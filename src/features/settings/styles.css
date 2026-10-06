@@ -57,11 +57,6 @@
   margin-top: 7px;
 }
 
-.setting-row .n-select {
-  width: 160px;
-  flex-shrink: 0;
-}
-
 .setting-row .n-radio-group {
   flex-shrink: 0;
 }

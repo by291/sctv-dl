@@ -16,22 +16,26 @@ const store = useProgrammeStore()
 const settings = useSettingsStore()
 const query = ref('')
 const tab = ref<'all' | 'favourites'>('all')
-const sort = ref('default')
+const sort = ref<'default' | 'name'>('default')
 
 const sortOptions = [
   { label: '默认排序', value: 'default' },
   { label: '按名称排序', value: 'name' },
 ]
 const filtered = computed(() => {
+  const favourites = new Set(settings.favourites)
+  const search = query.value.trim().toLowerCase()
   const items = store.programmes.filter(
     (item) =>
-      item.name.toLowerCase().includes(query.value.trim().toLowerCase()) &&
-      (tab.value === 'all' || settings.favourites.includes(item.id)),
+      item.name.toLowerCase().includes(search) && (tab.value === 'all' || favourites.has(item.id)),
   )
 
-  return sort.value === 'name'
-    ? [...items].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
-    : items
+  return items.sort((a, b) => {
+    const priority = Number(favourites.has(b.id)) - Number(favourites.has(a.id))
+
+    // Stable sorting preserves the service order within each group in default mode.
+    return priority || (sort.value === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : 0)
+  })
 })
 const { featured, canChange, chooseAnother } = useFeaturedProgramme(toRef(store, 'programmes'))
 

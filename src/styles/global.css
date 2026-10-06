@@ -35,6 +35,13 @@
   --hero: #3c2e2b;
 }
 
+@supports (scrollbar-gutter: stable) {
+  :root {
+    /* The gutter already reserves space; suppress Naive UI's inline scroll-lock compensation. */
+    margin-right: 0 !important;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

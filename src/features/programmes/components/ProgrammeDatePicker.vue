@@ -25,7 +25,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         :options="options"
         filterable
         :disabled="loading || !dates.length"
-        :loading="loading"
+        :aria-busy="loading"
         placeholder="搜索或选择播出日期"
         aria-label="播出日期"
       />
@@ -36,7 +36,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         :loading="loading"
         @click="emit('refresh')"
       >
-        <RefreshCw :size="16" />
+        <template #icon><RefreshCw :size="16" /></template>
       </NButton>
     </div>
   </div>

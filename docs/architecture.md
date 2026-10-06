@@ -80,19 +80,21 @@ The proxy middleware runs inside Vite's existing development or preview server, 
 
 The shared typography uses 16px body text and a 14px minimum for supporting labels, with matching Naive UI theme settings. Page titles describe the current task, and helper text is reserved for choices and behaviour that affect the user.
 
-The top bar shows the current page title, while the sidebar owns the app brand. The document reserves scrollbar space with `scrollbar-gutter: stable` so the library remains aligned when a filtered list becomes shorter than the viewport.
+The top bar shows the current page title, while the sidebar owns the app brand. The document reserves scrollbar space with `scrollbar-gutter: stable` so the library remains aligned when a filtered list becomes shorter than the viewport. Where stable gutters are supported, root margins suppress Naive UI's additional scrollbar compensation during modal scroll locking. The modal keeps its scroll lock and focus trap without narrowing the background page.
+
+Catalogue sorting always places favourites first. Default sorting retains service order within the favourite and non-favourite groups; name sorting orders each group separately. Search and the favourites tab use the same ordering. The theme setting exposes its three choices as radio buttons, and only the archive refresh button indicates date-toolbar loading.
 
 ## Motion and Video Preview
 
 Motion uses Vue Transition / TransitionGroup and shared CSS durations in `src/styles/motion.css`. Most transitions last 140-180ms and animate opacity or small transforms. Page wrappers provide a single transition root even when a view has multiple root nodes. The router passes the programme ID as a view prop so a departing view retains its own request identity during the transition. Scrollbar space remains reserved during list filtering.
 
-| Surface                 | Motion decision                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Navigation and settings | Brief page transition; the sidebar and top bar remain stable. Existing Naive UI input and dropdown transitions are retained.                                                                           |
-| Programme library       | Catalogue entries fade in and move when filtered or sorted. The spotlight title and poster reveal on manual shuffle without remounting the focused button. Favourite icons provide brief confirmation. |
-| Broadcast archive       | Loading, empty, and error panels reveal gently. Loaded content fades in; date choices and selected rows transition their colours.                                                                      |
-| Download queue          | New and removed tasks fade, remaining rows move, and status changes crossfade.                                                                                                                         |
-| Preview dialog          | Keep Naive UI's existing modal and focus management. Artplayer owns playback controls and their transitions.                                                                                           |
+| Surface                 | Motion decision                                                                                                                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Navigation and settings | Brief page transition; the sidebar and top bar remain stable. Existing Naive UI input and dropdown transitions are retained.                                                                                                               |
+| Programme library       | Newly visible catalogue entries fade in. Sorting and favourite priority changes reorder immediately without movement across the grid. The spotlight title and poster reveal on manual shuffle; favourite icons provide brief confirmation. |
+| Broadcast archive       | Loading, empty, and error panels reveal gently. Loaded content fades in; date choices and selected rows transition their colours.                                                                                                          |
+| Download queue          | New and removed tasks fade, remaining rows move, and status changes crossfade.                                                                                                                                                             |
+| Preview dialog          | Keep Naive UI's existing modal and focus management. Artplayer owns playback controls and their transitions.                                                                                                                               |
 
 The reduced-motion media query shortens custom and library animations to effectively immediate changes. There are no automatic carousels, staggered delays for long lists, or animated numeric counters.
 

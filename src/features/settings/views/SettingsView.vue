@@ -2,7 +2,7 @@
 import '../styles.css'
 import { computed, onMounted } from 'vue'
 
-import { NButton, NSelect, NRadioGroup, NRadioButton } from 'naive-ui'
+import { NButton, NRadioGroup, NRadioButton } from 'naive-ui'
 import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
 import { useSettingsStore } from '../store'
@@ -78,11 +78,19 @@ onMounted(() => {
           <div>
             <h3>界面主题</h3>
           </div>
-          <NSelect
+          <NRadioGroup
             v-model:value="settings.theme"
-            :options="themeOptions"
+            name="theme"
             aria-label="界面主题"
-          />
+          >
+            <NRadioButton
+              v-for="option in themeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </NRadioButton>
+          </NRadioGroup>
         </div>
       </section>
       <section class="settings-card">

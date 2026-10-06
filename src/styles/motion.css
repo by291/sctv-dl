@@ -30,7 +30,19 @@
   opacity: 0;
 }
 
-.catalogue-enter-active,
+.catalogue-enter-active {
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.catalogue-enter-from {
+  opacity: 0;
+}
+
+/* Hover transforms must not enable TransitionGroup movement when ordering changes. */
+.programme-card.catalogue-move {
+  transition: none;
+}
+
 .queue-enter-active,
 .queue-leave-active {
   transition:
@@ -38,14 +50,12 @@
     transform var(--motion-normal) var(--motion-ease);
 }
 
-.catalogue-enter-from,
 .queue-enter-from,
 .queue-leave-to {
   opacity: 0;
   transform: translateY(6px);
 }
 
-.catalogue-move,
 .queue-move {
   transition: transform var(--motion-normal) var(--motion-ease);
 }
