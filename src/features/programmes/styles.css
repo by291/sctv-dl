@@ -49,6 +49,7 @@
   letter-spacing: -0.5px;
   margin: 12px 0 9px;
   overflow-wrap: anywhere;
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 
 .featured-copy p {
@@ -92,6 +93,7 @@
 
 .featured-visual .cover-image {
   aspect-ratio: 16 / 10;
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 
 .feature-orbit {
@@ -225,13 +227,19 @@
   display: grid;
   place-items: center;
   backdrop-filter: blur(8px);
-  transition: background 0.15s;
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .favourite-button:hover,
 .favourite-button.saved {
   background: #ffffffdf;
   color: var(--accent);
+}
+
+.favourite-button.saved svg {
+  animation: favourite-pop 220ms var(--motion-ease);
 }
 
 .programme-caption {
@@ -364,6 +372,15 @@
   font-size: var(--font-size-meta);
   color: var(--muted);
   padding: 7px 10px;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.recent-dates button:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .recent-dates button.active {
@@ -433,6 +450,11 @@
   gap: 18px;
   padding: 18px 24px;
   border-bottom: 1px solid var(--line);
+  transition: background var(--motion-fast);
+}
+
+.content-list {
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 
 .content-row.checked {
@@ -517,14 +539,6 @@
 
 .preview-modal.n-card {
   width: min(860px, calc(100vw - 32px));
-}
-
-.preview-modal video {
-  display: block;
-  width: 100%;
-  max-height: 70vh;
-  background: #08090b;
-  border-radius: 7px;
 }
 
 .preview-error {

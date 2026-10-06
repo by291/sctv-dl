@@ -4,6 +4,7 @@ import { NModal } from 'naive-ui'
 
 import { proxyMediaUrl } from '../../../shared/media'
 import { resolveVideo } from '../video'
+import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
 
 import type { ProgrammeContent, Quality } from '../types'
 
@@ -36,14 +37,12 @@ watch(url, () => {
     :bordered="false"
     @update:show="updateVisible"
   >
-    <video
+    <ProgrammeVideoPlayer
       v-if="content && url"
       :key="url"
-      :src="url"
-      controls
-      playsinline
-      preload="none"
-      :poster="content.cover || undefined"
+      :url="url"
+      :poster="content.cover"
+      :title="content.title"
       @error="failed = true"
     />
     <p

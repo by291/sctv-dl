@@ -143,8 +143,10 @@ async function copy(url: string) {
         <ArrowRight :size="16" />
       </RouterLink>
     </StatePanel>
-    <div
+    <TransitionGroup
       v-else
+      tag="div"
+      name="queue"
       class="queue-list"
     >
       <DownloadTaskRow
@@ -156,6 +158,6 @@ async function copy(url: string) {
         @remove="store.remove"
         @copy="copy"
       />
-    </div>
+    </TransitionGroup>
   </div>
 </template>

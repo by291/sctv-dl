@@ -46,6 +46,8 @@ useFeaturedProgramme selects a random catalogue entry when the library view is c
 
 AbortController cancels requests, while LatestRequest prevents obsolete responses from committing state. Requests are cancelled when their component scope ends. Content is not requested without a broadcast date.
 
+Cover and video fields are optional at the API boundary and normalize to null. The service can omit `videoStandard` for clips with only a standard variant; that must not invalidate the other contents in a broadcast. IDs, response envelopes, and calendar dates remain strictly validated. Error panels describe a loading failure without assuming a network outage, and content counts appear only after a successful request.
+
 Settings and favourites retain the `sctv-dl:settings` key; tasks retain `sctv-dl:downloads`. Invalid JSON falls back to defaults. An invalid preference field uses its own default, and individual invalid task records are discarded. Interrupted `checking` tasks return to `queued` during initialization. Valid tasks are retained without silently truncating the queue on reload.
 
 Settings use VueUse synchronization across browser tabs. Downloads execute within the current window and do not synchronize execution state across windows. Concurrent windows still use last-write-wins persistence. Multi-window queue coordination would require a single executor and a deliberate merge policy.
@@ -79,6 +81,22 @@ The proxy middleware runs inside Vite's existing development or preview server, 
 The shared typography uses 16px body text and a 14px minimum for supporting labels, with matching Naive UI theme settings. Page titles describe the current task, and helper text is reserved for choices and behaviour that affect the user.
 
 The top bar shows the current page title, while the sidebar owns the app brand. The document reserves scrollbar space with `scrollbar-gutter: stable` so the library remains aligned when a filtered list becomes shorter than the viewport.
+
+## Motion and Video Preview
+
+Motion uses Vue Transition / TransitionGroup and shared CSS durations in `src/styles/motion.css`. Most transitions last 140-180ms and animate opacity or small transforms. Page wrappers provide a single transition root even when a view has multiple root nodes. The router passes the programme ID as a view prop so a departing view retains its own request identity during the transition. Scrollbar space remains reserved during list filtering.
+
+| Surface                 | Motion decision                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Navigation and settings | Brief page transition; the sidebar and top bar remain stable. Existing Naive UI input and dropdown transitions are retained.                                                                           |
+| Programme library       | Catalogue entries fade in and move when filtered or sorted. The spotlight title and poster reveal on manual shuffle without remounting the focused button. Favourite icons provide brief confirmation. |
+| Broadcast archive       | Loading, empty, and error panels reveal gently. Loaded content fades in; date choices and selected rows transition their colours.                                                                      |
+| Download queue          | New and removed tasks fade, remaining rows move, and status changes crossfade.                                                                                                                         |
+| Preview dialog          | Keep Naive UI's existing modal and focus management. Artplayer owns playback controls and their transitions.                                                                                           |
+
+The reduced-motion media query shortens custom and library animations to effectively immediate changes. There are no automatic carousels, staggered delays for long lists, or animated numeric counters.
+
+ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with Chinese controls, playback speed, keyboard shortcuts, picture-in-picture, and fullscreen. The browser still decodes MP4 media. The preview retains the existing quality fallback and `/media` proxy, requests metadata without autoplay, and keys each player by its resolved URL. Closing the dialog, changing source, or leaving the page pauses and destroys the instance. Initialization and media errors propagate to the dialog's error message. Player lifecycle tests cover cleanup and failures; browser verification covers the actual library UI and playback.
 
 ## Readability Improvements
 

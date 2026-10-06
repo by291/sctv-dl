@@ -27,7 +27,7 @@ const emit = defineEmits<{
         <span aria-hidden="true" />
         栏目探索
       </span>
-      <h2>{{ programme.name }}</h2>
+      <h2 :key="programme.id">{{ programme.name }}</h2>
       <p>
         浏览播出日历，选择整期或精彩片段。
         <br />
@@ -58,6 +58,7 @@ const emit = defineEmits<{
       :aria-label="`查看${programme.name}`"
     >
       <CoverImage
+        :key="programme.id"
         :src="programme.cover"
         :alt="programme.name"
       />

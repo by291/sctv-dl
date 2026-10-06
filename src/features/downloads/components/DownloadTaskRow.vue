@@ -45,13 +45,21 @@ const status = computed(() => statusInfo[props.task.status])
       </p>
     </div>
 
-    <span :class="['task-status', task.status]">
-      <component
-        :is="status.icon"
-        :size="14"
-      />
-      {{ status.label }}
-    </span>
+    <Transition
+      name="fade"
+      mode="out-in"
+    >
+      <span
+        :key="task.status"
+        :class="['task-status', task.status]"
+      >
+        <component
+          :is="status.icon"
+          :size="14"
+        />
+        {{ status.label }}
+      </span>
+    </Transition>
 
     <div class="queue-actions">
       <NButton

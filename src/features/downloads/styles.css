@@ -67,6 +67,10 @@
   border-bottom: 1px solid var(--line);
 }
 
+.queue-list {
+  position: relative;
+}
+
 .queue-row:last-child {
   border: 0;
 }

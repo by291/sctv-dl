@@ -27,7 +27,7 @@ defineEmits<{ retry: [] }>()
       :stroke-width="1.3"
     />
     <h3>
-      {{ loading ? '正在加载…' : error ? '无法连接节目服务' : title || '暂无内容' }}
+      {{ loading ? '正在加载…' : error ? title || '加载失败' : title || '暂无内容' }}
     </h3>
     <p v-if="error || description">{{ error || description }}</p>
     <NButton
@@ -52,6 +52,7 @@ defineEmits<{ retry: [] }>()
   text-align: center;
   padding: 40px 20px;
   color: var(--muted);
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 
 .state-panel h3 {

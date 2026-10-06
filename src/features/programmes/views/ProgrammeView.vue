@@ -2,7 +2,7 @@
 import '../styles.css'
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { NButton, NCheckbox, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
 import { ArrowLeft, CalendarDays, Download, Star, Check } from '@lucide/vue'
 
@@ -21,14 +21,14 @@ import ProgrammePreviewDialog from '../components/ProgrammePreviewDialog.vue'
 
 import type { ProgrammeContent } from '../types'
 
-const route = useRoute()
+const props = defineProps<{ id: string }>()
 const router = useRouter()
 const catalogue = useProgrammeStore()
 const downloads = useDownloadStore()
 const settings = useSettingsStore()
 const message = useMessage()
 
-const programmeId = computed(() => String(route.params.id))
+const programmeId = computed(() => props.id)
 const programme = computed(() => catalogue.programmes.find((item) => item.id === programmeId.value))
 const programmeName = computed(() => programme.value?.name ?? '')
 const {
@@ -151,6 +151,7 @@ onMounted(() => {
     />
     <StatePanel
       v-else-if="dateError"
+      title="播出日期加载失败"
       :error="dateError"
       @retry="loadDates"
     />
@@ -167,7 +168,7 @@ onMounted(() => {
             {{ selectedDate }}
             <span>节目内容</span>
           </h2>
-          <span v-if="!loadingContents">{{ contents.length }} 条内容</span>
+          <span v-if="!loadingContents && !contentError">{{ contents.length }} 条内容</span>
         </div>
         <div class="quality-control">
           <span>画质</span>
@@ -188,6 +189,7 @@ onMounted(() => {
       />
       <StatePanel
         v-else-if="contentError"
+        title="节目内容加载失败"
         :error="contentError"
         @retry="loadContents"
       />

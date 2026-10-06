@@ -13,6 +13,7 @@ export const router = createRouter({
       path: '/programmes/:id',
       name: 'programme',
       component: () => import('../features/programmes/views/ProgrammeView.vue'),
+      props: true,
       meta: { title: '节目详情' },
     },
     {

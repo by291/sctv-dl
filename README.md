@@ -35,6 +35,8 @@ See [Coding Conventions](CONTRIBUTING.md) and [Architecture and Library Decision
 
 ## Download Behaviour
 
+Video previews use Artplayer with Chinese playback controls, speed settings, keyboard shortcuts, picture-in-picture, and fullscreen. Playback begins when requested, and closing a preview releases the player. If the selected video variant is unavailable, the preview uses the same fallback as the download queue. UI motion respects the system's reduced-motion preference.
+
 Select content on the programme details page and add it to the queue, then start downloads from the task page. The application uses HEAD to check video availability before handing the download to the browser. A `handed-off` task means that a save was requested; it does not mean the download finished. The browser download manager owns progress, the destination directory, pause, cancellation, resume, and the final result. Batch downloads may require the browser to allow multiple files.
 
 Tasks are deduplicated by content ID and actual quality. If the requested quality is missing, the available alternative is used and shown in the content row and task. Selection is disabled only when both video variants are missing. Full-episode selection matches the programme name and broadcast date in the title; it does not assume the first item is a full episode. Filenames include the date, title, and actual quality. Large videos are streamed rather than fully buffered in page memory.

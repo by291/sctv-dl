@@ -138,8 +138,10 @@ onMounted(() => {
     "
   />
 
-  <div
+  <TransitionGroup
     v-else
+    name="catalogue"
+    tag="div"
     class="programme-grid"
   >
     <ProgrammeCard
@@ -149,7 +151,7 @@ onMounted(() => {
       :favourite="settings.favourites.includes(programme.id)"
       @toggle-favourite="settings.toggleFavourite"
     />
-  </div>
+  </TransitionGroup>
 
   <div
     v-if="filtered.length"

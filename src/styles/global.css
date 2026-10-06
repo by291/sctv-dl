@@ -156,6 +156,7 @@ h1 {
   padding: 9px 0;
   font-size: var(--font-size-body);
   white-space: nowrap;
+  transition: color var(--motion-fast);
 }
 
 .tabs button.selected {
@@ -172,6 +173,7 @@ h1 {
   width: 20px;
   bottom: -16px;
   left: 0;
+  animation: content-reveal var(--motion-fast) var(--motion-ease);
 }
 
 .tabs button > span {
@@ -182,6 +184,9 @@ h1 {
   padding: 2px 5px;
   font-size: var(--font-size-meta);
   font-weight: 500;
+  transition:
+    color var(--motion-fast),
+    background var(--motion-fast);
 }
 
 .tabs button.selected > span {

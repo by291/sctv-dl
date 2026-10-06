@@ -80,7 +80,21 @@ function isActive(path: string): boolean {
           {{ connectionLabel }}
         </div>
       </header>
-      <main id="main-content"><RouterView /></main>
+      <main id="main-content">
+        <RouterView v-slot="{ Component, route: currentRoute }">
+          <Transition
+            name="page"
+            mode="out-in"
+          >
+            <div
+              :key="currentRoute.path"
+              class="page-view"
+            >
+              <component :is="Component" />
+            </div>
+          </Transition>
+        </RouterView>
+      </main>
     </div>
   </div>
 </template>

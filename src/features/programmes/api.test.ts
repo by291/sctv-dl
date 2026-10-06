@@ -35,6 +35,58 @@ describe('programme API', () => {
       createApi('/api', vi.fn().mockResolvedValue(reply(null, 401))).programmes(),
     ).rejects.toThrow('服务错误')
   })
+
+  it('accepts content without a smooth variant instead of rejecting the entire broadcast', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      reply([
+        {
+          id: '2106339065831817217',
+          title: 'Broadcast with both variants',
+          cover: '/cover.jpg',
+          video: '/full.mp4',
+          videoStandard: '/smooth.mp4',
+        },
+        {
+          id: '2106333329596809217',
+          title: 'Clip with standard video only',
+          cover: '/clip.jpg',
+          video: '/clip.mp4',
+        },
+      ]),
+    )
+
+    const contents = await createApi('/api', fetcher).contents('1', '2106333281679892481')
+
+    expect(contents).toHaveLength(2)
+    expect(contents[1]).toMatchObject({
+      video: 'https://fscgc.scgchc.com/clip.mp4',
+      smoothVideo: null,
+    })
+  })
+
+  it('normalizes omitted covers and video variants to null while retaining valid records', async () => {
+    const client = createApi(
+      '/api',
+      vi.fn().mockResolvedValue(reply([{ id: '1', title: 'No video' }])),
+    )
+
+    expect(await client.contents('1', '2')).toEqual([
+      {
+        id: '1',
+        title: 'No video',
+        cover: null,
+        video: null,
+        smoothVideo: null,
+        publishedAt: null,
+      },
+    ])
+    expect(
+      await createApi(
+        '/api',
+        vi.fn().mockResolvedValue(reply({ records: [{ id: '1', name: 'No cover' }] })),
+      ).programmes(),
+    ).toEqual([{ id: '1', name: 'No cover', cover: null }])
+  })
   it('rejects unsafe numeric IDs instead of silently rounding them', async () => {
     const fetcher = vi
       .fn()

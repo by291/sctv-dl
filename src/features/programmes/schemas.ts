@@ -19,7 +19,7 @@ export const envelopeSchema = z.object({
 export const programmeSchema = z.object({
   id: idSchema,
   name: z.string().catch('未命名栏目'),
-  cover: z.unknown().transform(imageUrl),
+  cover: z.unknown().optional().transform(imageUrl),
 })
 
 export const programmeDateSchema = z.object({
@@ -31,9 +31,10 @@ export const programmeContentSchema = z
   .object({
     id: idSchema,
     title: z.string().catch('未命名节目'),
-    cover: z.unknown().transform(imageUrl),
-    video: z.unknown().transform(mediaUrl),
-    videoStandard: z.unknown().transform(mediaUrl),
+    cover: z.unknown().optional().transform(imageUrl),
+    // Upstream omits unavailable variants rather than always returning null.
+    video: z.unknown().optional().transform(mediaUrl),
+    videoStandard: z.unknown().optional().transform(mediaUrl),
     pubTime: z.string().nullable().catch(null),
   })
   .transform((row) => ({
