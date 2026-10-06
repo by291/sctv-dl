@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import '../styles.css'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { RouterLink } from 'vue-router'
@@ -100,7 +99,7 @@ onMounted(() => {
 <template>
   <RouterLink
     to="/"
-    class="back-link"
+    class="back-link mb-[25px] inline-flex items-center gap-[7px] text-meta text-muted hover:text-accent"
   >
     <ArrowLeft :size="16" />
     返回节目库
@@ -113,16 +112,26 @@ onMounted(() => {
         :alt="programmeName || '电视节目'"
       />
     </div>
-    <div class="detail-copy">
-      <h1>{{ programmeName || '电视节目' }}</h1>
-      <span class="detail-meta">
+    <div class="detail-copy flex-1">
+      <h1 class="mt-[6px] text-[28px] max-[760px]:text-[23px]">
+        {{ programmeName || '电视节目' }}
+      </h1>
+      <span
+        class="detail-meta mt-[13px] flex flex-wrap items-center gap-[7px] text-meta text-muted max-[760px]:leading-[1.5]"
+      >
         <CalendarDays :size="15" />
-        <span>{{ dateSummary }}</span>
-        <span v-if="dates.length">· {{ dates.at(-1)?.date }} 起</span>
+        <span class="whitespace-nowrap">{{ dateSummary }}</span>
+        <span
+          v-if="dates.length"
+          class="whitespace-nowrap"
+        >
+          · {{ dates.at(-1)?.date }} 起
+        </span>
       </span>
     </div>
     <NButton
       v-if="programme"
+      class="max-[1020px]:self-start max-[760px]:ml-[126px]! max-[440px]:ml-[100px]!"
       secondary
       @click="settings.toggleFavourite(programme.id)"
     >
@@ -136,7 +145,7 @@ onMounted(() => {
     </NButton>
   </section>
 
-  <div class="content-panel">
+  <div class="content-panel rounded-xl border border-line bg-panel">
     <ProgrammeDatePicker
       v-model="selectedDate"
       :dates="dates"
@@ -162,10 +171,17 @@ onMounted(() => {
 
     <template v-else>
       <div class="content-toolbar">
-        <div class="content-count">
-          <h2>{{ selectedDate }}</h2>
-          <span class="content-kind">节目内容</span>
-          <span v-if="!loadingContents && !contentError">{{ contents.length }} 条内容</span>
+        <div
+          class="content-count flex items-baseline gap-[13px] max-[1020px]:flex-wrap max-[1020px]:gap-[7px]"
+        >
+          <h2 class="text-[18px] leading-[1.5] font-semibold">{{ selectedDate }}</h2>
+          <span class="content-kind text-body text-main">节目内容</span>
+          <span
+            v-if="!loadingContents && !contentError"
+            class="text-meta text-muted"
+          >
+            {{ contents.length }} 条内容
+          </span>
         </div>
         <ProgrammeDownloadButton
           v-if="!loadingContents && !contentError && contents.length"
@@ -209,7 +225,7 @@ onMounted(() => {
             <template #icon><Check :size="15" /></template>
             只选整期
           </NButton>
-          <span>已选择 {{ selected.length }} 条</span>
+          <span class="ml-auto text-meta text-muted">已选择 {{ selected.length }} 条</span>
         </div>
 
         <ProgrammeContentList
@@ -228,3 +244,63 @@ onMounted(() => {
     :quality="settings.quality"
   />
 </template>
+
+<style scoped>
+@reference '../../../styles/global.css';
+
+@layer components {
+  .detail-heading {
+    @apply mb-[34px] flex items-center gap-6;
+
+    @variant max-[1020px] {
+      @apply gap-[18px];
+    }
+
+    @variant max-[760px] {
+      @apply flex-wrap gap-4;
+    }
+
+    @variant max-[440px] {
+      @apply gap-3;
+    }
+  }
+
+  .detail-cover {
+    @apply aspect-[16/10] w-[184px] shrink-0 overflow-hidden rounded-[9px] border border-line;
+
+    @variant max-[1020px] {
+      @apply w-[130px];
+    }
+
+    @variant max-[760px] {
+      @apply w-[110px];
+    }
+
+    @variant max-[440px] {
+      @apply w-[88px];
+    }
+  }
+
+  .content-toolbar {
+    @apply flex items-center justify-between gap-5 px-6 py-[18px];
+
+    @variant max-[760px] {
+      @apply flex-wrap gap-3 p-5;
+    }
+  }
+
+  .content-toolbar > :deep(.n-button) {
+    @variant max-[760px] {
+      @apply ml-auto!;
+    }
+  }
+
+  .selection-toolbar {
+    @apply flex flex-wrap items-center gap-[25px] bg-subtle px-6 py-[11px];
+
+    @variant max-[760px] {
+      @apply gap-[15px] px-5 py-3;
+    }
+  }
+}
+</style>

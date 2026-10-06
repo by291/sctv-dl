@@ -19,17 +19,22 @@ defineEmits<{ retry: [] }>()
     <CircleAlert
       v-else-if="error"
       :size="34"
-      class="accent"
+      class="accent text-accent"
     />
     <Inbox
       v-else
       :size="38"
       :stroke-width="1.3"
     />
-    <h3>
+    <h3 class="text-body font-medium text-main">
       {{ loading ? '正在加载…' : error ? title || '加载失败' : title || '暂无内容' }}
     </h3>
-    <p v-if="error || description">{{ error || description }}</p>
+    <p
+      v-if="error || description"
+      class="max-w-[470px] text-meta leading-[1.8]"
+    >
+      {{ error || description }}
+    </p>
     <NButton
       v-if="error"
       secondary
@@ -42,28 +47,12 @@ defineEmits<{ retry: [] }>()
 </template>
 
 <style scoped>
-.state-panel {
-  min-height: 285px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--muted);
-  animation: content-reveal var(--motion-normal) var(--motion-ease);
-}
+@reference '../styles/global.css';
 
-.state-panel h3 {
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.state-panel p {
-  font-size: var(--font-size-meta);
-  line-height: 1.8;
-  max-width: 470px;
+@layer components {
+  .state-panel {
+    @apply flex min-h-[285px] animate-content-reveal flex-col items-center justify-center gap-[15px];
+    @apply px-5 py-10 text-center text-muted;
+  }
 }
 </style>

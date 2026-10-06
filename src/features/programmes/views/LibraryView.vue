@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import '../styles.css'
 import { computed, onMounted, ref, toRef } from 'vue'
 
 import { NButton, NInput, NSelect } from 'naive-ui'
@@ -68,47 +67,60 @@ onMounted(() => {
       :can-change="canChange"
       @change="chooseAnother"
     />
-    <div class="library-stat">
-      <h2>节目概览</h2>
-      <div class="library-stat-row">
+    <div
+      class="library-stat rounded-xl border border-line bg-panel px-6 py-5 max-[1250px]:px-5 max-[1020px]:hidden"
+    >
+      <h2 class="mb-3 text-body font-bold">节目概览</h2>
+      <div
+        class="library-stat-row flex items-center justify-between gap-4 py-1 text-meta text-muted"
+      >
         <span>全部栏目</span>
-        <strong>{{ store.programmes.length }}</strong>
+        <strong class="text-[22px] text-main tabular-nums">{{ store.programmes.length }}</strong>
       </div>
-      <div class="library-stat-row">
+      <div
+        class="library-stat-row flex items-center justify-between gap-4 py-1 text-meta text-muted"
+      >
         <span>已收藏</span>
-        <strong>{{ settings.favourites.length }}</strong>
+        <strong class="text-[22px] text-main tabular-nums">{{ settings.favourites.length }}</strong>
       </div>
     </div>
   </div>
 
   <div class="library-toolbar">
     <div
-      class="tabs"
+      class="tabs flex items-center gap-6"
       role="tablist"
       aria-label="栏目筛选"
     >
       <button
+        class="filter-tab library-tab"
         :class="{ selected: tab === 'all' }"
         role="tab"
         :aria-selected="tab === 'all'"
         @click="tab = 'all'"
       >
         全部栏目
-        <span>{{ store.programmes.length }}</span>
+        <span class="filter-count">
+          {{ store.programmes.length }}
+        </span>
       </button>
       <button
+        class="filter-tab library-tab"
         :class="{ selected: tab === 'favourites' }"
         role="tab"
         :aria-selected="tab === 'favourites'"
         @click="tab = 'favourites'"
       >
         我的收藏
-        <span>{{ settings.favourites.length }}</span>
+        <span class="filter-count">
+          {{ settings.favourites.length }}
+        </span>
       </button>
     </div>
-    <div class="library-filters">
+    <div class="library-filters flex gap-3 max-[1020px]:w-full">
       <NInput
         v-model:value="query"
+        class="w-[200px]! max-[1020px]:flex-1"
         clearable
         placeholder="搜索节目名称"
         aria-label="搜索节目名称"
@@ -117,6 +129,7 @@ onMounted(() => {
       </NInput>
       <NSelect
         v-model:value="sort"
+        class="w-[148px]!"
         :options="sortOptions"
         aria-label="节目排序"
       />
@@ -159,9 +172,67 @@ onMounted(() => {
 
   <div
     v-if="filtered.length"
-    class="list-footer"
+    class="list-footer flex justify-between pt-[25px] text-meta text-muted"
   >
     <span>共 {{ filtered.length }} 个栏目</span>
     <span>内容来自四川观察节目服务</span>
   </div>
 </template>
+
+<style scoped>
+@reference '../../../styles/global.css';
+
+@layer components {
+  .library-tab::after {
+    @apply -bottom-4;
+
+    @variant max-[1020px] {
+      @apply -bottom-[10px];
+    }
+  }
+
+  .library-intro {
+    @apply mb-[31px] grid grid-cols-[minmax(0,1fr)_242px] gap-5;
+
+    @variant max-[1250px] {
+      @apply grid-cols-[minmax(0,1fr)_210px];
+    }
+
+    @variant max-[1020px] {
+      @apply grid-cols-1;
+    }
+
+    @variant max-[760px] {
+      @apply mb-[25px];
+    }
+  }
+
+  .library-toolbar {
+    @apply mb-[22px] flex items-center justify-between gap-5 border-b border-line pb-[15px];
+
+    @variant max-[1020px] {
+      @apply flex-col items-start gap-7;
+    }
+  }
+
+  .programme-grid {
+    @apply grid grid-cols-4 gap-x-5 gap-y-[22px];
+
+    @variant min-[1700px] {
+      @apply grid-cols-5;
+    }
+
+    @variant max-[1250px] {
+      @apply grid-cols-3;
+    }
+
+    @variant max-[1020px] {
+      @apply grid-cols-2;
+    }
+
+    @variant max-[760px] {
+      @apply gap-x-[14px] gap-y-[18px];
+    }
+  }
+}
+</style>

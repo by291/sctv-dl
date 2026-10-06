@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import '../styles.css'
 import { computed, ref } from 'vue'
 
 import { RouterLink } from 'vue-router'
@@ -52,26 +51,38 @@ async function copy(url: string) {
     </NButton>
   </section>
 
-  <div class="download-stats">
-    <div>
-      <span class="stat-icon soft"><FileVideo :size="21" /></span>
+  <div class="download-stats mb-6 grid grid-cols-3 gap-5 max-[760px]:gap-2.5">
+    <div class="download-stat">
+      <span class="stat-icon soft">
+        <FileVideo :size="21" />
+      </span>
       <div>
-        <strong>{{ store.tasks.length }}</strong>
-        <span>全部任务</span>
+        <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
+          {{ store.tasks.length }}
+        </strong>
+        <span class="mt-[7px] block text-meta text-muted">全部任务</span>
       </div>
     </div>
-    <div>
-      <span class="stat-icon warm"><Clock3 :size="21" /></span>
+    <div class="download-stat">
+      <span class="stat-icon warm">
+        <Clock3 :size="21" />
+      </span>
       <div>
-        <strong>{{ store.pending.length }}</strong>
-        <span>待处理</span>
+        <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
+          {{ store.pending.length }}
+        </strong>
+        <span class="mt-[7px] block text-meta text-muted">待处理</span>
       </div>
     </div>
-    <div>
-      <span class="stat-icon green"><ExternalLink :size="21" /></span>
+    <div class="download-stat">
+      <span class="stat-icon green">
+        <ExternalLink :size="21" />
+      </span>
       <div>
-        <strong>{{ handedOff }}</strong>
-        <span>已交给浏览器</span>
+        <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
+          {{ handedOff }}
+        </strong>
+        <span class="mt-[7px] block text-meta text-muted">已交给浏览器</span>
       </div>
     </div>
   </div>
@@ -88,23 +99,27 @@ async function copy(url: string) {
     浏览器未允许本地存储，刷新页面后任务列表可能丢失。
   </div>
 
-  <div class="queue-panel">
+  <div class="queue-panel rounded-xl border border-line bg-panel">
     <div class="queue-toolbar">
       <div
-        class="tabs"
+        class="tabs flex items-center gap-6 max-[760px]:gap-4"
         role="tablist"
         aria-label="任务状态筛选"
       >
         <button
+          class="filter-tab queue-tab"
           :class="{ selected: tab === 'all' }"
           role="tab"
           :aria-selected="tab === 'all'"
           @click="tab = 'all'"
         >
           全部任务
-          <span>{{ store.tasks.length }}</span>
+          <span class="filter-count">
+            {{ store.tasks.length }}
+          </span>
         </button>
         <button
+          class="filter-tab queue-tab"
           :class="{ selected: tab === 'queued' }"
           role="tab"
           :aria-selected="tab === 'queued'"
@@ -113,6 +128,7 @@ async function copy(url: string) {
           待处理
         </button>
         <button
+          class="filter-tab queue-tab"
           :class="{ selected: tab === 'handed-off' }"
           role="tab"
           :aria-selected="tab === 'handed-off'"
@@ -137,7 +153,7 @@ async function copy(url: string) {
     >
       <RouterLink
         to="/"
-        class="empty-link"
+        class="empty-link mt-1.5 inline-flex items-center gap-[9px] text-body text-accent"
       >
         浏览节目
         <ArrowRight :size="16" />
@@ -147,7 +163,7 @@ async function copy(url: string) {
       v-else
       tag="div"
       name="queue"
-      class="queue-list"
+      class="queue-list relative"
     >
       <DownloadTaskRow
         v-for="task in filtered"
@@ -161,3 +177,57 @@ async function copy(url: string) {
     </TransitionGroup>
   </div>
 </template>
+
+<style scoped>
+@reference '../../../styles/global.css';
+
+@layer components {
+  .download-stat {
+    @apply flex items-center gap-[18px] rounded-[11px] border border-line bg-panel p-[23px];
+
+    @variant max-[760px] {
+      @apply gap-2.5 px-2.5 py-[15px];
+    }
+  }
+
+  .stat-icon {
+    @apply flex size-11 items-center justify-center rounded-[10px];
+
+    @variant max-[760px] {
+      @apply hidden;
+    }
+  }
+
+  .stat-icon.soft {
+    @apply bg-[#eaf0f9] text-[#7082a7];
+  }
+
+  .stat-icon.warm {
+    @apply bg-[#fcf3e3] text-[#ba904d];
+  }
+
+  .stat-icon.green {
+    @apply bg-[#e8f6ef] text-[#439c78];
+  }
+
+  .queue-toolbar {
+    @apply flex items-center justify-between gap-5 border-b border-line px-6 py-[13px];
+
+    @variant max-[760px] {
+      @apply flex-wrap gap-2.5 px-[18px];
+    }
+  }
+
+  .queue-tab {
+    @apply px-0;
+
+    @variant max-[760px] {
+      @apply text-meta;
+    }
+  }
+
+  .queue-tab::after {
+    @apply -bottom-[15px];
+  }
+}
+</style>

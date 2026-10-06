@@ -92,36 +92,36 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.programme-player {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #08090b;
-  border-radius: 7px;
-  --art-font-size: 14px;
-}
+@reference '../../../styles/global.css';
 
-/* Keep playback, speed, and fullscreen controls reachable in narrow previews. */
-@media (max-width: 480px) {
-  .programme-player :deep(.art-video-player) {
-    --art-control-height: 44px;
+@layer components {
+  .programme-player {
+    @apply aspect-video w-full rounded-[7px] bg-[#08090b] [--art-font-size:14px];
   }
 
-  .programme-player :deep(.art-video-player .art-controls .art-control-volume) {
-    display: none;
+  /* Artplayer creates its controls outside Vue's scoped template. */
+  @variant max-[480px] {
+    .programme-player :deep(.art-video-player) {
+      @apply [--art-control-height:44px]!;
+    }
+
+    .programme-player :deep(.art-controls .art-control-volume) {
+      @apply hidden!;
+    }
+
+    .programme-player :deep(.art-controls .art-control-time) {
+      @apply px-1!;
+    }
   }
 
-  .programme-player :deep(.art-video-player .art-controls .art-control-time) {
-    padding: 0 4px;
-  }
-}
+  @variant max-[400px] {
+    .programme-player :deep(.art-controls .art-control-pip) {
+      @apply hidden!;
+    }
 
-@media (max-width: 400px) {
-  .programme-player :deep(.art-video-player .art-controls .art-control-pip) {
-    display: none;
-  }
-
-  .programme-player :deep(.art-video-player .art-controls .art-control-time) {
-    padding: 0 2px;
+    .programme-player :deep(.art-controls .art-control-time) {
+      @apply px-[2px]!;
+    }
   }
 }
 </style>

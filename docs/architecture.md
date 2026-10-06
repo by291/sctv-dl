@@ -19,7 +19,6 @@ src/
       composables/         Archive lifecycle, content selection, programme discovery
       components/          Cards, spotlight, date picker, content list, download menu, preview dialog
       views/               Library and details page composition
-      styles.css           Programme UI and responsive styles
     downloads/
       schema.ts            Stored task validation
       model.ts             Filenames, task creation, deduplication, recovery
@@ -27,12 +26,11 @@ src/
       store.ts             Shared queue, actions, persistence
       components/          Task row presentation
       views/               Queue page composition
-      styles.css
     settings/
       schema.ts / store.ts Preference validation and shared state
-      views/ / styles.css  Settings UI
+      views/               Settings UI
   shared/                  Persistence, errors, media URLs, request guards
-  styles/global.css        Theme variables, resets, common styles
+  styles/global.css        Tailwind entry, theme tokens, shared styles and motion
 server/                    Local API and streaming media proxies
 ```
 
@@ -86,7 +84,7 @@ Catalogue sorting always places favourites first. Default sorting retains servic
 
 ## Motion and Video Preview
 
-Motion uses Vue Transition / TransitionGroup and shared CSS durations in `src/styles/motion.css`. Most transitions last 140-180ms and animate opacity or small transforms. Page wrappers provide a single transition root even when a view has multiple root nodes. The router passes the programme ID as a view prop so a departing view retains its own request identity during the transition. Scrollbar space remains reserved during list filtering.
+Motion uses Vue Transition / TransitionGroup with short transition names and Tailwind-composed rules in `src/styles/global.css`. Most transitions last 140-180ms and animate opacity or small transforms. Page wrappers provide a single transition root even when a view has multiple root nodes. The router passes the programme ID as a view prop so a departing view retains its own request identity during the transition. Scrollbar space remains reserved during list filtering.
 
 | Surface                 | Motion decision                                                                                                                                                                                                                            |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -106,6 +104,6 @@ ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with 
 - ProgrammeView mixed requests, selection, playback, and task creation; requests and selection are separate composables, while date selection, content rows, and previews have typed component contracts.
 - Download rows used nested status ternaries; a typed map now defines labels, icons, and actions.
 - Vue closing tags were crowded; Prettier whitespace/attribute settings and semantic spacing make the markup readable.
-- One long stylesheet covered the entire application; feature styles and scoped shared component styles now have clear ownership.
+- Short Tailwind utility combinations remain in component templates. Complex responsive styles and repeated component patterns use scoped `@apply` rules, with `@variant` blocks grouping breakpoints and `@reference` reusing the theme without duplicate output. Shared styles and named transitions live in the Tailwind entry; feature-specific rules remain with their owning components.
 - Browser and server ambient types were mixed; TypeScript and ESLint environments are configured separately.
 - Conventions depended on memory; EditorConfig, Prettier, ESLint, and pnpm check enforce the mechanical rules.

@@ -58,13 +58,21 @@ watch(
     v-model:show="show"
     trigger="click"
     placement="bottom-end"
-    :width="128"
+    width="trigger"
+    size="medium"
+    :theme-overrides="{ fontSizeMedium: '16px', optionHeightMedium: '36px', padding: '4px 0' }"
     :options="options"
     :disabled="!enabled"
-    :menu-props="() => ({ role: 'menu', 'aria-label': '下载画质' })"
+    :menu-props="
+      () => ({
+        role: 'menu',
+        'aria-label': '下载画质',
+      })
+    "
     @select="selectQuality"
   >
     <NButton
+      :theme-overrides="{ heightMedium: '42px', fontSizeMedium: '16px', fontWeight: '600' }"
       :type="primary ? 'primary' : 'default'"
       :secondary="!primary"
       :disabled="!enabled"
@@ -75,7 +83,7 @@ watch(
       <template #icon><Download :size="16" /></template>
       {{ label }}
       <ChevronDown
-        class="download-chevron"
+        class="download-chevron ml-[6px]"
         :size="14"
       />
     </NButton>

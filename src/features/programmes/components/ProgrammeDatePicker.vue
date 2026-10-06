@@ -15,13 +15,14 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 <template>
   <div class="date-toolbar">
     <div>
-      <h2>选择播出日期</h2>
+      <h2 class="text-[18px] font-semibold">选择播出日期</h2>
     </div>
 
-    <div class="date-control">
+    <div class="date-control flex items-center gap-[10px] text-muted max-[760px]:w-full">
       <CalendarDays :size="18" />
       <NSelect
         v-model:value="selectedDate"
+        class="w-[215px]! max-[760px]:w-auto! max-[760px]:flex-1"
         :options="options"
         filterable
         :disabled="loading || !dates.length"
@@ -30,6 +31,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         aria-label="播出日期"
       />
       <NButton
+        class="size-[42px]!"
         quaternary
         circle
         aria-label="重新读取播出日期"
@@ -45,10 +47,13 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
     v-if="dates.length"
     class="recent-dates"
   >
-    <span>最近播出</span>
+    <span class="mr-[10px] text-meta text-muted max-[760px]:mb-[3px] max-[760px]:w-full">
+      最近播出
+    </span>
     <button
       v-for="date in dates.slice(0, 7)"
       :key="date.id"
+      class="date-button"
       :class="{ active: date.date === selectedDate }"
       :aria-pressed="date.date === selectedDate"
       @click="selectedDate = date.date"
@@ -57,3 +62,34 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
     </button>
   </div>
 </template>
+
+<style scoped>
+@reference '../../../styles/global.css';
+
+@layer components {
+  .date-button {
+    @apply rounded-[6px] border border-transparent bg-subtle px-[10px] py-[7px] text-meta text-muted;
+    @apply transition-colors duration-[140ms] ease-[ease] hover:bg-accent-soft hover:text-accent;
+  }
+
+  .date-button.active {
+    @apply border-[#dc4f4135] bg-accent-soft text-accent;
+  }
+
+  .date-toolbar {
+    @apply flex items-center justify-between gap-5 p-6;
+
+    @variant max-[760px] {
+      @apply flex-col items-start gap-[15px] p-5;
+    }
+  }
+
+  .recent-dates {
+    @apply flex flex-wrap items-center gap-2 border-b border-line px-6 pb-[23px];
+
+    @variant max-[760px] {
+      @apply gap-[7px] px-5 pb-5;
+    }
+  }
+}
+</style>

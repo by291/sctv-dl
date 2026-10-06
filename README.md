@@ -15,6 +15,10 @@ Open http://127.0.0.1:5180 . An internet connection is required to access the pr
 
 Installation uses pnpm's default machine-wide package store. The repository does not override `store-dir`, so other projects can reuse cached packages.
 
+The interface uses Tailwind CSS 4 through the official Vite plugin. Short utility combinations stay in Vue templates; complex and repeated component styles use scoped `@apply` rules with `@reference` to the shared theme. `src/styles/global.css` defines theme tokens, base rules, shared presentation classes, and named transitions. Naive UI and Artplayer retain their own library styles.
+
+Development enables Vite 8's experimental bundled dev mode to reduce first-page module loading overhead. Routing, hot updates, and the local proxies use the same Vite process. This setting affects development only; the production build and preview continue to use the regular build pipeline.
+
 ```powershell
 pnpm check
 pnpm build

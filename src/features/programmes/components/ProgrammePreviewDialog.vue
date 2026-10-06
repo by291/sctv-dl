@@ -40,7 +40,7 @@ watch(url, () => {
   <NModal
     :show="!!content"
     preset="card"
-    class="preview-modal"
+    class="preview-modal w-[min(860px,calc(100vw_-_32px))]!"
     :title="content?.title"
     :bordered="false"
     @update:show="updateVisible"
@@ -57,7 +57,7 @@ watch(url, () => {
     />
     <p
       v-if="failed"
-      class="preview-error"
+      class="preview-error pt-3 text-meta text-accent"
       role="alert"
     >
       这个视频暂时无法播放，请检查网络或换一个日期。

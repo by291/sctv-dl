@@ -19,16 +19,18 @@ const status = computed(() => statusInfo[props.task.status])
 
 <template>
   <article class="queue-row">
-    <div class="file-icon">
+    <div
+      class="file-icon grid h-[46px] w-[42px] shrink-0 place-items-center rounded-[7px] border border-line text-[#8993a5]"
+    >
       <FileVideo
         :size="25"
         :stroke-width="1.5"
       />
     </div>
 
-    <div class="queue-info">
-      <h3>{{ task.title }}</h3>
-      <p>
+    <div class="queue-info min-w-0 flex-1 max-[1020px]:basis-[calc(100%-70px)]">
+      <h3 class="text-body leading-[1.8] font-medium [overflow-wrap:anywhere]">{{ task.title }}</h3>
+      <p class="mt-[5px] text-meta text-muted [&>span]:px-[7px]">
         {{ task.programme }}
         <span>·</span>
         {{ task.date }}
@@ -39,7 +41,7 @@ const status = computed(() => statusInfo[props.task.status])
       </p>
       <p
         v-if="task.error"
-        class="task-error"
+        class="task-error mt-[5px] text-meta text-accent"
       >
         {{ task.error }}
       </p>
@@ -51,7 +53,8 @@ const status = computed(() => statusInfo[props.task.status])
     >
       <span
         :key="task.status"
-        :class="['task-status', task.status]"
+        class="task-status"
+        :class="task.status"
       >
         <component
           :is="status.icon"
@@ -61,7 +64,7 @@ const status = computed(() => statusInfo[props.task.status])
       </span>
     </Transition>
 
-    <div class="queue-actions">
+    <div class="queue-actions flex items-center gap-[7px] max-[1020px]:ml-auto max-[440px]:gap-0.5">
       <NButton
         :loading="task.status === 'checking'"
         :disabled="batchRunning"
@@ -91,3 +94,45 @@ const status = computed(() => statusInfo[props.task.status])
     </div>
   </article>
 </template>
+
+<style scoped>
+@reference '../../../styles/global.css';
+
+@layer components {
+  .task-status {
+    @apply flex items-center gap-1.5 text-meta whitespace-nowrap text-muted;
+
+    @variant max-[1020px] {
+      @apply ml-[54px];
+    }
+
+    @variant max-[440px] {
+      @apply ml-0;
+    }
+  }
+
+  .task-status.handed-off {
+    @apply text-success;
+  }
+
+  .task-status.failed {
+    @apply text-accent;
+  }
+
+  .queue-row {
+    @apply flex items-center gap-[18px] border-b border-line p-6 last:border-0;
+
+    @variant max-[1250px] {
+      @apply gap-3;
+    }
+
+    @variant max-[1020px] {
+      @apply flex-wrap;
+    }
+
+    @variant max-[760px] {
+      @apply px-[18px] py-5;
+    }
+  }
+}
+</style>
