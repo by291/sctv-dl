@@ -16,8 +16,8 @@ src/
       types.ts             Domain types inferred from schemas
       urls.ts / video.ts   URL normalization and available quality selection
       store.ts             Shared programme catalogue cache
-      composables/         Archive request lifecycle and content selection
-      components/          Cards, date picker, content list, preview dialog
+      composables/         Archive lifecycle, content selection, programme discovery
+      components/          Cards, spotlight, date picker, content list, preview dialog
       views/               Library and details page composition
       styles.css           Programme UI and responsive styles
     downloads/
@@ -41,6 +41,8 @@ Views compose components and composables. Stores own shared state. Business func
 ## Data Flow
 
 The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages quality, selection, and full-episode matching. The page converts selected content into tasks and passes them to the download store. The preview dialog owns player errors and media URLs.
+
+useFeaturedProgramme selects a random catalogue entry when the library view is created. The spotlight's shuffle action excludes the current programme. Searching, filtering favourites, and refreshing the catalogue preserve the selected ID; refreshed metadata is resolved from the current catalogue. A removed programme is replaced, and changing is disabled when fewer than two entries exist. There is no automatic rotation or persisted selection.
 
 AbortController cancels requests, while LatestRequest prevents obsolete responses from committing state. Requests are cancelled when their component scope ends. Content is not requested without a broadcast date.
 
@@ -75,6 +77,8 @@ The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/)
 The proxy middleware runs inside Vite's existing development or preview server, sharing its process and port. It is not a separately started service. The API currently allows cross-origin metadata requests, but media requests still require a Referer from the upstream player origin that browser Fetch cannot supply. Production can serve static files and the media route from one application server; this runtime is not implemented yet. A native desktop or mobile HTTP implementation can satisfy the media header requirement without a local HTTP proxy process.
 
 The shared typography uses 16px body text and a 14px minimum for supporting labels, with matching Naive UI theme settings. Page titles describe the current task, and helper text is reserved for choices and behaviour that affect the user.
+
+The top bar shows the current page title, while the sidebar owns the app brand. The document reserves scrollbar space with `scrollbar-gutter: stable` so the library remains aligned when a filtered list becomes shorter than the viewport.
 
 ## Readability Improvements
 

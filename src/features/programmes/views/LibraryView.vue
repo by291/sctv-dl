@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import '../styles.css'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, toRef } from 'vue'
 
-import { RouterLink } from 'vue-router'
 import { NButton, NInput, NSelect } from 'naive-ui'
-import { Search, RefreshCw, ArrowRight } from '@lucide/vue'
+import { Search, RefreshCw } from '@lucide/vue'
 
 import { useProgrammeStore } from '../store'
 import { useSettingsStore } from '../../settings/store'
-import CoverImage from '../../../components/CoverImage.vue'
 import StatePanel from '../../../components/StatePanel.vue'
 import ProgrammeCard from '../components/ProgrammeCard.vue'
+import ProgrammeSpotlight from '../components/ProgrammeSpotlight.vue'
+import { useFeaturedProgramme } from '../composables/useFeaturedProgramme'
 
 const store = useProgrammeStore()
 const settings = useSettingsStore()
@@ -33,9 +33,8 @@ const filtered = computed(() => {
     ? [...items].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
     : items
 })
-const featured = computed(
-  () => store.programmes.find((item) => item.id === '1') || store.programmes[0],
-)
+const { featured, canChange, chooseAnother } = useFeaturedProgramme(toRef(store, 'programmes'))
+
 onMounted(() => {
   void store.load()
 })
@@ -60,41 +59,11 @@ onMounted(() => {
     v-if="featured"
     class="library-intro"
   >
-    <RouterLink
-      :to="`/programmes/${featured.id}`"
-      class="featured-card"
-    >
-      <div class="featured-copy">
-        <span class="feature-label">
-          <span aria-hidden="true" />
-          从这里开始
-        </span>
-        <h2>{{ featured.name }}</h2>
-        <p>
-          浏览播出日历，选择整期或精彩片段。
-          <br />
-          让每次回看，都触手可及。
-        </p>
-        <span class="feature-link">
-          查看节目
-          <ArrowRight :size="17" />
-        </span>
-      </div>
-      <div class="featured-visual">
-        <CoverImage
-          :src="featured.cover"
-          :alt="featured.name"
-        />
-      </div>
-      <span
-        class="feature-orbit orbit-one"
-        aria-hidden="true"
-      />
-      <span
-        class="feature-orbit orbit-two"
-        aria-hidden="true"
-      />
-    </RouterLink>
+    <ProgrammeSpotlight
+      :programme="featured"
+      :can-change="canChange"
+      @change="chooseAnother"
+    />
     <div class="library-stat">
       <h2>节目概览</h2>
       <div class="library-stat-row">

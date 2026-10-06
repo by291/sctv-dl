@@ -7,6 +7,8 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  /* Keep the content width stable when filtering removes the vertical scrollbar. */
+  scrollbar-gutter: stable;
   --bg: #f6f7f9;
   --panel: #fff;
   --text: #242a33;

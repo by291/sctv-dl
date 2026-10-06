@@ -113,16 +113,8 @@
   padding: 0 40px;
 }
 
-.breadcrumb {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  font-size: var(--font-size-meta);
-  color: var(--muted);
-}
-
-.breadcrumb strong {
-  font-size: var(--font-size-meta);
+.page-location {
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: var(--text);
 }

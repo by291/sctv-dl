@@ -3,7 +3,7 @@ import './styles.css'
 import { computed } from 'vue'
 
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Tv, Library, Download, Settings2, ChevronRight } from '@lucide/vue'
+import { Tv, Library, Download, Settings2 } from '@lucide/vue'
 
 import { useDownloadStore } from '../features/downloads/store'
 import { useProgrammeStore } from '../features/programmes/store'
@@ -74,11 +74,7 @@ function isActive(path: string): boolean {
     </aside>
     <div class="workspace">
       <header class="topbar">
-        <div class="breadcrumb">
-          <span>sctv-dl</span>
-          <ChevronRight :size="14" />
-          <strong>{{ route.meta.title }}</strong>
-        </div>
+        <span class="page-location">{{ route.meta.title }}</span>
         <div class="connection">
           <span :class="['status-dot', { offline: programmes.error }]" />
           {{ connectionLabel }}
