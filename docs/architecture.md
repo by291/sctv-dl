@@ -1,0 +1,85 @@
+# Architecture and Library Decisions
+
+The frontend was moved from web/ to the repository root. Run installation, development, test, and build commands from the root.
+
+## Structure and Responsibilities
+
+```text
+src/
+  app/                     Routing, Naive UI configuration, theme synchronization
+  layouts/                 Navigation, top bar, footer
+  components/              Shared covers and loading/error/empty states
+  features/
+    programmes/
+      schemas.ts           Upstream validation and field normalization
+      api.ts               Three programme APIs and localized errors
+      types.ts             Domain types inferred from schemas
+      urls.ts / video.ts   URL normalization and available quality selection
+      store.ts             Shared programme catalogue cache
+      composables/         Archive request lifecycle and content selection
+      components/          Cards, date picker, content list, preview dialog
+      views/               Library and details page composition
+      styles.css           Programme UI and responsive styles
+    downloads/
+      schema.ts            Stored task validation
+      model.ts             Filenames, task creation, deduplication, recovery
+      browser-download.ts  HEAD preflight and browser handoff
+      store.ts             Shared queue, actions, persistence
+      components/          Task row presentation
+      views/               Queue page composition
+      styles.css
+    settings/
+      schema.ts / store.ts Preference validation and shared state
+      views/ / styles.css  Settings UI
+  shared/                  Persistence, errors, media URLs, request guards
+  styles/global.css        Theme variables, resets, common styles
+server/                    Local API and streaming media proxies
+```
+
+Views compose components and composables. Stores own shared state. Business functions depend on domain types and schemas. APIs accept unknown data and return validated types. Shared modules do not import feature stores. Browser code does not import Node server modules.
+
+## Data Flow
+
+The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages quality, selection, and full-episode matching. The page converts selected content into tasks and passes them to the download store. The preview dialog owns player errors and media URLs.
+
+AbortController cancels requests, while LatestRequest prevents obsolete responses from committing state. Requests are cancelled when their component scope ends. Content is not requested without a broadcast date.
+
+Settings and favourites retain the `sctv-dl:settings` key; tasks retain `sctv-dl:downloads`. Invalid JSON falls back to defaults. An invalid preference field uses its own default, and individual invalid task records are discarded. Interrupted `checking` tasks return to `queued` during initialization. Valid tasks are retained without silently truncating the queue on reload.
+
+Settings use VueUse synchronization across browser tabs. Downloads execute within the current window and do not synchronize execution state across windows. Concurrent windows still use last-write-wins persistence. Multi-window queue coordination would require a single executor and a deliberate merge policy.
+
+## Replaced Custom Infrastructure
+
+| Previous implementation                                                       | Current approach                              | Benefit                                                                |
+| ----------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| localStorage access and deep watchers                                         | VueUse useStorage with a small schema adapter | Reactive persistence, managed listeners, consistent error feedback     |
+| matchMedia listeners, HTML theme updates, lifecycle cleanup                   | VueUse useColorMode                           | System theme support and reuse of the existing settings state          |
+| navigator.clipboard.writeText                                                 | VueUse useClipboard                           | Existing compatibility handling and legacy copy fallback               |
+| Manual object/array checks, field guards, date regex, stored record filtering | Zod schemas                                   | Central runtime validation, field defaults, inferred types             |
+| Manually adding/removing IDs for each checkbox                                | Naive UI NCheckboxGroup                       | Direct selection binding with explicit select-all/full-episode actions |
+| Repeated find calls for task deduplication                                    | Native Set                                    | Linear deduplication while preserving existing task state              |
+
+The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/), [useColorMode](https://vueuse.org/core/useColorMode/), [useClipboard](https://vueuse.org/core/useClipboard/), and [Zod Basics](https://zod.dev/basics).
+
+## Retained Small Implementations
+
+| Implementation                                               | Rationale                                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Native fetch for three GET endpoints                         | The current request policy is simple. Reconsider Axios/ky or a query library when authentication, complex retries, or caching require it.        |
+| Request switching guard                                      | AbortController plus a small version guard is sufficient. Cancellation alone does not prevent an obsolete result from overwriting current state. |
+| URL parsing, ISO date sorting, Set deduplication             | Platform features suffice without additional URL, date, or utility libraries.                                                                    |
+| Full-episode matching, quality fallback, filenames, task IDs | These are downloader business rules expressed as named, independently testable functions.                                                        |
+| Browser download handoff                                     | The native download manager owns saving and actual progress without buffering hundreds of MB in a page Blob.                                     |
+| Node streaming proxy                                         | Native stream/pipeline provides backpressure. CDN restrictions, Referer, and Range handling are explicit service constraints.                    |
+
+The local Node proxy is still required to satisfy the media Referer requirement. A production service, Rust SDK, or desktop client can use the same domain types later. The current Web project does not include an unused bridge layer.
+
+## Readability Improvements
+
+- App.vue mixed theme detection, component library configuration, and layout; these now live in a theme composable, configuration module, and layout component.
+- ProgrammeView mixed requests, selection, playback, and task creation; requests and selection are separate composables, while date selection, content rows, and previews have typed component contracts.
+- Download rows used nested status ternaries; a typed map now defines labels, icons, and actions.
+- Vue closing tags were crowded; Prettier whitespace/attribute settings and semantic spacing make the markup readable.
+- One long stylesheet covered the entire application; feature styles and scoped shared component styles now have clear ownership.
+- Browser and server ambient types were mixed; TypeScript and ESLint environments are configured separately.
+- Conventions depended on memory; EditorConfig, Prettier, ESLint, and pnpm check enforce the mechanical rules.
