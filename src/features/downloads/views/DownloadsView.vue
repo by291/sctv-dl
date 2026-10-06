@@ -60,7 +60,7 @@ async function copy(url: string) {
         <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
           {{ store.tasks.length }}
         </strong>
-        <span class="mt-[7px] block text-meta text-muted">全部任务</span>
+        <span class="mt-1.75 block text-meta text-muted">全部任务</span>
       </div>
     </div>
     <div class="download-stat">
@@ -71,7 +71,7 @@ async function copy(url: string) {
         <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
           {{ store.pending.length }}
         </strong>
-        <span class="mt-[7px] block text-meta text-muted">待处理</span>
+        <span class="mt-1.75 block text-meta text-muted">待处理</span>
       </div>
     </div>
     <div class="download-stat">
@@ -82,7 +82,7 @@ async function copy(url: string) {
         <strong class="block text-[28px] leading-[1.1] font-semibold max-[760px]:text-2xl">
           {{ handedOff }}
         </strong>
-        <span class="mt-[7px] block text-meta text-muted">已交给浏览器</span>
+        <span class="mt-1.75 block text-meta text-muted">已交给浏览器</span>
       </div>
     </div>
   </div>
@@ -153,7 +153,7 @@ async function copy(url: string) {
     >
       <RouterLink
         to="/"
-        class="empty-link mt-1.5 inline-flex items-center gap-[9px] text-body text-accent"
+        class="empty-link mt-1.5 inline-flex items-center gap-2.25 text-body text-accent"
       >
         浏览节目
         <ArrowRight :size="16" />
@@ -183,10 +183,10 @@ async function copy(url: string) {
 
 @layer components {
   .download-stat {
-    @apply flex items-center gap-[18px] rounded-[11px] border border-line bg-panel p-[23px];
+    @apply flex items-center gap-4.5 rounded-[11px] border border-line bg-panel p-5.75;
 
     @variant max-[760px] {
-      @apply gap-2.5 px-2.5 py-[15px];
+      @apply gap-2.5 px-2.5 py-3.75;
     }
   }
 
@@ -211,10 +211,10 @@ async function copy(url: string) {
   }
 
   .queue-toolbar {
-    @apply flex items-center justify-between gap-5 border-b border-line px-6 py-[13px];
+    @apply flex items-center justify-between gap-5 border-b border-line px-6 py-3.25;
 
     @variant max-[760px] {
-      @apply flex-wrap gap-2.5 px-[18px];
+      @apply flex-wrap gap-2.5 px-4.5;
     }
   }
 
@@ -227,7 +227,7 @@ async function copy(url: string) {
   }
 
   .queue-tab::after {
-    @apply -bottom-[15px];
+    @apply -bottom-3.75;
   }
 }
 </style>

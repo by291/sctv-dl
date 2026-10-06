@@ -18,6 +18,7 @@ Write repository documentation, code comments, test descriptions, and commit mes
 - Keep theme tokens, base defaults, shared presentation classes, named Vue transitions, keyframes, and reduced-motion handling in `src/styles/global.css`. Keep feature-specific selectors inside their owning components; avoid separate feature stylesheets or extracting every small utility combination.
 - Prefer semantic theme utilities such as `bg-panel`, `text-main`, `text-muted`, and `border-line` so light and dark themes share one style definition. Use short semantic classes for composed styles and state objects such as `:class="{ active: isActive }"`; keep any inline utilities complete and statically discoverable.
 - Use component library theme overrides for supported control sizing. Reserve important utilities for overriding the library's unlayered styles or explicitly suppressing competing component transitions. Retain semantic class hooks when tests or component behavior need them.
+- Use canonical Tailwind utilities when they express the same style: `w-58` instead of `w-[232px]`, for example. ESLint checks template classes and all `@apply` rules, including scoped Vue styles, for canonical names, official ordering, duplicates, conflicts, and deprecated utilities. The canonical conversion assumes the application's fixed 16px root font size; update both the base style and lint settings if that changes. Keep arbitrary values when no equivalent utility exists. Prettier controls wrapping so lint fixes do not expand templates into long class lists.
 
 ## TypeScript
 

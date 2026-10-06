@@ -31,7 +31,7 @@ defineEmits<{ retry: [] }>()
     </h3>
     <p
       v-if="error || description"
-      class="max-w-[470px] text-meta leading-[1.8]"
+      class="max-w-117.5 text-meta leading-[1.8]"
     >
       {{ error || description }}
     </p>
@@ -51,7 +51,7 @@ defineEmits<{ retry: [] }>()
 
 @layer components {
   .state-panel {
-    @apply flex min-h-[285px] animate-content-reveal flex-col items-center justify-center gap-[15px];
+    @apply flex min-h-71.25 animate-content-reveal flex-col items-center justify-center gap-3.75;
     @apply px-5 py-10 text-center text-muted;
   }
 }

@@ -44,7 +44,7 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
       class="programme-caption"
     >
       <div>
-        <h3 class="text-body leading-[1.5] font-semibold">{{ programme.name }}</h3>
+        <h3 class="text-body leading-normal font-semibold">{{ programme.name }}</h3>
       </div>
       <ArrowUpRight
         class="text-[#b2b8c0] max-[440px]:hidden"
@@ -61,7 +61,7 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
   .programme-card {
     @apply relative overflow-hidden rounded-[11px] border border-line bg-panel;
     @apply transition-[transform,box-shadow] duration-200 ease-[ease];
-    @apply hover:shadow-[0_8px_24px_#20232a0d] hover:[transform:translateY(-3px)];
+    @apply hover:transform-[translateY(-3px)] hover:shadow-[0_8px_24px_#20232a0d];
   }
 
   .cover-open {
@@ -70,8 +70,8 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
   }
 
   .favourite-button {
-    @apply absolute top-[10px] right-[10px] grid size-9 place-items-center rounded-[7px] border;
-    @apply border-[#ffffff50] backdrop-blur-[8px] transition-colors duration-[140ms] ease-[ease];
+    @apply absolute top-2.5 right-2.5 grid size-9 place-items-center rounded-[7px] border;
+    @apply border-[#ffffff50] backdrop-blur-sm transition-colors duration-140 ease-[ease];
     @apply bg-[#17223145] text-white;
     @apply hover:bg-[#ffffffdf] hover:text-accent;
   }

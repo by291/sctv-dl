@@ -17,7 +17,7 @@ Installation uses pnpm's default machine-wide package store. The repository does
 
 The interface uses Tailwind CSS 4 through the official Vite plugin. Short utility combinations stay in Vue templates; complex and repeated component styles use scoped `@apply` rules with `@reference` to the shared theme. `src/styles/global.css` defines theme tokens, base rules, shared presentation classes, and named transitions. Naive UI and Artplayer retain their own library styles.
 
-Development enables Vite 8's experimental bundled dev mode to reduce first-page module loading overhead. Routing, hot updates, and the local proxies use the same Vite process. This setting affects development only; the production build and preview continue to use the regular build pipeline.
+Development uses Vite's regular module-based hot updates and automatic dependency pre-bundling. Experimental bundled dev mode is disabled because its rebuilds interrupted editing with a bundling page. Restart `pnpm dev` after changing Vite configuration.
 
 ```powershell
 pnpm check
@@ -26,6 +26,8 @@ pnpm preview
 ```
 
 `build` runs TypeScript checks before generating `dist/`. `preview` serves the production build at http://127.0.0.1:4173 with the same local proxy.
+
+`pnpm lint` checks Tailwind class names in Vue templates, bound class expressions, CSS files, and Vue `<style>` blocks. `pnpm lint:fix` applies canonical names (for example, `w-[232px]` becomes `w-58`), official class ordering, and duplicate removal. Conflicting and deprecated utilities are also reported. Prettier handles whitespace and line wrapping. VS Code workspace settings enable ESLint fixes on save and recommend the ESLint and Tailwind extensions. Tailwind IntelliSense retains its own diagnostics.
 
 ## Project Structure
 

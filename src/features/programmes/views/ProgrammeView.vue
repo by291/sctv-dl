@@ -99,7 +99,7 @@ onMounted(() => {
 <template>
   <RouterLink
     to="/"
-    class="back-link mb-[25px] inline-flex items-center gap-[7px] text-meta text-muted hover:text-accent"
+    class="back-link mb-6.25 inline-flex items-center gap-1.75 text-meta text-muted hover:text-accent"
   >
     <ArrowLeft :size="16" />
     返回节目库
@@ -113,11 +113,11 @@ onMounted(() => {
       />
     </div>
     <div class="detail-copy flex-1">
-      <h1 class="mt-[6px] text-[28px] max-[760px]:text-[23px]">
+      <h1 class="mt-1.5 text-[28px] max-[760px]:text-[23px]">
         {{ programmeName || '电视节目' }}
       </h1>
       <span
-        class="detail-meta mt-[13px] flex flex-wrap items-center gap-[7px] text-meta text-muted max-[760px]:leading-[1.5]"
+        class="detail-meta mt-3.25 flex flex-wrap items-center gap-1.75 text-meta text-muted max-[760px]:leading-normal"
       >
         <CalendarDays :size="15" />
         <span class="whitespace-nowrap">{{ dateSummary }}</span>
@@ -131,7 +131,7 @@ onMounted(() => {
     </div>
     <NButton
       v-if="programme"
-      class="max-[1020px]:self-start max-[760px]:ml-[126px]! max-[440px]:ml-[100px]!"
+      class="max-[1020px]:self-start max-[760px]:ml-31.5! max-[440px]:ml-25!"
       secondary
       @click="settings.toggleFavourite(programme.id)"
     >
@@ -172,9 +172,9 @@ onMounted(() => {
     <template v-else>
       <div class="content-toolbar">
         <div
-          class="content-count flex items-baseline gap-[13px] max-[1020px]:flex-wrap max-[1020px]:gap-[7px]"
+          class="content-count flex items-baseline gap-3.25 max-[1020px]:flex-wrap max-[1020px]:gap-1.75"
         >
-          <h2 class="text-[18px] leading-[1.5] font-semibold">{{ selectedDate }}</h2>
+          <h2 class="text-[18px] leading-normal font-semibold">{{ selectedDate }}</h2>
           <span class="content-kind text-body text-main">节目内容</span>
           <span
             v-if="!loadingContents && !contentError"
@@ -250,10 +250,10 @@ onMounted(() => {
 
 @layer components {
   .detail-heading {
-    @apply mb-[34px] flex items-center gap-6;
+    @apply mb-8.5 flex items-center gap-6;
 
     @variant max-[1020px] {
-      @apply gap-[18px];
+      @apply gap-4.5;
     }
 
     @variant max-[760px] {
@@ -266,23 +266,23 @@ onMounted(() => {
   }
 
   .detail-cover {
-    @apply aspect-[16/10] w-[184px] shrink-0 overflow-hidden rounded-[9px] border border-line;
+    @apply aspect-16/10 w-46 shrink-0 overflow-hidden rounded-[9px] border border-line;
 
     @variant max-[1020px] {
-      @apply w-[130px];
+      @apply w-32.5;
     }
 
     @variant max-[760px] {
-      @apply w-[110px];
+      @apply w-27.5;
     }
 
     @variant max-[440px] {
-      @apply w-[88px];
+      @apply w-22;
     }
   }
 
   .content-toolbar {
-    @apply flex items-center justify-between gap-5 px-6 py-[18px];
+    @apply flex items-center justify-between gap-5 px-6 py-4.5;
 
     @variant max-[760px] {
       @apply flex-wrap gap-3 p-5;
@@ -296,10 +296,10 @@ onMounted(() => {
   }
 
   .selection-toolbar {
-    @apply flex flex-wrap items-center gap-[25px] bg-subtle px-6 py-[11px];
+    @apply flex flex-wrap items-center gap-6.25 bg-subtle px-6 py-2.75;
 
     @variant max-[760px] {
-      @apply gap-[15px] px-5 py-3;
+      @apply gap-3.75 px-5 py-3;
     }
   }
 }

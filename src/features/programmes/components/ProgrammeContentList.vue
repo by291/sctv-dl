@@ -67,7 +67,7 @@ function videoAvailability(content: ProgrammeContent): string {
       </button>
 
       <div class="content-info min-w-0 flex-1">
-        <div class="content-labels mb-[7px] flex items-center gap-[9px] max-[760px]:mb-1">
+        <div class="content-labels mb-1.75 flex items-center gap-2.25 max-[760px]:mb-1">
           <span class="content-index text-meta text-muted tabular-nums">
             {{ String(index + 1).padStart(2, '0') }}
           </span>
@@ -90,17 +90,17 @@ function videoAvailability(content: ProgrammeContent): string {
             暂无视频
           </span>
         </div>
-        <h3 class="text-body leading-[1.7] font-medium [overflow-wrap:anywhere]">
+        <h3 class="text-body leading-[1.7] font-medium wrap-anywhere">
           {{ content.title }}
         </h3>
-        <p class="mt-[6px] text-meta text-muted">{{ videoAvailability(content) }}</p>
+        <p class="mt-1.5 text-meta text-muted">{{ videoAvailability(content) }}</p>
       </div>
 
       <div
         class="content-row-actions flex shrink-0 items-center gap-2 max-[760px]:col-start-3 max-[760px]:justify-self-end"
       >
         <NButton
-          class="preview-button size-[42px]! max-[760px]:hidden!"
+          class="preview-button size-10.5! max-[760px]:hidden!"
           quaternary
           circle
           :disabled="!hasVideo(content)"
@@ -125,15 +125,15 @@ function videoAvailability(content: ProgrammeContent): string {
 
 @layer components {
   .content-row {
-    @apply flex items-center gap-[18px] border-b border-line px-6 py-[18px] transition-colors;
-    @apply duration-[140ms] ease-[ease] last:rounded-b-[11px] last:border-b-0;
+    @apply flex items-center gap-4.5 border-b border-line px-6 py-4.5 transition-colors;
+    @apply duration-140 ease-[ease] last:rounded-b-[11px] last:border-b-0;
 
     @variant max-[760px] {
       @apply grid grid-cols-[20px_88px_minmax(0,1fr)] gap-3 px-5;
     }
 
     @variant max-[440px] {
-      @apply grid-cols-[20px_72px_minmax(0,1fr)] gap-[10px] px-[14px];
+      @apply grid-cols-[20px_72px_minmax(0,1fr)] gap-2.5 px-3.5;
     }
   }
 
@@ -142,14 +142,14 @@ function videoAvailability(content: ProgrammeContent): string {
   }
 
   .content-thumbnail {
-    @apply relative aspect-video w-[126px] shrink-0 overflow-hidden rounded-[6px] border-0 p-0;
+    @apply relative aspect-video w-31.5 shrink-0 overflow-hidden rounded-md border-0 p-0;
 
     @variant max-[760px] {
-      @apply row-span-2 w-[88px];
+      @apply row-span-2 w-22;
     }
 
     @variant max-[440px] {
-      @apply w-[72px];
+      @apply w-18;
     }
   }
 }

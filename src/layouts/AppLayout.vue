@@ -70,7 +70,7 @@ function isActive(path: string): boolean {
       </nav>
       <div class="sidebar-bottom mt-auto max-[760px]:hidden">
         <div
-          class="version flex items-center gap-2 border-t border-line px-[14px] pt-[18px] text-meta text-muted"
+          class="version flex items-center gap-2 border-t border-line px-3.5 pt-4.5 text-meta text-muted"
         >
           Web · v0.1.0
         </div>
@@ -79,7 +79,7 @@ function isActive(path: string): boolean {
     <div class="workspace flex min-w-0 flex-1 flex-col">
       <header class="topbar">
         <span class="page-location text-body font-medium text-main">{{ route.meta.title }}</span>
-        <div class="connection flex items-center gap-[7px] text-meta text-muted">
+        <div class="connection flex items-center gap-1.75 text-meta text-muted">
           <span
             class="status-dot"
             :class="{ offline: programmes.error }"
@@ -114,29 +114,29 @@ function isActive(path: string): boolean {
 
 @layer components {
   .sidebar {
-    @apply sticky top-0 flex h-screen w-[232px] shrink-0 flex-col border-r border-line bg-panel;
+    @apply sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-panel;
     @apply px-5 pt-9 pb-5;
 
     @variant max-[1250px] {
-      @apply w-[216px] px-[15px];
+      @apply w-54 px-3.75;
     }
 
     @variant max-[1020px] {
-      @apply w-[200px] px-2.5;
+      @apply w-50 px-2.5;
     }
 
     @variant max-[760px] {
-      @apply z-20 h-[75px] w-full flex-row items-center justify-between gap-[18px];
-      @apply border-r-0 border-b px-[18px] py-0;
+      @apply z-20 h-18.75 w-full flex-row items-center justify-between gap-4.5;
+      @apply border-r-0 border-b px-4.5 py-0;
     }
 
     @variant max-[440px] {
-      @apply gap-2 px-[15px];
+      @apply gap-2 px-3.75;
     }
   }
 
   .brand {
-    @apply flex items-center gap-[11px] px-[11px] text-2xl leading-[1.2] font-extrabold;
+    @apply flex items-center gap-2.75 px-2.75 text-2xl leading-[1.2] font-extrabold;
     @apply tracking-[-0.8px];
 
     @variant max-[1020px] {
@@ -153,10 +153,10 @@ function isActive(path: string): boolean {
   }
 
   .brand-icon {
-    @apply grid size-[42px] shrink-0 place-items-center rounded-xl bg-accent text-white;
+    @apply grid size-10.5 shrink-0 place-items-center rounded-xl bg-accent text-white;
 
     @variant max-[760px] {
-      @apply size-[34px] rounded-[10px];
+      @apply size-8.5 rounded-[10px];
     }
   }
 
@@ -164,16 +164,16 @@ function isActive(path: string): boolean {
     @apply mt-10 grid gap-2;
 
     @variant max-[760px] {
-      @apply mt-0 flex gap-[3px];
+      @apply mt-0 flex gap-0.75;
     }
   }
 
   .nav-link {
-    @apply flex items-center gap-3 rounded-lg px-[15px] py-[13px] text-body font-medium;
+    @apply flex items-center gap-3 rounded-lg px-3.75 py-3.25 text-body font-medium;
     @apply text-[#727987] transition-[background,color] duration-150 ease-[ease] hover:bg-subtle;
 
     @variant max-[760px] {
-      @apply gap-[7px] p-2.5 text-meta;
+      @apply gap-1.75 p-2.5 text-meta;
     }
 
     @variant max-[440px] {
@@ -186,7 +186,7 @@ function isActive(path: string): boolean {
   }
 
   .nav-count {
-    @apply ml-auto grid h-[19px] min-w-5 place-items-center rounded-[5px] bg-accent-soft text-meta;
+    @apply ml-auto grid h-4.75 min-w-5 place-items-center rounded-[5px] bg-accent-soft text-meta;
     @apply text-accent;
 
     @variant max-[760px] {
@@ -195,22 +195,22 @@ function isActive(path: string): boolean {
   }
 
   .topbar {
-    @apply flex h-[70px] items-center justify-between border-b border-line bg-panel px-10;
+    @apply flex h-17.5 items-center justify-between border-b border-line bg-panel px-10;
 
     @variant max-[1250px] {
-      @apply px-[30px];
+      @apply px-7.5;
     }
 
     @variant max-[760px] {
-      @apply h-[53px] px-5;
+      @apply h-13.25 px-5;
     }
   }
 
   .main-content {
-    @apply mx-auto w-full max-w-[1460px] flex-1 px-10 pt-[38px] pb-10;
+    @apply mx-auto w-full max-w-365 flex-1 px-10 pt-9.5 pb-10;
 
     @variant max-[1250px] {
-      @apply p-[30px];
+      @apply p-7.5;
     }
 
     @variant max-[1020px] {
@@ -218,7 +218,7 @@ function isActive(path: string): boolean {
     }
 
     @variant max-[760px] {
-      @apply px-5 pt-[26px] pb-[30px];
+      @apply px-5 pt-6.5 pb-7.5;
     }
   }
 }

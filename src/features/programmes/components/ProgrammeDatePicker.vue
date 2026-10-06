@@ -18,11 +18,11 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
       <h2 class="text-[18px] font-semibold">选择播出日期</h2>
     </div>
 
-    <div class="date-control flex items-center gap-[10px] text-muted max-[760px]:w-full">
+    <div class="date-control flex items-center gap-2.5 text-muted max-[760px]:w-full">
       <CalendarDays :size="18" />
       <NSelect
         v-model:value="selectedDate"
-        class="w-[215px]! max-[760px]:w-auto! max-[760px]:flex-1"
+        class="w-53.75! max-[760px]:w-auto! max-[760px]:flex-1"
         :options="options"
         filterable
         :disabled="loading || !dates.length"
@@ -31,7 +31,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         aria-label="播出日期"
       />
       <NButton
-        class="size-[42px]!"
+        class="size-10.5!"
         quaternary
         circle
         aria-label="重新读取播出日期"
@@ -47,9 +47,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
     v-if="dates.length"
     class="recent-dates"
   >
-    <span class="mr-[10px] text-meta text-muted max-[760px]:mb-[3px] max-[760px]:w-full">
-      最近播出
-    </span>
+    <span class="mr-2.5 text-meta text-muted max-[760px]:mb-0.75 max-[760px]:w-full">最近播出</span>
     <button
       v-for="date in dates.slice(0, 7)"
       :key="date.id"
@@ -68,8 +66,8 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 
 @layer components {
   .date-button {
-    @apply rounded-[6px] border border-transparent bg-subtle px-[10px] py-[7px] text-meta text-muted;
-    @apply transition-colors duration-[140ms] ease-[ease] hover:bg-accent-soft hover:text-accent;
+    @apply rounded-md border border-transparent bg-subtle px-2.5 py-1.75 text-meta text-muted;
+    @apply transition-colors duration-140 ease-[ease] hover:bg-accent-soft hover:text-accent;
   }
 
   .date-button.active {
@@ -80,15 +78,15 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
     @apply flex items-center justify-between gap-5 p-6;
 
     @variant max-[760px] {
-      @apply flex-col items-start gap-[15px] p-5;
+      @apply flex-col items-start gap-3.75 p-5;
     }
   }
 
   .recent-dates {
-    @apply flex flex-wrap items-center gap-2 border-b border-line px-6 pb-[23px];
+    @apply flex flex-wrap items-center gap-2 border-b border-line px-6 pb-5.75;
 
     @variant max-[760px] {
-      @apply gap-[7px] px-5 pb-5;
+      @apply gap-1.75 px-5 pb-5;
     }
   }
 }

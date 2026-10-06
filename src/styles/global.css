@@ -41,10 +41,10 @@
 
 @layer components {
   .page-heading {
-    @apply mb-[30px] flex items-center justify-between gap-5;
+    @apply mb-7.5 flex items-center justify-between gap-5;
 
     @variant max-[760px] {
-      @apply mb-[23px] items-start gap-3;
+      @apply mb-5.75 items-start gap-3;
     }
 
     @variant max-[440px] {
@@ -53,7 +53,7 @@
   }
 
   .pill {
-    @apply inline-flex rounded-[4px] bg-subtle px-1.5 py-0.5 text-meta whitespace-nowrap text-muted;
+    @apply inline-flex rounded-sm bg-subtle px-1.5 py-0.5 text-meta whitespace-nowrap text-muted;
   }
 
   .pill.coral {
@@ -61,7 +61,7 @@
   }
 
   .notice {
-    @apply mb-[22px] flex items-center gap-2.5 rounded-lg bg-subtle px-4 py-[13px];
+    @apply mb-5.5 flex items-center gap-2.5 rounded-lg bg-subtle px-4 py-3.25;
     @apply text-meta leading-[1.8] text-muted;
   }
 
@@ -78,8 +78,8 @@
   }
 
   .filter-tab {
-    @apply relative border-0 bg-transparent py-[9px] text-body whitespace-nowrap text-muted;
-    @apply transition-colors duration-[140ms] ease-[ease] after:content-[''];
+    @apply relative border-0 bg-transparent py-2.25 text-body whitespace-nowrap text-muted;
+    @apply transition-colors duration-140 ease-[ease] after:content-[''];
   }
 
   .filter-tab.selected {
@@ -87,13 +87,13 @@
   }
 
   .filter-tab.selected::after {
-    @apply absolute left-0 h-[2px] w-5 animate-content-reveal rounded-[2px] bg-accent;
+    @apply absolute left-0 h-0.5 w-5 animate-content-reveal rounded-xs bg-accent;
     @apply [animation-duration:140ms];
   }
 
   .filter-count {
-    @apply ml-2 rounded-[5px] bg-subtle px-[5px] py-[2px] text-meta font-medium text-muted;
-    @apply transition-colors duration-[140ms] ease-[ease];
+    @apply ml-2 rounded-[5px] bg-subtle px-1.25 py-0.5 text-meta font-medium text-muted;
+    @apply transition-colors duration-140 ease-[ease];
   }
 
   .filter-tab.selected .filter-count {
@@ -102,11 +102,11 @@
 
   .page-enter-active,
   .page-leave-active {
-    @apply transition-[opacity,transform] duration-[var(--motion-fast)] ease-[var(--motion-ease)];
+    @apply transition-[opacity,transform] duration-(--motion-fast) ease-(--motion-ease);
   }
 
   .page-enter-from {
-    @apply opacity-0 [transform:translateY(4px)];
+    @apply transform-[translateY(4px)] opacity-0;
   }
 
   .page-leave-to,
@@ -118,11 +118,11 @@
 
   .fade-enter-active,
   .fade-leave-active {
-    @apply transition-opacity duration-[var(--motion-fast)] ease-[var(--motion-ease)];
+    @apply transition-opacity duration-(--motion-fast) ease-(--motion-ease);
   }
 
   .catalogue-enter-active {
-    @apply transition-opacity! duration-[140ms]! ease-[var(--motion-ease)]!;
+    @apply transition-opacity! duration-140! ease-(--motion-ease)!;
   }
 
   /* Suppress Vue's positional animation when sorting the catalogue. */
@@ -132,7 +132,7 @@
 
   .queue-enter-active,
   .queue-leave-active {
-    @apply transition-[opacity,transform] duration-[var(--motion-normal)] ease-[var(--motion-ease)];
+    @apply transition-[opacity,transform] duration-(--motion-normal) ease-(--motion-ease);
   }
 
   .queue-leave-active {
@@ -141,11 +141,11 @@
 
   .queue-enter-from,
   .queue-leave-to {
-    @apply opacity-0 [transform:translateY(6px)];
+    @apply transform-[translateY(6px)] opacity-0;
   }
 
   .queue-move {
-    @apply transition-transform duration-[var(--motion-normal)] ease-[var(--motion-ease)];
+    @apply transition-transform duration-(--motion-normal) ease-(--motion-ease);
   }
 }
 
@@ -194,7 +194,7 @@
   }
 
   body {
-    @apply min-w-[340px] bg-app-bg text-body text-main;
+    @apply min-w-85 bg-app-bg text-body text-main;
     line-height: inherit;
   }
 

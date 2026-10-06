@@ -40,7 +40,7 @@ watch(url, () => {
   <NModal
     :show="!!content"
     preset="card"
-    class="preview-modal w-[min(860px,calc(100vw_-_32px))]!"
+    class="preview-modal w-[min(860px,calc(100vw-32px))]!"
     :title="content?.title"
     :bordered="false"
     @update:show="updateVisible"

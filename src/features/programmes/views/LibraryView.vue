@@ -120,7 +120,7 @@ onMounted(() => {
     <div class="library-filters flex gap-3 max-[1020px]:w-full">
       <NInput
         v-model:value="query"
-        class="w-[200px]! max-[1020px]:flex-1"
+        class="w-50! max-[1020px]:flex-1"
         clearable
         placeholder="搜索节目名称"
         aria-label="搜索节目名称"
@@ -129,7 +129,7 @@ onMounted(() => {
       </NInput>
       <NSelect
         v-model:value="sort"
-        class="w-[148px]!"
+        class="w-37!"
         :options="sortOptions"
         aria-label="节目排序"
       />
@@ -172,7 +172,7 @@ onMounted(() => {
 
   <div
     v-if="filtered.length"
-    class="list-footer flex justify-between pt-[25px] text-meta text-muted"
+    class="list-footer flex justify-between pt-6.25 text-meta text-muted"
   >
     <span>共 {{ filtered.length }} 个栏目</span>
     <span>内容来自四川观察节目服务</span>
@@ -187,12 +187,12 @@ onMounted(() => {
     @apply -bottom-4;
 
     @variant max-[1020px] {
-      @apply -bottom-[10px];
+      @apply -bottom-2.5;
     }
   }
 
   .library-intro {
-    @apply mb-[31px] grid grid-cols-[minmax(0,1fr)_242px] gap-5;
+    @apply mb-7.75 grid grid-cols-[minmax(0,1fr)_242px] gap-5;
 
     @variant max-[1250px] {
       @apply grid-cols-[minmax(0,1fr)_210px];
@@ -203,12 +203,12 @@ onMounted(() => {
     }
 
     @variant max-[760px] {
-      @apply mb-[25px];
+      @apply mb-6.25;
     }
   }
 
   .library-toolbar {
-    @apply mb-[22px] flex items-center justify-between gap-5 border-b border-line pb-[15px];
+    @apply mb-5.5 flex items-center justify-between gap-5 border-b border-line pb-3.75;
 
     @variant max-[1020px] {
       @apply flex-col items-start gap-7;
@@ -216,7 +216,7 @@ onMounted(() => {
   }
 
   .programme-grid {
-    @apply grid grid-cols-4 gap-x-5 gap-y-[22px];
+    @apply grid grid-cols-4 gap-x-5 gap-y-5.5;
 
     @variant min-[1700px] {
       @apply grid-cols-5;
@@ -231,7 +231,7 @@ onMounted(() => {
     }
 
     @variant max-[760px] {
-      @apply gap-x-[14px] gap-y-[18px];
+      @apply gap-x-3.5 gap-y-4.5;
     }
   }
 }

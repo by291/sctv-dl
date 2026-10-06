@@ -41,7 +41,7 @@ watch(
 
 @layer components {
   .cover-fallback {
-    @apply flex size-full min-h-[85px] flex-col items-center justify-center gap-2;
+    @apply flex size-full min-h-21.25 flex-col items-center justify-center gap-2;
     @apply bg-[linear-gradient(125deg,var(--subtle),var(--accent-soft))] p-3 text-center text-muted;
   }
 }

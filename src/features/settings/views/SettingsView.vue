@@ -39,17 +39,17 @@ onMounted(() => {
     浏览器未允许本地存储，本次设置可能无法在刷新后保留。
   </div>
 
-  <div class="settings-layout max-w-[960px]">
-    <div class="settings-sections grid gap-[22px]">
+  <div class="settings-layout max-w-240">
+    <div class="settings-sections grid gap-5.5">
       <section class="settings-card">
         <div class="settings-title">
           <SlidersHorizontal :size="20" />
           <h2 class="text-lg leading-[inherit] font-semibold text-main">播放与下载</h2>
         </div>
         <div class="setting-row">
-          <div class="max-w-[450px]">
+          <div class="max-w-112.5">
             <h3 class="text-body font-medium">默认预览画质</h3>
-            <p class="mt-[7px] text-meta leading-[1.9] text-muted">
+            <p class="mt-1.75 text-meta leading-[1.9] text-muted">
               播放时优先使用该画质，不可用时自动使用另一版本。
             </p>
           </div>
@@ -64,9 +64,9 @@ onMounted(() => {
           </NRadioGroup>
         </div>
         <div class="setting-row">
-          <div class="max-w-[450px]">
+          <div class="max-w-112.5">
             <h3 class="text-body font-medium">保存位置</h3>
-            <p class="mt-[7px] text-meta leading-[1.9] text-muted">
+            <p class="mt-1.75 text-meta leading-[1.9] text-muted">
               由浏览器的下载设置决定。若要每次选择目录，请在浏览器中开启“下载前询问保存位置”。
             </p>
           </div>
@@ -79,7 +79,7 @@ onMounted(() => {
           <h2 class="text-lg leading-[inherit] font-semibold text-main">外观</h2>
         </div>
         <div class="setting-row">
-          <div class="max-w-[450px]">
+          <div class="max-w-112.5">
             <h3 class="text-body font-medium">界面主题</h3>
           </div>
           <NRadioGroup
@@ -104,10 +104,10 @@ onMounted(() => {
           <h2 class="text-lg leading-[inherit] font-semibold text-main">节目服务</h2>
         </div>
         <div class="setting-row">
-          <div class="max-w-[450px]">
+          <div class="max-w-112.5">
             <h3 class="text-body font-medium">
               <span
-                class="status-dot mr-[7px]"
+                class="status-dot mr-1.75"
                 :class="{ offline: programmes.error }"
               />
               {{
@@ -118,7 +118,7 @@ onMounted(() => {
                     : '正在检查连接'
               }}
             </h3>
-            <p class="mt-[7px] text-meta leading-[1.9] text-muted">
+            <p class="mt-1.75 text-meta leading-[1.9] text-muted">
               {{
                 programmes.error ||
                 `已读取 ${programmes.programmes.length} 个栏目 · 最近检查 ${lastUpdated}`
@@ -152,14 +152,14 @@ onMounted(() => {
   }
 
   .settings-title {
-    @apply flex items-center gap-2.5 border-b border-line pb-[19px] text-muted;
+    @apply flex items-center gap-2.5 border-b border-line pb-4.75 text-muted;
   }
 
   .setting-row {
-    @apply flex items-center justify-between gap-[25px] pt-[22px];
+    @apply flex items-center justify-between gap-6.25 pt-5.5;
 
     @variant max-[760px] {
-      @apply flex-wrap gap-[15px];
+      @apply flex-wrap gap-3.75;
     }
   }
 }

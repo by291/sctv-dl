@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
     }
 
     .programme-player :deep(.art-controls .art-control-time) {
-      @apply px-[2px]!;
+      @apply px-0.5!;
     }
   }
 }

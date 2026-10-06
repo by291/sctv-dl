@@ -23,9 +23,9 @@ const emit = defineEmits<{
     aria-label="栏目探索"
   >
     <div class="featured-copy">
-      <span class="feature-label flex items-center gap-[6px] text-meta text-[#ad6e5f]">
+      <span class="feature-label flex items-center gap-1.5 text-meta text-[#ad6e5f]">
         <span
-          class="size-[5px] rounded-full bg-current"
+          class="size-1.25 rounded-full bg-current"
           aria-hidden="true"
         />
         栏目探索
@@ -36,15 +36,15 @@ const emit = defineEmits<{
       >
         {{ programme.name }}
       </h2>
-      <p class="text-meta leading-[1.8] text-muted max-[440px]:mt-[22px]">
+      <p class="text-meta leading-[1.8] text-muted max-[440px]:mt-5.5">
         浏览播出日历，选择整期或精彩片段。
         <br />
         让每次回看，都触手可及。
       </p>
-      <div class="feature-actions mt-[19px] flex flex-wrap items-center gap-6">
+      <div class="feature-actions mt-4.75 flex flex-wrap items-center gap-6">
         <RouterLink
           :to="`/programmes/${programme.id}`"
-          class="feature-link inline-flex items-center gap-[19px] text-body font-semibold text-[#b75241]"
+          class="feature-link inline-flex items-center gap-4.75 text-body font-semibold text-[#b75241]"
         >
           查看节目
           <ArrowRight :size="17" />
@@ -67,7 +67,7 @@ const emit = defineEmits<{
     >
       <CoverImage
         :key="programme.id"
-        class="aspect-[16/10] animate-content-reveal"
+        class="aspect-16/10 animate-content-reveal"
         :src="programme.cover"
         :alt="programme.name"
       />
@@ -88,19 +88,19 @@ const emit = defineEmits<{
 
 @layer components {
   .featured-card {
-    @apply relative flex min-h-[240px] overflow-clip rounded-xl bg-hero transition-shadow duration-200;
+    @apply relative flex min-h-60 overflow-clip rounded-xl bg-hero transition-shadow duration-200;
     @apply ease-[ease] hover:shadow-[0_8px_25px_#0000000c];
   }
 
   .featured-copy {
-    @apply relative z-2 min-w-0 flex-1 px-7 py-[29px];
+    @apply relative z-2 min-w-0 flex-1 px-7 py-7.25;
 
     @variant max-[1250px] {
       @apply pl-6;
     }
 
     @variant max-[760px] {
-      @apply px-[22px] py-[26px];
+      @apply px-5.5 py-6.5;
     }
 
     @variant max-[440px] {
@@ -109,8 +109,8 @@ const emit = defineEmits<{
   }
 
   .featured-title {
-    @apply mt-3 mb-[9px] animate-content-reveal text-[26px] font-bold tracking-[-0.5px];
-    @apply [overflow-wrap:anywhere];
+    @apply mt-3 mb-2.25 animate-content-reveal text-[26px] font-bold tracking-[-0.5px];
+    @apply wrap-anywhere;
 
     @variant max-[1250px] {
       @apply text-[23px];
@@ -122,7 +122,7 @@ const emit = defineEmits<{
   }
 
   .featured-visual {
-    @apply relative z-2 mr-6 w-[42%] max-w-[280px] shrink-0 -rotate-5 self-center overflow-hidden;
+    @apply relative z-2 mr-6 w-[42%] max-w-70 shrink-0 -rotate-5 self-center overflow-hidden;
     @apply rounded-[10px] border-4 border-[#ffffff90] shadow-[0_16px_26px_#5e433524];
 
     @variant max-[1250px] {
@@ -143,11 +143,11 @@ const emit = defineEmits<{
   }
 
   .orbit-one {
-    @apply -top-[44px] -right-[10px] size-[330px];
+    @apply -top-11 -right-2.5 size-82.5;
   }
 
   .orbit-two {
-    @apply -top-[90px] -right-[58px] size-[420px];
+    @apply -top-22.5 -right-14.5 size-105;
   }
 }
 </style>

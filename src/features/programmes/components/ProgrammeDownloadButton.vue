@@ -83,7 +83,7 @@ watch(
       <template #icon><Download :size="16" /></template>
       {{ label }}
       <ChevronDown
-        class="download-chevron ml-[6px]"
+        class="download-chevron ml-1.5"
         :size="14"
       />
     </NButton>

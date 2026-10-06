@@ -20,7 +20,7 @@ const status = computed(() => statusInfo[props.task.status])
 <template>
   <article class="queue-row">
     <div
-      class="file-icon grid h-[46px] w-[42px] shrink-0 place-items-center rounded-[7px] border border-line text-[#8993a5]"
+      class="file-icon grid h-11.5 w-10.5 shrink-0 place-items-center rounded-[7px] border border-line text-[#8993a5]"
     >
       <FileVideo
         :size="25"
@@ -29,8 +29,8 @@ const status = computed(() => statusInfo[props.task.status])
     </div>
 
     <div class="queue-info min-w-0 flex-1 max-[1020px]:basis-[calc(100%-70px)]">
-      <h3 class="text-body leading-[1.8] font-medium [overflow-wrap:anywhere]">{{ task.title }}</h3>
-      <p class="mt-[5px] text-meta text-muted [&>span]:px-[7px]">
+      <h3 class="text-body leading-[1.8] font-medium wrap-anywhere">{{ task.title }}</h3>
+      <p class="mt-1.25 text-meta text-muted [&>span]:px-1.75">
         {{ task.programme }}
         <span>·</span>
         {{ task.date }}
@@ -41,7 +41,7 @@ const status = computed(() => statusInfo[props.task.status])
       </p>
       <p
         v-if="task.error"
-        class="task-error mt-[5px] text-meta text-accent"
+        class="task-error mt-1.25 text-meta text-accent"
       >
         {{ task.error }}
       </p>
@@ -64,7 +64,7 @@ const status = computed(() => statusInfo[props.task.status])
       </span>
     </Transition>
 
-    <div class="queue-actions flex items-center gap-[7px] max-[1020px]:ml-auto max-[440px]:gap-0.5">
+    <div class="queue-actions flex items-center gap-1.75 max-[1020px]:ml-auto max-[440px]:gap-0.5">
       <NButton
         :loading="task.status === 'checking'"
         :disabled="batchRunning"
@@ -103,7 +103,7 @@ const status = computed(() => statusInfo[props.task.status])
     @apply flex items-center gap-1.5 text-meta whitespace-nowrap text-muted;
 
     @variant max-[1020px] {
-      @apply ml-[54px];
+      @apply ml-13.5;
     }
 
     @variant max-[440px] {
@@ -120,7 +120,7 @@ const status = computed(() => statusInfo[props.task.status])
   }
 
   .queue-row {
-    @apply flex items-center gap-[18px] border-b border-line p-6 last:border-0;
+    @apply flex items-center gap-4.5 border-b border-line p-6 last:border-0;
 
     @variant max-[1250px] {
       @apply gap-3;
@@ -131,7 +131,7 @@ const status = computed(() => statusInfo[props.task.status])
     }
 
     @variant max-[760px] {
-      @apply px-[18px] py-5;
+      @apply px-4.5 py-5;
     }
   }
 }
