@@ -15,8 +15,13 @@ describe('settings validation', () => {
   it('supplies defaults when old storage has no preferences', () => {
     expect(settingsSchema.parse({})).toEqual({
       quality: 'standard',
-      theme: 'light',
+      theme: 'system',
       favourites: [],
     })
+  })
+
+  it('preserves an explicitly saved theme while recovering an invalid theme to system', () => {
+    expect(settingsSchema.parse({ theme: 'light' }).theme).toBe('light')
+    expect(settingsSchema.parse({ theme: 'invalid' }).theme).toBe('system')
   })
 })

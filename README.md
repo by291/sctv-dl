@@ -1,6 +1,6 @@
 # sctv-dl
 
-Browse real Sichuan TV programmes, search and save favourites, select full episodes or clips by broadcast date, choose standard or smooth quality, and add items to a download queue. Theme, quality preferences, favourites, and task metadata are stored locally in the browser.
+Browse real Sichuan TV programmes, search and save favourites, select full episodes or clips by broadcast date, choose standard or smooth quality, and add items to a download queue. Theme, preview quality preferences, favourites, and task metadata are stored locally in the browser.
 
 ## Development
 
@@ -12,6 +12,8 @@ pnpm dev
 ```
 
 Open http://127.0.0.1:5180 . An internet connection is required to access the programme service. `pnpm dev` starts one Vite process that serves both the frontend and the proxy middleware; no separate server command is needed.
+
+Installation uses pnpm's default machine-wide package store. The repository does not override `store-dir`, so other projects can reuse cached packages.
 
 ```powershell
 pnpm check
@@ -35,11 +37,11 @@ See [Coding Conventions](CONTRIBUTING.md) and [Architecture and Library Decision
 
 ## Download Behaviour
 
-Video previews use Artplayer with Chinese playback controls, speed settings, keyboard shortcuts, picture-in-picture, and fullscreen. Playback begins when requested, and closing a preview releases the player. If the selected video variant is unavailable, the preview uses the same fallback as the download queue. UI motion respects the system's reduced-motion preference.
+Video previews use Artplayer with Chinese playback controls, speed settings, keyboard shortcuts, picture-in-picture, and fullscreen. When a programme has distinct standard and smooth variants, the settings menu also provides quality selection while retaining the playback position. Playback begins when requested, and closing a preview releases the player. The initial quality follows the saved preference with an available-variant fallback. UI motion respects the system's reduced-motion preference, and the theme follows the system by default.
 
-Select content on the programme details page and add it to the queue, then start downloads from the task page. The application uses HEAD to check video availability before handing the download to the browser. A `handed-off` task means that a save was requested; it does not mean the download finished. The browser download manager owns progress, the destination directory, pause, cancellation, resume, and the final result. Batch downloads may require the browser to allow multiple files.
+Use a content row's download button or select multiple rows and choose the batch download action above the list. Both open a quality dropdown; selecting a quality immediately adds tasks and shows a notification while keeping the current page. Unavailable choices are disabled, and batch fallbacks are explained in the notification. Dismissing the menu adds no tasks. Download quality is chosen per operation, while the saved quality preference controls initial video preview quality. Start queued downloads from the task page. The application uses HEAD to check video availability before handing the download to the browser. A `handed-off` task means that a save was requested; it does not mean the download finished. The browser download manager owns progress, the destination directory, pause, cancellation, resume, and the final result. Batch downloads may require the browser to allow multiple files.
 
-Tasks are deduplicated by content ID and actual quality. If the requested quality is missing, the available alternative is used and shown in the content row and task. Selection is disabled only when both video variants are missing. Full-episode selection matches the programme name and broadcast date in the title; it does not assume the first item is a full episode. Filenames include the date, title, and actual quality. Large videos are streamed rather than fully buffered in page memory.
+Tasks are deduplicated by content ID and actual quality. Content rows show available variants; if the requested quality is missing, the task uses the available alternative and records its actual quality. Selection is disabled only when both video variants are missing. Full-episode selection matches the programme name and broadcast date in the title; it does not assume the first item is a full episode. Filenames include the date, title, and actual quality. Large videos are streamed rather than fully buffered in page memory.
 
 ## APIs and Proxies
 

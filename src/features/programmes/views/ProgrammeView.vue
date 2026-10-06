@@ -2,9 +2,9 @@
 import '../styles.css'
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { RouterLink, useRouter } from 'vue-router'
-import { NButton, NCheckbox, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
-import { ArrowLeft, CalendarDays, Download, Star, Check } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
+import { NButton, NCheckbox, useMessage } from 'naive-ui'
+import { ArrowLeft, CalendarDays, Star, Check } from '@lucide/vue'
 
 import { errorMessage } from '../../../shared/errors'
 import { makeDownloadTask } from '../../downloads/model'
@@ -18,11 +18,11 @@ import StatePanel from '../../../components/StatePanel.vue'
 import ProgrammeDatePicker from '../components/ProgrammeDatePicker.vue'
 import ProgrammeContentList from '../components/ProgrammeContentList.vue'
 import ProgrammePreviewDialog from '../components/ProgrammePreviewDialog.vue'
+import ProgrammeDownloadButton from '../components/ProgrammeDownloadButton.vue'
 
-import type { ProgrammeContent } from '../types'
+import type { ProgrammeContent, Quality } from '../types'
 
 const props = defineProps<{ id: string }>()
-const router = useRouter()
 const catalogue = useProgrammeStore()
 const downloads = useDownloadStore()
 const settings = useSettingsStore()
@@ -42,9 +42,15 @@ const {
   loadDates,
   loadContents,
 } = useProgrammeArchive(programmeId)
-const { selected, quality, allSelected, fullIds, selectAll, selectFullEpisodes, videoNote } =
-  useContentSelection(contents, programmeName, selectedDate, settings.quality)
+const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useContentSelection(
+  contents,
+  programmeName,
+  selectedDate,
+)
 const preview = ref<ProgrammeContent | null>(null)
+const selectedContents = computed(() =>
+  contents.value.filter((item) => selected.value.includes(item.id)),
+)
 
 const dateSummary = computed(() => {
   if (loadingDates.value) {
@@ -62,28 +68,21 @@ function openPreview(content: ProgrammeContent) {
   preview.value = content
 }
 
-function addSelected(openQueue = false) {
+function addDownloads(items: ProgrammeContent[], quality: Quality) {
   try {
-    const tasks = contents.value
-      .filter((item) => selected.value.includes(item.id))
-      .map((item) =>
-        makeDownloadTask(
-          item,
-          programmeName.value || '电视节目',
-          selectedDate.value || '',
-          quality.value,
-        ),
-      )
+    if (!items.length) {
+      return
+    }
+
+    const tasks = items.map((item) =>
+      makeDownloadTask(item, programmeName.value || '电视节目', selectedDate.value || '', quality),
+    )
     const count = downloads.add(tasks)
-    message.success(count ? `已加入 ${count} 个下载任务` : '所选内容已在下载列表中')
+    const fallback = tasks.some((task) => task.quality !== quality)
+      ? `，缺少${quality === 'smooth' ? '流畅' : '标准'}版本的内容使用${quality === 'smooth' ? '标准' : '流畅'}画质`
+      : ''
 
-    if (tasks.some((task) => task.quality !== quality.value)) {
-      message.info('部分内容没有所选版本，已使用可用画质，详见任务列表')
-    }
-
-    if (openQueue) {
-      void router.push('/downloads')
-    }
+    message.success(count ? `已加入 ${count} 个下载任务${fallback}` : '所选内容已在下载列表中')
   } catch (cause) {
     message.error(errorMessage(cause))
   }
@@ -164,23 +163,17 @@ onMounted(() => {
     <template v-else>
       <div class="content-toolbar">
         <div class="content-count">
-          <h2>
-            {{ selectedDate }}
-            <span>节目内容</span>
-          </h2>
+          <h2>{{ selectedDate }}</h2>
+          <span class="content-kind">节目内容</span>
           <span v-if="!loadingContents && !contentError">{{ contents.length }} 条内容</span>
         </div>
-        <div class="quality-control">
-          <span>画质</span>
-          <NRadioGroup
-            v-model:value="quality"
-            name="quality"
-            aria-label="下载画质"
-          >
-            <NRadioButton value="standard">标准</NRadioButton>
-            <NRadioButton value="smooth">流畅</NRadioButton>
-          </NRadioGroup>
-        </div>
+        <ProgrammeDownloadButton
+          v-if="!loadingContents && !contentError && contents.length"
+          :contents="selectedContents"
+          label="批量下载"
+          primary
+          @download="addDownloads(selectedContents, $event)"
+        />
       </div>
 
       <StatePanel
@@ -211,7 +204,6 @@ onMounted(() => {
           <NButton
             v-if="fullIds.length"
             text
-            size="small"
             @click="selectFullEpisodes"
           >
             <template #icon><Check :size="15" /></template>
@@ -224,40 +216,15 @@ onMounted(() => {
           v-model="selected"
           :contents="contents"
           :full-ids="fullIds"
-          :quality="quality"
-          :video-note="videoNote"
           @preview="openPreview"
+          @download="addDownloads"
         />
-
-        <div class="download-action">
-          <div>
-            <strong>
-              {{ selected.length ? `已选 ${selected.length} 条内容` : '请选择节目内容' }}
-            </strong>
-          </div>
-          <div class="action-buttons">
-            <NButton
-              :disabled="!selected.length"
-              @click="addSelected()"
-            >
-              加入任务
-            </NButton>
-            <NButton
-              type="primary"
-              :disabled="!selected.length"
-              @click="addSelected(true)"
-            >
-              <template #icon><Download :size="17" /></template>
-              加入并查看任务
-            </NButton>
-          </div>
-        </div>
       </template>
     </template>
   </div>
 
   <ProgrammePreviewDialog
     v-model="preview"
-    :quality="quality"
+    :quality="settings.quality"
   />
 </template>

@@ -19,8 +19,6 @@ describe('programme content selection UI', () => {
         modelValue: [],
         contents: [content, { ...content, id: '2', smoothVideo: null }],
         fullIds: ['1'],
-        quality: 'standard',
-        videoNote: () => '流畅画质',
       },
     })
     const checkboxes = wrapper.findAll('[role="checkbox"]')
@@ -28,6 +26,11 @@ describe('programme content selection UI', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([[['1']]])
     await checkboxes[1]!.trigger('click')
     expect(wrapper.emitted('update:modelValue')).toEqual([[['1']]])
+    const downloadButtons = wrapper
+      .findAll('button')
+      .filter((button) => button.attributes('aria-label')?.startsWith('下载'))
+    expect(downloadButtons).toHaveLength(2)
+    expect(downloadButtons[1]!.attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 })

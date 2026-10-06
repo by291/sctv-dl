@@ -17,12 +17,13 @@ describe('content selection', () => {
   it('selects only playable entries and recognizes full episodes by title', () => {
     const scope = effectScope()
     const selection = scope.run(() =>
-      useContentSelection(ref([full, missing]), ref('栏目'), ref('2026-10-06'), 'standard'),
+      useContentSelection(ref([full, missing]), ref('栏目'), ref('2026-10-06')),
     )!
     selection.selectAll(true)
     expect(selection.selected.value).toEqual(['1'])
     expect(selection.fullIds.value).toEqual(['1'])
-    expect(selection.videoNote(full)).toContain('将使用流畅画质')
+    expect(selection.hasVideo(full)).toBe(true)
+    expect(selection.hasVideo(missing)).toBe(false)
     scope.stop()
   })
 
@@ -30,7 +31,7 @@ describe('content selection', () => {
     const contents = ref([full])
     const scope = effectScope()
     const selection = scope.run(() =>
-      useContentSelection(contents, ref('栏目'), ref('2026-10-06'), 'standard'),
+      useContentSelection(contents, ref('栏目'), ref('2026-10-06')),
     )!
     selection.selectAll(true)
     contents.value = [missing]

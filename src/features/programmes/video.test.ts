@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveVideo } from './video'
+import { getVideoVariants, resolveVideo } from './video'
 
 const content = {
   id: '1',
@@ -19,5 +19,22 @@ describe('shared preview and download availability', () => {
   })
   it('disables content only when both variants are absent', () => {
     expect(resolveVideo({ ...content, smoothVideo: null }, 'smooth')).toBeNull()
+  })
+
+  it('lists distinct standard and smooth files for the player quality menu', () => {
+    const video = 'https://fscgc.scgchc.com/full.mp4'
+
+    expect(getVideoVariants({ ...content, video })).toEqual([
+      { quality: 'standard', url: video },
+      { quality: 'smooth', url: content.smoothVideo },
+    ])
+    expect(getVideoVariants({ ...content, video, smoothVideo: video })).toEqual([
+      { quality: 'standard', url: video },
+    ])
+  })
+
+  it('offers only existing variants and leaves unavailable content without a choice', () => {
+    expect(getVideoVariants(content)).toEqual([{ quality: 'smooth', url: content.smoothVideo }])
+    expect(getVideoVariants({ ...content, smoothVideo: null })).toEqual([])
   })
 })

@@ -9,9 +9,9 @@ import { useSettingsStore } from '../store'
 import { useProgrammeStore } from '../../programmes/store'
 
 const themeOptions = [
+  { label: '跟随系统', value: 'system' },
   { label: '浅色', value: 'light' },
   { label: '深色', value: 'dark' },
-  { label: '跟随系统', value: 'system' },
 ]
 
 const settings = useSettingsStore()
@@ -45,17 +45,17 @@ onMounted(() => {
       <section class="settings-card">
         <div class="settings-title">
           <SlidersHorizontal :size="20" />
-          <h2>下载偏好</h2>
+          <h2>播放与下载</h2>
         </div>
         <div class="setting-row">
           <div>
-            <h3>默认画质</h3>
-            <p>所选画质不可用时，自动使用另一版本。</p>
+            <h3>默认预览画质</h3>
+            <p>播放时优先使用该画质，不可用时自动使用另一版本。</p>
           </div>
           <NRadioGroup
             v-model:value="settings.quality"
             name="default-quality"
-            aria-label="默认下载画质"
+            aria-label="默认预览画质"
           >
             <NRadioButton value="standard">标准</NRadioButton>
             <NRadioButton value="smooth">流畅</NRadioButton>

@@ -3,21 +3,31 @@ import { NButton, NCheckbox, NCheckboxGroup } from 'naive-ui'
 import { Play } from '@lucide/vue'
 
 import CoverImage from '../../../components/CoverImage.vue'
-import { resolveVideo } from '../video'
+import ProgrammeDownloadButton from './ProgrammeDownloadButton.vue'
+import { getVideoVariants, resolveVideo } from '../video'
 
 import type { ProgrammeContent, Quality } from '../types'
 
 const selected = defineModel<string[]>({ required: true })
-const props = defineProps<{
+defineProps<{
   contents: ProgrammeContent[]
   fullIds: string[]
-  quality: Quality
-  videoNote: (content: ProgrammeContent) => string
 }>()
-const emit = defineEmits<{ preview: [content: ProgrammeContent] }>()
+const emit = defineEmits<{
+  preview: [content: ProgrammeContent]
+  download: [contents: ProgrammeContent[], quality: Quality]
+}>()
 
 function hasVideo(content: ProgrammeContent): boolean {
-  return !!resolveVideo(content, props.quality)
+  return !!resolveVideo(content, 'standard')
+}
+
+function videoAvailability(content: ProgrammeContent): string {
+  const variants = getVideoVariants(content)
+
+  return variants.length
+    ? variants.map(({ quality }) => (quality === 'standard' ? '标准' : '流畅')).join(' / ') + '画质'
+    : '暂无可用视频'
 }
 </script>
 
@@ -77,18 +87,27 @@ function hasVideo(content: ProgrammeContent): boolean {
           </span>
         </div>
         <h3>{{ content.title }}</h3>
-        <p>{{ videoNote(content) }}</p>
+        <p>{{ videoAvailability(content) }}</p>
       </div>
 
-      <NButton
-        quaternary
-        circle
-        :disabled="!hasVideo(content)"
-        :aria-label="`预览${content.title}`"
-        @click="emit('preview', content)"
-      >
-        <Play :size="17" />
-      </NButton>
+      <div class="content-row-actions">
+        <NButton
+          class="preview-button"
+          quaternary
+          circle
+          :disabled="!hasVideo(content)"
+          :aria-label="`预览${content.title}`"
+          @click="emit('preview', content)"
+        >
+          <template #icon><Play :size="17" /></template>
+        </NButton>
+        <ProgrammeDownloadButton
+          :contents="[content]"
+          label="下载"
+          :aria-label="`下载${content.title}`"
+          @download="emit('download', [content], $event)"
+        />
+      </div>
     </article>
   </NCheckboxGroup>
 </template>

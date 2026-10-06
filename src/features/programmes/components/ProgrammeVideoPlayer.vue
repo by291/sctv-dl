@@ -2,8 +2,19 @@
 import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import Artplayer from 'artplayer'
 
-const props = defineProps<{ url: string; poster: string | null; title: string }>()
-const emit = defineEmits<{ error: [] }>()
+import type { VideoVariant } from '../video'
+import type { Setting } from 'artplayer'
+
+const props = withDefaults(
+  defineProps<{
+    url: string
+    poster: string | null
+    title: string
+    variants?: VideoVariant[]
+  }>(),
+  { variants: () => [] },
+)
+const emit = defineEmits<{ error: []; ready: [] }>()
 const container = useTemplateRef<HTMLDivElement>('container')
 let player: Artplayer | undefined
 
@@ -13,6 +24,28 @@ onMounted(() => {
   }
 
   try {
+    const qualitySettings: Setting[] =
+      props.variants.length > 1
+        ? [
+            {
+              html: '画质',
+              tooltip:
+                props.variants.find((variant) => variant.url === props.url)?.quality === 'smooth'
+                  ? '流畅'
+                  : '标准',
+              selector: props.variants.map((variant) => ({
+                html: variant.quality === 'smooth' ? '流畅' : '标准',
+                url: variant.url,
+                default: variant.url === props.url,
+              })),
+              onSelect(item) {
+                void player?.switchQuality(item.url).catch(() => emit('error'))
+
+                return item.html
+              },
+            },
+          ]
+        : []
     // The dialog keys this component by URL so each source owns one instance.
     player = new Artplayer({
       container: container.value,
@@ -24,6 +57,7 @@ onMounted(() => {
       autoplay: false,
       playsInline: true,
       setting: true,
+      settings: qualitySettings,
       playbackRate: true,
       pip: true,
       fullscreen: true,
@@ -31,6 +65,7 @@ onMounted(() => {
       moreVideoAttr: { controls: false, preload: 'metadata' },
     })
     player.on('video:error', () => emit('error'))
+    player.on('video:loadedmetadata', () => emit('ready'))
   } catch {
     emit('error')
   }

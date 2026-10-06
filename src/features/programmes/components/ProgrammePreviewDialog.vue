@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { NModal } from 'naive-ui'
 
 import { proxyMediaUrl } from '../../../shared/media'
-import { resolveVideo } from '../video'
+import { getVideoVariants, resolveVideo } from '../video'
 import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
 
 import type { ProgrammeContent, Quality } from '../types'
@@ -16,6 +16,14 @@ const url = computed(() => {
 
   return variant ? proxyMediaUrl(variant.url) : ''
 })
+const variants = computed(() =>
+  content.value
+    ? getVideoVariants(content.value).map((variant) => ({
+        ...variant,
+        url: proxyMediaUrl(variant.url),
+      }))
+    : [],
+)
 
 function updateVisible(show: boolean) {
   if (!show) {
@@ -43,7 +51,9 @@ watch(url, () => {
       :url="url"
       :poster="content.cover"
       :title="content.title"
+      :variants="variants"
       @error="failed = true"
+      @ready="failed = false"
     />
     <p
       v-if="failed"

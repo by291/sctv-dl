@@ -6,7 +6,7 @@ export const themeSchema = z.enum(['light', 'dark', 'system'])
 
 export const settingsSchema = z.object({
   quality: qualitySchema.catch('standard'),
-  theme: themeSchema.catch('light'),
+  theme: themeSchema.catch('system'),
   favourites: z
     .array(z.unknown())
     .catch([])

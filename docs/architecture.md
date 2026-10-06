@@ -17,7 +17,7 @@ src/
       urls.ts / video.ts   URL normalization and available quality selection
       store.ts             Shared programme catalogue cache
       composables/         Archive lifecycle, content selection, programme discovery
-      components/          Cards, spotlight, date picker, content list, preview dialog
+      components/          Cards, spotlight, date picker, content list, download menu, preview dialog
       views/               Library and details page composition
       styles.css           Programme UI and responsive styles
     downloads/
@@ -40,7 +40,7 @@ Views compose components and composables. Stores own shared state. Business func
 
 ## Data Flow
 
-The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages quality, selection, and full-episode matching. The page converts selected content into tasks and passes them to the download store. The preview dialog owns player errors and media URLs.
+The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages selection and full-episode matching independently of quality. ProgrammeDownloadButton shares the click-triggered Naive UI quality dropdown across individual rows and the batch action. Unavailable variants are disabled. Selecting a quality converts the current requested contents into tasks and shows one notification, including any fallback, without navigating away. Dismissing the menu leaves the queue unchanged. Changing the selection closes its pending menu; replacing archive contents unmounts download menus and closes the preview. The preview dialog owns player errors and media URLs.
 
 useFeaturedProgramme selects a random catalogue entry when the library view is created. The spotlight's shuffle action excludes the current programme. Searching, filtering favourites, and refreshing the catalogue preserve the selected ID; refreshed metadata is resolved from the current catalogue. A removed programme is replaced, and changing is disabled when fewer than two entries exist. There is no automatic rotation or persisted selection.
 
@@ -48,7 +48,7 @@ AbortController cancels requests, while LatestRequest prevents obsolete response
 
 Cover and video fields are optional at the API boundary and normalize to null. The service can omit `videoStandard` for clips with only a standard variant; that must not invalidate the other contents in a broadcast. IDs, response envelopes, and calendar dates remain strictly validated. Error panels describe a loading failure without assuming a network outage, and content counts appear only after a successful request.
 
-Settings and favourites retain the `sctv-dl:settings` key; tasks retain `sctv-dl:downloads`. Invalid JSON falls back to defaults. An invalid preference field uses its own default, and individual invalid task records are discarded. Interrupted `checking` tasks return to `queued` during initialization. Valid tasks are retained without silently truncating the queue on reload.
+Settings and favourites retain the `sctv-dl:settings` key; tasks retain `sctv-dl:downloads`. Invalid JSON falls back to defaults. An invalid preference field uses its own default, and individual invalid task records are discarded. New or invalid theme preferences default to system; valid saved choices are retained. The saved quality preference sets initial preview quality; each download operation chooses its own quality in the menu. Interrupted `checking` tasks return to `queued` during initialization. Valid tasks are retained without silently truncating the queue on reload.
 
 Settings use VueUse synchronization across browser tabs. Downloads execute within the current window and do not synchronize execution state across windows. Concurrent windows still use last-write-wins persistence. Multi-window queue coordination would require a single executor and a deliberate merge policy.
 
@@ -82,7 +82,7 @@ The shared typography uses 16px body text and a 14px minimum for supporting labe
 
 The top bar shows the current page title, while the sidebar owns the app brand. The document reserves scrollbar space with `scrollbar-gutter: stable` so the library remains aligned when a filtered list becomes shorter than the viewport. Where stable gutters are supported, root margins suppress Naive UI's additional scrollbar compensation during modal scroll locking. The modal keeps its scroll lock and focus trap without narrowing the background page.
 
-Catalogue sorting always places favourites first. Default sorting retains service order within the favourite and non-favourite groups; name sorting orders each group separately. Search and the favourites tab use the same ordering. The theme setting exposes its three choices as radio buttons, and only the archive refresh button indicates date-toolbar loading.
+Catalogue sorting always places favourites first. Default sorting retains service order within the favourite and non-favourite groups; name sorting orders each group separately. Search and the favourites tab use the same ordering. The theme setting exposes system, light, and dark as radio buttons in that order, and only the archive refresh button indicates date-toolbar loading. The content header aligns the date, title, and count on a shared baseline and places the batch action above the list; every available row has its own download action.
 
 ## Motion and Video Preview
 
@@ -98,7 +98,7 @@ Motion uses Vue Transition / TransitionGroup and shared CSS durations in `src/st
 
 The reduced-motion media query shortens custom and library animations to effectively immediate changes. There are no automatic carousels, staggered delays for long lists, or animated numeric counters.
 
-ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with Chinese controls, playback speed, keyboard shortcuts, picture-in-picture, and fullscreen. The browser still decodes MP4 media. The preview retains the existing quality fallback and `/media` proxy, requests metadata without autoplay, and keys each player by its resolved URL. Closing the dialog, changing source, or leaving the page pauses and destroys the instance. Initialization and media errors propagate to the dialog's error message. Player lifecycle tests cover cleanup and failures; browser verification covers the actual library UI and playback.
+ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with Chinese controls, playback speed, keyboard shortcuts, picture-in-picture, and fullscreen. The browser still decodes MP4 media. The preview retains the existing quality fallback and `/media` proxy and requests metadata without autoplay. video.ts lists distinct available variants, omitting duplicate URLs. When two variants are available, an Artplayer settings selector switches quality through switchQuality, preserving playback position within the same instance. The initial resolved URL keys the component; closing the dialog, changing the preview, or leaving the page pauses and destroys the instance. Initialization, media, and quality-switch failures propagate to the dialog's error message, which clears when metadata loads successfully. Tests cover quality selection, immediate queue creation, notifications, fallbacks, menu dismissal, player integration, cleanup, and failures; browser verification covers the actual library UI and playback.
 
 ## Readability Improvements
 
