@@ -7,7 +7,7 @@ The frontend was moved from web/ to the repository root. Run installation, devel
 ```text
 src/
   app/                     Routing, Naive UI configuration, theme synchronization
-  layouts/                 Navigation, top bar, footer
+  layouts/                 Navigation and top bar
   components/              Shared covers and loading/error/empty states
   features/
     programmes/
@@ -72,7 +72,9 @@ The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/)
 | Browser download handoff                                     | The native download manager owns saving and actual progress without buffering hundreds of MB in a page Blob.                                     |
 | Node streaming proxy                                         | Native stream/pipeline provides backpressure. CDN restrictions, Referer, and Range handling are explicit service constraints.                    |
 
-The local Node proxy is still required to satisfy the media Referer requirement. A production service, Rust SDK, or desktop client can use the same domain types later. The current Web project does not include an unused bridge layer.
+The proxy middleware runs inside Vite's existing development or preview server, sharing its process and port. It is not a separately started service. The API currently allows cross-origin metadata requests, but media requests still require a Referer from the upstream player origin that browser Fetch cannot supply. Production can serve static files and the media route from one application server; this runtime is not implemented yet. A native desktop or mobile HTTP implementation can satisfy the media header requirement without a local HTTP proxy process.
+
+The shared typography uses 16px body text and a 14px minimum for supporting labels, with matching Naive UI theme settings. Page titles describe the current task, and helper text is reserved for choices and behaviour that affect the user.
 
 ## Readability Improvements
 

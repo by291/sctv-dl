@@ -16,7 +16,6 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   <div class="date-toolbar">
     <div>
       <h2>选择播出日期</h2>
-      <p>可搜索年月日，查看历史节目。</p>
     </div>
 
     <div class="date-control">

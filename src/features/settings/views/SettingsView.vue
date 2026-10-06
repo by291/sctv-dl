@@ -3,7 +3,7 @@ import '../styles.css'
 import { computed, onMounted } from 'vue'
 
 import { NButton, NSelect, NRadioGroup, NRadioButton } from 'naive-ui'
-import { SlidersHorizontal, Palette, Radio, RefreshCw, Tv, ExternalLink } from '@lucide/vue'
+import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
 import { useSettingsStore } from '../store'
 import { useProgrammeStore } from '../../programmes/store'
@@ -29,12 +29,7 @@ onMounted(() => {
 <template>
   <section class="page-heading">
     <div>
-      <div class="eyebrow">PREFERENCES</div>
-      <h1>
-        按照你的习惯
-        <span class="title-dot">.</span>
-      </h1>
-      <p>一点简单的设置，让收藏节目更顺手。</p>
+      <h1>设置</h1>
     </div>
   </section>
 
@@ -55,7 +50,7 @@ onMounted(() => {
         <div class="setting-row">
           <div>
             <h3>默认画质</h3>
-            <p>流畅画质文件通常更小；没有流畅版本时会使用标准画质。</p>
+            <p>所选画质不可用时，自动使用另一版本。</p>
           </div>
           <NRadioGroup
             v-model:value="settings.quality"
@@ -82,7 +77,6 @@ onMounted(() => {
         <div class="setting-row">
           <div>
             <h3>界面主题</h3>
-            <p>选择适合你当前环境的颜色。</p>
           </div>
           <NSelect
             v-model:value="settings.theme"
@@ -126,24 +120,5 @@ onMounted(() => {
         </div>
       </section>
     </div>
-    <aside class="about-card">
-      <span class="brand-icon"><Tv :size="25" /></span>
-      <h2>sctv-dl</h2>
-      <span class="pill">Web · 0.1.0</span>
-      <p>
-        一个简单的四川电视节目收藏工具。
-        <br />
-        <br />
-        找到一段喜欢的内容，选好日期，再把它留在身边。
-      </p>
-      <div>
-        <ExternalLink :size="16" />
-        <span>
-          下载由浏览器完成
-          <br />
-          设置与任务保存在本机
-        </span>
-      </div>
-    </aside>
   </div>
 </template>

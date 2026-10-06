@@ -3,7 +3,7 @@ import './styles.css'
 import { computed } from 'vue'
 
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Tv, Library, Download, Settings2, ArrowUpRight, ChevronRight } from '@lucide/vue'
+import { Tv, Library, Download, Settings2, ChevronRight } from '@lucide/vue'
 
 import { useDownloadStore } from '../features/downloads/store'
 import { useProgrammeStore } from '../features/programmes/store'
@@ -40,9 +40,8 @@ function isActive(path: string): boolean {
       >
         <span class="brand-icon"><Tv :size="23" /></span>
         <!-- prettier-ignore -->
-        <span>sctv<span class="brand-dash">-dl</span><small>节目收藏室</small></span>
+        <span>sctv<span class="brand-dash">-dl</span><small>电视节目下载</small></span>
       </RouterLink>
-      <div class="nav-caption">工作空间</div>
       <nav aria-label="主导航">
         <RouterLink
           v-for="link in links"
@@ -70,19 +69,7 @@ function isActive(path: string): boolean {
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
-        <div class="sidebar-note">
-          <span class="eyebrow">YOUR PERSONAL ARCHIVE</span>
-          <p>
-            一段节目，
-            <br />
-            一份值得留下的记忆。
-          </p>
-          <ArrowUpRight :size="19" />
-        </div>
-        <div class="version">
-          <span class="status-dot" />
-          Web · v0.1.0
-        </div>
+        <div class="version">Web · v0.1.0</div>
       </div>
     </aside>
     <div class="workspace">
@@ -98,14 +85,6 @@ function isActive(path: string): boolean {
         </div>
       </header>
       <main id="main-content"><RouterView /></main>
-      <footer class="app-footer">
-        <span>
-          sctv-dl
-          <span class="footer-separator">/</span>
-          为喜欢的节目留一个位置
-        </span>
-        <span>SC TV · PERSONAL COLLECTION</span>
-      </footer>
     </div>
   </div>
 </template>

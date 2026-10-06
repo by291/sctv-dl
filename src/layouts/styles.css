@@ -4,7 +4,7 @@
 }
 
 .sidebar {
-  width: 216px;
+  width: 232px;
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -34,22 +34,16 @@
 .brand small {
   display: block;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   font-weight: 400;
-  letter-spacing: 2.2px;
+  letter-spacing: 0;
   margin-top: 6px;
-}
-
-.nav-caption {
-  margin: 54px 15px 14px;
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 2px;
 }
 
 .sidebar nav {
   display: grid;
   gap: 8px;
+  margin-top: 40px;
 }
 
 .nav-link {
@@ -58,7 +52,7 @@
   align-items: center;
   padding: 13px 15px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #727987;
   transition:
@@ -82,7 +76,7 @@
   height: 19px;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: 5px;
@@ -92,41 +86,13 @@
   margin-top: auto;
 }
 
-.sidebar-note {
-  position: relative;
-  margin: 20px 2px;
-  padding: 22px 15px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: linear-gradient(140deg, var(--panel), var(--subtle));
-}
-
-.sidebar-note .eyebrow {
-  font-size: 8px;
-  letter-spacing: 1px;
-}
-
-.sidebar-note p {
-  font-size: 12px;
-  line-height: 1.9;
-  color: var(--muted);
-  margin-top: 12px;
-}
-
-.sidebar-note svg {
-  position: absolute;
-  right: 15px;
-  bottom: 24px;
-  color: #b1b5bf;
-}
-
 .version {
   border-top: 1px solid var(--line);
   padding: 18px 14px 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
 }
 
@@ -151,12 +117,12 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  font-size: 11px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
 }
 
 .breadcrumb strong {
-  font-size: 12px;
+  font-size: var(--font-size-meta);
   font-weight: 500;
   color: var(--text);
 }
@@ -165,7 +131,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
 }
 
@@ -177,29 +143,9 @@ main {
   flex: 1;
 }
 
-.app-footer {
-  padding: 20px 40px;
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.footer-separator {
-  margin: 0 10px;
-  color: #c1c6cf;
-}
-
-.app-footer > span:last-child {
-  letter-spacing: 1.3px;
-  font-size: 8px;
-}
-
 @media (max-width: 1250px) {
   .sidebar {
-    width: 195px;
+    width: 216px;
     padding-left: 15px;
     padding-right: 15px;
   }
@@ -208,8 +154,7 @@ main {
     padding: 30px;
   }
 
-  .topbar,
-  .app-footer {
+  .topbar {
     padding-left: 30px;
     padding-right: 30px;
   }
@@ -217,7 +162,7 @@ main {
 
 @media (max-width: 1020px) {
   .sidebar {
-    width: 180px;
+    width: 200px;
     padding-left: 10px;
     padding-right: 10px;
   }
@@ -256,7 +201,6 @@ main {
   }
 
   .brand small,
-  .nav-caption,
   .sidebar-bottom {
     display: none;
   }
@@ -264,12 +208,13 @@ main {
   .sidebar nav {
     display: flex;
     gap: 3px;
+    margin-top: 0;
   }
 
   .nav-link {
     padding: 10px;
     gap: 7px;
-    font-size: 11px;
+    font-size: var(--font-size-meta);
   }
 
   .nav-count {
@@ -284,14 +229,6 @@ main {
   main {
     padding: 26px 20px 30px;
   }
-
-  .app-footer {
-    padding: 18px 20px;
-  }
-
-  .app-footer > span:last-child {
-    display: none;
-  }
 }
 
 @media (max-width: 440px) {
@@ -303,8 +240,8 @@ main {
   .nav-link {
     flex-direction: column;
     gap: 4px;
-    padding: 8px 10px;
-    font-size: 9px;
+    padding: 8px 6px;
+    font-size: var(--font-size-meta);
   }
 
   .brand {
@@ -312,6 +249,6 @@ main {
   }
 
   .connection {
-    font-size: 9px;
+    font-size: var(--font-size-meta);
   }
 }

@@ -39,12 +39,7 @@ async function copy(url: string) {
 <template>
   <section class="page-heading">
     <div>
-      <div class="eyebrow">DOWNLOAD QUEUE</div>
-      <h1>
-        让喜欢的节目，留在本地
-        <span class="title-dot">.</span>
-      </h1>
-      <p>整理你的下载列表，交给浏览器开始保存。</p>
+      <h1>下载任务</h1>
     </div>
     <NButton
       type="primary"
@@ -83,9 +78,7 @@ async function copy(url: string) {
 
   <div class="notice">
     <ExternalLink :size="17" />
-    <p>
-      文件保存、下载进度和取消操作在浏览器下载管理器中查看。批量下载时，浏览器可能会询问是否允许下载多个文件。
-    </p>
+    <p>进度与保存位置由浏览器管理；批量下载可能需要允许下载多个文件。</p>
   </div>
 
   <div
@@ -139,14 +132,14 @@ async function copy(url: string) {
     </div>
     <StatePanel
       v-if="!filtered.length"
-      title="下载列表空空的"
-      description="去节目库挑选一个栏目，把想留下的整期或片段加入这里。"
+      title="暂无下载任务"
+      description="在节目详情页选择内容并加入队列。"
     >
       <RouterLink
         to="/"
         class="empty-link"
       >
-        去发现节目
+        浏览节目
         <ArrowRight :size="16" />
       </RouterLink>
     </StatePanel>

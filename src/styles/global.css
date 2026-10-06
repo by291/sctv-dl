@@ -1,5 +1,7 @@
 :root {
   font-family: Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
   color: #242a33;
   background: #f6f7f9;
   font-synthesis: none;
@@ -8,13 +10,15 @@
   --bg: #f6f7f9;
   --panel: #fff;
   --text: #242a33;
-  --muted: #818691;
+  --muted: #667080;
   --line: #e9ebef;
   --accent: #dc4f41;
   --accent-soft: #fff0ed;
   --subtle: #f2f4f7;
   --green: #419b76;
   --hero: #f4e9e3;
+  --font-size-body: 16px;
+  --font-size-meta: 14px;
 }
 
 :root[data-theme='dark'] {
@@ -36,6 +40,9 @@
 body {
   margin: 0;
   min-width: 340px;
+  font-family: inherit;
+  font-size: var(--font-size-body);
+  line-height: inherit;
   background: var(--bg);
   color: var(--text);
 }
@@ -107,32 +114,11 @@ svg {
   margin-bottom: 30px;
 }
 
-.eyebrow {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  line-height: 1.4;
-}
-
 h1 {
-  font-size: 29px;
+  font-size: 30px;
   line-height: 1.45;
   font-weight: 700;
-  letter-spacing: -0.9px;
-  margin-top: 8px;
-}
-
-.title-dot {
-  color: var(--accent);
-  margin-left: 3px;
-}
-
-.page-heading p {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 9px;
-  line-height: 1.7;
+  letter-spacing: -0.5px;
 }
 
 .accent {
@@ -166,7 +152,7 @@ h1 {
   border: 0;
   color: var(--muted);
   padding: 9px 0;
-  font-size: 12px;
+  font-size: var(--font-size-body);
   white-space: nowrap;
 }
 
@@ -192,7 +178,7 @@ h1 {
   border-radius: 5px;
   color: var(--muted);
   padding: 2px 5px;
-  font-size: 9px;
+  font-size: var(--font-size-meta);
   font-weight: 500;
 }
 
@@ -203,7 +189,7 @@ h1 {
 
 .pill {
   display: inline-flex;
-  font-size: 9px;
+  font-size: var(--font-size-meta);
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--subtle);
@@ -239,7 +225,7 @@ h1 {
   color: var(--muted);
   background: var(--subtle);
   padding: 13px 16px;
-  font-size: 11px;
+  font-size: var(--font-size-meta);
   line-height: 1.8;
   margin-bottom: 22px;
 }
@@ -269,17 +255,7 @@ h1 {
   }
 
   h1 {
-    font-size: 23px;
-    letter-spacing: -0.7px;
-  }
-
-  .page-heading > .n-button {
-    margin-top: 22px;
-  }
-
-  .page-heading p {
-    font-size: 11px;
-    max-width: 310px;
+    font-size: 26px;
   }
 }
 

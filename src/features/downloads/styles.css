@@ -45,7 +45,7 @@
 
 .download-stats div > span:not(.stat-icon) {
   display: block;
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
   margin-top: 7px;
 }
@@ -88,14 +88,14 @@
 }
 
 .queue-info h3 {
-  font-size: 12px;
+  font-size: var(--font-size-body);
   line-height: 1.8;
   font-weight: 500;
   overflow-wrap: anywhere;
 }
 
 .queue-info p {
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
   margin-top: 5px;
 }
@@ -112,7 +112,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -136,7 +136,7 @@
   align-items: center;
   gap: 9px;
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--font-size-body);
   margin-top: 6px;
 }
 
@@ -183,7 +183,7 @@
   }
 
   .download-stats div > span:not(.stat-icon) {
-    font-size: 9px;
+    font-size: var(--font-size-meta);
   }
 
   .queue-toolbar {
@@ -197,7 +197,7 @@
   }
 
   .queue-toolbar .tabs button {
-    font-size: 11px;
+    font-size: var(--font-size-meta);
   }
 
   .queue-row {
@@ -205,7 +205,7 @@
   }
 
   .task-status {
-    font-size: 9px;
+    font-size: var(--font-size-meta);
   }
 }
 

@@ -1,12 +1,5 @@
-.settings-title h2 {
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .settings-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  gap: 24px;
+  max-width: 960px;
 }
 
 .settings-sections {
@@ -32,6 +25,8 @@
 
 .settings-title h2 {
   color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .setting-row {
@@ -47,7 +42,7 @@
 }
 
 .setting-row h3 {
-  font-size: 12px;
+  font-size: var(--font-size-body);
   font-weight: 500;
 }
 
@@ -57,67 +52,18 @@
 
 .setting-row p {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-size-meta);
   line-height: 1.9;
   margin-top: 7px;
 }
 
 .setting-row .n-select {
-  width: 140px;
+  width: 160px;
   flex-shrink: 0;
 }
 
 .setting-row .n-radio-group {
   flex-shrink: 0;
-}
-
-.about-card {
-  align-self: start;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  padding: 28px 24px;
-}
-
-.about-card h2 {
-  font-size: 21px;
-  margin-top: 16px;
-  margin-bottom: 10px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.about-card p {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 2;
-  padding: 22px 0;
-}
-
-.about-card > div {
-  border-top: 1px solid var(--line);
-  padding-top: 20px;
-  display: flex;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.8;
-}
-
-@media (max-width: 1250px) {
-  .settings-layout {
-    grid-template-columns: minmax(0, 1fr) 220px;
-  }
-}
-
-@media (max-width: 1020px) {
-  .settings-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .about-card {
-    display: none;
-  }
 }
 
 @media (max-width: 760px) {

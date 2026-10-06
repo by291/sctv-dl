@@ -115,12 +115,10 @@ onMounted(() => {
       />
     </div>
     <div class="detail-copy">
-      <div class="eyebrow">PROGRAMME ARCHIVE</div>
       <h1>{{ programmeName || '电视节目' }}</h1>
-      <p>按播出日期，找到你想留下的整期与片段。</p>
       <span class="detail-meta">
         <CalendarDays :size="15" />
-        {{ dateSummary }}
+        <span>{{ dateSummary }}</span>
         <span v-if="dates.length">· {{ dates.at(-1)?.date }} 起</span>
       </span>
     </div>
@@ -176,7 +174,6 @@ onMounted(() => {
           <NRadioGroup
             v-model:value="quality"
             name="quality"
-            size="small"
             aria-label="下载画质"
           >
             <NRadioButton value="standard">标准</NRadioButton>
@@ -233,9 +230,8 @@ onMounted(() => {
         <div class="download-action">
           <div>
             <strong>
-              {{ selected.length ? `已选 ${selected.length} 条节目内容` : '选择想要收藏的内容' }}
+              {{ selected.length ? `已选 ${selected.length} 条内容` : '请选择节目内容' }}
             </strong>
-            <p>加入列表后，可在下载任务中开始保存。</p>
           </div>
           <div class="action-buttons">
             <NButton

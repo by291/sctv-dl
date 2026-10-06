@@ -41,7 +41,6 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
     >
       <div>
         <h3>{{ programme.name }}</h3>
-        <p>查看播出日期与节目内容</p>
       </div>
       <ArrowUpRight :size="18" />
     </RouterLink>

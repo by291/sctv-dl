@@ -27,9 +27,9 @@ defineEmits<{ retry: [] }>()
       :stroke-width="1.3"
     />
     <h3>
-      {{ loading ? '正在读取节目…' : error ? '暂时没能连接节目服务' : title || '这里还没有内容' }}
+      {{ loading ? '正在加载…' : error ? '无法连接节目服务' : title || '暂无内容' }}
     </h3>
-    <p>{{ error || description || (loading ? '稍等片刻，精彩马上就来。' : '') }}</p>
+    <p v-if="error || description">{{ error || description }}</p>
     <NButton
       v-if="error"
       secondary
@@ -61,7 +61,7 @@ defineEmits<{ retry: [] }>()
 }
 
 .state-panel p {
-  font-size: 12px;
+  font-size: var(--font-size-meta);
   line-height: 1.8;
   max-width: 470px;
 }

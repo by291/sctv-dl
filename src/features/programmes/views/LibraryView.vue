@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import { RouterLink } from 'vue-router'
 import { NButton, NInput, NSelect } from 'naive-ui'
-import { Search, RefreshCw, ArrowRight, Tv, CalendarDays } from '@lucide/vue'
+import { Search, RefreshCw, ArrowRight } from '@lucide/vue'
 
 import { useProgrammeStore } from '../store'
 import { useSettingsStore } from '../../settings/store'
@@ -44,12 +44,7 @@ onMounted(() => {
 <template>
   <section class="page-heading">
     <div>
-      <div class="eyebrow">PROGRAMME LIBRARY</div>
-      <h1>
-        发现节目，收藏日常
-        <span class="title-dot">.</span>
-      </h1>
-      <p>从四川出发，把每一期值得回看的节目留在身边。</p>
+      <h1>节目库</h1>
     </div>
     <NButton
       :loading="store.loading"
@@ -71,7 +66,7 @@ onMounted(() => {
     >
       <div class="featured-copy">
         <span class="feature-label">
-          <span />
+          <span aria-hidden="true" />
           从这里开始
         </span>
         <h2>{{ featured.name }}</h2>
@@ -91,29 +86,24 @@ onMounted(() => {
           :alt="featured.name"
         />
       </div>
-      <span class="feature-orbit orbit-one" />
-      <span class="feature-orbit orbit-two" />
+      <span
+        class="feature-orbit orbit-one"
+        aria-hidden="true"
+      />
+      <span
+        class="feature-orbit orbit-two"
+        aria-hidden="true"
+      />
     </RouterLink>
     <div class="library-stat">
-      <span class="stat-icon">
-        <Tv
-          :size="23"
-          :stroke-width="1.5"
-        />
-      </span>
-      <div class="stat-number">
-        {{ store.programmes.length }}
-        <span>个栏目</span>
+      <h2>节目概览</h2>
+      <div class="library-stat-row">
+        <span>全部栏目</span>
+        <strong>{{ store.programmes.length }}</strong>
       </div>
-      <h3>属于你的节目库</h3>
-      <p>
-        按日期发现整期与片段
-        <br />
-        收藏常看的栏目，随时回来
-      </p>
-      <div class="stat-foot">
-        <CalendarDays :size="15" />
-        往期节目 · 随时回看
+      <div class="library-stat-row">
+        <span>已收藏</span>
+        <strong>{{ settings.favourites.length }}</strong>
       </div>
     </div>
   </div>
@@ -173,11 +163,9 @@ onMounted(() => {
 
   <StatePanel
     v-else-if="!filtered.length"
-    :title="tab === 'favourites' && !query ? '收藏你常看的节目' : '没有找到匹配的栏目'"
+    :title="tab === 'favourites' && !query ? '暂无收藏栏目' : '没有找到匹配的栏目'"
     :description="
-      tab === 'favourites' && !query
-        ? '点击栏目右上角的星标，下次就能在这里快速找到。'
-        : '换一个关键词试试，或清空搜索查看全部栏目。'
+      tab === 'favourites' && !query ? '点击栏目右上角的星标添加收藏。' : '请更换关键词或清空搜索。'
     "
   />
 

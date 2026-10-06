@@ -11,7 +11,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://127.0.0.1:5180 . An internet connection is required to access the programme service.
+Open http://127.0.0.1:5180 . An internet connection is required to access the programme service. `pnpm dev` starts one Vite process that serves both the frontend and the proxy middleware; no separate server command is needed.
 
 ```powershell
 pnpm check
@@ -49,10 +49,14 @@ Upstream service: `https://gw.scgchc.com`.
 
 `dateId` is the string ID returned by the service, not the date text. All IDs are retained as strings. `video` contains the standard variant; `videoStandard` contains the smooth variant.
 
-Video requests require `Referer: https://scgc.video.play/`. Browsers cannot set this header directly, so the local `/media?url=...` service adds it, forwards Range / If-Range, and streams the response. The media proxy accepts only HTTPS MP4 URLs on `fscgc.scgchc.com` and rejects other hosts, explicit nondefault ports, credentials, and redirects. It is not an unrestricted proxy. Downloads receive a safely encoded Content-Disposition filename.
+The programme APIs returned `Access-Control-Allow-Origin: *` during verification on 2026-10-06, so programme metadata can currently be requested directly from a browser. The default configuration keeps these requests behind `/api` for a consistent local origin. Set `VITE_API_BASE=https://gw.scgchc.com` before building to request metadata directly.
+
+The tested video returned HTTP 403 without a Referer and HTTP 200 with `Referer: https://scgc.video.play/`. A page cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to supply an arbitrary foreign origin. The local `/media?url=...` middleware therefore adds the required header, forwards Range / If-Range, and streams the response. The media proxy accepts only HTTPS MP4 URLs on `fscgc.scgchc.com` and rejects other hosts, explicit nondefault ports, credentials, and redirects. Downloads receive a safely encoded Content-Disposition filename.
 
 ## Deployment
 
-The Vite proxies run only with `dev` and `preview`; **they are not included in `dist/`**. Production deployments need matching `/api` and `/media` services and a history fallback to `index.html` for Vue Router. Hosting the static files alone does not provide the download service.
+The Vite proxies run only with `dev` and `preview`; **they are not included in `dist/`**. A production host needs the `/media` route, an `/api` route if metadata uses the default proxy configuration, and a history fallback to `index.html` for Vue Router. One application server can serve both the static build and these routes on the same port; a second process or separately deployed proxy is not required. A production server is not included yet, and Vite preview is only for local build verification.
+
+Static hosting alone cannot provide working video downloads under the verified Referer restriction. A future desktop or mobile client can make these requests through its native HTTP implementation without a local HTTP proxy process.
 
 Set `VITE_API_BASE` / `VITE_MEDIA_BASE` from `.env.example` before building to use different service endpoints. This version does not include a production server, Rust SDK, desktop shell, authentication, or live-stream parsing.
