@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 
 import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
 
@@ -18,7 +18,6 @@ const player = {
   pause: vi.fn(),
   destroy: vi.fn(),
   on: vi.fn(),
-  switchQuality: vi.fn().mockResolvedValue(undefined),
 }
 const props = { url: '/media?url=video.mp4', poster: null, title: 'Programme preview' }
 
@@ -59,25 +58,30 @@ describe('programme player lifecycle', () => {
     expect(player.destroy).not.toHaveBeenCalled()
   })
 
-  it('switches only to supplied variants using the progress-preserving player API', async () => {
+  it('puts the supplied variants in the bottom quality menu with the current source selected', () => {
     const wrapper = mount(ProgrammeVideoPlayer, {
       props: {
         ...props,
+        url: '/media?url=smooth.mp4',
         variants: [
           { quality: 'standard', url: props.url },
           { quality: 'smooth', url: '/media?url=smooth.mp4' },
         ],
       },
     })
-    const settings = createPlayer.mock.calls[0]?.[0].settings
-    expect(settings).toHaveLength(1)
-    expect(settings[0].selector).toEqual([
-      { html: '标准', url: props.url, default: true },
-      { html: '流畅', url: '/media?url=smooth.mp4', default: false },
+    expect(createPlayer.mock.calls[0]?.[0].quality).toEqual([
+      { html: '标准', url: props.url, default: false },
+      { html: '流畅', url: '/media?url=smooth.mp4', default: true },
     ])
-    settings[0].onSelect(settings[0].selector[1])
-    await flushPromises()
-    expect(player.switchQuality).toHaveBeenCalledWith('/media?url=smooth.mp4')
+    wrapper.unmount()
+  })
+
+  it('omits the quality menu when there is no alternative source', () => {
+    const wrapper = mount(ProgrammeVideoPlayer, {
+      props: { ...props, variants: [{ quality: 'standard', url: props.url }] },
+    })
+
+    expect(createPlayer.mock.calls[0]?.[0].quality).toEqual([])
     wrapper.unmount()
   })
 })

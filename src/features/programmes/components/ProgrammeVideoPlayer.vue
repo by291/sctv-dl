@@ -3,7 +3,6 @@ import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import Artplayer from 'artplayer'
 
 import type { VideoVariant } from '../video'
-import type { Setting } from 'artplayer'
 
 const props = withDefaults(
   defineProps<{
@@ -26,28 +25,6 @@ onMounted(() => {
   }
 
   try {
-    const qualitySettings: Setting[] =
-      props.variants.length > 1
-        ? [
-            {
-              html: '画质',
-              tooltip:
-                props.variants.find((variant) => variant.url === props.url)?.quality === 'smooth'
-                  ? '流畅'
-                  : '标准',
-              selector: props.variants.map((variant) => ({
-                html: variant.quality === 'smooth' ? '流畅' : '标准',
-                url: variant.url,
-                default: variant.url === props.url,
-              })),
-              onSelect(item) {
-                void player?.switchQuality(item.url).catch(() => emit('error'))
-
-                return item.html
-              },
-            },
-          ]
-        : []
     // The dialog keys this component by URL so each source owns one instance.
     player = new Artplayer({
       container: container.value,
@@ -59,7 +36,14 @@ onMounted(() => {
       autoplay: false,
       playsInline: true,
       setting: true,
-      settings: qualitySettings,
+      quality:
+        props.variants.length > 1
+          ? props.variants.map((variant) => ({
+              html: variant.quality === 'smooth' ? '流畅' : '标准',
+              url: variant.url,
+              default: variant.url === props.url,
+            }))
+          : [],
       playbackRate: true,
       pip: true,
       fullscreen: true,
