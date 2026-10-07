@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import { useDownloadStore } from './store'
-import { makeDownloadTask } from './model'
+import { handOffDownload } from './browser-download'
 
 const click = vi.fn()
 beforeEach(() => {
-  setActivePinia(createPinia())
-  vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() })
   vi.stubGlobal('document', {
     createElement: () => ({ click, remove: vi.fn() }),
     body: { append: vi.fn() },
@@ -14,24 +10,12 @@ beforeEach(() => {
   click.mockClear()
 })
 afterEach(() => vi.unstubAllGlobals())
-const seed = () => {
-  const store = useDownloadStore()
-  const task = makeDownloadTask(
-    {
-      id: '1',
-      title: '节目',
-      cover: null,
-      video: 'https://fscgc.scgchc.com/a.mp4',
-      smoothVideo: null,
-      publishedAt: null,
-    },
-    '栏目',
-    '2026-10-06',
-    'standard',
-  )
-  store.add([task])
-
-  return { store, task }
+const file = {
+  contentId: '1',
+  title: '节目',
+  url: 'https://fscgc.scgchc.com/a.mp4',
+  filename: '2026-10-06_节目_标准.mp4',
+  quality: 'standard' as const,
 }
 
 describe('browser download handoff', () => {
@@ -40,12 +24,10 @@ describe('browser download handoff', () => {
       'fetch',
       vi.fn().mockResolvedValue(new Response('', { headers: { 'content-type': 'text/html' } })),
     )
-    const { store, task } = seed()
-    await store.start(task.id)
-    expect(store.tasks[0]?.status).toBe('failed')
+    await expect(handOffDownload(file)).rejects.toThrow('下载代理未返回视频')
     expect(click).not.toHaveBeenCalled()
   })
-  it('reports HTTP failure and allows a successful retry without claiming file completion', async () => {
+  it('rejects an HTTP failure and permits a successful browser handoff on retry', async () => {
     const fetcher = vi
       .fn()
       .mockResolvedValueOnce(new Response('', { status: 403 }))
@@ -58,11 +40,13 @@ describe('browser download handoff', () => {
         }),
       )
     vi.stubGlobal('fetch', fetcher)
-    const { store, task } = seed()
-    await store.start(task.id)
-    expect(store.tasks[0]?.status).toBe('failed')
-    await store.start(task.id)
-    expect(store.tasks[0]?.status).toBe('handed-off')
+    await expect(handOffDownload(file)).rejects.toThrow('HTTP 403')
+    expect(click).not.toHaveBeenCalled()
+    await handOffDownload(file)
     expect(click).toHaveBeenCalledTimes(1)
+    expect(fetcher).toHaveBeenLastCalledWith(
+      '/media?url=https%3A%2F%2Ffscgc.scgchc.com%2Fa.mp4&download=1&filename=2026-10-06_%E8%8A%82%E7%9B%AE_%E6%A0%87%E5%87%86.mp4',
+      expect.objectContaining({ method: 'HEAD' }),
+    )
   })
 })

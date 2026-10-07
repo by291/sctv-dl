@@ -20,12 +20,8 @@ src/
       components/          Cards, spotlight, date picker, content list, download menu, preview dialog
       views/               Library and details page composition
     downloads/
-      schema.ts            Stored task validation
-      model.ts             Filenames, task creation, deduplication, recovery
+      model.ts             Download file descriptions, quality fallback, filenames
       browser-download.ts  HEAD preflight and browser handoff
-      store.ts             Shared queue, actions, persistence
-      components/          Task row presentation
-      views/               Queue page composition
     settings/
       schema.ts / store.ts Preference validation and shared state
       views/               Settings UI
@@ -38,7 +34,7 @@ Views compose components and composables. Stores own shared state. Business func
 
 ## Data Flow
 
-The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages selection and full-episode matching independently of quality. ProgrammeDownloadButton shares the click-triggered Naive UI quality dropdown across individual rows and the batch action. Unavailable variants are disabled. Selecting a quality converts the current requested contents into tasks and shows one notification, including any fallback, without navigating away. Dismissing the menu leaves the queue unchanged. Changing the selection closes its pending menu; replacing archive contents unmounts download menus and closes the preview. The preview dialog owns player errors and media URLs.
+The programme store caches the catalogue. useProgrammeArchive manages dates, content, loading, errors, and request cancellation. useContentSelection manages selection and full-episode matching independently of quality. ProgrammeDownloadButton shares the click-triggered Naive UI quality dropdown across individual rows and the batch action. Unavailable variants are disabled. Selecting a quality prepares file descriptions and performs HEAD checks, handing each successful file directly to the browser without navigation. ProgrammeView holds only transient preparation IDs to show loading on requested rows and prevent duplicate clicks. A failed file does not stop the batch; one notification reports handoffs, fallbacks, and failures. Dismissing the menu starts no download. Changing the selection closes its pending menu; replacing archive contents unmounts download menus and closes the preview. The preview dialog owns player errors and media URLs.
 
 useFeaturedProgramme selects a random catalogue entry when the library view is created. The spotlight's shuffle action excludes the current programme. Searching, filtering favourites, and refreshing the catalogue preserve the selected ID; refreshed metadata is resolved from the current catalogue. A removed programme is replaced, and changing is disabled when fewer than two entries exist. There is no automatic rotation or persisted selection.
 
@@ -46,9 +42,9 @@ AbortController cancels requests, while LatestRequest prevents obsolete response
 
 Cover and video fields are optional at the API boundary and normalize to null. The service can omit `videoStandard` for clips with only a standard variant; that must not invalidate the other contents in a broadcast. IDs, response envelopes, and calendar dates remain strictly validated. Error panels describe a loading failure without assuming a network outage, and content counts appear only after a successful request.
 
-Settings and favourites retain the `sctv-dl:settings` key; tasks retain `sctv-dl:downloads`. Invalid JSON falls back to defaults. An invalid preference field uses its own default, and individual invalid task records are discarded. New or invalid theme preferences default to system; valid saved choices are retained. The saved quality preference sets initial preview quality; each download operation chooses its own quality in the menu. Interrupted `checking` tasks return to `queued` during initialization. Valid tasks are retained without silently truncating the queue on reload.
+Settings and favourites retain the `sctv-dl:settings` key. Invalid JSON falls back to defaults, and an invalid preference field uses its own default. New or invalid theme preferences default to system; valid saved choices are retained. The saved quality preference sets initial preview quality; each download operation chooses its own quality in the menu.
 
-Settings use VueUse synchronization across browser tabs. Downloads execute within the current window and do not synchronize execution state across windows. Concurrent windows still use last-write-wins persistence. Multi-window queue coordination would require a single executor and a deliberate merge policy.
+Settings use VueUse synchronization across browser tabs. Downloads execute within the current view with no persistent queue or history. Legacy `sctv-dl:downloads` records are no longer read or executed. A browser handoff reports a save request, not transfer completion; the browser owns actual progress and file management.
 
 ## Replaced Custom Infrastructure
 
@@ -56,23 +52,21 @@ Settings use VueUse synchronization across browser tabs. Downloads execute withi
 | ----------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
 | localStorage access and deep watchers                                         | VueUse useStorage with a small schema adapter | Reactive persistence, managed listeners, consistent error feedback     |
 | matchMedia listeners, HTML theme updates, lifecycle cleanup                   | VueUse useColorMode                           | System theme support and reuse of the existing settings state          |
-| navigator.clipboard.writeText                                                 | VueUse useClipboard                           | Existing compatibility handling and legacy copy fallback               |
 | Manual object/array checks, field guards, date regex, stored record filtering | Zod schemas                                   | Central runtime validation, field defaults, inferred types             |
 | Manually adding/removing IDs for each checkbox                                | Naive UI NCheckboxGroup                       | Direct selection binding with explicit select-all/full-episode actions |
-| Repeated find calls for task deduplication                                    | Native Set                                    | Linear deduplication while preserving existing task state              |
 
-The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/), [useColorMode](https://vueuse.org/core/useColorMode/), [useClipboard](https://vueuse.org/core/useClipboard/), and [Zod Basics](https://zod.dev/basics).
+The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/), [useColorMode](https://vueuse.org/core/useColorMode/), and [Zod Basics](https://zod.dev/basics).
 
 ## Retained Small Implementations
 
-| Implementation                                               | Rationale                                                                                                                                        |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Native fetch for three GET endpoints                         | The current request policy is simple. Reconsider Axios/ky or a query library when authentication, complex retries, or caching require it.        |
-| Request switching guard                                      | AbortController plus a small version guard is sufficient. Cancellation alone does not prevent an obsolete result from overwriting current state. |
-| URL parsing, ISO date sorting, Set deduplication             | Platform features suffice without additional URL, date, or utility libraries.                                                                    |
-| Full-episode matching, quality fallback, filenames, task IDs | These are downloader business rules expressed as named, independently testable functions.                                                        |
-| Browser download handoff                                     | The native download manager owns saving and actual progress without buffering hundreds of MB in a page Blob.                                     |
-| Node streaming proxy                                         | Native stream/pipeline provides backpressure. CDN restrictions, Referer, and Range handling are explicit service constraints.                    |
+| Implementation                                     | Rationale                                                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Native fetch for three GET endpoints               | The current request policy is simple. Reconsider Axios/ky or a query library when authentication, complex retries, or caching require it.        |
+| Request switching guard                            | AbortController plus a small version guard is sufficient. Cancellation alone does not prevent an obsolete result from overwriting current state. |
+| URL parsing, ISO date sorting, Set deduplication   | Platform features suffice without additional URL, date, or utility libraries.                                                                    |
+| Full-episode matching, quality fallback, filenames | These are downloader business rules expressed as named, independently testable functions.                                                        |
+| Browser download handoff                           | The native download manager owns saving and actual progress without buffering hundreds of MB in a page Blob.                                     |
+| Node streaming proxy                               | Native stream/pipeline provides backpressure. CDN restrictions, Referer, and Range handling are explicit service constraints.                    |
 
 The proxy middleware runs inside Vite's existing development or preview server, sharing its process and port. It is not a separately started service. The API currently allows cross-origin metadata requests, but media requests still require a Referer from the upstream player origin that browser Fetch cannot supply. Production can serve static files and the media route from one application server; this runtime is not implemented yet. A native desktop or mobile HTTP implementation can satisfy the media header requirement without a local HTTP proxy process.
 
@@ -91,18 +85,16 @@ Motion uses Vue Transition / TransitionGroup with short transition names and Tai
 | Navigation and settings | Brief page transition; the sidebar and top bar remain stable. Existing Naive UI input and dropdown transitions are retained.                                                                                                               |
 | Programme library       | Newly visible catalogue entries fade in. Sorting and favourite priority changes reorder immediately without movement across the grid. The spotlight title and poster reveal on manual shuffle; favourite icons provide brief confirmation. |
 | Broadcast archive       | Loading, empty, and error panels reveal gently. Loaded content fades in; date choices and selected rows transition their colours.                                                                                                          |
-| Download queue          | New and removed tasks fade, remaining rows move, and status changes crossfade.                                                                                                                                                             |
 | Preview dialog          | Keep Naive UI's existing modal and focus management. Artplayer owns playback controls and their transitions.                                                                                                                               |
 
 The reduced-motion media query shortens custom and library animations to effectively immediate changes. There are no automatic carousels, staggered delays for long lists, or animated numeric counters.
 
-ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with Chinese controls, playback speed, keyboard shortcuts, picture-in-picture, and fullscreen. The browser still decodes MP4 media. The preview retains the existing quality fallback and `/media` proxy and requests metadata without autoplay. video.ts lists distinct available variants, omitting duplicate URLs. When two variants are available, an Artplayer settings selector switches quality through switchQuality, preserving playback position within the same instance. The initial resolved URL keys the component; closing the dialog, changing the preview, or leaving the page pauses and destroys the instance. Initialization, media, and quality-switch failures propagate to the dialog's error message, which clears when metadata loads successfully. Tests cover quality selection, immediate queue creation, notifications, fallbacks, menu dismissal, player integration, cleanup, and failures; browser verification covers the actual library UI and playback.
+ProgrammeVideoPlayer wraps [Artplayer](https://artplayer.org/document/en/) with Chinese controls, playback speed, keyboard shortcuts, picture-in-picture, and fullscreen. The browser still decodes MP4 media. The preview retains the existing quality fallback and `/media` proxy and requests metadata without autoplay. video.ts lists distinct available variants, omitting duplicate URLs. When two variants are available, an Artplayer settings selector switches quality through switchQuality, preserving playback position within the same instance. The initial resolved URL keys the component; closing the dialog, changing the preview, or leaving the page pauses and destroys the instance. Initialization, media, and quality-switch failures propagate to the dialog's error message, which clears when metadata loads successfully. Tests cover quality selection, direct download handoff, notifications, fallbacks, menu dismissal, duplicate-click prevention, retries, partial batch failures, player integration, cleanup, and failures; browser verification covers the actual library UI and playback.
 
 ## Readability Improvements
 
 - App.vue mixed theme detection, component library configuration, and layout; these now live in a theme composable, configuration module, and layout component.
-- ProgrammeView mixed requests, selection, playback, and task creation; requests and selection are separate composables, while date selection, content rows, and previews have typed component contracts.
-- Download rows used nested status ternaries; a typed map now defines labels, icons, and actions.
+- ProgrammeView composes requests, selection, playback, and direct downloads. Requests and selection are separate composables, while date selection, content rows, and previews have typed component contracts. File preparation and browser handoff remain separate from UI feedback.
 - Vue closing tags were crowded; Prettier whitespace/attribute settings and semantic spacing make the markup readable.
 - Short Tailwind utility combinations remain in component templates. Complex responsive styles and repeated component patterns use scoped `@apply` rules, with `@variant` blocks grouping breakpoints and `@reference` reusing the theme without duplicate output. Shared styles and named transitions live in the Tailwind entry; feature-specific rules remain with their owning components.
 - Browser and server ambient types were mixed; TypeScript and ESLint environments are configured separately.

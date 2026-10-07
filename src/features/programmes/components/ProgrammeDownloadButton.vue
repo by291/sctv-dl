@@ -12,11 +12,15 @@ const props = defineProps<{
   label: string
   ariaLabel?: string
   primary?: boolean
+  disabled?: boolean
+  loading?: boolean
 }>()
 const emit = defineEmits<{ download: [quality: Quality] }>()
 const show = ref(false)
 const enabled = computed(
   () =>
+    !props.disabled &&
+    !props.loading &&
     props.contents.length > 0 &&
     props.contents.every((content) => !!resolveVideo(content, 'standard')),
 )
@@ -76,6 +80,7 @@ watch(
       :type="primary ? 'primary' : 'default'"
       :secondary="!primary"
       :disabled="!enabled"
+      :loading="loading"
       :aria-label="ariaLabel || label"
       aria-haspopup="menu"
       :aria-expanded="show"

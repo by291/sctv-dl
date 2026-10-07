@@ -1,9 +1,9 @@
 import { proxyMediaUrl } from '../../shared/media'
 
-import type { DownloadTask } from './schema'
+import type { DownloadFile } from './model'
 
-export async function handOffDownload(task: DownloadTask): Promise<void> {
-  const url = proxyMediaUrl(task.url, task.filename)
+export async function handOffDownload(file: DownloadFile): Promise<void> {
+  const url = proxyMediaUrl(file.url, file.filename)
   const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(25_000) })
 
   if (!response.ok) {
@@ -20,7 +20,7 @@ export async function handOffDownload(task: DownloadTask): Promise<void> {
   // Let the browser stream the download instead of buffering the entire MP4 in a Blob.
   const link = document.createElement('a')
   link.href = url
-  link.download = task.filename
+  link.download = file.filename
   link.hidden = true
   document.body.append(link)
   link.click()

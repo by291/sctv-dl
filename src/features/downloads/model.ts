@@ -1,16 +1,20 @@
 import { resolveVideo } from '../programmes/video'
 
 import type { ProgrammeContent, Quality } from '../programmes/types'
-import type { DownloadTask } from './schema'
 
-export type { DownloadTask } from './schema'
+export interface DownloadFile {
+  contentId: string
+  title: string
+  url: string
+  filename: string
+  quality: Quality
+}
 
-export function makeDownloadTask(
+export function makeDownloadFile(
   content: ProgrammeContent,
-  programme: string,
   date: string,
   requested: Quality,
-): DownloadTask {
+): DownloadFile {
   const variant = resolveVideo(content, requested)
 
   if (!variant) {
@@ -27,39 +31,10 @@ export function makeDownloadTask(
       .replace(/[. ]+$/, '') + '.mp4'
 
   return {
-    id: `${content.id}:${quality}`,
     contentId: content.id,
     title: content.title,
-    programme,
-    date,
     url,
     filename,
     quality,
-    status: 'queued',
-    createdAt: new Date().toISOString(),
   }
-}
-
-export function appendTasks(existing: DownloadTask[], added: DownloadTask[]): DownloadTask[] {
-  const ids = new Set(existing.map((task) => task.id))
-
-  return [
-    ...existing,
-    ...added.filter((task) => {
-      if (ids.has(task.id)) {
-        return false
-      }
-
-      ids.add(task.id)
-
-      return true
-    }),
-  ]
-}
-
-export function recoverInterruptedTasks(tasks: DownloadTask[]): DownloadTask[] {
-  return tasks.map((task) => ({
-    ...task,
-    status: task.status === 'checking' ? 'queued' : task.status,
-  }))
 }

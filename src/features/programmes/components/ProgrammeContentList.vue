@@ -9,10 +9,14 @@ import { getVideoVariants, resolveVideo } from '../video'
 import type { ProgrammeContent, Quality } from '../types'
 
 const selected = defineModel<string[]>({ required: true })
-defineProps<{
-  contents: ProgrammeContent[]
-  fullIds: string[]
-}>()
+withDefaults(
+  defineProps<{
+    contents: ProgrammeContent[]
+    fullIds: string[]
+    downloadingIds?: string[]
+  }>(),
+  { downloadingIds: () => [] },
+)
 const emit = defineEmits<{
   preview: [content: ProgrammeContent]
   download: [contents: ProgrammeContent[], quality: Quality]
@@ -113,6 +117,8 @@ function videoAvailability(content: ProgrammeContent): string {
           :contents="[content]"
           label="下载"
           :aria-label="`下载${content.title}`"
+          :disabled="downloadingIds.length > 0"
+          :loading="downloadingIds.includes(content.id)"
           @download="emit('download', [content], $event)"
         />
       </div>

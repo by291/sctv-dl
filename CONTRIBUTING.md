@@ -37,7 +37,7 @@ Use two-space indentation, UTF-8, and LF line endings. EditorConfig and Prettier
 
 Use blank lines to separate imports, state, derived values, actions, and lifecycle hooks. Inside functions, separate validation, computation, and state updates. ESLint requires spacing after imports, around function/block statements, and before returns. Separate major template regions and CSS rule blocks with blank lines.
 
-Comments explain business rules, constraints, or non-obvious decisions: large string IDs, full-episode matching, per-window queues, and streaming downloads. Do not repeat what the code already says or comment every ordinary variable.
+Comments explain business rules, constraints, or non-obvious decisions: large string IDs, full-episode matching, download preparation, and streaming downloads. Do not repeat what the code already says or comment every ordinary variable.
 
 ## Verification
 

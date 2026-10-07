@@ -2,18 +2,15 @@
 import { computed } from 'vue'
 
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Tv, Library, Download, Settings2 } from '@lucide/vue'
+import { Tv, Library, Settings2 } from '@lucide/vue'
 
-import { useDownloadStore } from '../features/downloads/store'
 import { useProgrammeStore } from '../features/programmes/store'
 
 const route = useRoute()
-const downloads = useDownloadStore()
 const programmes = useProgrammeStore()
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
-  { to: '/downloads', label: '下载任务', icon: Download },
   { to: '/settings', label: '设置', icon: Settings2 },
 ]
 const connectionLabel = computed(() => {
@@ -60,12 +57,6 @@ function isActive(path: string): boolean {
             :stroke-width="1.7"
           />
           <span>{{ link.label }}</span>
-          <span
-            v-if="link.to === '/downloads' && downloads.pending.length"
-            class="nav-count"
-          >
-            {{ downloads.pending.length }}
-          </span>
         </RouterLink>
       </nav>
       <div class="sidebar-bottom mt-auto max-[760px]:hidden">
@@ -183,15 +174,6 @@ function isActive(path: string): boolean {
 
   .nav-link.active {
     @apply bg-accent-soft font-semibold text-accent hover:bg-accent-soft;
-  }
-
-  .nav-count {
-    @apply ml-auto grid h-4.75 min-w-5 place-items-center rounded-[5px] bg-accent-soft text-meta;
-    @apply text-accent;
-
-    @variant max-[760px] {
-      @apply hidden;
-    }
   }
 
   .topbar {

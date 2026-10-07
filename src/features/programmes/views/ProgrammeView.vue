@@ -6,8 +6,8 @@ import { NButton, NCheckbox, useMessage } from 'naive-ui'
 import { ArrowLeft, CalendarDays, Star, Check } from '@lucide/vue'
 
 import { errorMessage } from '../../../shared/errors'
-import { makeDownloadTask } from '../../downloads/model'
-import { useDownloadStore } from '../../downloads/store'
+import { makeDownloadFile } from '../../downloads/model'
+import { handOffDownload } from '../../downloads/browser-download'
 import { useSettingsStore } from '../../settings/store'
 import { useProgrammeStore } from '../store'
 import { useProgrammeArchive } from '../composables/useProgrammeArchive'
@@ -23,7 +23,6 @@ import type { ProgrammeContent, Quality } from '../types'
 
 const props = defineProps<{ id: string }>()
 const catalogue = useProgrammeStore()
-const downloads = useDownloadStore()
 const settings = useSettingsStore()
 const message = useMessage()
 
@@ -47,6 +46,7 @@ const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useCon
   selectedDate,
 )
 const preview = ref<ProgrammeContent | null>(null)
+const downloadingIds = ref<string[]>([])
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
 )
@@ -67,23 +67,50 @@ function openPreview(content: ProgrammeContent) {
   preview.value = content
 }
 
-function addDownloads(items: ProgrammeContent[], quality: Quality) {
+async function downloadContents(items: ProgrammeContent[], quality: Quality) {
+  if (!items.length || downloadingIds.value.length) {
+    return
+  }
+
+  downloadingIds.value = items.map((item) => item.id)
+
   try {
-    if (!items.length) {
-      return
+    const files = items.map((item) => makeDownloadFile(item, selectedDate.value || '', quality))
+    const failures: string[] = []
+    let handedOff = 0
+    let usedFallback = false
+
+    // Await only preparation; the browser owns each file's transfer and completion.
+    for (const file of files) {
+      try {
+        await handOffDownload(file)
+        handedOff += 1
+        usedFallback ||= file.quality !== quality
+      } catch (cause) {
+        failures.push(`${file.title}：${errorMessage(cause)}`)
+      }
     }
 
-    const tasks = items.map((item) =>
-      makeDownloadTask(item, programmeName.value || '电视节目', selectedDate.value || '', quality),
-    )
-    const count = downloads.add(tasks)
-    const fallback = tasks.some((task) => task.quality !== quality)
+    const fallback = usedFallback
       ? `，缺少${quality === 'smooth' ? '流畅' : '标准'}版本的内容使用${quality === 'smooth' ? '标准' : '流畅'}画质`
       : ''
+    const success = `${handedOff} 个视频已交给浏览器${fallback}`
 
-    message.success(count ? `已加入 ${count} 个下载任务${fallback}` : '所选内容已在下载列表中')
+    if (failures.length) {
+      const error = `${failures.length} 个视频下载失败。${failures[0]}`
+
+      if (handedOff) {
+        message.warning(`${success}；${error}`, { duration: 8000 })
+      } else {
+        message.error(error, { duration: 8000 })
+      }
+    } else {
+      message.success(success)
+    }
   } catch (cause) {
     message.error(errorMessage(cause))
+  } finally {
+    downloadingIds.value = []
   }
 }
 
@@ -186,9 +213,10 @@ onMounted(() => {
         <ProgrammeDownloadButton
           v-if="!loadingContents && !contentError && contents.length"
           :contents="selectedContents"
+          :disabled="downloadingIds.length > 0"
           label="批量下载"
           primary
-          @download="addDownloads(selectedContents, $event)"
+          @download="downloadContents(selectedContents, $event)"
         />
       </div>
 
@@ -232,8 +260,9 @@ onMounted(() => {
           v-model="selected"
           :contents="contents"
           :full-ids="fullIds"
+          :downloading-ids="downloadingIds"
           @preview="openPreview"
-          @download="addDownloads"
+          @download="downloadContents"
         />
       </template>
     </template>

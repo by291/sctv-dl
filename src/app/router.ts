@@ -17,12 +17,6 @@ export const router = createRouter({
       meta: { title: '节目详情' },
     },
     {
-      path: '/downloads',
-      name: 'downloads',
-      component: () => import('../features/downloads/views/DownloadsView.vue'),
-      meta: { title: '下载任务' },
-    },
-    {
       path: '/settings',
       name: 'settings',
       component: () => import('../features/settings/views/SettingsView.vue'),

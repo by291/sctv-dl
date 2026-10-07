@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeDownloadTask, appendTasks, recoverInterruptedTasks } from './model'
-import { downloadTasksSchema } from './schema'
+import { makeDownloadFile } from './model'
 
 const content = {
   id: '2107426129285414913',
@@ -11,50 +10,41 @@ const content = {
   publishedAt: null,
 }
 
-describe('download queue', () => {
+describe('download file preparation', () => {
   it('uses the available smooth version when the standard source is missing', () => {
     const onlySmooth = {
       ...content,
       video: null,
       smoothVideo: 'https://fscgc.scgchc.com/NewsMedia/standard/a.mp4',
     }
-    const task = makeDownloadTask(onlySmooth, '栏目', '2026-10-06', 'standard')
-    expect(task.quality).toBe('smooth')
-    expect(task.url).toBe(onlySmooth.smoothVideo)
+    const file = makeDownloadFile(onlySmooth, '2026-10-06', 'standard')
+    expect(file.quality).toBe('smooth')
+    expect(file.url).toBe(onlySmooth.smoothVideo)
   })
-  it('falls back to standard when smooth is absent and deduplicates by actual quality', () => {
-    const smooth = makeDownloadTask(content, '四川新闻联播', '2026-10-06', 'smooth')
-    const standard = makeDownloadTask(content, '四川新闻联播', '2026-10-06', 'standard')
-    expect(smooth.quality).toBe('standard')
-    expect(appendTasks([standard], [smooth])).toHaveLength(1)
+  it('falls back to standard when smooth is absent and labels the actual quality', () => {
+    const file = makeDownloadFile(content, '2026-10-06', 'smooth')
+    expect(file.quality).toBe('standard')
+    expect(file.url).toBe(content.video)
+    expect(file.filename).toBe('2026-10-06_四川新闻联播（2026.10.06）_标准.mp4')
   })
-  it('keeps distinct quality versions as separate tasks', () => {
+  it('uses the selected source when both quality versions exist', () => {
     const both = { ...content, smoothVideo: 'https://fscgc.scgchc.com/NewsMedia/standard/a.mp4' }
-    expect(
-      appendTasks(
-        [],
-        [
-          makeDownloadTask(both, '栏目', '2026-10-06', 'standard'),
-          makeDownloadTask(both, '栏目', '2026-10-06', 'smooth'),
-        ],
-      ),
-    ).toHaveLength(2)
+    expect(makeDownloadFile(both, '2026-10-06', 'standard').url).toBe(content.video)
+    expect(makeDownloadFile(both, '2026-10-06', 'smooth').url).toBe(both.smoothVideo)
   })
   it('cleans filenames and uses the selected date', () => {
-    const task = makeDownloadTask(
+    const file = makeDownloadFile(
       { ...content, title: '片段:/\\?*\n标题' },
-      '栏目',
       '2026-10-06',
       'standard',
     )
-    expect(task.filename).not.toMatch(/[<>:"/\\|?*\r\n]/)
-    expect(task.filename).toContain('2026-10-06')
-    expect(task.filename.endsWith('.mp4')).toBe(true)
+    expect(file.filename).not.toMatch(/[<>:"/\\|?*\r\n]/)
+    expect(file.filename).toContain('2026-10-06')
+    expect(file.filename.endsWith('.mp4')).toBe(true)
   })
-  it('recovers damaged storage and resets interrupted preflight to queued', () => {
-    expect(downloadTasksSchema.parse({})).toEqual([])
-    const task = makeDownloadTask(content, '栏目', '2026-10-06', 'standard')
-    expect(recoverInterruptedTasks([{ ...task, status: 'checking' }])[0]?.status).toBe('queued')
-    expect(downloadTasksSchema.parse([null, { ...task, url: 'javascript:alert(1)' }])).toEqual([])
+  it('rejects contents without a playable source', () => {
+    expect(() => makeDownloadFile({ ...content, video: null }, '2026-10-06', 'standard')).toThrow(
+      '没有可下载的视频',
+    )
   })
 })

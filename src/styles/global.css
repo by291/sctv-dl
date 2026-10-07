@@ -129,24 +129,6 @@
   .catalogue-move {
     @apply transition-none!;
   }
-
-  .queue-enter-active,
-  .queue-leave-active {
-    @apply transition-[opacity,transform] duration-(--motion-normal) ease-(--motion-ease);
-  }
-
-  .queue-leave-active {
-    @apply absolute w-full;
-  }
-
-  .queue-enter-from,
-  .queue-leave-to {
-    @apply transform-[translateY(6px)] opacity-0;
-  }
-
-  .queue-move {
-    @apply transition-transform duration-(--motion-normal) ease-(--motion-ease);
-  }
 }
 
 @layer base {

@@ -1,6 +1,6 @@
 # sctv-dl
 
-Browse real Sichuan TV programmes, search and save favourites, select full episodes or clips by broadcast date, choose standard or smooth quality, and add items to a download queue. Theme, preview quality preferences, favourites, and task metadata are stored locally in the browser.
+Browse real Sichuan TV programmes, search and save favourites, select full episodes or clips by broadcast date, and download them directly in standard or smooth quality. Theme, preview quality preferences, and favourites are stored locally in the browser.
 
 ## Development
 
@@ -33,7 +33,7 @@ pnpm preview
 
 - `src/app/` / `src/layouts/`: routing, theme configuration, and application layout.
 - `src/features/programmes/`: programme APIs, validation, catalogue cache, archive logic, and components.
-- `src/features/downloads/`: task models, validation, queue management, and browser download handoff.
+- `src/features/downloads/`: quality resolution, safe filenames, and direct browser download handoff.
 - `src/features/settings/`: preference validation and settings.
 - `src/shared/` / `src/styles/`: shared logic and base styles.
 - `src/components/`: reusable cover images and state feedback.
@@ -45,9 +45,11 @@ See [Coding Conventions](CONTRIBUTING.md) and [Architecture and Library Decision
 
 Video previews use Artplayer with Chinese playback controls, speed settings, keyboard shortcuts, picture-in-picture, and fullscreen. When a programme has distinct standard and smooth variants, the settings menu also provides quality selection while retaining the playback position. Playback begins when requested, and closing a preview releases the player. The initial quality follows the saved preference with an available-variant fallback. UI motion respects the system's reduced-motion preference, and the theme follows the system by default.
 
-Use a content row's download button or select multiple rows and choose the batch download action above the list. Both open a quality dropdown; selecting a quality immediately adds tasks and shows a notification while keeping the current page. Unavailable choices are disabled, and batch fallbacks are explained in the notification. Dismissing the menu adds no tasks. Download quality is chosen per operation, while the saved quality preference controls initial video preview quality. Start queued downloads from the task page. The application uses HEAD to check video availability before handing the download to the browser. A `handed-off` task means that a save was requested; it does not mean the download finished. The browser download manager owns progress, the destination directory, pause, cancellation, resume, and the final result. Batch downloads may require the browser to allow multiple files.
+Use a content row's download button or select multiple rows and choose the batch download action above the list. Both open a quality dropdown; selecting a quality checks video availability with HEAD and immediately hands each available file to the browser. A notification reports the handoff or failure while keeping the current page. There is no separate task page or persistent download queue. Download buttons are temporarily disabled during preparation to prevent repeated clicks; afterward, a file can be downloaded again or retried from its row. Dismissing the menu starts no download. Download quality is chosen per operation, while the saved quality preference controls initial video preview quality.
 
-Tasks are deduplicated by content ID and actual quality. Content rows show available variants; if the requested quality is missing, the task uses the available alternative and records its actual quality. Selection is disabled only when both video variants are missing. Full-episode selection matches the programme name and broadcast date in the title; it does not assume the first item is a full episode. Filenames include the date, title, and actual quality. Large videos are streamed rather than fully buffered in page memory.
+The browser download manager owns progress, the destination directory, pause, cancellation, resume, and the final result. A handoff means that a save was requested; it does not mean the download finished. Batch downloads may require the browser to allow multiple files. A failed video does not stop the remaining batch; the notification reports the successful handoff count, failure count, and first failed video's error.
+
+Content rows show available variants, and unavailable menu choices are disabled. In a mixed batch, missing variants fall back to the available quality, with a notification explaining the fallback for handed-off files. Selection is disabled only when both video variants are missing. Full-episode selection matches the programme name and broadcast date in the title; it does not assume the first item is a full episode. Filenames include the date, title, and actual quality. Large videos are streamed rather than fully buffered in page memory.
 
 ## APIs and Proxies
 
