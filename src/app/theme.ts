@@ -16,4 +16,11 @@ export const themeOverrides: GlobalThemeOverrides = {
     heightLarge: '48px',
   },
   Button: { fontWeight: '600' },
+  Modal: {
+    peers: {
+      Card: {
+        closeSize: '32px',
+      },
+    },
+  },
 }
