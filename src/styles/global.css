@@ -77,29 +77,6 @@
     @apply bg-[#de9753];
   }
 
-  .filter-tab {
-    @apply relative border-0 bg-transparent py-2.25 text-body whitespace-nowrap text-muted;
-    @apply transition-colors duration-140 ease-[ease] after:content-[''];
-  }
-
-  .filter-tab.selected {
-    @apply font-semibold text-main;
-  }
-
-  .filter-tab.selected::after {
-    @apply absolute left-0 h-0.5 w-5 animate-content-reveal rounded-xs bg-accent;
-    @apply [animation-duration:140ms];
-  }
-
-  .filter-count {
-    @apply ml-2 rounded-[5px] bg-subtle px-1.25 py-0.5 text-meta font-medium text-muted;
-    @apply transition-colors duration-140 ease-[ease];
-  }
-
-  .filter-tab.selected .filter-count {
-    @apply bg-accent-soft text-accent;
-  }
-
   .page-enter-active,
   .page-leave-active {
     @apply transition-[opacity,transform] duration-(--motion-fast) ease-(--motion-ease);

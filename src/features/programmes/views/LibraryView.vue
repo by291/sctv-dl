@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef } from 'vue'
 
-import { NButton, NInput, NSelect } from 'naive-ui'
+import { NButton, NInput, NSelect, NTab, NTabs } from 'naive-ui'
 import { Search, RefreshCw } from '@lucide/vue'
 
 import { useProgrammeStore } from '../store'
@@ -21,6 +21,17 @@ const sortOptions = [
   { label: '默认排序', value: 'default' },
   { label: '按名称排序', value: 'name' },
 ]
+const tabTheme = {
+  tabTextColorLine: 'var(--muted)',
+  tabTextColorActiveLine: 'var(--text)',
+  tabTextColorHoverLine: 'var(--text)',
+  tabFontWeightActive: '600',
+  tabFontSizeMedium: '16px',
+  tabGapMediumLine: '24px',
+  tabPaddingMediumLine: 'var(--library-tab-padding)',
+  tabBorderColor: 'var(--line)',
+}
+
 const filtered = computed(() => {
   const favourites = new Set(settings.favourites)
   const search = query.value.trim().toLowerCase()
@@ -87,37 +98,44 @@ onMounted(() => {
   </div>
 
   <div class="library-toolbar">
-    <div
-      class="tabs flex items-center gap-6"
+    <NTabs
+      v-model:value="tab"
+      class="library-tabs -mb-px w-auto! shrink-0 max-[1020px]:w-full!"
+      type="line"
+      size="medium"
+      :bar-width="32"
+      :theme-overrides="tabTheme"
       role="tablist"
       aria-label="栏目筛选"
     >
-      <button
-        class="filter-tab library-tab"
-        :class="{ selected: tab === 'all' }"
+      <NTab
+        name="all"
         role="tab"
+        tabindex="0"
         :aria-selected="tab === 'all'"
-        @click="tab = 'all'"
+        @keydown.enter.prevent="tab = 'all'"
+        @keydown.space.prevent="tab = 'all'"
       >
         全部栏目
         <span class="filter-count">
           {{ store.programmes.length }}
         </span>
-      </button>
-      <button
-        class="filter-tab library-tab"
-        :class="{ selected: tab === 'favourites' }"
+      </NTab>
+      <NTab
+        name="favourites"
         role="tab"
+        tabindex="0"
         :aria-selected="tab === 'favourites'"
-        @click="tab = 'favourites'"
+        @keydown.enter.prevent="tab = 'favourites'"
+        @keydown.space.prevent="tab = 'favourites'"
       >
         我的收藏
         <span class="filter-count">
           {{ settings.favourites.length }}
         </span>
-      </button>
-    </div>
-    <div class="library-filters flex gap-3 max-[1020px]:w-full">
+      </NTab>
+    </NTabs>
+    <div class="library-filters mb-0.75 flex gap-3 max-[1020px]:mb-0 max-[1020px]:w-full">
       <NInput
         v-model:value="query"
         class="w-50! max-[1020px]:flex-1"
@@ -183,12 +201,35 @@ onMounted(() => {
 @reference '../../../styles/global.css';
 
 @layer components {
-  .library-tab::after {
-    @apply -bottom-4;
+  .library-tabs {
+    @apply [--library-tab-padding:9px_0_12px];
 
     @variant max-[1020px] {
-      @apply -bottom-2.5;
+      @apply [--library-tab-padding:9px_0_10px];
     }
+  }
+
+  /* Keep badges outside the measured tab so the indicator centers on its text. */
+  .library-tabs :deep(.n-tabs-tab-wrapper) {
+    @apply pr-9;
+  }
+
+  .library-tabs :deep(.n-tabs-tab__label) {
+    @apply relative;
+  }
+
+  .library-tabs :deep(.n-tabs-tab:focus-visible) {
+    @apply outline-[3px] outline-offset-[-3px] outline-[#e99389];
+  }
+
+  .library-tabs :deep(.filter-count) {
+    @apply absolute top-1/2 left-full ml-2 -translate-y-1/2;
+    @apply rounded-[5px] bg-subtle px-1.25 py-0.5 text-meta font-medium text-muted;
+    @apply transition-colors duration-140 ease-[ease];
+  }
+
+  .library-tabs :deep(.n-tabs-tab--active .filter-count) {
+    @apply bg-accent-soft text-accent;
   }
 
   .library-intro {
@@ -208,10 +249,10 @@ onMounted(() => {
   }
 
   .library-toolbar {
-    @apply mb-5.5 flex items-center justify-between gap-5 border-b border-line pb-3.75;
+    @apply mb-5.5 flex items-center justify-between gap-5 border-b border-line;
 
     @variant max-[1020px] {
-      @apply flex-col items-start gap-7;
+      @apply flex-col items-start gap-4 border-0;
     }
   }
 
