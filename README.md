@@ -45,6 +45,14 @@ Commands and dependency versions are defined in `package.json`. Run commands fro
 
 The development and preview ports are strict. If 5180 is occupied, choose a free port explicitly, for example `pnpm dev --port 5181`. Restart Vite after configuration changes. Preview is for local build verification.
 
+## CI and Dependency Updates
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pull requests and pushes to `main`, and can also be started manually. It installs the pnpm version from `package.json` with a frozen lockfile, then runs `pnpm check` and `pnpm build` on Ubuntu with Node.js 24.15.0 and 26. Superseded runs are cancelled, and the shared pnpm store is cached between runs.
+
+[Dependabot](.github/dependabot.yml) checks npm dependencies and GitHub Actions every Monday at 09:00 Asia/Shanghai. Minor and patch updates are grouped by production dependencies, development dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
+
+Both configurations take effect after they reach the default branch on GitHub. Dependabot's update parser handles multi-document pnpm lockfiles, but GitHub's dependency graph and security alerts still have a [reported pnpm 12 limitation](https://github.com/dependabot/dependabot-core/issues/15904). Do not rely on an empty dependency graph as evidence that dependencies are secure.
+
 ## Documentation
 
 | Document                             | Purpose                                                   |
