@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { NModal } from 'naive-ui'
 
 import { proxyMediaUrl } from '../../../shared/media'
@@ -10,15 +10,17 @@ import type { ProgrammeContent, Quality } from '../types'
 
 const content = defineModel<ProgrammeContent | null>({ required: true })
 const props = defineProps<{ quality: Quality }>()
+const displayedContent = shallowRef(content.value)
+const videoPlayer = useTemplateRef('videoPlayer')
 const failed = ref(false)
 const url = computed(() => {
-  const variant = content.value && resolveVideo(content.value, props.quality)
+  const variant = displayedContent.value && resolveVideo(displayedContent.value, props.quality)
 
   return variant ? proxyMediaUrl(variant.url) : ''
 })
 const variants = computed(() =>
-  content.value
-    ? getVideoVariants(content.value).map((variant) => ({
+  displayedContent.value
+    ? getVideoVariants(displayedContent.value).map((variant) => ({
         ...variant,
         url: proxyMediaUrl(variant.url),
       }))
@@ -31,6 +33,21 @@ function updateVisible(show: boolean) {
   }
 }
 
+function clearPreview() {
+  if (!content.value) {
+    displayedContent.value = null
+  }
+}
+
+watch(content, (value) => {
+  if (value) {
+    displayedContent.value = value
+  } else {
+    // Pause immediately, but keep the closing dialog's content and height intact.
+    videoPlayer.value?.pause()
+  }
+})
+
 watch(url, () => {
   failed.value = false
 })
@@ -41,16 +58,18 @@ watch(url, () => {
     :show="!!content"
     preset="card"
     class="preview-modal w-[min(860px,calc(100vw-32px))]!"
-    :title="content?.title"
+    :title="displayedContent?.title"
     :bordered="false"
     @update:show="updateVisible"
+    @after-leave="clearPreview"
   >
     <ProgrammeVideoPlayer
-      v-if="content && url"
+      v-if="displayedContent && url"
       :key="url"
+      ref="videoPlayer"
       :url="url"
-      :poster="content.cover"
-      :title="content.title"
+      :poster="displayedContent.cover"
+      :title="displayedContent.title"
       :variants="variants"
       @error="failed = true"
       @ready="failed = false"

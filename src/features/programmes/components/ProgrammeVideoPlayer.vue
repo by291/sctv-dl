@@ -18,6 +18,8 @@ const emit = defineEmits<{ error: []; ready: [] }>()
 const container = useTemplateRef<HTMLDivElement>('container')
 let player: Artplayer | undefined
 
+defineExpose({ pause: () => player?.pause() })
+
 onMounted(() => {
   if (!container.value) {
     return
