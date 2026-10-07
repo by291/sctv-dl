@@ -3,3 +3,7 @@ node_modules
 pnpm-lock.yaml
 .cache
 .superpowers
+
+# Native sources use Spotless; Gradle owns generated products.
+android/**
+!android/*.md

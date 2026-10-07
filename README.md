@@ -1,10 +1,12 @@
 # sctv-dl
 
-A Web app for browsing and downloading Sichuan TV programmes.
+A Web app and native Android client for browsing and downloading Sichuan TV programmes.
 
 Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Preferences are saved in the browser. Downloads go directly to the browser's download manager.
 
 ## Run Locally
+
+For the Kotlin and Jetpack Compose client, open `android/` in Android Studio and follow the [Android README](android/README.md). It connects directly to upstream services and needs no Node deployment. The commands below run the Web app.
 
 Use Node.js 24.15 or newer and the pnpm version pinned in `package.json`. Run commands from the repository root.
 
@@ -55,9 +57,11 @@ Both configurations take effect after they reach the default branch on GitHub. D
 
 ## Documentation
 
-| Document                             | Purpose                                                   |
-| ------------------------------------ | --------------------------------------------------------- |
-| [Agent Instructions](AGENTS.md)      | Project constraints, coding conventions, and verification |
-| [Architecture](docs/architecture.md) | Module ownership, data flow, and important behaviour      |
-| [Deployment](docs/deployment.md)     | Production service, configuration, and operations         |
-| [Upstream API](docs/upstream-api.md) | Programme endpoints, video fields, and proxy contracts    |
+| Document                                               | Purpose                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| [Agent Instructions](AGENTS.md)                        | Project constraints, coding conventions, and verification     |
+| [Architecture](docs/architecture.md)                   | Module ownership, data flow, and important behaviour          |
+| [Deployment](docs/deployment.md)                       | Production service, configuration, and operations             |
+| [Upstream API](docs/upstream-api.md)                   | Programme endpoints, video fields, and proxy contracts        |
+| [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |
+| [Android Client](android/README.md)                    | Native setup, modules, downloads, playback, and verification  |

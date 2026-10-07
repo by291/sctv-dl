@@ -21,7 +21,7 @@ const tailwindRules = {
 }
 
 export default defineConfig(
-  { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**'] },
+  { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**', 'android/**'] },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,vue}'],
     extends: [
