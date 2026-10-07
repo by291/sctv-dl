@@ -4,7 +4,7 @@ Browse real Sichuan TV programmes, search and save favourites, select full episo
 
 ## Development
 
-Use Node.js 24.12+ (verified with 26.10.0) and pnpm 10.28.2. Run all commands from the project root.
+Use Node.js 24.15+ (verified with 26.10.0) and pnpm 10.28.2. Run all commands from the project root.
 
 ```powershell
 pnpm install
@@ -37,7 +37,7 @@ pnpm preview
 - `src/features/settings/`: preference validation and settings.
 - `src/shared/` / `src/styles/`: shared logic and base styles.
 - `src/components/`: reusable cover images and state feedback.
-- `server/`: API and streaming media proxies for Vite development and preview.
+- `server/`: production HTTP service, shared API and streaming media proxies, and Vite integration.
 
 See [Coding Conventions](CONTRIBUTING.md) and [Architecture and Library Decisions](docs/architecture.md) for module responsibilities, formatting rules, and the rationale for retained custom logic.
 
@@ -63,12 +63,26 @@ Upstream service: `https://gw.scgchc.com`.
 
 The programme APIs returned `Access-Control-Allow-Origin: *` during verification on 2026-10-06, so programme metadata can currently be requested directly from a browser. The default configuration keeps these requests behind `/api` for a consistent local origin. Set `VITE_API_BASE=https://gw.scgchc.com` before building to request metadata directly.
 
-The tested video returned HTTP 403 without a Referer and HTTP 200 with `Referer: https://scgc.video.play/`. A page cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to supply an arbitrary foreign origin. The local `/media?url=...` middleware therefore adds the required header, forwards Range / If-Range, and streams the response. The media proxy accepts only HTTPS MP4 URLs on `fscgc.scgchc.com` and rejects other hosts, explicit nondefault ports, credentials, and redirects. Downloads receive a safely encoded Content-Disposition filename.
+The tested video returned HTTP 403 without a Referer and HTTP 200 with `Referer: https://scgc.video.play/`. A page cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to supply an arbitrary foreign origin. The shared `/media?url=...` middleware therefore adds the required header, forwards Range / If-Range, and streams the response. The media proxy accepts only HTTPS MP4 URLs on `fscgc.scgchc.com` and rejects other hosts, explicit nondefault ports, credentials, and redirects. Downloads receive a safely encoded Content-Disposition filename.
 
 ## Deployment
 
-The Vite proxies run only with `dev` and `preview`; **they are not included in `dist/`**. A production host needs the `/media` route, an `/api` route if metadata uses the default proxy configuration, and a history fallback to `index.html` for Vue Router. One application server can serve both the static build and these routes on the same port; a second process or separately deployed proxy is not required. A production server is not included yet, and Vite preview is only for local build verification.
+Deploy one long-running Node.js service that serves the built frontend, programme APIs, and video streams on the same port:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm build
+pnpm start
+```
+
+Open http://127.0.0.1:3000 locally. The production entry is `server/index.ts`; it runs directly with Node's stable TypeScript support and does not load Vite. Keep `dist/`, `server/`, and the package manifests together when deploying. If the frontend was built elsewhere, install runtime dependencies with `pnpm install --prod --frozen-lockfile` and start the service without running the build again. Vite preview remains a local build-verification tool.
+
+`pnpm start` loads an optional `.env` file. `HOST` defaults to `0.0.0.0` and `PORT` defaults to `3000`; environment variables supplied by the host override `.env`. `VITE_API_BASE` and `VITE_MEDIA_BASE` are build-time settings, so keep their default `/api` and `/media` values for this single-origin deployment. Changing either requires rebuilding the frontend.
+
+The service supports direct Vue Router navigation, revalidates HTML with ETags, and caches Vite's hashed assets. `GET /healthz` returns `{"status":"ok"}` without contacting the upstream service. Startup fails clearly when the frontend build is missing or the port is invalid. SIGINT and SIGTERM stop accepting requests and allow active transfers up to 30 seconds to finish.
+
+The server forwards media with backpressure and does not save video files or maintain download jobs. Transfers consume the deployment host's outgoing bandwidth. If the hosting platform supplies HTTPS or a reverse proxy, it must allow streaming responses, Range requests, and long downloads. The existing allowlist restricts requests to the programme APIs and verified MP4 CDN.
 
 Static hosting alone cannot provide working video downloads under the verified Referer restriction. A future desktop or mobile client can make these requests through its native HTTP implementation without a local HTTP proxy process.
 
-Set `VITE_API_BASE` / `VITE_MEDIA_BASE` from `.env.example` before building to use different service endpoints. This version does not include a production server, Rust SDK, desktop shell, authentication, or live-stream parsing.
+Set `VITE_API_BASE` / `VITE_MEDIA_BASE` from `.env.example` before building to use different service endpoints. This version does not include a Rust SDK, desktop shell, authentication, or live-stream parsing.

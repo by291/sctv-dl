@@ -27,7 +27,7 @@ src/
       views/               Settings UI
   shared/                  Persistence, errors, media URLs, request guards
   styles/global.css        Tailwind entry, theme tokens, shared styles and motion
-server/                    Local API and streaming media proxies
+server/                    Production HTTP service, shared proxies, Vite adapter
 ```
 
 Views compose components and composables. Stores own shared state. Business functions depend on domain types and schemas. APIs accept unknown data and return validated types. Shared modules do not import feature stores. Browser code does not import Node server modules.
@@ -68,7 +68,11 @@ The replacements follow [VueUse useStorage](https://vueuse.org/core/useStorage/)
 | Browser download handoff                           | The native download manager owns saving and actual progress without buffering hundreds of MB in a page Blob.                                     |
 | Node streaming proxy                               | Native stream/pipeline provides backpressure. CDN restrictions, Referer, and Range handling are explicit service constraints.                    |
 
-The proxy middleware runs inside Vite's existing development or preview server, sharing its process and port. It is not a separately started service. The API currently allows cross-origin metadata requests, but media requests still require a Referer from the upstream player origin that browser Fetch cannot supply. Production can serve static files and the media route from one application server; this runtime is not implemented yet. A native desktop or mobile HTTP implementation can satisfy the media header requirement without a local HTTP proxy process.
+The proxy middleware is independent of Vite. `server/vite-plugin.ts` installs it in the development and preview servers; `server/app.ts` composes it with sirv static-file handling and a health route. `server/index.ts` starts the production Node HTTP server, reads HOST / PORT, and drains active transfers on shutdown. Development and production each use one process and port. The production runtime executes erasable TypeScript directly with Node, without loading Vite or a TypeScript loader.
+
+sirv handles content types, ETags, file lookup, and the Vue Router history fallback. HTML revalidates while Vite's content-hashed assets receive immutable caching. Missing assets, reserved proxy routes, and dotfile paths are excluded from the frontend fallback. Frontend assets use complete responses and ignore Range headers; only the media proxy supports byte ranges. This avoids exposing sirv's malformed-range handling to public requests. Production only serves files from `dist/`, and startup requires its index.html. Integration tests exercise real local HTTP requests for routes, static-file boundaries, malformed static ranges, health checks, metadata, media headers, download filenames, and streaming before completion; external upstream requests are stubbed at the fetch boundary.
+
+The API currently allows cross-origin metadata requests, but media requests still require a Referer from the upstream player origin that browser Fetch cannot supply. The production service supplies that header and streams media with native backpressure, without storing videos or download jobs. A native desktop or mobile HTTP implementation can satisfy the media header requirement without a local HTTP proxy process.
 
 The shared typography uses 16px body text and a 14px minimum for supporting labels, with matching Naive UI theme settings. Page titles describe the current task, and helper text is reserved for choices and behaviour that affect the user.
 

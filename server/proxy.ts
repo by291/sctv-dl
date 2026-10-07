@@ -4,7 +4,6 @@ import { pipeline } from 'node:stream/promises'
 import { contentDisposition, validateMediaTarget } from './media.ts'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { Connect, Plugin } from 'vite'
 
 async function serve(request: IncomingMessage, response: ServerResponse, local: URL) {
   if (!['GET', 'HEAD'].includes(request.method || '')) {
@@ -133,21 +132,23 @@ async function serve(request: IncomingMessage, response: ServerResponse, local: 
   }
 }
 
-export function programmeProxy(): Plugin {
-  const install = (middlewares: Connect.Server) => {
-    middlewares.use((request, response, next) => {
-      const url = new URL(request.url || '/', 'http://localhost')
-      if (url.pathname === '/media' || url.pathname.startsWith('/api/')) {
-        void serve(request, response, url)
-      } else {
-        next()
-      }
-    })
+export function programmeProxyMiddleware(
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void,
+): void {
+  let url: URL
+  try {
+    url = new URL(request.url || '/', 'http://localhost')
+  } catch {
+    response.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Invalid URL')
+
+    return
   }
 
-  return {
-    name: 'sctv-programme-proxy',
-    configureServer: (server) => install(server.middlewares),
-    configurePreviewServer: (server) => install(server.middlewares),
+  if (url.pathname === '/media' || url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    void serve(request, response, url)
+  } else {
+    next()
   }
 }
