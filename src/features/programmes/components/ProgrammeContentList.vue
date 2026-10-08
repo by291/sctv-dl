@@ -44,7 +44,7 @@ function hasVideo(content: ProgrammeContent): boolean {
     class="content-list"
   >
     <article
-      v-for="(content, index) in contents"
+      v-for="content in contents"
       :key="content.id"
       class="content-row"
       :class="{ checked: selected.includes(content.id) }"
@@ -74,30 +74,13 @@ function hasVideo(content: ProgrammeContent): boolean {
       </button>
 
       <div class="content-info">
-        <div class="content-labels">
-          <span class="content-index">
-            {{ String(index + 1).padStart(2, '0') }}
-          </span>
-          <span
-            v-if="fullIds.includes(content.id)"
-            class="pill coral"
-          >
-            整期节目
-          </span>
-          <span
-            v-else
-            class="pill"
-          >
-            节目片段
-          </span>
-          <span
-            v-if="!hasVideo(content)"
-            class="muted"
-          >
-            暂无视频
-          </span>
-        </div>
-        <h3>
+        <p
+          v-if="!hasVideo(content)"
+          class="content-unavailable"
+        >
+          暂无视频
+        </p>
+        <h3 class="content-heading">
           <NPopover
             class="content-title-popover"
             trigger="click"
@@ -120,6 +103,12 @@ function hasVideo(content: ProgrammeContent): boolean {
             </template>
             {{ content.title }}
           </NPopover>
+          <span
+            v-if="fullIds.includes(content.id)"
+            class="pill coral content-full"
+          >
+            整期节目
+          </span>
         </h3>
       </div>
 
@@ -192,23 +181,23 @@ function hasVideo(content: ProgrammeContent): boolean {
   min-width: 0;
   flex: 1;
 }
-.content-labels {
+.content-heading {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  font-weight: 400;
+}
+.content-full {
+  flex-shrink: 0;
+}
+.content-unavailable {
   margin-bottom: 7px;
-}
-.content-index {
-  font-size: 14px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.muted {
   color: var(--muted);
 }
 .content-title {
   display: -webkit-box;
-  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   border: 0;
   background: transparent;
@@ -263,9 +252,7 @@ function hasVideo(content: ProgrammeContent): boolean {
   .content-info {
     grid-area: info;
   }
-  .content-labels {
-    flex-wrap: wrap;
-    gap: 6px;
+  .content-unavailable {
     margin-bottom: 4px;
   }
   .content-title {
