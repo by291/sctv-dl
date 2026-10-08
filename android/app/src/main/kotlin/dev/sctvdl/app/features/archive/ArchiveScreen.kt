@@ -24,13 +24,11 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +51,7 @@ import dev.sctvdl.design.ContentCard
 import dev.sctvdl.design.CoverImage
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.QualitySheet
+import dev.sctvdl.design.RefreshableContent
 import dev.sctvdl.design.StatePanel
 import dev.sctvdl.design.TouchTarget
 import dev.sctvdl.domain.BroadcastDate
@@ -100,16 +99,6 @@ fun ArchiveScreen(
                         if (state.selectionMode) "退出选择" else "返回"
                     )
                 }
-            },
-            actions = {
-                if (!state.selectionMode) {
-                    IconButton(
-                        onClick = onRefresh,
-                        enabled = !state.dates.isRefreshing && !state.contents.isRefreshing
-                    ) {
-                        Icon(Icons.Outlined.Refresh, "刷新节目")
-                    }
-                }
             }
         )
         if (state.selectionMode) {
@@ -121,109 +110,114 @@ fun ArchiveScreen(
                 TextButton(onClick = onSelectFull) { Text("仅完整节目") }
             }
         }
-        LazyColumn(
-            Modifier.weight(1f),
-            contentPadding = PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        RefreshableContent(
+            isRefreshing = (state.dates.isRefreshing || state.contents.isRefreshing) &&
+                (state.dates.data != null || state.contents.data != null),
+            onRefresh = onRefresh,
+            enabled = !state.selectionMode && !state.dates.isRefreshing && !state.contents.isRefreshing,
+            modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            if (!state.selectionMode) {
-                item(key = "programme") { ArchiveHeader(state, onFavourite) }
-                if (state.dates.data.orEmpty().isNotEmpty()) {
-                    item(key = "dates") {
-                        BroadcastDates(state.dates.data.orEmpty(), state.date, onDate, { showDates = true })
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (!state.selectionMode) {
+                    item(key = "programme") { ArchiveHeader(state, onFavourite) }
+                    if (state.dates.data.orEmpty().isNotEmpty()) {
+                        item(key = "dates") {
+                            BroadcastDates(state.dates.data.orEmpty(), state.date, onDate, { showDates = true })
+                        }
                     }
                 }
-            }
-            state.dates.error?.let { error ->
-                item(key = "dates-error") {
-                    Column(Modifier.padding(horizontal = 16.dp)) {
-                        ErrorBanner(error, state.dates.data != null, onRefresh)
+                state.dates.error?.let { error ->
+                    item(key = "dates-error") {
+                        Column(Modifier.padding(horizontal = 16.dp)) {
+                            ErrorBanner(error, state.dates.data != null, onRefresh)
+                        }
                     }
                 }
-            }
-            state.contents.error?.let { error ->
-                item(key = "contents-error") {
-                    Column(Modifier.padding(horizontal = 16.dp)) {
-                        ErrorBanner(error, state.contents.data != null, onRefresh)
+                state.contents.error?.let { error ->
+                    item(key = "contents-error") {
+                        Column(Modifier.padding(horizontal = 16.dp)) {
+                            ErrorBanner(error, state.contents.data != null, onRefresh)
+                        }
                     }
                 }
-            }
-            when {
-                state.dates.data == null && state.dates.error == null -> item(key = "loading-dates") {
-                    StatePanel("加载播出日期", "正在查询往期节目", loading = true)
-                }
-                state.dates.data?.isEmpty() == true -> item(key = "empty-dates") {
-                    StatePanel("暂无播出日期", "该栏目暂时没有可回看的节目", onRetry = onRefresh)
-                }
-                state.date != null && state.contents.data == null && state.contents.error == null -> item(
-                    key = "loading-contents"
-                ) {
-                    StatePanel("加载节目", "正在获取当期节目单", loading = true)
-                }
-                state.contents.data?.isEmpty() == true -> item(key = "empty-contents") {
-                    StatePanel("这一天暂无节目", "可以选择其他播出日期", onRetry = onRefresh)
-                }
-                else -> {
-                    if (state.contents.isRefreshing || state.dates.isRefreshing) {
-                        item(key = "refresh") { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                when {
+                    state.dates.data == null && state.dates.error == null -> item(key = "loading-dates") {
+                        StatePanel("加载播出日期", "正在查询往期节目", loading = true)
                     }
-                    if (state.contents.data.orEmpty().isNotEmpty()) {
-                        item(key = "contents-heading") {
-                            Row(
-                                Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("当期节目", style = MaterialTheme.typography.titleLarge)
-                                    Text(
-                                        "${state.date?.date ?: ""} · ${state.contents.data.orEmpty().size} 条内容",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                if (!state.selectionMode) {
-                                    TextButton(onClick = onBeginSelection) { Text("批量下载") }
+                    state.dates.data?.isEmpty() == true -> item(key = "empty-dates") {
+                        StatePanel("暂无播出日期", "该栏目暂时没有可回看的节目", onRetry = onRefresh)
+                    }
+                    state.date != null && state.contents.data == null && state.contents.error == null -> item(
+                        key = "loading-contents"
+                    ) {
+                        StatePanel("加载节目", "正在获取当期节目单", loading = true)
+                    }
+                    state.contents.data?.isEmpty() == true -> item(key = "empty-contents") {
+                        StatePanel("这一天暂无节目", "可以选择其他播出日期", onRetry = onRefresh)
+                    }
+                    else -> {
+                        if (state.contents.data.orEmpty().isNotEmpty()) {
+                            item(key = "contents-heading") {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("当期节目", style = MaterialTheme.typography.titleLarge)
+                                        Text(
+                                            "${state.date?.date ?: ""} · ${state.contents.data.orEmpty().size} 条内容",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (!state.selectionMode) {
+                                        TextButton(onClick = onBeginSelection) { Text("批量下载") }
+                                    }
                                 }
                             }
                         }
-                    }
-                    items(state.fullEpisodes, key = { "full-${it.id}" }) { content ->
-                        Column(Modifier.padding(horizontal = 16.dp)) {
-                            ContentCard(
-                                content,
-                                true,
-                                state.selectionMode,
-                                content.id in state.selectedIds,
-                                {
-                                    onPlay(content)
-                                },
-                                { downloadIds = arrayListOf(content.id) },
-                                { onToggle(content.id) }
-                            )
+                        items(state.fullEpisodes, key = { "full-${it.id}" }) { content ->
+                            Column(Modifier.padding(horizontal = 16.dp)) {
+                                ContentCard(
+                                    content,
+                                    true,
+                                    state.selectionMode,
+                                    content.id in state.selectedIds,
+                                    {
+                                        onPlay(content)
+                                    },
+                                    { downloadIds = arrayListOf(content.id) },
+                                    { onToggle(content.id) }
+                                )
+                            }
                         }
-                    }
-                    if (state.clips.isNotEmpty()) {
-                        item(key = "clips-heading") {
-                            Text(
-                                "节目片段 · ${state.clips.size}",
-                                Modifier.padding(horizontal = 16.dp),
-                                style = MaterialTheme.typography.titleMedium
-                            )
+                        if (state.clips.isNotEmpty()) {
+                            item(key = "clips-heading") {
+                                Text(
+                                    "节目片段 · ${state.clips.size}",
+                                    Modifier.padding(horizontal = 16.dp),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
                         }
-                    }
-                    items(state.clips, key = { "clip-${it.id}" }) { content ->
-                        Column(Modifier.padding(horizontal = 16.dp)) {
-                            ContentCard(
-                                content,
-                                false,
-                                state.selectionMode,
-                                content.id in state.selectedIds,
-                                {
-                                    onPlay(content)
-                                },
-                                { downloadIds = arrayListOf(content.id) },
-                                { onToggle(content.id) }
-                            )
+                        items(state.clips, key = { "clip-${it.id}" }) { content ->
+                            Column(Modifier.padding(horizontal = 16.dp)) {
+                                ContentCard(
+                                    content,
+                                    false,
+                                    state.selectionMode,
+                                    content.id in state.selectedIds,
+                                    {
+                                        onPlay(content)
+                                    },
+                                    { downloadIds = arrayListOf(content.id) },
+                                    { onToggle(content.id) }
+                                )
+                            }
                         }
                     }
                 }

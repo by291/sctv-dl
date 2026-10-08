@@ -40,7 +40,8 @@ Compact windows show bottom navigation only on primary destinations; programme d
 
 ### Programme Catalogue
 
-- A compact native app bar combines a television logo, `sctv-dl`, `电视节目下载`, and refresh. The two library tabs identify the current browsing scope. Search, the result count, sorting, and cards form one scrolling content area, leaving the page navigation reachable while browsing.
+- A compact native app bar combines a television logo, `sctv-dl`, `电视节目下载`, and a search action. Search expands inside the toolbar above the library tabs; opening it explicitly focuses the input. The IME search action dismisses the keyboard, while exiting search clears the current scope's query and restores the brand. Restored queries remain visible without automatically opening the keyboard. The two library tabs identify the current browsing scope. The result count, sorting, and cards form one scrolling content area, leaving the page navigation reachable while browsing.
+- Pull down at the beginning of either library tab to refresh. Use the native Material 3 indicator and preserve cached results and filters during the request. An active request cannot be triggered again; error and empty-state retry actions remain available. Assistive technology exposes an equivalent refresh action.
 - Use an adaptive two-column cover grid on typical phones, a single column when large text requires it, and additional columns when space permits. Cards show the cover, programme name, and an accessible favourite control.
 - Provide default service order and name order. Favourites precede non-favourites in either mode; preserve ordering within each group.
 - The favourites tab reuses the same card, search, and ordering rules. Its empty state explains how to save a programme and provides an action to browse all programmes.
@@ -50,7 +51,7 @@ Compact windows show bottom navigation only on primary destinations; programme d
 
 ### Programme Archive
 
-The archive uses a compact app bar and a scrolling programme header with the real cover, full programme name, and favourite action. Recent returned broadcast dates appear in a horizontal row, newest first, and switch directly without opening a sheet. `更多日期` opens the month-grouped date sheet. A date selected from that sheet remains visible in the shortcut row even outside the seven recent broadcasts. Days without an upstream date record are unavailable.
+The archive uses a compact app bar and a scrolling programme header with the real cover, full programme name, and favourite action. Pull down at the beginning of the archive to refresh its dates and selected broadcast, retaining cached content during the request. Disable pull refresh during batch selection and while a request is active. Recent returned broadcast dates appear in a horizontal row, newest first, and switch directly without opening a sheet. `更多日期` opens the month-grouped date sheet. A date selected from that sheet remains visible in the shortcut row even outside the seven recent broadcasts. Days without an upstream date record are unavailable.
 
 Distinguish a confirmed full episode from individual clips using the existing title-matching rule. Show full episodes prominently when present, while retaining the service's content order within each group. Do not label the first row as a full episode by position.
 

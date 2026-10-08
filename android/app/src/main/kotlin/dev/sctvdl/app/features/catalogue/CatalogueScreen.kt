@@ -1,5 +1,6 @@
 package dev.sctvdl.app.features.catalogue
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,18 +15,18 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -35,20 +36,27 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.ProgrammeCard
 import dev.sctvdl.design.ProgrammeSpotlight
+import dev.sctvdl.design.RefreshableContent
 import dev.sctvdl.design.SctvBrand
 import dev.sctvdl.design.StatePanel
 
@@ -71,20 +79,74 @@ fun CatalogueScreen(
     val catalogueScroll = rememberLazyGridState()
     val favouritesScroll = rememberLazyGridState()
     var sortMenu by remember { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var requestSearchFocus by remember { mutableStateOf(false) }
+    val searching = searchExpanded || state.query.isNotEmpty()
+    val searchFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val closeSearch: () -> Unit = {
+        onQuery("")
+        searchExpanded = false
+        focusManager.clearFocus()
+        keyboard?.hide()
+    }
+    BackHandler(searching) { closeSearch() }
+    LaunchedEffect(requestSearchFocus) {
+        if (requestSearchFocus) {
+            searchFocus.requestFocus()
+            requestSearchFocus = false
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { if (embedded) Text("节目库") else SctvBrand() },
-            expandedHeight = if (largeText && !embedded) {
-                104.dp
-            } else if (embedded) {
-                64.dp
-            } else {
-                80.dp
+            title = {
+                if (searching) {
+                    TextField(
+                        value = state.query,
+                        onValueChange = onQuery,
+                        singleLine = true,
+                        placeholder = { Text(if (favouritesOnly) "搜索收藏栏目" else "搜索栏目") },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            focusManager.clearFocus()
+                            keyboard?.hide()
+                        }),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocus)
+                    )
+                } else if (embedded) {
+                    Text("节目库")
+                } else {
+                    SctvBrand()
+                }
+            },
+            expandedHeight = when {
+                searching && largeText -> 88.dp
+                searching || embedded -> 64.dp
+                largeText -> 104.dp
+                else -> 80.dp
+            },
+            navigationIcon = {
+                if (searching) {
+                    IconButton(onClick = closeSearch) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "退出搜索") }
+                }
             },
             actions = {
-                IconButton(onClick = onRefresh, enabled = !state.resource.isRefreshing) {
-                    Icon(Icons.Outlined.Refresh, "刷新栏目")
+                if (!searching) {
+                    IconButton(onClick = {
+                        searchExpanded = true
+                        requestSearchFocus = true
+                    }) { Icon(Icons.Outlined.Search, "搜索栏目") }
+                } else if (state.query.isNotEmpty()) {
+                    IconButton(onClick = { onQuery("") }) { Icon(Icons.Outlined.Close, "清除搜索") }
                 }
             }
         )
@@ -104,113 +166,92 @@ fun CatalogueScreen(
                 modifier = Modifier.testTag("filter-favourites")
             )
         }
-        LazyVerticalGrid(
-            modifier = Modifier.testTag("catalogue-grid"),
-            state = if (favouritesOnly) favouritesScroll else catalogueScroll,
-            columns = GridCells.Adaptive(if (largeText) 280.dp else 156.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        RefreshableContent(
+            isRefreshing = state.resource.isRefreshing && state.resource.data != null,
+            onRefresh = onRefresh,
+            enabled = !state.resource.isRefreshing,
+            modifier = Modifier.weight(1f).fillMaxWidth()
         ) {
-            item(key = "search", span = { GridItemSpan(maxLineSpan) }) {
-                TextField(
-                    value = state.query,
-                    onValueChange = onQuery,
-                    singleLine = true,
-                    placeholder = { Text(if (favouritesOnly) "搜索收藏栏目" else "搜索栏目") },
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    trailingIcon = {
-                        if (state.query.isNotEmpty()) {
-                            IconButton(onClick = { onQuery("") }) { Icon(Icons.Outlined.Close, "清除搜索") }
+            LazyVerticalGrid(
+                modifier = Modifier.fillMaxSize().testTag("catalogue-grid"),
+                state = if (favouritesOnly) favouritesScroll else catalogueScroll,
+                columns = GridCells.Adaptive(if (largeText) 280.dp else 156.dp),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!embedded && !favouritesOnly && state.query.isBlank()) {
+                    state.featured?.let { programme ->
+                        item(key = "exploration", span = { GridItemSpan(maxLineSpan) }) {
+                            ProgrammeSpotlight(
+                                programme,
+                                state.resource.data.orEmpty().size > 1,
+                                { onOpen(programme.id) },
+                                onExplore
+                            )
                         }
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (!embedded && !favouritesOnly && state.query.isBlank()) {
-                state.featured?.let { programme ->
-                    item(key = "exploration", span = { GridItemSpan(maxLineSpan) }) {
-                        ProgrammeSpotlight(
-                            programme,
-                            state.resource.data.orEmpty().size > 1,
-                            { onOpen(programme.id) },
-                            onExplore
+                    }
+                }
+                item(key = "summary", span = { GridItemSpan(maxLineSpan) }) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (state.resource.data != null) "${rows.size} 个栏目" else "正在获取栏目",
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                }
-            }
-            item(key = "summary", span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (state.resource.data != null) "${rows.size} 个栏目" else "正在获取栏目",
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Box {
-                        TextButton(onClick = { sortMenu = true }) {
-                            Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
-                            Text(if (state.byName) "按名称" else "默认排序", Modifier.padding(start = 6.dp))
-                        }
-                        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                            DropdownMenuItem(text = { Text("默认排序") }, onClick = {
-                                onSort(false)
-                                sortMenu = false
-                            })
-                            DropdownMenuItem(text = { Text("按名称排序") }, onClick = {
-                                onSort(true)
-                                sortMenu = false
-                            })
+                        Box {
+                            TextButton(onClick = { sortMenu = true }) {
+                                Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
+                                Text(if (state.byName) "按名称" else "默认排序", Modifier.padding(start = 6.dp))
+                            }
+                            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                                DropdownMenuItem(text = { Text("默认排序") }, onClick = {
+                                    onSort(false)
+                                    sortMenu = false
+                                })
+                                DropdownMenuItem(text = { Text("按名称排序") }, onClick = {
+                                    onSort(true)
+                                    sortMenu = false
+                                })
+                            }
                         }
                     }
                 }
-            }
-            if (state.resource.isRefreshing && state.resource.data != null) {
-                item(key = "refresh", span = { GridItemSpan(maxLineSpan) }) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
-                }
-            }
-            state.resource.error?.let { error ->
-                item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
-                    ErrorBanner(error, state.resource.data != null, onRefresh)
-                }
-            }
-            when {
-                state.resource.data == null && state.resource.error == null -> {
-                    item(key = "loading", span = { GridItemSpan(maxLineSpan) }) {
-                        StatePanel("加载栏目", "正在连接节目服务", loading = true)
+                state.resource.error?.let { error ->
+                    item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
+                        ErrorBanner(error, state.resource.data != null, onRefresh)
                     }
                 }
-                rows.isEmpty() && state.resource.data != null -> {
-                    item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
-                        StatePanel(
-                            state.emptyReason(favouritesOnly),
-                            when {
-                                state.query.isNotBlank() -> "试试其他关键词"
-                                favouritesOnly -> "点击栏目封面上的爱心即可收藏"
-                                else -> "稍后刷新查看最新节目"
-                            },
-                            onRetry = when {
-                                favouritesOnly && state.query.isBlank() -> {
-                                    { onFilter(false) }
-                                }
-                                state.query.isBlank() -> onRefresh
-                                else -> null
-                            },
-                            retryLabel = if (favouritesOnly) "浏览全部栏目" else "重试"
-                        )
+                when {
+                    state.resource.data == null && state.resource.error == null -> {
+                        item(key = "loading", span = { GridItemSpan(maxLineSpan) }) {
+                            StatePanel("加载栏目", "正在连接节目服务", loading = true)
+                        }
                     }
-                }
-                else -> items(rows, key = { it.id }) { row ->
-                    ProgrammeCard(row, row.id in state.favourites, { onOpen(row.id) }, { onFavourite(row.id) })
+                    rows.isEmpty() && state.resource.data != null -> {
+                        item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                            StatePanel(
+                                state.emptyReason(favouritesOnly),
+                                when {
+                                    state.query.isNotBlank() -> "试试其他关键词"
+                                    favouritesOnly -> "点击栏目封面上的爱心即可收藏"
+                                    else -> "稍后刷新查看最新节目"
+                                },
+                                onRetry = when {
+                                    favouritesOnly && state.query.isBlank() -> {
+                                        { onFilter(false) }
+                                    }
+                                    state.query.isBlank() -> onRefresh
+                                    else -> null
+                                },
+                                retryLabel = if (favouritesOnly) "浏览全部栏目" else "重试"
+                            )
+                        }
+                    }
+                    else -> items(rows, key = { it.id }) { row ->
+                        ProgrammeCard(row, row.id in state.favourites, { onOpen(row.id) }, { onFavourite(row.id) })
+                    }
                 }
             }
         }

@@ -72,6 +72,7 @@ class PlayerWindowTest {
             device.executeShellCommand("svc data disable")
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 val editable = By.clazz("android.widget.EditText")
+                requireNotNull(device.wait(Until.findObject(By.desc("搜索栏目")), 5_000)).click()
                 requireNotNull(device.wait(Until.findObject(editable), 5_000)).text = "catalogue-filter"
                 requireNotNull(device.wait(Until.findObject(By.res("filter-favourites")), 5_000)).click()
                 val favouritesSearch = device.wait(

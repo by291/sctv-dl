@@ -79,6 +79,7 @@ class LibraryExplorationTest {
                 }
             }
             assertNotNull(device.wait(Until.findObject(By.res("programme-spotlight")), 5_000))
+            requireNotNull(device.wait(Until.findObject(By.desc("搜索栏目")), 5_000)).click()
             requireNotNull(device.findObject(By.clazz("android.widget.EditText"))).text = "Alpha"
             device.wait(Until.gone(By.res("programme-spotlight")), 5_000)
             assertNull(device.findObject(By.res("programme-spotlight")))
