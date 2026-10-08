@@ -4,12 +4,12 @@ The Web frontend uses native CSS in Vue scoped styles, CSS variables for themes,
 
 ## Ownership
 
-| Location                                       | Responsibility                                                                            |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [Vue components](../src/layouts/AppLayout.vue) | Descriptive template classes, component declarations, and responsive rules                |
-| [Global stylesheet](../src/styles/global.css)  | Base reset, theme variables, shared presentation classes, transitions, and reduced motion |
-| [Naive UI theme](../src/app/theme.ts)          | Library colors, typography, sizing, and supported component overrides                     |
-| [ESLint configuration](../eslint.config.js)    | Native CSS property, value, and at-rule validation, including Vue style blocks            |
+| Location                                       | Responsibility                                                                                      |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| [Vue components](../src/layouts/AppLayout.vue) | Descriptive template classes, component declarations, and responsive rules                          |
+| [Global stylesheet](../src/styles/global.css)  | Application defaults, theme variables, shared presentation classes, transitions, and reduced motion |
+| [Naive UI theme](../src/app/theme.ts)          | Library colors, typography, sizing, and supported component overrides                               |
+| [ESLint configuration](../eslint.config.js)    | Native CSS property, value, and at-rule validation, including Vue style blocks                      |
 
 Keep feature styles with their owning components. Shared selectors such as `.page-heading`, `.pill`, `.notice`, and `.status-dot` belong in the global stylesheet because several components use them. Introduce a shared class or variable when it represents a repeated design decision; isolated measurements do not need individual tokens.
 
@@ -38,7 +38,9 @@ Keep related responsive adjustments in the same scoped stylesheet. Conditions su
 
 Use semantic variables such as `background: var(--panel)`, `color: var(--text)`, and `border: 1px solid var(--line)`. Their values change under `:root[data-theme='dark']`. Naive UI receives its corresponding theme through [App.vue](../src/App.vue).
 
-The native `@layer base` contains the reset and application defaults. Component styles are unlayered, so their normal declarations override the reset without raising selector specificity. Important declarations reverse this layer order: reduced-motion rules in the base layer retain priority over component animations.
+Naive UI's default preflight supplies body margins, typography, and input font inheritance. Keep it enabled. Application defaults add the border-box model, explicit heading and paragraph spacing, navigation link presentation, and native button typography. CoverImage and Artplayer own media sizing. Do not duplicate a full browser reset or add a reset dependency without a concrete need.
+
+The native `@layer base` contains application defaults. Component and library styles are unlayered, so their normal declarations override those defaults without raising selector specificity. Important declarations reverse this layer order: reduced-motion rules in the base layer retain priority over component animations.
 
 Prefer Naive UI theme overrides for supported control styling. Use scoped classes for layout constraints and `:deep()` for library-generated descendants, such as tab labels and Artplayer controls. The teleported preview card does not inherit its owner's scope attribute, so its unique `.preview-modal` selector uses `:global()` in the owning component. Use `!important` only where library rules compete with an intentional override, or for shared transition and accessibility guarantees.
 

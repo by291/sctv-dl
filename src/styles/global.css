@@ -1,24 +1,16 @@
-/* Keep resets below component and library styles, including reduced-motion overrides. */
+/* Keep application defaults below component and library styles. */
 @layer base {
   *,
   *::before,
-  *::after,
-  ::backdrop {
+  *::after {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    border: 0 solid;
   }
 
   :root {
-    font-family: Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-size: 16px;
-    line-height: 1.6;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-    tab-size: 4;
     /* Reserve scrollbar space during filtering and modal scroll locking. */
     scrollbar-gutter: stable;
     --bg: #f6f7f9;
@@ -59,18 +51,14 @@
     min-width: 340px;
     background: var(--bg);
     color: var(--text);
-    font-size: 16px;
-    line-height: inherit;
   }
 
+  /* Naive UI supplies body defaults; application headings and copy use explicit spacing. */
   h1,
   h2,
   h3,
-  h4,
-  h5,
-  h6 {
-    font-size: inherit;
-    font-weight: inherit;
+  p {
+    margin: 0;
   }
 
   a {
@@ -78,53 +66,11 @@
     text-decoration: inherit;
   }
 
-  b,
-  strong {
-    font-weight: bolder;
-  }
-
-  ul,
-  ol {
-    list-style: none;
-  }
-
-  img,
-  svg,
-  video,
-  canvas {
-    display: block;
-    vertical-align: middle;
-  }
-
-  img,
-  video {
-    max-width: 100%;
-    height: auto;
-  }
-
-  button,
-  input,
-  select,
-  textarea {
+  button {
     font: inherit;
     letter-spacing: inherit;
-    color: inherit;
-    border-radius: 0;
-    background: transparent;
-    opacity: 1;
-  }
-
-  button,
-  input:where([type='button'], [type='reset'], [type='submit']) {
-    appearance: button;
-  }
-
-  button {
+    padding: 0;
     cursor: pointer;
-  }
-
-  button:disabled {
-    cursor: not-allowed;
   }
 
   button:focus-visible,
@@ -142,10 +88,6 @@
     line-height: 1.45;
     font-weight: 700;
     letter-spacing: -0.5px;
-  }
-
-  [hidden]:where(:not([hidden='until-found'])) {
-    display: none !important;
   }
 
   @media (width < 760px) {
