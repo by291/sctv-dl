@@ -10,8 +10,10 @@ dist/
 *.tsbuildinfo
 
 # Android local tooling and generated products
+android/.idea/
 android/.gradle/
 android/.kotlin/
+android/gradle/gradle-daemon-jvm.properties
 android/**/build/
 android/local.properties
 android/*.jks
