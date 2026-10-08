@@ -1,10 +1,9 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import tailwindcss from '@tailwindcss/vite'
 import { programmeProxy } from './server/vite-plugin.ts'
 
 export default defineConfig({
-  plugins: [vue(), tailwindcss(), programmeProxy()],
+  plugins: [vue(), programmeProxy()],
   server: { port: 5180, strictPort: true },
   preview: { port: 4173, strictPort: true },
 })

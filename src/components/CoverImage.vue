@@ -13,12 +13,12 @@ watch(
 </script>
 
 <template>
-  <div class="cover-image size-full overflow-hidden bg-subtle">
+  <div class="cover-image">
     <img
       v-if="src && !failed"
       :src="src"
       :alt="alt"
-      class="block size-full object-cover"
+      class="cover-photo"
       loading="lazy"
       referrerpolicy="no-referrer"
       @error="failed = true"
@@ -31,18 +31,39 @@ watch(
         :size="34"
         :stroke-width="1.4"
       />
-      <span class="text-meta">{{ alt }}</span>
+      <span class="cover-label">{{ alt }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-@reference '../styles/global.css';
-
-@layer components {
-  .cover-fallback {
-    @apply flex size-full min-h-21.25 flex-col items-center justify-center gap-2;
-    @apply bg-[linear-gradient(125deg,var(--subtle),var(--accent-soft))] p-3 text-center text-muted;
-  }
+.cover-image {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--subtle);
+}
+.cover-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cover-fallback {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 85px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(125deg, var(--subtle), var(--accent-soft));
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.cover-label {
+  font-size: 14px;
 }
 </style>

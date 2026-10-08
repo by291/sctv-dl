@@ -29,12 +29,13 @@ Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.j
 - Validate external input as `unknown` with Zod and infer schema types with `z.infer`. Keep IDs as strings, public functions typed, and type imports separate.
 - The server executes TypeScript directly in Node. Use explicit `.ts` local imports and erasable syntax; avoid enums and parameter properties.
 
-### Tailwind and UI
+### CSS and UI
 
-- Keep short utilities in templates. Compose long, responsive, or repeated styles in the owning component's scoped `@apply` rules, using `@reference` with the correct relative path to `src/styles/global.css`.
-- Keep theme tokens, base rules, shared presentation classes, named transitions, and reduced-motion handling in the global entry. Keep feature styles with their components.
-- Use semantic theme utilities such as `bg-panel`, `text-main`, and `border-line`. Keep inline classes complete and statically discoverable; prefer library theme overrides for supported sizing. Reserve important utilities for competing library styles.
-- Preserve Tailwind diagnostics and canonical-class checks for templates and `@apply`. Canonical conversion assumes a 16px root font size; changing it requires updating base styles and lint settings together.
+- Use descriptive classes in templates and native CSS in the owning component's scoped stylesheet. Keep responsive rules in the same file with native `@media` conditions.
+- Keep theme variables, base rules, shared presentation classes, named transitions, and reduced-motion handling in `src/styles/global.css`. Keep feature styles with their components. See [Web Styling](docs/styling.md) for ownership and cascade conventions.
+- Use semantic theme variables such as `var(--panel)`, `var(--text)`, and `var(--line)`. Write explicit length units; use unitless values only where CSS defines them, such as line height or font weight.
+- Prefer library theme overrides for supported sizing. Reserve `!important` for competing library styles, transition overrides, and accessibility rules. Use `:deep()` only for library-generated descendants.
+- Preserve CSS diagnostics for global styles and Vue style blocks. Keep the base layer below component styles so reduced-motion important declarations retain priority.
 
 Preserve the task's relevant contracts from Architecture and Upstream API. In particular, retain cancellation and stale-response guards, saved-settings compatibility, truthful browser download handoff, proxy restrictions, and player cleanup after the modal leave animation.
 
@@ -58,4 +59,4 @@ Keep each subject in its owning document, using the map in README. Update it whe
 
 Review the diff for unrelated changes. Report what changed, what was actually verified, and any checks that could not run.
 
-References: [Vue TypeScript](https://vuejs.org/guide/typescript/composition-api.html), [Vue Composables](https://vuejs.org/guide/reusability/composables.html), [Tailwind Utilities](https://tailwindcss.com/docs/styling-with-utility-classes), [TypeScript Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html).
+References: [Vue TypeScript](https://vuejs.org/guide/typescript/composition-api.html), [Vue Composables](https://vuejs.org/guide/reusability/composables.html), [Vue Scoped CSS](https://vuejs.org/api/sfc-css-features.html), [TypeScript Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html).

@@ -27,7 +27,7 @@ function isActive(path: string): boolean {
 </script>
 
 <template>
-  <div class="app-shell flex min-h-screen max-[760px]:flex-col">
+  <div class="app-shell">
     <aside class="sidebar">
       <RouterLink
         to="/"
@@ -38,7 +38,7 @@ function isActive(path: string): boolean {
           <Tv :size="23" />
         </span>
         <!-- prettier-ignore -->
-        <span>sctv<span class="brand-dash text-accent">-dl</span><small class="mt-1.5 block text-meta font-normal tracking-normal text-muted max-[760px]:hidden">电视节目下载</small></span>
+        <span>sctv<span class="brand-dash">-dl</span><small class="brand-description">电视节目下载</small></span>
       </RouterLink>
       <nav
         class="primary-nav"
@@ -59,18 +59,14 @@ function isActive(path: string): boolean {
           <span>{{ link.label }}</span>
         </RouterLink>
       </nav>
-      <div class="sidebar-bottom mt-auto max-[760px]:hidden">
-        <div
-          class="version flex items-center gap-2 border-t border-line px-3.5 pt-4.5 text-meta text-muted"
-        >
-          Web · v0.1.0
-        </div>
+      <div class="sidebar-bottom">
+        <div class="version">Web · v0.1.0</div>
       </div>
     </aside>
-    <div class="workspace flex min-w-0 flex-1 flex-col">
+    <div class="workspace">
       <header class="topbar">
-        <span class="page-location text-body font-medium text-main">{{ route.meta.title }}</span>
-        <div class="connection flex items-center gap-1.75 text-meta text-muted">
+        <span class="page-location">{{ route.meta.title }}</span>
+        <div class="connection">
           <span
             class="status-dot"
             :class="{ offline: programmes.error }"
@@ -101,107 +97,213 @@ function isActive(path: string): boolean {
 </template>
 
 <style scoped>
-@reference '../styles/global.css';
-
-@layer components {
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  width: 232px;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  padding: 36px 20px 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 11px;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+.brand-dash {
+  color: var(--accent);
+}
+.brand-description {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+.brand-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+}
+.primary-nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 40px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 13px 15px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #727987;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+.nav-link.active {
+  background: var(--accent-soft);
+  font-weight: 600;
+  color: var(--accent);
+}
+.sidebar-bottom {
+  margin-top: auto;
+}
+.version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 18px 14px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.workspace {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.topbar {
+  display: flex;
+  height: 70px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  padding: 0 40px;
+}
+.page-location {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.main-content {
+  width: 100%;
+  max-width: 1460px;
+  flex: 1;
+  margin: 0 auto;
+  padding: 38px 40px 40px;
+}
+@media (hover: hover) {
+  .nav-link:hover {
+    background: var(--subtle);
+  }
+  .nav-link.active:hover {
+    background: var(--accent-soft);
+  }
+}
+@media (width < 1250px) {
   .sidebar {
-    @apply sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-panel;
-    @apply px-5 pt-9 pb-5;
-
-    @variant max-[1250px] {
-      @apply w-54 px-3.75;
-    }
-
-    @variant max-[1020px] {
-      @apply w-50 px-2.5;
-    }
-
-    @variant max-[760px] {
-      @apply z-20 h-18.75 w-full flex-row items-center justify-between gap-4.5;
-      @apply border-r-0 border-b px-4.5 py-0;
-    }
-
-    @variant max-[440px] {
-      @apply gap-2 px-3.75;
-    }
+    width: 216px;
+    padding-inline: 15px;
   }
-
-  .brand {
-    @apply flex items-center gap-2.75 px-2.75 text-2xl leading-[1.2] font-extrabold;
-    @apply tracking-[-0.8px];
-
-    @variant max-[1020px] {
-      @apply gap-2 text-[21px];
-    }
-
-    @variant max-[760px] {
-      @apply px-0;
-    }
-
-    @variant max-[440px] {
-      @apply text-[19px];
-    }
-  }
-
-  .brand-icon {
-    @apply grid size-10.5 shrink-0 place-items-center rounded-xl bg-accent text-white;
-
-    @variant max-[760px] {
-      @apply size-8.5 rounded-[10px];
-    }
-  }
-
-  .primary-nav {
-    @apply mt-10 grid gap-2;
-
-    @variant max-[760px] {
-      @apply mt-0 flex gap-0.75;
-    }
-  }
-
-  .nav-link {
-    @apply flex items-center gap-3 rounded-lg px-3.75 py-3.25 text-body font-medium;
-    @apply text-[#727987] transition-[background,color] duration-150 ease-[ease] hover:bg-subtle;
-
-    @variant max-[760px] {
-      @apply gap-1.75 p-2.5 text-meta;
-    }
-
-    @variant max-[440px] {
-      @apply flex-col gap-1 px-1.5 py-2;
-    }
-  }
-
-  .nav-link.active {
-    @apply bg-accent-soft font-semibold text-accent hover:bg-accent-soft;
-  }
-
   .topbar {
-    @apply flex h-17.5 items-center justify-between border-b border-line bg-panel px-10;
-
-    @variant max-[1250px] {
-      @apply px-7.5;
-    }
-
-    @variant max-[760px] {
-      @apply h-13.25 px-5;
-    }
+    padding-inline: 30px;
   }
-
   .main-content {
-    @apply mx-auto w-full max-w-365 flex-1 px-10 pt-9.5 pb-10;
-
-    @variant max-[1250px] {
-      @apply p-7.5;
-    }
-
-    @variant max-[1020px] {
-      @apply px-6 py-7;
-    }
-
-    @variant max-[760px] {
-      @apply px-5 pt-6.5 pb-7.5;
-    }
+    padding: 30px;
+  }
+}
+@media (width < 1020px) {
+  .sidebar {
+    width: 200px;
+    padding-inline: 10px;
+  }
+  .brand {
+    gap: 8px;
+    font-size: 21px;
+  }
+  .main-content {
+    padding: 28px 24px;
+  }
+}
+@media (width < 760px) {
+  .app-shell {
+    flex-direction: column;
+  }
+  .sidebar {
+    z-index: 20;
+    height: 75px;
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 0 18px;
+  }
+  .brand {
+    padding-inline: 0;
+  }
+  .brand-description,
+  .sidebar-bottom {
+    display: none;
+  }
+  .brand-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+  .primary-nav {
+    display: flex;
+    gap: 3px;
+    margin-top: 0;
+  }
+  .nav-link {
+    gap: 7px;
+    padding: 10px;
+    font-size: 14px;
+  }
+  .topbar {
+    height: 53px;
+    padding-inline: 20px;
+  }
+  .main-content {
+    padding: 26px 20px 30px;
+  }
+}
+@media (width < 440px) {
+  .sidebar {
+    gap: 8px;
+    padding-inline: 15px;
+  }
+  .brand {
+    font-size: 19px;
+  }
+  .nav-link {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 6px;
   }
 }
 </style>

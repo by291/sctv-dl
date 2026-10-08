@@ -6,19 +6,8 @@ import globals from 'globals'
 import stylistic from '@stylistic/eslint-plugin'
 import { defineConfig } from 'eslint/config'
 import css from '@eslint/css'
-import tailwind from 'eslint-plugin-better-tailwindcss'
-import { tailwind4 } from 'tailwind-csstree'
 import { mergeProcessors } from 'eslint-merge-processors'
 import vueBlocks from 'eslint-processor-vue-blocks'
-
-const tailwindRules = {
-  'better-tailwindcss/enforce-canonical-classes': ['error', { collapse: false, logical: false }],
-  'better-tailwindcss/enforce-consistent-class-order': ['error', { order: 'official' }],
-  'better-tailwindcss/no-duplicate-classes': 'error',
-  'better-tailwindcss/no-unnecessary-whitespace': 'error',
-  'better-tailwindcss/no-conflicting-classes': 'error',
-  'better-tailwindcss/no-deprecated-classes': 'error',
-}
 
 export default defineConfig(
   { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**', 'android/**'] },
@@ -53,22 +42,22 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['src/**/*.{ts,vue,css}'],
-    plugins: { 'better-tailwindcss': tailwind },
-    settings: {
-      'better-tailwindcss': { entryPoint: 'src/styles/global.css', rootFontSize: 16 },
-    },
-    rules: tailwindRules,
-  },
-  {
     files: ['**/*.css'],
     plugins: { css },
     language: 'css/css',
-    languageOptions: { customSyntax: tailwind4, tolerant: true },
+    rules: {
+      // Theme and library variables are defined outside individual style blocks.
+      'css/no-invalid-properties': ['error', { allowUnknownVariables: true }],
+      'css/no-invalid-at-rules': 'error',
+      'css/no-invalid-at-rule-placement': 'error',
+      'css/no-duplicate-imports': 'error',
+      'css/no-duplicate-keyframe-selectors': 'error',
+      'css/no-empty-blocks': 'error',
+    },
   },
   {
     files: ['**/*.vue'],
-    // Preserve Vue's comment directives while also linting scoped @apply rules.
+    // Preserve Vue's comment directives while also validating component CSS.
     processor: mergeProcessors([
       vue.processors['.vue'],
       vueBlocks({ blocks: { styles: true, script: false, template: false, customBlocks: false } }),

@@ -19,19 +19,19 @@ defineEmits<{ retry: [] }>()
     <CircleAlert
       v-else-if="error"
       :size="34"
-      class="accent text-accent"
+      class="accent"
     />
     <Inbox
       v-else
       :size="38"
       :stroke-width="1.3"
     />
-    <h3 class="text-body font-medium text-main">
+    <h3 class="state-title">
       {{ loading ? '正在加载…' : error ? title || '加载失败' : title || '暂无内容' }}
     </h3>
     <p
       v-if="error || description"
-      class="max-w-117.5 text-meta leading-[1.8]"
+      class="state-description"
     >
       {{ error || description }}
     </p>
@@ -47,12 +47,29 @@ defineEmits<{ retry: [] }>()
 </template>
 
 <style scoped>
-@reference '../styles/global.css';
-
-@layer components {
-  .state-panel {
-    @apply flex min-h-71.25 animate-content-reveal flex-col items-center justify-center gap-3.75;
-    @apply px-5 py-10 text-center text-muted;
-  }
+.state-panel {
+  display: flex;
+  min-height: 285px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
+}
+.accent {
+  color: var(--accent);
+}
+.state-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+.state-description {
+  max-width: 470px;
+  font-size: 14px;
+  line-height: 1.8;
 }
 </style>

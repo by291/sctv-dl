@@ -1,121 +1,24 @@
-@import 'tailwindcss';
-
-@theme inline {
-  --font-sans: Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif;
-  --color-app-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-main: var(--text);
-  --color-muted: var(--muted);
-  --color-line: var(--line);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-subtle: var(--subtle);
-  --color-success: var(--green);
-  --color-hero: var(--hero);
-  --text-body: 16px;
-  --text-meta: 14px;
-}
-
-@theme {
-  --animate-content-reveal: content-reveal 180ms cubic-bezier(0.2, 0, 0, 1);
-  --animate-favourite-pop: favourite-pop 220ms cubic-bezier(0.2, 0, 0, 1);
-
-  @keyframes content-reveal {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes favourite-pop {
-    50% {
-      transform: scale(1.2);
-    }
-  }
-}
-
-@layer components {
-  .page-heading {
-    @apply mb-7.5 flex items-center justify-between gap-5;
-
-    @variant max-[760px] {
-      @apply mb-5.75 items-start gap-3;
-    }
-
-    @variant max-[440px] {
-      @apply flex-wrap [&>.n-button]:m-0;
-    }
-  }
-
-  .pill {
-    @apply inline-flex rounded-sm bg-subtle px-1.5 py-0.5 text-meta whitespace-nowrap text-muted;
-  }
-
-  .pill.coral {
-    @apply bg-accent-soft text-accent;
-  }
-
-  .notice {
-    @apply mb-5.5 flex items-center gap-2.5 rounded-lg bg-subtle px-4 py-3.25;
-    @apply text-meta leading-[1.8] text-muted;
-  }
-
-  .notice.warning {
-    @apply bg-[#fff0d8] text-[#97713a];
-  }
-
-  .status-dot {
-    @apply inline-block size-1.5 shrink-0 rounded-full bg-success;
-  }
-
-  .status-dot.offline {
-    @apply bg-[#de9753];
-  }
-
-  .page-enter-active,
-  .page-leave-active {
-    @apply transition-[opacity,transform] duration-(--motion-fast) ease-(--motion-ease);
-  }
-
-  .page-enter-from {
-    @apply transform-[translateY(4px)] opacity-0;
-  }
-
-  .page-leave-to,
-  .fade-enter-from,
-  .fade-leave-to,
-  .catalogue-enter-from {
-    @apply opacity-0;
-  }
-
-  .fade-enter-active,
-  .fade-leave-active {
-    @apply transition-opacity duration-(--motion-fast) ease-(--motion-ease);
-  }
-
-  .catalogue-enter-active {
-    @apply transition-opacity! duration-140! ease-(--motion-ease)!;
-  }
-
-  /* Suppress Vue's positional animation when sorting the catalogue. */
-  .catalogue-move {
-    @apply transition-none!;
-  }
-}
-
+/* Keep resets below component and library styles, including reduced-motion overrides. */
 @layer base {
+  *,
+  *::before,
+  *::after,
+  ::backdrop {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+
   :root {
-    font-family: var(--font-sans);
+    font-family: Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-size: 16px;
     line-height: 1.6;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
     /* Reserve scrollbar space during filtering and modal scroll locking. */
     scrollbar-gutter: stable;
     --bg: #f6f7f9;
@@ -153,29 +56,104 @@
   }
 
   body {
-    @apply min-w-85 bg-app-bg text-body text-main;
+    min-width: 340px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
     line-height: inherit;
   }
 
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  b,
+  strong {
+    font-weight: bolder;
+  }
+
+  ul,
+  ol {
+    list-style: none;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    vertical-align: middle;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background: transparent;
+    opacity: 1;
+  }
+
+  button,
+  input:where([type='button'], [type='reset'], [type='submit']) {
+    appearance: button;
+  }
+
   button {
-    @apply cursor-pointer disabled:cursor-not-allowed;
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
   }
 
   button:focus-visible,
   a:focus-visible {
-    @apply outline-[3px]! outline-offset-4! outline-[#e99389]!;
+    outline: 3px solid #e99389 !important;
+    outline-offset: 4px !important;
   }
 
   svg {
-    @apply shrink-0;
+    flex-shrink: 0;
   }
 
   h1 {
-    @apply text-[30px] leading-[1.45] font-bold tracking-[-0.5px] max-[760px]:text-[26px];
+    font-size: 30px;
+    line-height: 1.45;
+    font-weight: 700;
+    letter-spacing: -0.5px;
   }
-}
 
-@layer base {
+  [hidden]:where(:not([hidden='until-found'])) {
+    display: none !important;
+  }
+
+  @media (width < 760px) {
+    h1 {
+      font-size: 26px;
+    }
+  }
+
   /* Earlier layers take priority for important declarations. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -186,5 +164,127 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+@keyframes content-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes favourite-pop {
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.pill {
+  display: inline-flex;
+  border-radius: 4px;
+  background: var(--subtle);
+  padding: 2px 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.pill.coral {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+  border-radius: 8px;
+  background: var(--subtle);
+  padding: 13px 16px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.notice.warning {
+  background: #fff0d8;
+  color: #97713a;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.status-dot.offline {
+  background: #de9753;
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.page-enter-from {
+  transform: translateY(4px);
+  opacity: 0;
+}
+
+.page-leave-to,
+.fade-enter-from,
+.fade-leave-to,
+.catalogue-enter-from {
+  opacity: 0;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.catalogue-enter-active {
+  transition: opacity 140ms var(--motion-ease) !important;
+}
+
+/* Suppress Vue's positional animation when sorting the catalogue. */
+.catalogue-move {
+  transition: none !important;
+}
+
+@media (width < 760px) {
+  .page-heading {
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 23px;
+  }
+}
+
+@media (width < 440px) {
+  .page-heading {
+    flex-wrap: wrap;
+  }
+
+  .page-heading > .n-button {
+    margin: 0;
   }
 }

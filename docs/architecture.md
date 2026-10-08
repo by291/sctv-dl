@@ -26,7 +26,7 @@ The service streams video with backpressure. It does not save videos or maintain
 | `src/features/downloads/`            | Quality resolution, safe filenames, HEAD preflight, and browser handoff          |
 | `src/features/settings/`             | Validated theme, initial preview quality, and favourites                         |
 | `src/shared/`                        | Persistence, errors, media URLs, and stale-request guards                        |
-| `src/styles/global.css`              | Tailwind entry, theme tokens, shared styles, and motion                          |
+| `src/styles/global.css`              | Base CSS, theme variables, shared styles, and motion                             |
 | `server/proxy.ts`, `server/media.ts` | Restricted upstream requests and media target/header validation                  |
 | `server/vite-plugin.ts`              | Development and preview proxy adapter                                            |
 | `server/app.ts`, `server/index.ts`   | Production static files, health route, HTTP startup, and shutdown                |
@@ -67,9 +67,9 @@ Theme defaults to following the system, while valid saved choices are retained. 
 
 ## UI and Player Lifecycle
 
-Naive UI provides controls, tabs, menus, modal focus management, and library transitions. Tailwind supplies application styles and theme tokens. The root reserves scrollbar space so filtering and modal scroll locking do not change page width; root margins suppress duplicate library compensation where stable gutters are supported.
+Naive UI provides controls, tabs, menus, modal focus management, and library transitions. Vue scoped CSS supplies application styles, and the global stylesheet owns theme variables. The root reserves scrollbar space so filtering and modal scroll locking do not change page width; root margins suppress duplicate library compensation where stable gutters are supported.
 
-See [Web Styling](styling.md) for the Tailwind assessment and proposed styling simplification.
+See [Web Styling](styling.md) for native CSS conventions and styling ownership.
 
 Custom motion is brief and respects reduced-motion preferences. Newly visible programme cards fade in, while sorting reorders the grid without positional animation.
 

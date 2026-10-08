@@ -78,21 +78,15 @@ onMounted(() => {
       :can-change="canChange"
       @change="chooseAnother"
     />
-    <div
-      class="library-stat rounded-xl border border-line bg-panel px-6 py-5 max-[1250px]:px-5 max-[1020px]:hidden"
-    >
-      <h2 class="mb-3 text-body font-bold">节目概览</h2>
-      <div
-        class="library-stat-row flex items-center justify-between gap-4 py-1 text-meta text-muted"
-      >
+    <div class="library-stat">
+      <h2 class="library-stat-heading">节目概览</h2>
+      <div class="library-stat-row">
         <span>全部栏目</span>
-        <strong class="text-[22px] text-main tabular-nums">{{ store.programmes.length }}</strong>
+        <strong class="library-stat-value">{{ store.programmes.length }}</strong>
       </div>
-      <div
-        class="library-stat-row flex items-center justify-between gap-4 py-1 text-meta text-muted"
-      >
+      <div class="library-stat-row">
         <span>已收藏</span>
-        <strong class="text-[22px] text-main tabular-nums">{{ settings.favourites.length }}</strong>
+        <strong class="library-stat-value">{{ settings.favourites.length }}</strong>
       </div>
     </div>
   </div>
@@ -100,7 +94,7 @@ onMounted(() => {
   <div class="library-toolbar">
     <NTabs
       v-model:value="tab"
-      class="library-tabs -mb-px w-auto! shrink-0 max-[1020px]:w-full!"
+      class="library-tabs"
       type="line"
       size="medium"
       :bar-width="32"
@@ -135,10 +129,10 @@ onMounted(() => {
         </span>
       </NTab>
     </NTabs>
-    <div class="library-filters mb-0.75 flex gap-3 max-[1020px]:mb-0 max-[1020px]:w-full">
+    <div class="library-filters">
       <NInput
         v-model:value="query"
-        class="w-50! max-[1020px]:flex-1"
+        class="library-search"
         clearable
         placeholder="搜索节目名称"
         aria-label="搜索节目名称"
@@ -147,7 +141,7 @@ onMounted(() => {
       </NInput>
       <NSelect
         v-model:value="sort"
-        class="w-37!"
+        class="library-sort"
         :options="sortOptions"
         aria-label="节目排序"
       />
@@ -190,7 +184,7 @@ onMounted(() => {
 
   <div
     v-if="filtered.length"
-    class="list-footer flex justify-between pt-6.25 text-meta text-muted"
+    class="list-footer"
   >
     <span>共 {{ filtered.length }} 个栏目</span>
     <span>内容来自四川观察节目服务</span>
@@ -198,82 +192,157 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
-  .library-tabs {
-    @apply [--library-tab-padding:9px_0_12px];
-
-    @variant max-[1020px] {
-      @apply [--library-tab-padding:9px_0_10px];
-    }
-  }
-
-  /* Keep badges outside the measured tab so the indicator centers on its text. */
-  .library-tabs :deep(.n-tabs-tab-wrapper) {
-    @apply pr-9;
-  }
-
-  .library-tabs :deep(.n-tabs-tab__label) {
-    @apply relative;
-  }
-
-  .library-tabs :deep(.n-tabs-tab:focus-visible) {
-    @apply outline-[3px] outline-offset-[-3px] outline-[#e99389];
-  }
-
-  .library-tabs :deep(.filter-count) {
-    @apply absolute top-1/2 left-full ml-2 -translate-y-1/2;
-    @apply rounded-[5px] bg-subtle px-1.25 py-0.5 text-meta font-medium text-muted;
-    @apply transition-colors duration-140 ease-[ease];
-  }
-
-  .library-tabs :deep(.n-tabs-tab--active .filter-count) {
-    @apply bg-accent-soft text-accent;
-  }
-
-  .library-intro {
-    @apply mb-7.75 grid grid-cols-[minmax(0,1fr)_242px] gap-5;
-
-    @variant max-[1250px] {
-      @apply grid-cols-[minmax(0,1fr)_210px];
-    }
-
-    @variant max-[1020px] {
-      @apply grid-cols-1;
-    }
-
-    @variant max-[760px] {
-      @apply mb-6.25;
-    }
-  }
-
-  .library-toolbar {
-    @apply mb-5.5 flex items-center justify-between gap-5 border-b border-line;
-
-    @variant max-[1020px] {
-      @apply flex-col items-start gap-4 border-0;
-    }
-  }
-
+.library-tabs {
+  --library-tab-padding: 9px 0 12px;
+  margin-bottom: -1px;
+  width: auto !important;
+  flex-shrink: 0;
+}
+/* Keep badges outside the measured tab so the indicator centers on its text. */
+.library-tabs :deep(.n-tabs-tab-wrapper) {
+  padding-right: 36px;
+}
+.library-tabs :deep(.n-tabs-tab__label) {
+  position: relative;
+}
+.library-tabs :deep(.n-tabs-tab:focus-visible) {
+  outline: 3px solid #e99389;
+  outline-offset: -3px;
+}
+.library-tabs :deep(.filter-count) {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 8px;
+  translate: 0 -50%;
+  border-radius: 5px;
+  background: var(--subtle);
+  padding: 2px 5px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+.library-tabs :deep(.n-tabs-tab--active .filter-count) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.library-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 242px;
+  gap: 20px;
+  margin-bottom: 31px;
+}
+.library-stat {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 20px 24px;
+}
+.library-stat-heading {
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.library-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.library-stat-value {
+  font-size: 22px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.library-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+.library-search {
+  width: 200px !important;
+}
+.library-sort {
+  width: 148px !important;
+}
+.programme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 20px;
+  row-gap: 22px;
+}
+.list-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 25px;
+  font-size: 14px;
+  color: var(--muted);
+}
+@media (width >= 1700px) {
   .programme-grid {
-    @apply grid grid-cols-4 gap-x-5 gap-y-5.5;
-
-    @variant min-[1700px] {
-      @apply grid-cols-5;
-    }
-
-    @variant max-[1250px] {
-      @apply grid-cols-3;
-    }
-
-    @variant max-[1020px] {
-      @apply grid-cols-2;
-    }
-
-    @variant max-[760px] {
-      @apply gap-x-3.5 gap-y-4.5;
-    }
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (width < 1250px) {
+  .library-intro {
+    grid-template-columns: minmax(0, 1fr) 210px;
+  }
+  .library-stat {
+    padding-inline: 20px;
+  }
+  .programme-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (width < 1020px) {
+  .library-tabs {
+    --library-tab-padding: 9px 0 10px;
+    width: 100% !important;
+  }
+  .library-stat {
+    display: none;
+  }
+  .library-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .library-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    border: 0;
+  }
+  .library-filters {
+    margin-bottom: 0;
+    width: 100%;
+  }
+  .library-search {
+    flex: 1;
+  }
+  .programme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (width < 760px) {
+  .library-intro {
+    margin-bottom: 25px;
+  }
+  .programme-grid {
+    column-gap: 14px;
+    row-gap: 18px;
   }
 }
 </style>

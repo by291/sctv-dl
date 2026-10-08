@@ -88,9 +88,15 @@ watch(
       <template #icon><Download :size="16" /></template>
       {{ label }}
       <ChevronDown
-        class="download-chevron ml-1.5"
+        class="download-chevron"
         :size="14"
       />
     </NButton>
   </NDropdown>
 </template>
+
+<style scoped>
+.download-chevron {
+  margin-left: 6px;
+}
+</style>

@@ -78,36 +78,31 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
-  .programme-player {
-    @apply aspect-video w-full rounded-[7px] bg-[#08090b] [--art-font-size:14px];
+.programme-player {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 7px;
+  background: #08090b;
+  --art-font-size: 14px;
+}
+/* Artplayer creates its controls outside Vue's scoped template. */
+@media (width < 480px) {
+  .programme-player :deep(.art-video-player) {
+    --art-control-height: 44px !important;
   }
-
-  /* Artplayer creates its controls outside Vue's scoped template. */
-  @variant max-[480px] {
-    .programme-player :deep(.art-video-player) {
-      @apply [--art-control-height:44px]!;
-    }
-
-    .programme-player :deep(.art-controls .art-control-volume) {
-      @apply hidden!;
-    }
-
-    .programme-player :deep(.art-controls .art-control-time) {
-      @apply px-1!;
-    }
+  .programme-player :deep(.art-controls .art-control-volume) {
+    display: none !important;
   }
-
-  @variant max-[400px] {
-    .programme-player :deep(.art-controls .art-control-pip) {
-      @apply hidden!;
-    }
-
-    .programme-player :deep(.art-controls .art-control-time) {
-      @apply px-0.5!;
-    }
+  .programme-player :deep(.art-controls .art-control-time) {
+    padding-inline: 4px !important;
+  }
+}
+@media (width < 400px) {
+  .programme-player :deep(.art-controls .art-control-pip) {
+    display: none !important;
+  }
+  .programme-player :deep(.art-controls .art-control-time) {
+    padding-inline: 2px !important;
   }
 }
 </style>

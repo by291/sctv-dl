@@ -14,10 +14,10 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
   <article class="programme-card">
     <RouterLink
       :to="`/programmes/${programme.id}`"
-      class="programme-cover group/cover relative block"
+      class="programme-cover"
     >
       <CoverImage
-        class="aspect-video"
+        class="programme-image"
         :src="programme.cover"
         :alt="programme.name"
       />
@@ -44,10 +44,10 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
       class="programme-caption"
     >
       <div>
-        <h3 class="text-body leading-normal font-semibold">{{ programme.name }}</h3>
+        <h3 class="programme-name">{{ programme.name }}</h3>
       </div>
       <ArrowUpRight
-        class="text-[#b2b8c0] max-[440px]:hidden"
+        class="caption-arrow"
         :size="18"
       />
     </RouterLink>
@@ -55,41 +55,94 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
-  .programme-card {
-    @apply relative overflow-hidden rounded-[11px] border border-line bg-panel;
-    @apply transition-[transform,box-shadow] duration-200 ease-[ease];
-    @apply hover:transform-[translateY(-3px)] hover:shadow-[0_8px_24px_#20232a0d];
+.programme-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+.programme-cover {
+  position: relative;
+  display: block;
+}
+.programme-image {
+  aspect-ratio: 16 / 9;
+}
+.cover-open {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #13192633;
+  color: white;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.favourite-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid #ffffff50;
+  backdrop-filter: blur(8px);
+  background: #17223145;
+  color: white;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+.favourite-button.saved {
+  background: #ffffffdf;
+  color: var(--accent);
+}
+.favourite-button.saved :deep(svg) {
+  animation: favourite-pop 220ms var(--motion-ease);
+}
+.programme-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+}
+.programme-name {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.caption-arrow {
+  color: #b2b8c0;
+}
+@media (hover: hover) {
+  .programme-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px #20232a0d;
   }
-
-  .cover-open {
-    @apply absolute inset-0 grid place-items-center bg-[#13192633] text-white opacity-0;
-    @apply transition-opacity duration-200 ease-[ease] group-hover/cover:opacity-100;
+  .programme-cover:hover .cover-open {
+    opacity: 1;
   }
-
-  .favourite-button {
-    @apply absolute top-2.5 right-2.5 grid size-9 place-items-center rounded-[7px] border;
-    @apply border-[#ffffff50] backdrop-blur-sm transition-colors duration-140 ease-[ease];
-    @apply bg-[#17223145] text-white;
-    @apply hover:bg-[#ffffffdf] hover:text-accent;
+  .favourite-button:hover {
+    background: #ffffffdf;
+    color: var(--accent);
   }
-
-  .favourite-button.saved {
-    @apply bg-[#ffffffdf] text-accent;
-  }
-
-  .favourite-button.saved :deep(svg) {
-    @apply animate-favourite-pop;
-  }
-
+}
+@media (width < 760px) {
   .programme-caption {
-    @apply flex items-center justify-between gap-2 px-4 py-2.5;
-
-    @variant max-[760px] {
-      @apply px-3;
-    }
+    padding-inline: 12px;
+  }
+}
+@media (width < 440px) {
+  .caption-arrow {
+    display: none;
   }
 }
 </style>

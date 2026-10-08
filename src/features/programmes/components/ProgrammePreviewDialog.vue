@@ -57,7 +57,7 @@ watch(url, () => {
   <NModal
     :show="!!content"
     preset="card"
-    class="preview-modal w-[min(860px,calc(100vw-32px))]!"
+    class="preview-modal"
     :title="displayedContent?.title"
     :bordered="false"
     @update:show="updateVisible"
@@ -76,10 +76,22 @@ watch(url, () => {
     />
     <p
       v-if="failed"
-      class="preview-error pt-3 text-meta text-accent"
+      class="preview-error"
       role="alert"
     >
       这个视频暂时无法播放，请检查网络或换一个日期。
     </p>
   </NModal>
 </template>
+
+<style scoped>
+/* Naive UI creates the teleported card without this component's scope attribute. */
+:global(.preview-modal) {
+  width: min(860px, calc(100vw - 32px)) !important;
+}
+.preview-error {
+  padding-top: 12px;
+  font-size: 14px;
+  color: var(--accent);
+}
+</style>

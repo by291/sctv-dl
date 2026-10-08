@@ -38,7 +38,7 @@ Commands and dependency versions are defined in `package.json`. Run commands fro
 | `pnpm dev`                          | Frontend and proxies at port 5180           |
 | `pnpm typecheck`                    | Browser and Node TypeScript checks          |
 | `pnpm test`                         | Vitest suite                                |
-| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and Tailwind rules      |
+| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and CSS rules           |
 | `pnpm format` / `pnpm format:check` | Format or check source and documentation    |
 | `pnpm check`                        | Type checking, tests, lint, and formatting  |
 | `pnpm build`                        | Type checking and production frontend build |
@@ -61,7 +61,7 @@ Both configurations take effect after they reach the default branch on GitHub. D
 | ------------------------------------------------------ | ------------------------------------------------------------- |
 | [Agent Instructions](AGENTS.md)                        | Project constraints, coding conventions, and verification     |
 | [Architecture](docs/architecture.md)                   | Module ownership, data flow, and important behaviour          |
-| [Web Styling](docs/styling.md)                         | Tailwind assessment and proposed styling simplification       |
+| [Web Styling](docs/styling.md)                         | Native CSS conventions, theme ownership, and UI verification  |
 | [Deployment](docs/deployment.md)                       | Production service, configuration, and operations             |
 | [Upstream API](docs/upstream-api.md)                   | Programme endpoints, video fields, and proxy contracts        |
 | [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |

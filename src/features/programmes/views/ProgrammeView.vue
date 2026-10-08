@@ -126,7 +126,7 @@ onMounted(() => {
 <template>
   <RouterLink
     to="/"
-    class="back-link mb-6.25 inline-flex items-center gap-1.75 text-meta text-muted hover:text-accent"
+    class="back-link"
   >
     <ArrowLeft :size="16" />
     返回节目库
@@ -139,18 +139,16 @@ onMounted(() => {
         :alt="programmeName || '电视节目'"
       />
     </div>
-    <div class="detail-copy flex-1">
-      <h1 class="mt-1.5 text-[28px] max-[760px]:text-[23px]">
+    <div class="detail-copy">
+      <h1 class="detail-title">
         {{ programmeName || '电视节目' }}
       </h1>
-      <span
-        class="detail-meta mt-3.25 flex flex-wrap items-center gap-1.75 text-meta text-muted max-[760px]:leading-normal"
-      >
+      <span class="detail-meta">
         <CalendarDays :size="15" />
-        <span class="whitespace-nowrap">{{ dateSummary }}</span>
+        <span class="detail-date-summary">{{ dateSummary }}</span>
         <span
           v-if="dates.length"
-          class="whitespace-nowrap"
+          class="detail-date-summary"
         >
           · {{ dates.at(-1)?.date }} 起
         </span>
@@ -158,7 +156,7 @@ onMounted(() => {
     </div>
     <NButton
       v-if="programme"
-      class="max-[1020px]:self-start max-[760px]:ml-31.5! max-[440px]:ml-25!"
+      class="detail-favourite"
       secondary
       @click="settings.toggleFavourite(programme.id)"
     >
@@ -172,7 +170,7 @@ onMounted(() => {
     </NButton>
   </section>
 
-  <div class="content-panel rounded-xl border border-line bg-panel">
+  <div class="content-panel">
     <ProgrammeDatePicker
       v-model="selectedDate"
       :dates="dates"
@@ -198,14 +196,12 @@ onMounted(() => {
 
     <template v-else>
       <div class="content-toolbar">
-        <div
-          class="content-count flex items-baseline gap-3.25 max-[1020px]:flex-wrap max-[1020px]:gap-1.75"
-        >
-          <h2 class="text-[18px] leading-normal font-semibold">{{ selectedDate }}</h2>
-          <span class="content-kind text-body text-main">节目内容</span>
+        <div class="content-count">
+          <h2 class="content-date">{{ selectedDate }}</h2>
+          <span class="content-kind">节目内容</span>
           <span
             v-if="!loadingContents && !contentError"
-            class="text-meta text-muted"
+            class="content-total"
           >
             {{ contents.length }} 条内容
           </span>
@@ -253,7 +249,7 @@ onMounted(() => {
             <template #icon><Check :size="15" /></template>
             只选整期
           </NButton>
-          <span class="ml-auto text-meta text-muted">已选择 {{ selected.length }} 条</span>
+          <span class="selection-summary">已选择 {{ selected.length }} 条</span>
         </div>
 
         <ProgrammeContentList
@@ -275,61 +271,149 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 25px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 34px;
+}
+.detail-cover {
+  aspect-ratio: 16 / 10;
+  width: 184px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+}
+.detail-copy {
+  flex: 1;
+}
+.detail-title {
+  margin-top: 6px;
+  font-size: 28px;
+}
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 13px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.detail-date-summary {
+  white-space: nowrap;
+}
+.content-panel {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.content-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
+}
+.content-count {
+  display: flex;
+  align-items: baseline;
+  gap: 13px;
+}
+.content-date {
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.content-kind {
+  font-size: 16px;
+  color: var(--text);
+}
+.content-total {
+  font-size: 14px;
+  color: var(--muted);
+}
+.selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 25px;
+  background: var(--subtle);
+  padding: 11px 24px;
+}
+.selection-summary {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--muted);
+}
+@media (hover: hover) {
+  .back-link:hover {
+    color: var(--accent);
+  }
+}
+@media (width < 1020px) {
   .detail-heading {
-    @apply mb-8.5 flex items-center gap-6;
-
-    @variant max-[1020px] {
-      @apply gap-4.5;
-    }
-
-    @variant max-[760px] {
-      @apply flex-wrap gap-4;
-    }
-
-    @variant max-[440px] {
-      @apply gap-3;
-    }
+    gap: 18px;
   }
-
   .detail-cover {
-    @apply aspect-16/10 w-46 shrink-0 overflow-hidden rounded-[9px] border border-line;
-
-    @variant max-[1020px] {
-      @apply w-32.5;
-    }
-
-    @variant max-[760px] {
-      @apply w-27.5;
-    }
-
-    @variant max-[440px] {
-      @apply w-22;
-    }
+    width: 130px;
   }
-
+  .detail-favourite {
+    align-self: flex-start;
+  }
+  .content-count {
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+}
+@media (width < 760px) {
+  .detail-heading {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .detail-cover {
+    width: 110px;
+  }
+  .detail-title {
+    font-size: 23px;
+  }
+  .detail-meta {
+    line-height: 1.5;
+  }
+  .detail-favourite {
+    margin-left: 126px !important;
+  }
   .content-toolbar {
-    @apply flex items-center justify-between gap-5 px-6 py-4.5;
-
-    @variant max-[760px] {
-      @apply flex-wrap gap-3 p-5;
-    }
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 20px;
   }
-
   .content-toolbar > :deep(.n-button) {
-    @variant max-[760px] {
-      @apply ml-auto!;
-    }
+    margin-left: auto !important;
   }
-
   .selection-toolbar {
-    @apply flex flex-wrap items-center gap-6.25 bg-subtle px-6 py-2.75;
-
-    @variant max-[760px] {
-      @apply gap-3.75 px-5 py-3;
-    }
+    gap: 15px;
+    padding: 12px 20px;
+  }
+}
+@media (width < 440px) {
+  .detail-heading {
+    gap: 12px;
+  }
+  .detail-cover {
+    width: 88px;
+  }
+  .detail-favourite {
+    margin-left: 100px !important;
   }
 }
 </style>

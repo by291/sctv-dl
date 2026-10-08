@@ -23,9 +23,9 @@ const emit = defineEmits<{
     aria-label="栏目探索"
   >
     <div class="featured-copy">
-      <span class="feature-label flex items-center gap-1.5 text-meta text-[#ad6e5f]">
+      <span class="feature-label">
         <span
-          class="size-1.25 rounded-full bg-current"
+          class="feature-dot"
           aria-hidden="true"
         />
         栏目探索
@@ -36,15 +36,15 @@ const emit = defineEmits<{
       >
         {{ programme.name }}
       </h2>
-      <p class="text-meta leading-[1.8] text-muted max-[440px]:mt-5.5">
+      <p class="feature-description">
         浏览播出日历，选择整期或精彩片段。
         <br />
         让每次回看，都触手可及。
       </p>
-      <div class="feature-actions mt-4.75 flex flex-wrap items-center gap-6">
+      <div class="feature-actions">
         <RouterLink
           :to="`/programmes/${programme.id}`"
-          class="feature-link inline-flex items-center gap-4.75 text-body font-semibold text-[#b75241]"
+          class="feature-link"
         >
           查看节目
           <ArrowRight :size="17" />
@@ -67,7 +67,7 @@ const emit = defineEmits<{
     >
       <CoverImage
         :key="programme.id"
-        class="aspect-16/10 animate-content-reveal"
+        class="featured-image"
         :src="programme.cover"
         :alt="programme.name"
       />
@@ -84,70 +84,141 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
-  .featured-card {
-    @apply relative flex min-h-60 overflow-clip rounded-xl bg-hero transition-shadow duration-200;
-    @apply ease-[ease] hover:shadow-[0_8px_25px_#0000000c];
+.featured-card {
+  position: relative;
+  display: flex;
+  min-height: 240px;
+  overflow: clip;
+  border-radius: 12px;
+  background: var(--hero);
+  transition: box-shadow 200ms ease;
+}
+.featured-copy {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  flex: 1;
+  padding: 29px 28px;
+}
+.feature-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #ad6e5f;
+}
+.feature-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.featured-title {
+  margin: 12px 0 9px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
+}
+.feature-description {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.feature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin-top: 19px;
+}
+.feature-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 19px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #b75241;
+}
+.featured-visual {
+  position: relative;
+  z-index: 2;
+  margin-right: 24px;
+  width: 42%;
+  max-width: 280px;
+  flex-shrink: 0;
+  rotate: -5deg;
+  align-self: center;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 4px solid #ffffff90;
+  box-shadow: 0 16px 26px #5e433524;
+}
+.featured-image {
+  aspect-ratio: 16 / 10;
+  animation: content-reveal var(--motion-normal) var(--motion-ease);
+}
+.feature-orbit {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid #cdad9c38;
+}
+.orbit-one {
+  top: -44px;
+  right: -10px;
+  width: 330px;
+  height: 330px;
+}
+.orbit-two {
+  top: -90px;
+  right: -58px;
+  width: 420px;
+  height: 420px;
+}
+@media (hover: hover) {
+  .featured-card:hover {
+    box-shadow: 0 8px 25px #0000000c;
   }
-
+}
+@media (width < 1250px) {
   .featured-copy {
-    @apply relative z-2 min-w-0 flex-1 px-7 py-7.25;
-
-    @variant max-[1250px] {
-      @apply pl-6;
-    }
-
-    @variant max-[760px] {
-      @apply px-5.5 py-6.5;
-    }
-
-    @variant max-[440px] {
-      @apply pl-5;
-    }
+    padding-left: 24px;
   }
-
   .featured-title {
-    @apply mt-3 mb-2.25 animate-content-reveal text-[26px] font-bold tracking-[-0.5px];
-    @apply wrap-anywhere;
-
-    @variant max-[1250px] {
-      @apply text-[23px];
-    }
-
-    @variant max-[440px] {
-      @apply max-w-[60%] text-[21px];
-    }
+    font-size: 23px;
   }
-
   .featured-visual {
-    @apply relative z-2 mr-6 w-[42%] max-w-70 shrink-0 -rotate-5 self-center overflow-hidden;
-    @apply rounded-[10px] border-4 border-[#ffffff90] shadow-[0_16px_26px_#5e433524];
-
-    @variant max-[1250px] {
-      @apply mr-5 w-[38%];
-    }
-
-    @variant max-[760px] {
-      @apply w-[40%];
-    }
-
-    @variant max-[440px] {
-      @apply absolute top-7 right-5 mr-0 w-[32%];
-    }
+    margin-right: 20px;
+    width: 38%;
   }
-
-  .feature-orbit {
-    @apply pointer-events-none absolute rounded-full border border-[#cdad9c38];
+}
+@media (width < 760px) {
+  .featured-copy {
+    padding: 26px 22px;
   }
-
-  .orbit-one {
-    @apply -top-11 -right-2.5 size-82.5;
+  .featured-visual {
+    width: 40%;
   }
-
-  .orbit-two {
-    @apply -top-22.5 -right-14.5 size-105;
+}
+@media (width < 440px) {
+  .featured-copy {
+    padding-left: 20px;
+  }
+  .featured-title {
+    max-width: 60%;
+    font-size: 21px;
+  }
+  .feature-description {
+    margin-top: 22px;
+  }
+  .featured-visual {
+    position: absolute;
+    top: 28px;
+    right: 20px;
+    margin-right: 0;
+    width: 32%;
   }
 }
 </style>

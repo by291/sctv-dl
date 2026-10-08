@@ -15,14 +15,14 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 <template>
   <div class="date-toolbar">
     <div>
-      <h2 class="text-[18px] font-semibold">选择播出日期</h2>
+      <h2 class="date-heading">选择播出日期</h2>
     </div>
 
-    <div class="date-control flex items-center gap-2.5 text-muted max-[760px]:w-full">
+    <div class="date-control">
       <CalendarDays :size="18" />
       <NSelect
         v-model:value="selectedDate"
-        class="w-53.75! max-[760px]:w-auto! max-[760px]:flex-1"
+        class="date-select"
         :options="options"
         filterable
         :disabled="loading || !dates.length"
@@ -31,7 +31,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         aria-label="播出日期"
       />
       <NButton
-        class="size-10.5!"
+        class="date-refresh"
         quaternary
         circle
         aria-label="重新读取播出日期"
@@ -47,7 +47,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
     v-if="dates.length"
     class="recent-dates"
   >
-    <span class="mr-2.5 text-meta text-muted max-[760px]:mb-0.75 max-[760px]:w-full">最近播出</span>
+    <span class="recent-label">最近播出</span>
     <button
       v-for="date in dates.slice(0, 7)"
       :key="date.id"
@@ -62,32 +62,88 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 </template>
 
 <style scoped>
-@reference '../../../styles/global.css';
-
-@layer components {
-  .date-button {
-    @apply rounded-md border border-transparent bg-subtle px-2.5 py-1.75 text-meta text-muted;
-    @apply transition-colors duration-140 ease-[ease] hover:bg-accent-soft hover:text-accent;
+.date-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+}
+.date-heading {
+  font-size: 18px;
+  font-weight: 600;
+}
+.date-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.date-select {
+  width: 215px !important;
+}
+.date-refresh {
+  width: 42px !important;
+  height: 42px !important;
+}
+.recent-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding: 0 24px 23px;
+}
+.recent-label {
+  margin-right: 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.date-button {
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--subtle);
+  padding: 7px 10px;
+  font-size: 14px;
+  color: var(--muted);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+.date-button.active {
+  border-color: #dc4f4135;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (hover: hover) {
+  .date-button:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
   }
-
-  .date-button.active {
-    @apply border-[#dc4f4135] bg-accent-soft text-accent;
-  }
-
+}
+@media (width < 760px) {
   .date-toolbar {
-    @apply flex items-center justify-between gap-5 p-6;
-
-    @variant max-[760px] {
-      @apply flex-col items-start gap-3.75 p-5;
-    }
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 20px;
   }
-
+  .date-control {
+    width: 100%;
+  }
+  .date-select {
+    width: auto !important;
+    flex: 1;
+  }
   .recent-dates {
-    @apply flex flex-wrap items-center gap-2 border-b border-line px-6 pb-5.75;
-
-    @variant max-[760px] {
-      @apply gap-1.75 px-5 pb-5;
-    }
+    gap: 7px;
+    padding-inline: 20px;
+    padding-bottom: 20px;
+  }
+  .recent-label {
+    margin-bottom: 3px;
+    width: 100%;
   }
 }
 </style>
