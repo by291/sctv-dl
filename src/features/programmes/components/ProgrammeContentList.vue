@@ -5,7 +5,7 @@ import { Play } from '@lucide/vue'
 
 import CoverImage from '../../../components/CoverImage.vue'
 import ProgrammeDownloadButton from './ProgrammeDownloadButton.vue'
-import { getVideoVariants, resolveVideo } from '../video'
+import { resolveVideo } from '../video'
 
 import type { ProgrammeContent, Quality } from '../types'
 
@@ -35,14 +35,6 @@ function closeTitle() {
 
 function hasVideo(content: ProgrammeContent): boolean {
   return !!resolveVideo(content, 'standard')
-}
-
-function videoAvailability(content: ProgrammeContent): string {
-  const variants = getVideoVariants(content)
-
-  return variants.length
-    ? variants.map(({ quality }) => (quality === 'standard' ? '标准' : '流畅')).join(' / ') + '画质'
-    : '暂无可用视频'
 }
 </script>
 
@@ -129,7 +121,6 @@ function videoAvailability(content: ProgrammeContent): string {
             {{ content.title }}
           </NPopover>
         </h3>
-        <p class="content-availability">{{ videoAvailability(content) }}</p>
       </div>
 
       <div class="content-row-actions">
@@ -239,11 +230,6 @@ function videoAvailability(content: ProgrammeContent): string {
   max-height: min(320px, calc(50dvh - 48px));
   overflow-y: auto;
 }
-.content-availability {
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--muted);
-}
 .content-row-actions {
   display: flex;
   flex-shrink: 0;
@@ -285,9 +271,6 @@ function videoAvailability(content: ProgrammeContent): string {
   .content-title {
     min-height: 44px;
     line-height: 1.5;
-  }
-  .content-availability {
-    font-size: 13px;
   }
   .content-row-actions {
     grid-area: actions;
