@@ -61,6 +61,7 @@ Both configurations take effect after they reach the default branch on GitHub. D
 | ------------------------------------------------------ | ------------------------------------------------------------- |
 | [Agent Instructions](AGENTS.md)                        | Project constraints, coding conventions, and verification     |
 | [Architecture](docs/architecture.md)                   | Module ownership, data flow, and important behaviour          |
+| [Web Styling](docs/styling.md)                         | Tailwind assessment and proposed styling simplification       |
 | [Deployment](docs/deployment.md)                       | Production service, configuration, and operations             |
 | [Upstream API](docs/upstream-api.md)                   | Programme endpoints, video fields, and proxy contracts        |
 | [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |

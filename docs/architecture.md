@@ -69,6 +69,8 @@ Theme defaults to following the system, while valid saved choices are retained. 
 
 Naive UI provides controls, tabs, menus, modal focus management, and library transitions. Tailwind supplies application styles and theme tokens. The root reserves scrollbar space so filtering and modal scroll locking do not change page width; root margins suppress duplicate library compensation where stable gutters are supported.
 
+See [Web Styling](styling.md) for the Tailwind assessment and proposed styling simplification.
+
 Custom motion is brief and respects reduced-motion preferences. Newly visible programme cards fade in, while sorting reorders the grid without positional animation.
 
 Artplayer owns playback controls, speed, shortcuts, picture-in-picture, fullscreen, and the bottom-toolbar quality menu. Available variants omit duplicate URLs. Quality switching keeps the same player instance and playback position. Preview starts without autoplay.
