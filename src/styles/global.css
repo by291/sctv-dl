@@ -23,6 +23,8 @@
     --subtle: #f2f4f7;
     --green: #419b76;
     --hero: #f4e9e3;
+    --hero-label: #ad6e5f;
+    --hero-link: #b75241;
     --motion-fast: 140ms;
     --motion-normal: 180ms;
     --motion-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -38,6 +40,8 @@
     --accent-soft: #3b2827;
     --subtle: #262b33;
     --hero: #3c2e2b;
+    --hero-label: #d69a88;
+    --hero-link: #f09e8f;
   }
 
   @supports (scrollbar-gutter: stable) {
@@ -48,7 +52,7 @@
   }
 
   body {
-    min-width: 340px;
+    min-width: 0;
     background: var(--bg);
     color: var(--text);
   }
@@ -215,9 +219,9 @@
 
 @media (width < 760px) {
   .page-heading {
-    align-items: flex-start;
+    align-items: center;
     gap: 12px;
-    margin-bottom: 23px;
+    margin-bottom: 16px;
   }
 }
 

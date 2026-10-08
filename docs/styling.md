@@ -34,6 +34,8 @@ For example, the brand's base style in [AppLayout.vue](../src/layouts/AppLayout.
 
 Keep related responsive adjustments in the same scoped stylesheet. Conditions such as `@media (width < 760px)` exclude the boundary itself. The shell changes from a sidebar to top navigation below this width. The existing narrower spacing and typography adjustments remain to preserve the layout; future changes can simplify them when the design permits.
 
+Mobile layouts support widths down to `320px`. Below `760px`, use one compact navigation bar, retain the connection warning when the service fails, and keep page titles in the content. The programme spotlight is compact, recent dates scroll horizontally, and content entries and settings controls use consistent vertical layouts. Keep native mobile action targets at least `44px` tall. Preview cards reduce padding and clamp long visible titles to two lines while retaining the full accessible text. Player controls use named container queries based on the available video width, so modal padding and screen size cannot select incompatible control layouts.
+
 ## Themes and Cascade
 
 Use semantic variables such as `background: var(--panel)`, `color: var(--text)`, and `border: 1px solid var(--line)`. Their values change under `:root[data-theme='dark']`. Naive UI receives its corresponding theme through [App.vue](../src/App.vue).

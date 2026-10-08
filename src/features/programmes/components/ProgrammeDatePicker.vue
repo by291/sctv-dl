@@ -124,26 +124,31 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 }
 @media (width < 760px) {
   .date-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-    padding: 20px;
+    padding: 16px;
+  }
+  .date-heading,
+  .recent-label {
+    display: none;
   }
   .date-control {
     width: 100%;
   }
   .date-select {
+    min-width: 0;
     width: auto !important;
     flex: 1;
   }
   .recent-dates {
-    gap: 7px;
-    padding-inline: 20px;
-    padding-bottom: 20px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-top: -8px;
+    padding: 8px 16px 16px;
+    scrollbar-width: thin;
   }
-  .recent-label {
-    margin-bottom: 3px;
-    width: 100%;
+  .date-button {
+    min-height: 44px;
+    flex-shrink: 0;
+    padding: 8px 12px;
   }
 }
 </style>

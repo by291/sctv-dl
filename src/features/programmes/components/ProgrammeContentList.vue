@@ -207,36 +207,44 @@ function videoAvailability(content: ProgrammeContent): string {
 @media (width < 760px) {
   .content-row {
     display: grid;
-    grid-template-columns: 20px 88px minmax(0, 1fr);
+    grid-template-columns: 24px 88px minmax(0, 1fr);
+    grid-template-areas:
+      'check info info'
+      '. thumbnail actions';
+    align-items: start;
     gap: 12px;
-    padding-inline: 20px;
+    padding: 16px;
   }
   .content-checkbox {
-    grid-row: span 2;
+    grid-area: check;
+    min-height: 44px;
+    align-items: center;
   }
   .content-thumbnail {
-    grid-row: span 2;
+    grid-area: thumbnail;
     width: 88px;
   }
+  .content-info {
+    grid-area: info;
+  }
   .content-labels {
+    flex-wrap: wrap;
+    gap: 6px;
     margin-bottom: 4px;
   }
+  .content-title {
+    line-height: 1.5;
+  }
+  .content-availability {
+    font-size: 13px;
+  }
   .content-row-actions {
-    grid-column-start: 3;
+    grid-area: actions;
+    align-self: center;
     justify-self: end;
   }
   .preview-button {
     display: none !important;
-  }
-}
-@media (width < 440px) {
-  .content-row {
-    grid-template-columns: 20px 72px minmax(0, 1fr);
-    gap: 10px;
-    padding-inline: 14px;
-  }
-  .content-thumbnail {
-    width: 72px;
   }
 }
 </style>

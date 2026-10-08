@@ -338,11 +338,25 @@ onMounted(() => {
 }
 @media (width < 760px) {
   .library-intro {
-    margin-bottom: 25px;
+    margin-bottom: 20px;
+  }
+  .library-filters {
+    gap: 8px;
+  }
+  .library-search {
+    min-width: 0;
+    width: auto !important;
+  }
+  .library-sort {
+    width: 132px !important;
   }
   .programme-grid {
-    column-gap: 14px;
-    row-gap: 18px;
+    gap: 16px 12px;
+  }
+  .list-footer {
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 20px;
   }
 }
 </style>

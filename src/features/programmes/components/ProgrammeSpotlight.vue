@@ -105,7 +105,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: 6px;
   font-size: 14px;
-  color: #ad6e5f;
+  color: var(--hero-label);
 }
 .feature-dot {
   width: 5px;
@@ -139,7 +139,7 @@ const emit = defineEmits<{
   gap: 19px;
   font-size: 16px;
   font-weight: 600;
-  color: #b75241;
+  color: var(--hero-link);
 }
 .featured-visual {
   position: relative;
@@ -195,30 +195,46 @@ const emit = defineEmits<{
   }
 }
 @media (width < 760px) {
-  .featured-copy {
-    padding: 26px 22px;
+  .featured-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    min-height: 0;
+    gap: 4px 16px;
+    padding: 16px;
   }
-  .featured-visual {
-    width: 40%;
-  }
-}
-@media (width < 440px) {
   .featured-copy {
-    padding-left: 20px;
+    display: contents;
+  }
+  .feature-label,
+  .featured-title {
+    grid-column: 1;
   }
   .featured-title {
-    max-width: 60%;
-    font-size: 21px;
+    margin: 0;
+    font-size: 20px;
   }
   .feature-description {
-    margin-top: 22px;
+    display: none;
+  }
+  .feature-actions {
+    grid-column: 1 / -1;
+    gap: 20px;
+    margin-top: 4px;
+  }
+  .feature-link {
+    min-height: 44px;
+    gap: 10px;
+  }
+  .feature-actions :deep(.n-button) {
+    min-height: 44px;
   }
   .featured-visual {
-    position: absolute;
-    top: 28px;
-    right: 20px;
-    margin-right: 0;
-    width: 32%;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin: 0;
+    width: 96px;
+    rotate: none;
+    border-width: 2px;
   }
 }
 </style>

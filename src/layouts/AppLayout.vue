@@ -64,7 +64,10 @@ function isActive(path: string): boolean {
       </div>
     </aside>
     <div class="workspace">
-      <header class="topbar">
+      <header
+        class="topbar"
+        :class="{ offline: programmes.error }"
+      >
         <span class="page-location">{{ route.meta.title }}</span>
         <div class="connection">
           <span
@@ -157,7 +160,7 @@ function isActive(path: string): boolean {
   padding: 13px 15px;
   font-size: 16px;
   font-weight: 500;
-  color: #727987;
+  color: var(--muted);
   transition:
     background 150ms ease,
     color 150ms ease;
@@ -252,58 +255,61 @@ function isActive(path: string): boolean {
   }
   .sidebar {
     z-index: 20;
-    height: 75px;
+    height: 64px;
     width: 100%;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 18px;
+    gap: 8px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    padding: 0 18px;
+    padding: 0 16px;
   }
   .brand {
+    min-height: 44px;
+    gap: 8px;
     padding-inline: 0;
+    font-size: 19px;
   }
   .brand-description,
   .sidebar-bottom {
     display: none;
   }
   .brand-icon {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 10px;
   }
   .primary-nav {
     display: flex;
-    gap: 3px;
+    gap: 4px;
     margin-top: 0;
   }
   .nav-link {
-    gap: 7px;
-    padding: 10px;
+    min-height: 44px;
+    gap: 5px;
+    padding: 8px;
     font-size: 14px;
   }
   .topbar {
-    height: 53px;
-    padding-inline: 20px;
+    display: none;
+  }
+  .topbar.offline {
+    display: flex;
+    height: auto;
+    min-height: 40px;
+    padding: 8px 16px;
+  }
+  .page-location {
+    display: none;
   }
   .main-content {
-    padding: 26px 20px 30px;
+    padding: 20px 16px 28px;
   }
 }
 @media (width < 440px) {
   .sidebar {
-    gap: 8px;
-    padding-inline: 15px;
-  }
-  .brand {
-    font-size: 19px;
-  }
-  .nav-link {
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 6px;
+    padding-inline: 12px;
   }
 }
 </style>

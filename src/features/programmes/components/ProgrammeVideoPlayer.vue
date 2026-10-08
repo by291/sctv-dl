@@ -79,6 +79,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .programme-player {
+  container: programme-player / inline-size;
   aspect-ratio: 16 / 9;
   width: 100%;
   border-radius: 7px;
@@ -86,7 +87,7 @@ onBeforeUnmount(() => {
   --art-font-size: 14px;
 }
 /* Artplayer creates its controls outside Vue's scoped template. */
-@media (width < 480px) {
+@container programme-player (width < 480px) {
   .programme-player :deep(.art-video-player) {
     --art-control-height: 44px !important;
   }
@@ -97,11 +98,15 @@ onBeforeUnmount(() => {
     padding-inline: 4px !important;
   }
 }
-@media (width < 400px) {
+@container programme-player (width < 360px) {
+  .programme-player :deep(.art-video-player) {
+    --art-padding: 4px;
+  }
   .programme-player :deep(.art-controls .art-control-pip) {
     display: none !important;
   }
   .programme-player :deep(.art-controls .art-control-time) {
+    font-size: 12px;
     padding-inline: 2px !important;
   }
 }

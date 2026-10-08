@@ -136,6 +136,12 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
   }
 }
 @media (width < 760px) {
+  .favourite-button {
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    height: 44px;
+  }
   .programme-caption {
     padding-inline: 12px;
   }

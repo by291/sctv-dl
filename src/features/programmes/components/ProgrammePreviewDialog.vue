@@ -94,4 +94,31 @@ watch(url, () => {
   font-size: 14px;
   color: var(--accent);
 }
+@media (width < 760px) {
+  :global(.preview-modal) {
+    width: calc(100vw - 16px) !important;
+  }
+  :global(.preview-modal.n-card > .n-card-header) {
+    align-items: flex-start;
+    padding: 12px 12px 8px;
+  }
+  :global(.preview-modal.n-card > .n-card-content) {
+    padding: 0 12px 12px;
+  }
+  :global(.preview-modal .n-card-header__close) {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    margin-top: -8px;
+    margin-right: -8px;
+  }
+  :global(.preview-modal .n-card-header__main) {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
 </style>

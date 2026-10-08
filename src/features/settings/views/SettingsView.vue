@@ -192,12 +192,34 @@ onMounted(() => {
   margin-right: 7px;
 }
 @media (width < 760px) {
+  .settings-sections {
+    gap: 16px;
+  }
   .settings-card {
-    padding: 20px;
+    padding: 16px;
+  }
+  .settings-title {
+    padding-bottom: 14px;
   }
   .setting-row {
-    flex-wrap: wrap;
-    gap: 15px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding-top: 18px;
+  }
+  .setting-description {
+    max-width: none;
+  }
+  .setting-options {
+    display: flex;
+  }
+  .setting-options :deep(.n-radio-button) {
+    flex: 1;
+    text-align: center;
+  }
+  .setting-row > .pill,
+  .setting-row > :deep(.n-button) {
+    align-self: flex-start;
   }
 }
 </style>
