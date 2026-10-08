@@ -36,6 +36,8 @@ Keep related responsive adjustments in the same scoped stylesheet. Conditions su
 
 Mobile layouts support widths down to `320px`. Below `760px`, use one compact navigation bar, retain the connection warning when the service fails, and keep page titles in the content. The programme spotlight is compact, recent dates scroll horizontally, and content entries and settings controls use consistent vertical layouts. Keep native mobile action targets at least `44px` tall. Preview cards reduce padding and clamp long visible titles to two lines while retaining the full accessible text. Player controls use named container queries based on the available video width, so modal padding and screen size cannot select incompatible control layouts.
 
+Programme cards, the spotlight, and content entries clamp visible titles to two lines with an ellipsis; cover placeholders use one line. Keep complete titles in the DOM and native title attributes. Content titles open a Naive UI popover on click or keyboard activation, including entries without playable video; Escape dismisses it. Programme detail headings wrap in full. Truncation must not alter source data, accessible action labels, or download filenames.
+
 ## Themes and Cascade
 
 Use semantic variables such as `background: var(--panel)`, `color: var(--text)`, and `border: 1px solid var(--line)`. Their values change under `:root[data-theme='dark']`. Naive UI receives its corresponding theme through [App.vue](../src/App.vue).

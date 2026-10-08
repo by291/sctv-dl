@@ -33,6 +33,7 @@ const emit = defineEmits<{
       <h2
         :key="programme.id"
         class="featured-title"
+        :title="programme.name"
       >
         {{ programme.name }}
       </h2>
@@ -114,11 +115,15 @@ const emit = defineEmits<{
   background: currentColor;
 }
 .featured-title {
+  display: -webkit-box;
+  overflow: hidden;
   margin: 12px 0 9px;
   font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.5px;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 .feature-description {

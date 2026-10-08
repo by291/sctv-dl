@@ -43,9 +43,12 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
       :to="`/programmes/${programme.id}`"
       class="programme-caption"
     >
-      <div>
-        <h3 class="programme-name">{{ programme.name }}</h3>
-      </div>
+      <h3
+        class="programme-name"
+        :title="programme.name"
+      >
+        {{ programme.name }}
+      </h3>
       <ArrowUpRight
         class="caption-arrow"
         :size="18"
@@ -115,9 +118,16 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
   padding: 10px 16px;
 }
 .programme-name {
+  display: -webkit-box;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
   font-size: 16px;
   line-height: 1.5;
   font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .caption-arrow {
   color: #b2b8c0;

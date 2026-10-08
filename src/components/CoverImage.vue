@@ -31,7 +31,12 @@ watch(
         :size="34"
         :stroke-width="1.4"
       />
-      <span class="cover-label">{{ alt }}</span>
+      <span
+        class="cover-label"
+        :title="alt"
+      >
+        {{ alt }}
+      </span>
     </div>
   </div>
 </template>
@@ -64,6 +69,11 @@ watch(
   color: var(--muted);
 }
 .cover-label {
+  width: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
   font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

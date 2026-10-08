@@ -294,11 +294,13 @@ onMounted(() => {
   border: 1px solid var(--line);
 }
 .detail-copy {
+  min-width: 0;
   flex: 1;
 }
 .detail-title {
   margin-top: 6px;
   font-size: 28px;
+  overflow-wrap: anywhere;
 }
 .detail-meta {
   display: flex;

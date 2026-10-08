@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NButton, NCheckbox, NCheckboxGroup } from 'naive-ui'
+import { ref } from 'vue'
+import { NButton, NCheckbox, NCheckboxGroup, NPopover } from 'naive-ui'
 import { Play } from '@lucide/vue'
 
 import CoverImage from '../../../components/CoverImage.vue'
@@ -21,6 +22,16 @@ const emit = defineEmits<{
   preview: [content: ProgrammeContent]
   download: [contents: ProgrammeContent[], quality: Quality]
 }>()
+
+const visibleTitleId = ref<string | null>(null)
+
+function updateTitleVisibility(id: string, show: boolean) {
+  visibleTitleId.value = show ? id : null
+}
+
+function closeTitle() {
+  visibleTitleId.value = null
+}
 
 function hasVideo(content: ProgrammeContent): boolean {
   return !!resolveVideo(content, 'standard')
@@ -94,8 +105,29 @@ function videoAvailability(content: ProgrammeContent): string {
             暂无视频
           </span>
         </div>
-        <h3 class="content-title">
-          {{ content.title }}
+        <h3>
+          <NPopover
+            class="content-title-popover"
+            trigger="click"
+            placement="top-start"
+            :show="visibleTitleId === content.id"
+            @update:show="updateTitleVisibility(content.id, $event)"
+          >
+            <template #trigger>
+              <button
+                type="button"
+                class="content-title"
+                :title="content.title"
+                :aria-label="`查看完整标题：${content.title}`"
+                :aria-expanded="visibleTitleId === content.id"
+                @keydown.esc="closeTitle"
+                @blur="closeTitle"
+              >
+                {{ content.title }}
+              </button>
+            </template>
+            {{ content.title }}
+          </NPopover>
         </h3>
         <p class="content-availability">{{ videoAvailability(content) }}</p>
       </div>
@@ -184,10 +216,28 @@ function videoAvailability(content: ProgrammeContent): string {
   color: var(--muted);
 }
 .content-title {
+  display: -webkit-box;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--text);
   font-size: 16px;
   line-height: 1.7;
   font-weight: 500;
+  text-align: left;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* The library teleports the full title outside the scoped content list. */
+:global(.content-title-popover) {
+  max-width: min(480px, calc(100vw - 32px));
+  overflow-wrap: anywhere;
+}
+:global(.content-title-popover .n-popover__content) {
+  max-height: min(320px, calc(50dvh - 48px));
+  overflow-y: auto;
 }
 .content-availability {
   margin-top: 6px;
@@ -233,6 +283,7 @@ function videoAvailability(content: ProgrammeContent): string {
     margin-bottom: 4px;
   }
   .content-title {
+    min-height: 44px;
     line-height: 1.5;
   }
   .content-availability {
