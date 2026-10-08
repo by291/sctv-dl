@@ -27,7 +27,8 @@ fun StatePanel(
     message: String,
     loading: Boolean = false,
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    retryLabel: String = "重试"
 ) {
     Column(
         modifier.fillMaxWidth().padding(32.dp),
@@ -53,7 +54,7 @@ fun StatePanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        onRetry?.let { FilledTonalButton(onClick = it) { Text("重试") } }
+        onRetry?.let { FilledTonalButton(onClick = it) { Text(retryLabel) } }
     }
 }
 

@@ -32,7 +32,7 @@ class DesignSystemTest {
         var enabled = false
         compose.setContent {
             SctvTheme(AppSettings()) {
-                SettingsScreen(AppSettings(), {}, {}, {}, { enabled = it }, {})
+                SettingsScreen(AppSettings(), {}, {}, {}, { enabled = it })
             }
         }
         compose.onNode(hasText("仅 Wi-Fi 下载") and isToggleable()).assertHasClickAction().performClick()

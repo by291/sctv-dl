@@ -8,8 +8,12 @@ data class CatalogueUiState(
     val resource: CachedResource<List<Programme>> = CachedResource(),
     val favourites: Set<String> = emptySet(),
     val query: String = "",
-    val byName: Boolean = false
+    val byName: Boolean = false,
+    val favouritesOnly: Boolean = false,
+    val featuredId: String? = null
 ) {
+    val featured: Programme? get() = resource.data.orEmpty().find { it.id == featuredId }
+
     fun rows(favouritesOnly: Boolean): List<Programme> = sortProgrammes(
         resource.data.orEmpty(),
         favourites,

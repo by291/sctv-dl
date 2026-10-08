@@ -94,26 +94,19 @@ fun SctvApp() {
                         settingsModel::setTheme,
                         settingsModel::setDynamicColour,
                         settingsModel::setQuality,
-                        settingsModel::setWifiOnly,
-                        navigator.back
+                        settingsModel::setWifiOnly
                     )
-                    AppRoute.Catalogue,
-                    AppRoute.Favourites -> {
-                        val model: CatalogueViewModel = if (route == AppRoute.Favourites) {
-                            hiltViewModel()
-                        } else {
-                            catalogueModel
-                        }
-                        val state by model.state.collectAsStateWithLifecycle()
+                    AppRoute.Catalogue -> {
                         CatalogueScreen(
-                            state,
-                            route == AppRoute.Favourites,
-                            model::query,
-                            model::sort,
-                            model::refresh,
-                            model::toggleFavourite,
+                            catalogue,
+                            catalogue.favouritesOnly,
+                            catalogueModel::query,
+                            catalogueModel::sort,
+                            catalogueModel::refresh,
+                            catalogueModel::toggleFavourite,
                             { navigator.open(AppRoute.Archive(it)) },
-                            { navigator.open(AppRoute.Settings) }
+                            catalogueModel::filter,
+                            catalogueModel::exploreAnother
                         )
                     }
                     is AppRoute.Archive -> {
@@ -128,13 +121,15 @@ fun SctvApp() {
                                     Box(Modifier.width(340.dp)) {
                                         CatalogueScreen(
                                             catalogue,
-                                            false,
+                                            catalogue.favouritesOnly,
                                             catalogueModel::query,
                                             catalogueModel::sort,
                                             catalogueModel::refresh,
                                             catalogueModel::toggleFavourite,
                                             { navigator.open(AppRoute.Archive(it)) },
-                                            { navigator.open(AppRoute.Settings) }
+                                            catalogueModel::filter,
+                                            catalogueModel::exploreAnother,
+                                            embedded = true
                                         )
                                     }
                                     VerticalDivider()

@@ -39,6 +39,8 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent?.getBooleanExtra("open_downloads", false) == true) {
             mutableDownloadsRequest.value++
+            // Recreation restores the current route instead of replaying the original notification.
+            intent.removeExtra("open_downloads")
         }
     }
 

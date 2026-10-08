@@ -38,6 +38,7 @@ class RestorationTest {
                             Column {
                                 Text("选择 $selection")
                                 Button(onClick = { selection++ }) { Text("增加选择") }
+                                Button(onClick = { navigator.open(AppRoute.Downloads) }) { Text("查看下载") }
                             }
                         }
                         else -> Text("其他页面")
@@ -47,7 +48,7 @@ class RestorationTest {
         }
         compose.onNodeWithText("打开栏目").performClick()
         compose.onNodeWithText("增加选择").performClick()
-        compose.onNodeWithTag("tab-Downloads").performClick()
+        compose.onNodeWithText("查看下载").performClick()
         compose.onNodeWithTag("tab-Catalogue").performClick()
         compose.onNodeWithText("选择 1").assertIsDisplayed()
         restore.emulateSavedInstanceStateRestore()

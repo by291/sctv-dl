@@ -73,14 +73,14 @@ class PlayerWindowTest {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 val editable = By.clazz("android.widget.EditText")
                 requireNotNull(device.wait(Until.findObject(editable), 5_000)).text = "catalogue-filter"
-                requireNotNull(device.wait(Until.findObject(By.text("收藏")), 5_000)).click()
+                requireNotNull(device.wait(Until.findObject(By.res("filter-favourites")), 5_000)).click()
                 val favouritesSearch = device.wait(
                     Until.findObject(By.clazz("android.widget.EditText").text("")),
                     5_000
                 )
                 assertNotNull("Favourites must have their own empty filter", favouritesSearch)
                 favouritesSearch!!.text = "favourites-filter"
-                requireNotNull(device.wait(Until.findObject(By.text("栏目")), 5_000)).click()
+                requireNotNull(device.wait(Until.findObject(By.res("filter-all")), 5_000)).click()
                 assertNotNull(
                     device.wait(Until.findObject(By.clazz("android.widget.EditText").text("catalogue-filter")), 5_000)
                 )

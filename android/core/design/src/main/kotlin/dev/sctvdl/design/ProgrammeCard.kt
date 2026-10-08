@@ -57,11 +57,12 @@ fun ProgrammeCard(programme: Programme, favourite: Boolean, onOpen: () -> Unit, 
             Text(
                 programme.name,
                 style = typography.titleMedium,
-                maxLines = 3,
+                minLines = 2,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "查看往期节目",
+                "往期回看",
                 style = typography.bodySmall,
                 color = colours.onSurfaceVariant
             )

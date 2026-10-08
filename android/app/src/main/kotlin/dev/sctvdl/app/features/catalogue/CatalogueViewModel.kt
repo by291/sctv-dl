@@ -9,6 +9,7 @@ import dev.sctvdl.domain.ProgrammeRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -20,17 +21,41 @@ class CatalogueViewModel @Inject constructor(
 ) : ViewModel() {
     private val query = saved.getStateFlow("query", "")
     private val byName = saved.getStateFlow("byName", false)
-    val state = combine(repository.observeProgrammes(), favourites.observeIds(), query, byName) {
-            resource,
-            ids,
+    private val favouritesQuery = saved.getStateFlow("favouritesQuery", "")
+    private val favouritesByName = saved.getStateFlow("favouritesByName", false)
+    private val favouritesOnly = saved.getStateFlow("favouritesOnly", false)
+    private val featuredId = saved.getStateFlow<String?>("featuredId", null)
+    private val catalogue = repository.observeProgrammes().onEach { resource ->
+        val programmes = resource.data ?: return@onEach
+        if (programmes.none { it.id == featuredId.value }) {
+            saved["featuredId"] = programmes.randomOrNull()?.id
+        }
+    }
+    private val filters = combine(query, byName, favouritesQuery, favouritesByName, favouritesOnly) {
             query,
-            sort
+            byName,
+            favouritesQuery,
+            favouritesByName,
+            favouritesOnly
         ->
-        CatalogueUiState(resource, ids, query, sort)
+        CatalogueUiState(
+            query = if (favouritesOnly) favouritesQuery else query,
+            byName = if (favouritesOnly) favouritesByName else byName,
+            favouritesOnly = favouritesOnly
+        )
+    }
+
+    val state = combine(catalogue, favourites.observeIds(), filters, featuredId) { resource, ids, filters, featuredId ->
+        filters.copy(resource = resource, favourites = ids, featuredId = featuredId)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        CatalogueUiState(query = query.value, byName = byName.value)
+        CatalogueUiState(
+            query = if (favouritesOnly.value) favouritesQuery.value else query.value,
+            byName = if (favouritesOnly.value) favouritesByName.value else byName.value,
+            favouritesOnly = favouritesOnly.value,
+            featuredId = featuredId.value
+        )
     )
 
     init {
@@ -38,10 +63,18 @@ class CatalogueViewModel @Inject constructor(
     }
 
     fun query(value: String) {
-        saved["query"] = value.take(200)
+        saved[if (favouritesOnly.value) "favouritesQuery" else "query"] = value.take(200)
     }
     fun sort(byName: Boolean) {
-        saved["byName"] = byName
+        saved[if (favouritesOnly.value) "favouritesByName" else "byName"] = byName
+    }
+    fun filter(favouritesOnly: Boolean) {
+        saved["favouritesOnly"] = favouritesOnly
+    }
+    fun exploreAnother() {
+        val programmes = state.value.resource.data.orEmpty()
+        val alternatives = programmes.filterNot { it.id == featuredId.value }
+        saved["featuredId"] = alternatives.ifEmpty { programmes }.randomOrNull()?.id
     }
     fun refresh() {
         viewModelScope.launch { repository.refreshProgrammes() }

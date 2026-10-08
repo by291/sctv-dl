@@ -1,19 +1,19 @@
 package dev.sctvdl.app.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -47,28 +47,36 @@ fun AppNavigationShell(
     content: @Composable (AppRoute, AppNavigator) -> Unit
 ) {
     val catalogue = rememberNavBackStack(AppRoute.Catalogue)
-    val favourites = rememberNavBackStack(AppRoute.Favourites)
     val downloads = rememberNavBackStack(AppRoute.Downloads)
-    val stacks = listOf(catalogue, favourites, downloads)
+    val settings = rememberNavBackStack(AppRoute.Settings)
+    val stacks = listOf(catalogue, downloads, settings)
+    val tabs = listOf(AppRoute.Catalogue, AppRoute.Downloads, AppRoute.Settings)
     var selected by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(downloadsRequest) {
         if (downloadsRequest > 0) {
             onBackCommitted()
-            selected = 2
+            while (downloads.size > 1) downloads.removeLastOrNull()
+            selected = 1
         }
     }
     val stack = stacks[selected]
     val current = stack.last() as AppRoute
     val isPlayer = current is AppRoute.Playback || current is AppRoute.LocalPlayback
-    val back = {
+    val back: () -> Unit = {
         if (stack.size > 1) {
             onBackCommitted()
             stack.removeLastOrNull()
-            Unit
+        } else if (selected != 0) {
+            selected = 0
         }
     }
+    BackHandler(stack.size == 1 && selected != 0) { selected = 0 }
     val navigator = AppNavigator({ route ->
-        if (stack.last() != route) {
+        val primaryIndex = tabs.indexOf(route)
+        if (primaryIndex >= 0) {
+            onBackCommitted()
+            selected = primaryIndex
+        } else if (stack.last() != route) {
             if (stack.last() is AppRoute.Archive &&
                 route is AppRoute.Archive
             ) {
@@ -94,17 +102,15 @@ fun AppNavigationShell(
             )
         }
     }
-    val tabs = listOf(AppRoute.Catalogue, AppRoute.Favourites, AppRoute.Downloads)
-    val labels = listOf("栏目", "收藏", "下载")
+    val labels = listOf("节目库", "下载", "设置")
     val icons =
-        listOf(Icons.Outlined.LiveTv, Icons.Outlined.FavoriteBorder, Icons.Outlined.Download)
+        listOf(Icons.Outlined.LiveTv, Icons.Outlined.Download, Icons.Outlined.Settings)
 
     BoxWithConstraints {
         val rail = maxWidth >= 600.dp && !isPlayer
+        val primary = current in tabs
         Scaffold(bottomBar = {
-            if (!rail &&
-                !isPlayer
-            ) {
+            if (!rail && primary) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     tabs.forEachIndexed { index, route ->
                         NavigationBarItem(selected = selected == index, onClick = {
@@ -118,7 +124,7 @@ fun AppNavigationShell(
                 }
             }
         }) { padding ->
-            Row(Modifier.fillMaxSize().padding(padding)) {
+            Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                 if (rail) {
                     NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
                         Spacer(Modifier.height(24.dp))
@@ -131,10 +137,6 @@ fun AppNavigationShell(
                                 Text(labels[index])
                             }, modifier = Modifier.testTag("tab-${route::class.simpleName}"))
                         }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = {
-                            navigator.open(AppRoute.Settings)
-                        }) { Icon(Icons.Outlined.Settings, "设置") }
                     }
                 }
                 NavDisplay(

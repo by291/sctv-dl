@@ -1,6 +1,6 @@
 # Android Client Design
 
-Status: Approved by the user on 2026-10-07; implemented under `android/`.
+Status: Implemented under `android/`. The native page framework was revised at the user's request on 2026-10-08.
 
 Prepared on 2026-10-07. This document owns the Android product, architecture, and acceptance criteria. Build, test, and platform limitations are maintained in the [Android README](../android/README.md). Existing Web contracts remain in [Architecture](architecture.md) and [Upstream API](upstream-api.md).
 
@@ -34,26 +34,27 @@ Media3's separate download manager is a credible alternative when app-private of
 
 ### Navigation
 
-Use three primary destinations: `栏目`, `收藏`, and `下载`. Put `设置` in the top app bar. Each destination retains its scroll and filter state. Programme details and playback are secondary destinations. Return navigation restores the originating programme and broadcast date.
+Use three primary destinations: `节目库`, `下载`, and `设置`. Catalogue and favourites are the `全部栏目` and `我的收藏` tabs inside the programme library, each retaining its own search, sort, and scroll state. Programme details and playback are secondary destinations. Return navigation restores the originating programme and broadcast date. Back from a primary download or settings page returns to the library before leaving the application.
 
-Compact windows use a bottom navigation bar. Medium and expanded windows use an adaptive navigation rail. Expanded layouts show programme details alongside the catalogue or archive list when appropriate; switching window size does not lose selection or player position.
+Compact windows show bottom navigation only on primary destinations; programme details and playback use the full content area with their own return action. Medium and expanded windows use an adaptive navigation rail, except during playback. Expanded archive layouts show the library alongside programme details; switching window size does not lose selection or player position. Download notifications open the download list and are consumed once so recreation does not override subsequent navigation.
 
 ### Programme Catalogue
 
-- A clear `栏目` title, search field, and explicit refresh action lead the page.
+- A compact native app bar combines a television logo, `sctv-dl`, `电视节目下载`, and refresh. The two library tabs identify the current browsing scope. Search, the result count, sorting, and cards form one scrolling content area, leaving the page navigation reachable while browsing.
 - Use an adaptive two-column cover grid on typical phones, a single column when large text requires it, and additional columns when space permits. Cards show the cover, programme name, and an accessible favourite control.
 - Provide default service order and name order. Favourites precede non-favourites in either mode; preserve ordering within each group.
-- The favourites destination reuses the same card, search, and ordering rules. Its empty state explains how to save a programme and provides a route to the catalogue.
+- The favourites tab reuses the same card, search, and ordering rules. Its empty state explains how to save a programme and provides an action to browse all programmes.
 - Do not add invented categories, rankings, durations, audience counts, or programme freshness badges. The current catalogue provides none of those fields.
-- Keep the initial page focused on browsing; omit a promotional hero and automatic spotlight carousel.
+- The unfiltered all-programmes page includes a compact `栏目探索` card using a real catalogue name and cover. `查看节目` opens that programme; `换一个` randomly selects a different available programme and is disabled when only one exists. Preserve the choice across refresh/recreation while its ID remains available, and use refreshed metadata. Hide exploration in search results, favourites, and embedded archive panes. There is no timed carousel, extra catalogue request, fabricated recommendation label, or autoplay.
+- Adapt the brand and exploration to the native layout: small cover with labelled touch actions on phones, more image/text space in wide windows, and text-first layouts at large font scales. Keep both modules in the library rather than copying the Web sidebar or decorative desktop hero.
 
 ### Programme Archive
 
-The page header shows the cover, programme name, and favourite action. The date selector presents returned broadcast dates, newest first. A date sheet supports browsing the available dates by month and selecting a specific broadcast; days without an upstream date record are unavailable.
+The archive uses a compact app bar and a scrolling programme header with the real cover, full programme name, and favourite action. Recent returned broadcast dates appear in a horizontal row, newest first, and switch directly without opening a sheet. `更多日期` opens the month-grouped date sheet. A date selected from that sheet remains visible in the shortcut row even outside the seven recent broadcasts. Days without an upstream date record are unavailable.
 
 Distinguish a confirmed full episode from individual clips using the existing title-matching rule. Show full episodes prominently when present, while retaining the service's content order within each group. Do not label the first row as a full episode by position.
 
-Each available item exposes `播放` and `下载`. A `选择` action enters batch selection mode, with `全选`, `仅完整节目`, a selected count, and a bottom download action. Back first exits selection mode. Selection clears when the programme or date changes. Items without media remain readable and display `暂无视频`; they cannot be selected or played.
+An `当期节目` heading identifies the selected broadcast date and actual item count. Each available item exposes `播放` and `下载`. A `批量下载` action enters batch selection mode, replacing the programme/date header with a selection app bar, `全选`, `仅完整节目`, a selected count, and a fixed bottom download action. Back first exits selection mode. Selection clears when the programme or date changes. Items without media remain readable and display `暂无视频`; they cannot be selected or played.
 
 Selecting download opens a quality sheet. Show only meaningful available choices for one item. For a batch, show the selected count and explain that items missing the chosen variant use their available variant. Dismissing the sheet creates no tasks. After submission, show the actual queued, fallback, and failed counts, with a route to Downloads.
 
@@ -92,23 +93,23 @@ The default network policy permits ordinary connected networks. Offer `仅 Wi-Fi
 
 ### Settings
 
-Use grouped preference rows for appearance, playback, downloads, and app information. Provide `跟随系统 / 浅色 / 深色`, an optional system dynamic-colour setting, the initial playback quality, and the Wi-Fi-only download preference. The theme defaults to following the system; dynamic colour defaults off to preserve the product palette.
+Use a primary settings page with separate surface groups for appearance, playback, downloads, and app information. Provide `跟随系统 / 浅色 / 深色`, an optional system dynamic-colour setting, the initial playback quality, and the Wi-Fi-only download preference. The theme defaults to following the system; dynamic colour defaults off to preserve the product palette.
 
 Do not require onboarding, account registration, notification permission, or broad storage permissions merely to browse programmes. Request any future capability-specific permission at the action that needs it.
 
 ## Visual and Interaction System
 
-Use stable Material 3 components and a custom theme. The default palette uses a restrained warm vermilion accent, warm neutral surfaces in light mode, and dark charcoal surfaces in dark mode. Define semantic roles for background, surface, primary action, text, outline, error, and completed status; do not scatter literal colours through feature screens.
+Use stable Material 3 components and a custom theme. The default palette uses a restrained warm vermilion accent, cool neutral backgrounds with white panels in light mode, and graphite backgrounds with charcoal panels in dark mode. Define semantic roles for background, surface, primary action, text, outline, error, and completed status; do not scatter literal colours through feature screens.
 
 | Token          | Value or rule                                                                        |
 | -------------- | ------------------------------------------------------------------------------------ |
 | Primary        | Light: `#AD3D28`; dark: `#FFB4A4`, with paired accessible foregrounds                |
-| Background     | Light: `#FBF8F5`; dark: `#171311`                                                    |
-| Surface        | Light: `#FFFFFF`; dark: `#231D19`                                                    |
-| Main text      | Light: `#241D19`; dark: `#F0DFD6`                                                    |
-| Secondary text | Light: `#675C55`; dark: `#D0BFB5`                                                    |
+| Background     | Light: `#F6F7F9`; dark: `#16191E`                                                    |
+| Surface        | Light: `#FFFFFF`; dark: `#1E2229`                                                    |
+| Main text      | Light: `#242A33`; dark: `#E7E9EE`                                                    |
+| Secondary text | Light: `#667080`; dark: `#A9AEB8`                                                    |
 | Spacing        | 4dp base; 16dp compact page padding; 12dp grid gaps                                  |
-| Shape          | 16dp cards and media; Material defaults for controls and sheets                      |
+| Shape          | 16dp programme cards; 12dp content panels; native control and sheet roles            |
 | Typography     | System sans-serif with native Chinese fallback; Material type roles in sp            |
 | Targets        | At least 48dp for interactive controls                                               |
 | Motion         | Short purposeful state and navigation transitions; respect system animation settings |

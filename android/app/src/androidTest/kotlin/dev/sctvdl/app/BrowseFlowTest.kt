@@ -48,7 +48,7 @@ class BrowseFlowTest {
                 })
             }
         }
-        compose.onNodeWithText("2026-10-06").performClick()
+        compose.onNodeWithText("更多日期").performClick()
         compose.onNodeWithText("10月5日 星期一").performClick()
         compose.runOnIdle { assertEquals("older", state.date?.id) }
         compose.onNodeWithText("下载").performScrollTo().performClick()

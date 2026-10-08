@@ -6,7 +6,7 @@
 
 Browse and search programmes, save favourites, choose available broadcast dates, distinguish full episodes from clips, and play standard or smooth MP4 video. Native playback includes seeking, speed, fullscreen, and explicit picture-in-picture. Download one item or a selection to `Downloads/sctv-dl`, inspect actual system progress, cancel, retry, play local files, and open or share a completed file.
 
-The warm vermilion Material 3 theme supports light, dark, system mode, and optional system wallpaper colours on Android 12+. Compact windows use bottom navigation; wider windows use a rail and a catalogue/detail layout. Text scaling changes card layout without hiding actions.
+The Material 3 theme pairs a restrained vermilion accent with neutral surfaces and supports light, dark, system mode, and optional system wallpaper colours on Android 12+. The primary destinations are programme library, downloads, and settings. A compact television brand identifies the library. All programmes and favourites are tabs inside it with independent filters and scroll positions. The unfiltered all-programmes view includes a native exploration card using real artwork; users can open the featured programme or choose another, without an automatic carousel. Compact windows show bottom navigation on primary pages, while programme details and playback are separate pages. Wider windows use a rail and a catalogue/detail layout. Archive pages expose direct recent-date shortcuts and a full date sheet; batch actions appear only in selection mode. Text scaling changes card layout without hiding actions.
 
 ## Setup and Build
 
@@ -83,6 +83,10 @@ The final API 29 cold boot initially gave all Android processes a stale 16 MiB V
 Physical-device performance measurements, a TalkBack walkthrough, store signing, and a remote CI run remain separate verification steps. API 37 Compose interaction coverage is limited by the Espresso issue described above. Emulator results establish behaviour on those tested runtimes, not identical performance or decoder behaviour on every device.
 
 See [Client Design](../docs/android-client-design.md) for acceptance criteria and [Agent Instructions](AGENTS.md) for native contribution constraints.
+
+### Native Layout Revision Verification
+
+Verified on 2026-10-08: formatting, Android lint, 54 unit tests, debug and R8 release assemblies, 11 UI Automator navigation/archive/exploration/window tests, and four storage/system-download device tests on API 37. Manual checks covered live catalogue and archive data, light/dark appearance, a 320 dp window at 200% text, keyboard search, empty favourites/results, offline retry recovery, and expanded catalogue/archive panes. Eleven Compose interaction tests were blocked by the API 37 Espresso incompatibility above; this revision was not rerun on API 29 or physical devices.
 
 ## Performance and CI
 

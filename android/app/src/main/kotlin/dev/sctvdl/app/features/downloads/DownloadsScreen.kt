@@ -56,9 +56,14 @@ fun DownloadsScreen(
         PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
             DownloadTab.entries.forEach { tab ->
                 val count = state.tasks.count { it.state.isInActiveSection == (tab == DownloadTab.Active) }
-                Tab(selected = tab == state.tab, onClick = {
-                    onTab(tab)
-                }, text = { Text("${if (tab == DownloadTab.Active) "进行中" else "下载记录"} · $count") })
+                Tab(
+                    selected = tab == state.tab,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = {
+                        onTab(tab)
+                    },
+                    text = { Text("${if (tab == DownloadTab.Active) "进行中" else "下载记录"} · $count") }
+                )
             }
         }
         LazyColumn(
