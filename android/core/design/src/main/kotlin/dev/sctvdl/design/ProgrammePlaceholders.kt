@@ -84,8 +84,7 @@ fun CatalogueSummaryPlaceholder() {
 @Composable
 fun ProgrammeCardPlaceholder(index: Int) {
     val typography = MaterialTheme.typography
-    val titleHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() * 2 }
-    val captionHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
+    val titleHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
     Card(
         modifier = Modifier.fillMaxWidth().testTag("programme-placeholder-$index"),
         shape = MaterialTheme.shapes.large,
@@ -95,9 +94,8 @@ fun ProgrammeCardPlaceholder(index: Int) {
         SkeletonContent {
             Column {
                 SkeletonBlock(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                     SkeletonBlock(Modifier.fillMaxWidth(0.8f).height(titleHeight))
-                    SkeletonBlock(Modifier.fillMaxWidth(0.45f).height(captionHeight))
                 }
             }
         }

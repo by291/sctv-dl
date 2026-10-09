@@ -1,9 +1,7 @@
 package dev.sctvdl.design
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -53,19 +51,12 @@ fun ProgrammeCard(programme: Programme, favourite: Boolean, onOpen: () -> Unit, 
                 )
             }
         }
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                programme.name,
-                style = typography.titleMedium,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                "往期回看",
-                style = typography.bodySmall,
-                color = colours.onSurfaceVariant
-            )
-        }
+        Text(
+            programme.name,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            style = typography.titleMedium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
