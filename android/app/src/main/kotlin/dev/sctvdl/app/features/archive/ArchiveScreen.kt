@@ -306,22 +306,24 @@ fun ArchiveScreen(
 @Composable
 private fun ArchiveHeader(state: ArchiveUiState, onFavourite: () -> Unit) {
     val largeText = LocalDensity.current.fontScale >= 1.5f
-    val colours = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
         if (!largeText) {
             CoverImage(
                 state.programme?.coverUrl,
-                Modifier.width(112.dp).aspectRatio(4f / 3f).clip(MaterialTheme.shapes.medium)
+                Modifier.width(144.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)
             )
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(state.programme?.name ?: "往期节目", style = MaterialTheme.typography.titleLarge)
-            Text("往期回看", style = MaterialTheme.typography.bodyMedium, color = colours.onSurfaceVariant)
-            TextButton(onClick = onFavourite, contentPadding = PaddingValues(horizontal = 0.dp)) {
+            TextButton(
+                onClick = onFavourite,
+                contentPadding = PaddingValues(horizontal = 0.dp),
+                modifier = Modifier.heightIn(min = TouchTarget)
+            ) {
                 Icon(
                     if (state.favourite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     null,

@@ -42,7 +42,8 @@ fun ProgrammeSpotlightPlaceholder() {
     ) {
         SkeletonContent(Modifier.padding(16.dp)) {
             BoxWithConstraints {
-                val wide = maxWidth >= 480.dp && !largeText
+                val availableWidth = maxWidth
+                val wide = availableWidth >= 480.dp && !largeText
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -54,7 +55,7 @@ fun ProgrammeSpotlightPlaceholder() {
                             if (wide) SkeletonBlock(Modifier.fillMaxWidth(0.9f).height(bodyHeight))
                         }
                         if (!largeText) {
-                            SkeletonBlock(Modifier.width(if (wide) 160.dp else 88.dp).aspectRatio(16f / 9f))
+                            SpotlightCoverFrame(availableWidth) { modifier -> SkeletonBlock(modifier) }
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,16 +105,18 @@ fun ProgrammeCardPlaceholder(index: Int) {
 
 @Composable
 fun ArchiveHeaderPlaceholder() {
-    val titleHeight = with(LocalDensity.current) { MaterialTheme.typography.titleLarge.lineHeight.toDp() }
-    val bodyHeight = with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
+    val typography = MaterialTheme.typography
+    val titleHeight = with(LocalDensity.current) { typography.titleLarge.lineHeight.toDp() }
+    val labelHeight = with(LocalDensity.current) { typography.labelLarge.lineHeight.toDp() }
+    val labelSize = with(LocalDensity.current) { typography.labelLarge.fontSize.toDp() }
     SkeletonContent(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (LocalDensity.current.fontScale < 1.5f) {
-                SkeletonBlock(Modifier.width(112.dp).aspectRatio(4f / 3f))
+                SkeletonBlock(Modifier.width(144.dp).aspectRatio(16f / 9f))
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SkeletonBlock(Modifier.fillMaxWidth(0.75f).height(titleHeight))
-                SkeletonBlock(Modifier.fillMaxWidth(0.4f).height(bodyHeight))
+                SkeletonBlock(Modifier.width(labelSize * 4 + 24.dp).height(maxOf(TouchTarget, labelHeight)))
             }
         }
     }

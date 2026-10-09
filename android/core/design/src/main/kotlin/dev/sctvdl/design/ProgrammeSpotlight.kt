@@ -1,6 +1,7 @@
 package dev.sctvdl.design
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -25,12 +26,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.Programme
 
@@ -44,7 +47,8 @@ fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> U
         modifier = Modifier.fillMaxWidth().testTag("programme-spotlight")
     ) {
         BoxWithConstraints(Modifier.padding(16.dp)) {
-            val wide = maxWidth >= 480.dp && !largeText
+            val availableWidth = maxWidth
+            val wide = availableWidth >= 480.dp && !largeText
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -68,11 +72,7 @@ fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> U
                         }
                     }
                     if (!largeText) {
-                        CoverImage(
-                            programme.coverUrl,
-                            Modifier.width(if (wide) 160.dp else 88.dp).aspectRatio(16f / 9f)
-                                .clip(MaterialTheme.shapes.small)
-                        )
+                        SpotlightCoverFrame(availableWidth) { modifier -> CoverImage(programme.coverUrl, modifier) }
                     }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -95,6 +95,23 @@ fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> U
                         Text("换一个", Modifier.padding(start = 6.dp))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SpotlightCoverFrame(availableWidth: Dp, content: @Composable (Modifier) -> Unit) {
+    val width = if (availableWidth >= 480.dp) 240.dp else (availableWidth * 0.46f).coerceIn(112.dp, 160.dp)
+    Box(Modifier.padding(8.dp)) {
+        Surface(
+            modifier = Modifier.width(width).rotate(-5f),
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            shape = MaterialTheme.shapes.medium,
+            shadowElevation = 4.dp
+        ) {
+            Box(Modifier.padding(4.dp).clip(MaterialTheme.shapes.small)) {
+                content(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
             }
         }
     }
