@@ -32,6 +32,14 @@ data class PlayerUiState(
     val broadcastDate: LocalDate? = null
 )
 
+data class PlaybackSelection(
+    val programmeId: String,
+    val dateId: String,
+    val content: ProgrammeContent,
+    val programmeName: String,
+    val broadcastDate: LocalDate
+)
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val repository: ProgrammeRepository,
@@ -43,13 +51,21 @@ class PlayerViewModel @Inject constructor(
     private var job: Job? = null
     private var key: Triple<String, String, String>? = null
 
-    fun open(programmeId: String, dateId: String, contentId: String) {
+    fun open(programmeId: String, dateId: String, contentId: String, selection: PlaybackSelection? = null) {
         val currentKey = Triple(programmeId, dateId, contentId)
         if (key == currentKey) return
         key = currentKey
         job?.cancel()
         mutableState.value = PlayerUiState()
         job = viewModelScope.launch {
+            val accepted = selection?.takeIf {
+                it.programmeId == programmeId && it.dateId == dateId && it.content.id == contentId &&
+                    videoVariants(it.content).isNotEmpty()
+            }
+            var selectedContent = accepted?.content
+            var source: PlaybackSource? = null
+            var programmeName = accepted?.programmeName
+            var broadcastDate = accepted?.broadcastDate
             launch { repository.refreshContents(programmeId, dateId) }
             combine(
                 repository.observeContents(programmeId, dateId),
@@ -62,36 +78,30 @@ class PlayerViewModel @Inject constructor(
                     programmes,
                     dates
                 ->
-                val content = resource.data?.firstOrNull { it.id == contentId }
+                val content = selectedContent ?: resource.data?.firstOrNull { it.id == contentId }
                 val variants = content?.let(::videoVariants).orEmpty()
-                val source = content?.takeIf { variants.isNotEmpty() }?.let {
-                    PlaybackSource(
-                        it.id,
-                        it.title,
-                        variants,
-                        startPositionMs =
-                        saved["positionMs"] ?: 0L
-                    )
+                if (source == null && content != null && variants.isNotEmpty()) {
+                    selectedContent = content
+                    source =
+                        PlaybackSource(content.id, content.title, variants, startPositionMs = saved["positionMs"] ?: 0L)
                 }
-                val error = if (resource.data != null &&
-                    source == null
-                ) {
-                    AppError(ErrorKind.NoVideo, "该节目暂时无法播放")
-                } else {
-                    resource.error
+                if (programmeName == null) {
+                    programmeName = programmes.data?.firstOrNull { it.id == programmeId }?.name
+                }
+                if (broadcastDate == null) broadcastDate = dates.data?.firstOrNull { it.id == dateId }?.date
+                val error = when {
+                    source != null -> null
+                    resource.data != null -> AppError(ErrorKind.NoVideo, "该节目暂时无法播放")
+                    else -> resource.error
                 }
                 PlayerUiState(
-                    resource.data == null && resource.error == null,
+                    source == null && resource.data == null && resource.error == null,
                     source,
                     content,
                     error,
                     preferences.initialQuality,
-                    programmes.data?.firstOrNull {
-                        it.id == programmeId
-                    }?.name ?: "节目",
-                    dates.data?.firstOrNull {
-                        it.id == dateId
-                    }?.date
+                    programmeName ?: "节目",
+                    broadcastDate
                 )
             }.collect { if (key == currentKey) mutableState.value = it }
         }

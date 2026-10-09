@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -37,6 +39,7 @@ import dev.sctvdl.app.features.downloads.DownloadsViewModel
 import dev.sctvdl.app.features.downloads.openDownloadFile
 import dev.sctvdl.app.features.downloads.openSystemDownloads
 import dev.sctvdl.app.features.player.LocalPlayerViewModel
+import dev.sctvdl.app.features.player.PlaybackSelection
 import dev.sctvdl.app.features.player.PlayerScreen
 import dev.sctvdl.app.features.player.PlayerViewModel
 import dev.sctvdl.app.features.player.mainActivity
@@ -62,6 +65,7 @@ fun SctvApp() {
     val coordinator: DownloadCoordinatorViewModel = hiltViewModel()
     val message by coordinator.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -97,6 +101,7 @@ fun SctvApp() {
                         settingsModel::setWifiOnly
                     )
                     AppRoute.Catalogue -> {
+                        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { catalogueModel.enter() }
                         CatalogueScreen(
                             catalogue,
                             catalogue.favouritesOnly,
@@ -106,18 +111,20 @@ fun SctvApp() {
                             catalogueModel::toggleFavourite,
                             { navigator.open(AppRoute.Archive(it)) },
                             catalogueModel::filter,
-                            catalogueModel::exploreAnother
+                            catalogueModel::exploreAnother,
+                            onApplyUpdates = catalogueModel::applyUpdates
                         )
                     }
                     is AppRoute.Archive -> {
                         val archiveModel: ArchiveViewModel =
                             hiltViewModel(key = "archive-${route.programmeId}")
                         val archive by archiveModel.state.collectAsStateWithLifecycle()
-                        LaunchedEffect(route.programmeId) { archiveModel.open(route.programmeId) }
+                        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { archiveModel.open(route.programmeId) }
                         BoxWithConstraints {
                             val expanded = maxWidth >= 840.dp
                             Row {
                                 if (expanded) {
+                                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { catalogueModel.enter() }
                                     Box(Modifier.width(340.dp)) {
                                         CatalogueScreen(
                                             catalogue,
@@ -129,7 +136,8 @@ fun SctvApp() {
                                             { navigator.open(AppRoute.Archive(it)) },
                                             catalogueModel::filter,
                                             catalogueModel::exploreAnother,
-                                            embedded = true
+                                            embedded = true,
+                                            onApplyUpdates = catalogueModel::applyUpdates
                                         )
                                     }
                                     VerticalDivider()
@@ -144,6 +152,13 @@ fun SctvApp() {
                                         archiveModel::toggleFavourite,
                                         { content ->
                                             archive.date?.let {
+                                                playbackSelection = PlaybackSelection(
+                                                    route.programmeId,
+                                                    it.id,
+                                                    content,
+                                                    archive.programme?.name ?: "节目",
+                                                    it.date
+                                                )
                                                 navigator.open(
                                                     AppRoute.Playback(
                                                         route.programmeId,
@@ -158,7 +173,8 @@ fun SctvApp() {
                                         archiveModel::selectFullEpisodes,
                                         archiveModel::toggleContent,
                                         archiveModel::exitSelection,
-                                        coordinator::enqueue
+                                        coordinator::enqueue,
+                                        onApplyUpdates = archiveModel::applyUpdates
                                     )
                                 }
                             }
@@ -214,7 +230,8 @@ fun SctvApp() {
                             playerModel.open(
                                 route.programmeId,
                                 route.dateId,
-                                route.contentId
+                                route.contentId,
+                                playbackSelection
                             )
                         }
                         PlayerScreen(

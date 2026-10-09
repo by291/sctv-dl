@@ -4,12 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.sctvdl.app.features.PresentedResource
 import dev.sctvdl.domain.FavouriteRepository
+import dev.sctvdl.domain.Programme
 import dev.sctvdl.domain.ProgrammeRepository
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,12 +28,9 @@ class CatalogueViewModel @Inject constructor(
     private val favouritesByName = saved.getStateFlow("favouritesByName", false)
     private val favouritesOnly = saved.getStateFlow("favouritesOnly", false)
     private val featuredId = saved.getStateFlow<String?>("featuredId", null)
-    private val catalogue = repository.observeProgrammes().onEach { resource ->
-        val programmes = resource.data ?: return@onEach
-        if (programmes.none { it.id == featuredId.value }) {
-            saved["featuredId"] = programmes.randomOrNull()?.id
-        }
-    }
+    private val snapshot = PresentedResource<List<Programme>>()
+    private val catalogue = MutableStateFlow(CatalogueUiState())
+    private var refreshJob: Job? = null
     private val filters = combine(query, byName, favouritesQuery, favouritesByName, favouritesOnly) {
             query,
             byName,
@@ -45,8 +45,18 @@ class CatalogueViewModel @Inject constructor(
         )
     }
 
-    val state = combine(catalogue, favourites.observeIds(), filters, featuredId) { resource, ids, filters, featuredId ->
-        filters.copy(resource = resource, favourites = ids, featuredId = featuredId)
+    val state = combine(catalogue, favourites.observeIds(), filters, featuredId) {
+            catalogue,
+            ids,
+            filters,
+            featuredId
+        ->
+        filters.copy(
+            resource = catalogue.resource,
+            hasUpdate = catalogue.hasUpdate,
+            favourites = ids,
+            featuredId = featuredId
+        )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
@@ -59,7 +69,29 @@ class CatalogueViewModel @Inject constructor(
     )
 
     init {
+        viewModelScope.launch {
+            repository.observeProgrammes().collect { resource ->
+                snapshot.observe(resource)
+                publish()
+            }
+        }
+    }
+
+    fun enter() {
         refresh()
+    }
+
+    fun applyUpdates() {
+        snapshot.accept()
+        publish()
+    }
+
+    private fun publish() {
+        catalogue.value = CatalogueUiState(resource = snapshot.resource, hasUpdate = snapshot.hasUpdate)
+        val programmes = snapshot.resource.data ?: return
+        if (programmes.none { it.id == featuredId.value }) {
+            saved["featuredId"] = programmes.randomOrNull()?.id
+        }
     }
 
     fun query(value: String) {
@@ -77,7 +109,8 @@ class CatalogueViewModel @Inject constructor(
         saved["featuredId"] = alternatives.ifEmpty { programmes }.randomOrNull()?.id
     }
     fun refresh() {
-        viewModelScope.launch { repository.refreshProgrammes() }
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch { repository.refreshProgrammes() }
     }
     fun toggleFavourite(id: String) {
         viewModelScope.launch { favourites.toggle(id) }

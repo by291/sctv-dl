@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +55,7 @@ import dev.sctvdl.design.ArchiveContentPlaceholder
 import dev.sctvdl.design.ArchiveHeaderPlaceholder
 import dev.sctvdl.design.BroadcastDatesPlaceholder
 import dev.sctvdl.design.ContentCard
+import dev.sctvdl.design.ContentUpdateAction
 import dev.sctvdl.design.CoverImage
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.QualitySheet
@@ -65,6 +67,7 @@ import dev.sctvdl.domain.ProgrammeContent
 import dev.sctvdl.domain.videoVariants
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val RecentDateLabel = DateTimeFormatter.ofPattern("M月d日", Locale.SIMPLIFIED_CHINESE)
 private val BroadcastDateLabel = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.SIMPLIFIED_CHINESE)
@@ -85,7 +88,8 @@ fun ArchiveScreen(
     onSelectFull: () -> Unit,
     onToggle: (String) -> Unit,
     onExitSelection: () -> Unit,
-    onDownload: (List<DownloadRequest>) -> Unit
+    onDownload: (List<DownloadRequest>) -> Unit,
+    onApplyUpdates: () -> Unit = {}
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
@@ -94,6 +98,7 @@ fun ArchiveScreen(
     val loadingContents = state.date != null && state.contents.data == null && state.contents.error == null
     val largeText = LocalDensity.current.fontScale >= 1.5f
     val scroll = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     BackHandler(state.selectionMode) { onExitSelection() }
     LaunchedEffect(state.programmeId, state.date?.id) {
         downloadIds = arrayListOf()
@@ -109,6 +114,14 @@ fun ArchiveScreen(
                         if (state.selectionMode) Icons.Outlined.Close else Icons.AutoMirrored.Outlined.ArrowBack,
                         if (state.selectionMode) "退出选择" else "返回"
                     )
+                }
+            },
+            actions = {
+                if (state.hasUpdate && !state.selectionMode) {
+                    ContentUpdateAction(onUpdate = {
+                        onApplyUpdates()
+                        scope.launch { scroll.scrollToItem(0) }
+                    })
                 }
             }
         )

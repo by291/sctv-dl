@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.CatalogueSummaryPlaceholder
+import dev.sctvdl.design.ContentUpdateAction
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.ProgrammeCard
 import dev.sctvdl.design.ProgrammeCardPlaceholder
@@ -65,6 +67,7 @@ import dev.sctvdl.design.ProgrammeSpotlight
 import dev.sctvdl.design.ProgrammeSpotlightPlaceholder
 import dev.sctvdl.design.SctvBrand
 import dev.sctvdl.design.StatePanel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +81,8 @@ fun CatalogueScreen(
     onOpen: (String) -> Unit,
     onFilter: (Boolean) -> Unit,
     onExplore: () -> Unit = {},
-    embedded: Boolean = false
+    embedded: Boolean = false,
+    onApplyUpdates: () -> Unit = {}
 ) {
     val rows = state.rows(favouritesOnly)
     val initialLoading = state.resource.data == null && state.resource.error == null
@@ -86,6 +90,7 @@ fun CatalogueScreen(
     val largeText = LocalDensity.current.fontScale >= 1.5f
     val catalogueScroll = rememberLazyGridState()
     val favouritesScroll = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
     var sortMenu by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var requestSearchFocus by remember { mutableStateOf(false) }
@@ -148,6 +153,12 @@ fun CatalogueScreen(
                 }
             },
             actions = {
+                if (state.hasUpdate) {
+                    ContentUpdateAction(onUpdate = {
+                        onApplyUpdates()
+                        scope.launch { (if (favouritesOnly) favouritesScroll else catalogueScroll).scrollToItem(0) }
+                    })
+                }
                 if (!searching) {
                     IconButton(onClick = {
                         searchExpanded = true

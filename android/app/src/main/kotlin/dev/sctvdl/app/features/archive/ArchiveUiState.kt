@@ -14,7 +14,8 @@ data class ArchiveUiState(
     val date: BroadcastDate? = null,
     val contents: CachedResource<List<ProgrammeContent>> = CachedResource(),
     val selectionMode: Boolean = false,
-    val selectedIds: Set<String> = emptySet()
+    val selectedIds: Set<String> = emptySet(),
+    val hasUpdate: Boolean = false
 ) {
     val fullEpisodes: List<ProgrammeContent> get() = contents.data.orEmpty().filter { item ->
         date?.let { isFullEpisode(item, programme?.name.orEmpty(), it.date) } == true

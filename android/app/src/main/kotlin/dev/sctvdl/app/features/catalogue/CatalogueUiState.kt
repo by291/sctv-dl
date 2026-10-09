@@ -10,7 +10,8 @@ data class CatalogueUiState(
     val query: String = "",
     val byName: Boolean = false,
     val favouritesOnly: Boolean = false,
-    val featuredId: String? = null
+    val featuredId: String? = null,
+    val hasUpdate: Boolean = false
 ) {
     val featured: Programme? get() = resource.data.orEmpty().find { it.id == featuredId }
 

@@ -4,11 +4,13 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.sctvdl.app.features.PresentedResource
 import dev.sctvdl.domain.BroadcastDate
 import dev.sctvdl.domain.CachedResource
 import dev.sctvdl.domain.DownloadRequest
 import dev.sctvdl.domain.FavouriteRepository
 import dev.sctvdl.domain.Programme
+import dev.sctvdl.domain.ProgrammeContent
 import dev.sctvdl.domain.ProgrammeRepository
 import dev.sctvdl.domain.Quality
 import dev.sctvdl.domain.videoVariants
@@ -34,6 +36,10 @@ class ArchiveViewModel @Inject constructor(
     val state = mutableState.asStateFlow()
     private var datesJob: Job? = null
     private var contentsJob: Job? = null
+    private var datesRefreshJob: Job? = null
+    private var contentsRefreshJob: Job? = null
+    private var datesSnapshot = PresentedResource<List<BroadcastDate>>()
+    private var contentsSnapshot = PresentedResource<List<ProgrammeContent>>()
     private var programmes = emptyList<Programme>()
     private var favouriteIds = emptySet<String>()
     private var requestedDateId: String? = saved["dateId"]
@@ -51,21 +57,29 @@ class ArchiveViewModel @Inject constructor(
                 favouriteIds = ids
                 mutableState.update {
                     it.copy(
-                        programme = rows.firstOrNull { row ->
+                        programme = it.programme ?: rows.firstOrNull { row ->
                             row.id == it.programmeId
                         },
                         favourite = it.programmeId in ids
                     )
                 }
+                publishUpdateFlag()
             }
         }
     }
 
     fun open(programmeId: String) {
-        if (started && state.value.programmeId == programmeId) return
+        if (started && state.value.programmeId == programmeId) {
+            refresh()
+            return
+        }
         started = true
         datesJob?.cancel()
         contentsJob?.cancel()
+        datesRefreshJob?.cancel()
+        contentsRefreshJob?.cancel()
+        datesSnapshot = PresentedResource()
+        contentsSnapshot = PresentedResource()
         if (restoredProgrammeId != programmeId) {
             requestedDateId = null
             restoredSelection = emptySet()
@@ -82,30 +96,35 @@ class ArchiveViewModel @Inject constructor(
             )
 
         datesJob = viewModelScope.launch {
-            launch { repository.refreshDates(programmeId) }
             repository.observeDates(programmeId).collect { resource ->
                 if (state.value.programmeId != programmeId) return@collect
-                mutableState.update { it.copy(dates = resource) }
-                val dates = resource.data ?: return@collect
-                val selected =
-                    dates.firstOrNull { it.id == (state.value.date?.id ?: requestedDateId) }
-                        ?: dates.firstOrNull()
-                if (selected == null) {
-                    contentsJob?.cancel()
-                    mutableState.update {
-                        it.copy(
-                            date = null,
-                            contents = CachedResource(),
-                            selectedIds = emptySet(),
-                            selectionMode = false
-                        )
-                    }
-                    persistSelection()
-                } else if (selected.id != state.value.date?.id) {
-                    selectDate(selected)
-                }
+                presentDates(datesSnapshot.observe(resource))
             }
         }
+        refreshDates(programmeId)
+    }
+
+    private fun presentDates(resource: CachedResource<List<BroadcastDate>>) {
+        mutableState.update { it.copy(dates = resource) }
+        val dates = resource.data
+        if (dates != null) {
+            val selected = dates.firstOrNull { it.id == (state.value.date?.id ?: requestedDateId) }
+                ?: dates.firstOrNull()
+            if (selected == null) {
+                contentsJob?.cancel()
+                contentsRefreshJob?.cancel()
+                contentsSnapshot = PresentedResource()
+                mutableState.update {
+                    it.copy(date = null, contents = CachedResource(), selectedIds = emptySet(), selectionMode = false)
+                }
+                persistSelection()
+            } else if (selected.id != state.value.date?.id) {
+                selectDate(selected)
+            } else {
+                mutableState.update { it.copy(date = selected) }
+            }
+        }
+        publishUpdateFlag()
     }
 
     fun selectDate(date: BroadcastDate) {
@@ -116,6 +135,8 @@ class ArchiveViewModel @Inject constructor(
             return
         }
         contentsJob?.cancel()
+        contentsRefreshJob?.cancel()
+        contentsSnapshot = PresentedResource()
         val restore = date.id == requestedDateId
         mutableState.update {
             it.copy(
@@ -134,35 +155,67 @@ class ArchiveViewModel @Inject constructor(
         val programmeId = current.programmeId
 
         contentsJob = viewModelScope.launch {
-            launch { repository.refreshContents(programmeId, date.id) }
             repository.observeContents(programmeId, date.id).collect { resource ->
                 if (state.value.programmeId != programmeId ||
                     state.value.date?.id != date.id
                 ) {
                     return@collect
                 }
-                val rows = resource.data
-                mutableState.update {
-                    it.copy(
-                        contents = resource,
-                        selectedIds = if (rows != null) {
-                            it.selectedIds.intersect(selectableIds(rows))
-                        } else {
-                            it.selectedIds
-                        }
-                    )
-                }
-                persistSelection()
+                presentContents(contentsSnapshot.observe(resource))
             }
+        }
+        refreshContents(programmeId, date.id)
+        publishUpdateFlag()
+    }
+
+    private fun presentContents(resource: CachedResource<List<ProgrammeContent>>) {
+        mutableState.update {
+            it.copy(
+                contents = resource,
+                selectedIds = resource.data?.let { rows -> it.selectedIds.intersect(selectableIds(rows)) }
+                    ?: it.selectedIds
+            )
+        }
+        persistSelection()
+        publishUpdateFlag()
+    }
+
+    fun applyUpdates() {
+        if (state.value.selectionMode) return
+        val dateId = state.value.date?.id
+        mutableState.update { current ->
+            current.copy(programme = programmes.firstOrNull { it.id == current.programmeId } ?: current.programme)
+        }
+        presentDates(datesSnapshot.accept())
+        // A changed date owns a new content snapshot and request, never the previous date's pending rows.
+        if (dateId == state.value.date?.id) presentContents(contentsSnapshot.accept())
+    }
+
+    private fun publishUpdateFlag() {
+        mutableState.update { current ->
+            val latestProgramme = programmes.firstOrNull { it.id == current.programmeId }
+            current.copy(
+                hasUpdate = datesSnapshot.hasUpdate || contentsSnapshot.hasUpdate ||
+                    (latestProgramme != null && latestProgramme != current.programme)
+            )
         }
     }
 
     fun refresh() {
         val current = state.value
-        viewModelScope.launch {
-            launch { repository.refreshDates(current.programmeId) }
-            current.date?.let { repository.refreshContents(current.programmeId, it.id) }
-        }
+        if (current.programmeId.isBlank()) return
+        refreshDates(current.programmeId)
+        current.date?.let { refreshContents(current.programmeId, it.id) }
+    }
+
+    private fun refreshDates(programmeId: String) {
+        if (datesRefreshJob?.isActive == true) return
+        datesRefreshJob = viewModelScope.launch { repository.refreshDates(programmeId) }
+    }
+
+    private fun refreshContents(programmeId: String, dateId: String) {
+        if (contentsRefreshJob?.isActive == true) return
+        contentsRefreshJob = viewModelScope.launch { repository.refreshContents(programmeId, dateId) }
     }
 
     fun toggleFavourite() {
