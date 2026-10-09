@@ -51,12 +51,18 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import dev.sctvdl.design.CatalogueSummaryPlaceholder
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.ProgrammeCard
+import dev.sctvdl.design.ProgrammeCardPlaceholder
 import dev.sctvdl.design.ProgrammeSpotlight
-import dev.sctvdl.design.RefreshableContent
+import dev.sctvdl.design.ProgrammeSpotlightPlaceholder
 import dev.sctvdl.design.SctvBrand
 import dev.sctvdl.design.StatePanel
 
@@ -75,6 +81,8 @@ fun CatalogueScreen(
     embedded: Boolean = false
 ) {
     val rows = state.rows(favouritesOnly)
+    val initialLoading = state.resource.data == null && state.resource.error == null
+    val showExploration = !embedded && !favouritesOnly && state.query.isBlank()
     val largeText = LocalDensity.current.fontScale >= 1.5f
     val catalogueScroll = rememberLazyGridState()
     val favouritesScroll = rememberLazyGridState()
@@ -166,54 +174,68 @@ fun CatalogueScreen(
                 modifier = Modifier.testTag("filter-favourites")
             )
         }
-        RefreshableContent(
-            isRefreshing = state.resource.isRefreshing && state.resource.data != null,
-            onRefresh = onRefresh,
-            enabled = !state.resource.isRefreshing,
-            modifier = Modifier.weight(1f).fillMaxWidth()
-        ) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
             LazyVerticalGrid(
-                modifier = Modifier.fillMaxSize().testTag("catalogue-grid"),
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("catalogue-grid"),
                 state = if (favouritesOnly) favouritesScroll else catalogueScroll,
                 columns = GridCells.Adaptive(if (largeText) 280.dp else 156.dp),
                 contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!embedded && !favouritesOnly && state.query.isBlank()) {
-                    state.featured?.let { programme ->
-                        item(key = "exploration", span = { GridItemSpan(maxLineSpan) }) {
-                            ProgrammeSpotlight(
-                                programme,
-                                state.resource.data.orEmpty().size > 1,
-                                { onOpen(programme.id) },
-                                onExplore
-                            )
-                        }
-                    }
-                }
-                item(key = "summary", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (state.resource.data != null) "${rows.size} 个栏目" else "正在获取栏目",
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Box {
-                            TextButton(onClick = { sortMenu = true }) {
-                                Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
-                                Text(if (state.byName) "按名称" else "默认排序", Modifier.padding(start = 6.dp))
+                // Keep the first key stable as cached data and the featured ID arrive independently.
+                item(key = "library-header", span = { GridItemSpan(maxLineSpan) }) {
+                    Column(
+                        modifier = if (initialLoading) {
+                            Modifier.semantics {
+                                contentDescription = "正在加载栏目"
+                                liveRegion = LiveRegionMode.Polite
                             }
-                            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                                DropdownMenuItem(text = { Text("默认排序") }, onClick = {
-                                    onSort(false)
-                                    sortMenu = false
-                                })
-                                DropdownMenuItem(text = { Text("按名称排序") }, onClick = {
-                                    onSort(true)
-                                    sortMenu = false
-                                })
+                        } else {
+                            Modifier
+                        },
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (showExploration) {
+                            if (initialLoading) {
+                                ProgrammeSpotlightPlaceholder()
+                            } else {
+                                state.featured?.let { programme ->
+                                    ProgrammeSpotlight(
+                                        programme,
+                                        state.resource.data.orEmpty().size > 1,
+                                        { onOpen(programme.id) },
+                                        onExplore
+                                    )
+                                }
+                            }
+                        }
+                        if (initialLoading) {
+                            CatalogueSummaryPlaceholder()
+                        } else {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    if (state.resource.data != null) "${rows.size} 个栏目" else "正在获取栏目",
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Box {
+                                    TextButton(onClick = { sortMenu = true }) {
+                                        Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
+                                        Text(if (state.byName) "按名称" else "默认排序", Modifier.padding(start = 6.dp))
+                                    }
+                                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                                        DropdownMenuItem(text = { Text("默认排序") }, onClick = {
+                                            onSort(false)
+                                            sortMenu = false
+                                        })
+                                        DropdownMenuItem(text = { Text("按名称排序") }, onClick = {
+                                            onSort(true)
+                                            sortMenu = false
+                                        })
+                                    }
+                                }
                             }
                         }
                     }
@@ -224,10 +246,8 @@ fun CatalogueScreen(
                     }
                 }
                 when {
-                    state.resource.data == null && state.resource.error == null -> {
-                        item(key = "loading", span = { GridItemSpan(maxLineSpan) }) {
-                            StatePanel("加载栏目", "正在连接节目服务", loading = true)
-                        }
+                    initialLoading -> {
+                        items(6, key = { "placeholder-$it" }) { ProgrammeCardPlaceholder(it) }
                     }
                     rows.isEmpty() && state.resource.data != null -> {
                         item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -242,7 +262,7 @@ fun CatalogueScreen(
                                     favouritesOnly && state.query.isBlank() -> {
                                         { onFilter(false) }
                                     }
-                                    state.query.isBlank() -> onRefresh
+                                    state.query.isBlank() && state.resource.error == null -> onRefresh
                                     else -> null
                                 },
                                 retryLabel = if (favouritesOnly) "浏览全部栏目" else "重试"

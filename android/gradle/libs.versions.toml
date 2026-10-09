@@ -18,6 +18,7 @@ coil = "3.6.3"
 media3 = "1.11.1"
 spotless = "8.10.3"
 benchmark = "1.5.0"
+shimmer = "1.5.0"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
@@ -26,6 +27,7 @@ compose-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-icons = { module = "androidx.compose.material:material-icons-extended" }
+compose-shimmer = { module = "com.valentinilk.shimmer:compose-shimmer", version.ref = "shimmer" }
 compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }

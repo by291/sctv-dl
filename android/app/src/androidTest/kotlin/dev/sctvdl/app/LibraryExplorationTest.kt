@@ -32,11 +32,40 @@ import dev.sctvdl.domain.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LibraryExplorationTest {
     private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private val programmes = listOf(Programme("one", "Alpha", null, 0), Programme("two", "Beta", null, 1))
+
+    @Test fun firstLoadKeepsExplorationVisibleWithoutPullingTheListBackToTheTop() {
+        var state by mutableStateOf(CatalogueUiState(resource = CachedResource(isRefreshing = true)))
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    SctvTheme(AppSettings()) {
+                        CatalogueScreen(state, false, {}, {}, {}, {}, {}, {})
+                    }
+                }
+            }
+            assertNotNull(device.wait(Until.findObject(By.desc("正在加载栏目")), 5_000))
+            device.waitForIdle()
+            scenario.onActivity {
+                state = state.copy(
+                    resource = CachedResource(
+                        programmes + (2 until 40).map { Programme("$it", "Programme $it", null, it) }
+                    )
+                )
+            }
+            assertNotNull(device.wait(Until.findObject(By.text("Alpha")), 5_000))
+            scenario.onActivity { state = state.copy(featuredId = "one") }
+            val exploration = device.wait(Until.findObject(By.desc("查看栏目Alpha")), 5_000)
+            assertNotNull("The first loaded exploration action must be visible without scrolling", exploration)
+            val tabs = requireNotNull(device.findObject(By.text("全部栏目")))
+            assertTrue(exploration!!.visibleBounds.top >= tabs.visibleBounds.bottom)
+        }
+    }
 
     @Test fun explorationOpensTheProgrammeCurrentlyDisplayedAfterChanging() {
         var state by mutableStateOf(CatalogueUiState(resource = CachedResource(programmes), featuredId = "one"))

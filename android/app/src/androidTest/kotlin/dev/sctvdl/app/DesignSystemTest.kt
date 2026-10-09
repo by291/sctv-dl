@@ -49,7 +49,6 @@ class DesignSystemTest {
                     true,
                     false,
                     {},
-                    {},
                     { selected = true }
                 )
             }

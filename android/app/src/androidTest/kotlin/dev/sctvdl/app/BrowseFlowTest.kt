@@ -28,7 +28,7 @@ class BrowseFlowTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun choosingAnAvailableDateAndDismissingDownloadCreatesNoTask() {
+    fun choosingAnAvailableDateAndDismissingBatchDownloadCreatesNoTask() {
         val latest = BroadcastDate("latest", LocalDate.of(2026, 10, 6))
         val older = BroadcastDate("older", LocalDate.of(2026, 10, 5))
         var state by mutableStateOf(
@@ -43,15 +43,19 @@ class BrowseFlowTest {
         val requests = mutableListOf<DownloadRequest>()
         compose.setContent {
             SctvTheme(AppSettings()) {
-                ArchiveScreen(state, false, {}, { state = state.copy(date = it) }, {}, {}, {}, {}, {}, {}, {}, {}, {
-                    requests.addAll(it)
-                })
+                ArchiveScreen(
+                    state, false, {}, { state = state.copy(date = it) }, {}, {}, {},
+                    { state = state.copy(selectionMode = true) }, {}, {},
+                    { state = state.copy(selectedIds = setOf(it)) }, {}, { requests.addAll(it) }
+                )
             }
         }
         compose.onNodeWithText("更多日期").performClick()
         compose.onNodeWithText("10月5日 星期一").performClick()
         compose.runOnIdle { assertEquals("older", state.date?.id) }
-        compose.onNodeWithText("下载").performScrollTo().performClick()
+        compose.onNodeWithText("批量下载").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("选择今日新闻片段").performScrollTo().performClick()
+        compose.onNodeWithText("下载所选（1）").performClick()
         compose.onNodeWithText("选择下载清晰度").assertIsDisplayed()
         compose.onNodeWithContentDescription("关闭清晰度选择").performClick()
         compose.runOnIdle { assertTrue(requests.isEmpty()) }

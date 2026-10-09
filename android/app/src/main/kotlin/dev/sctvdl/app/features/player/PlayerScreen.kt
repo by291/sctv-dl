@@ -6,15 +6,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -41,13 +47,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.QualitySheet
 import dev.sctvdl.design.StatePanel
+import dev.sctvdl.design.TouchTarget
 import dev.sctvdl.domain.DownloadRequest
 import dev.sctvdl.domain.Quality
 import dev.sctvdl.player.PlaybackSource
 import dev.sctvdl.player.PlayerControls
 import dev.sctvdl.player.PlayerSession
 import dev.sctvdl.player.VideoSurface
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.delay
+
+private val PlayerDateLabel = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.SIMPLIFIED_CHINESE)
 
 @Composable
 fun PlayerScreen(
@@ -81,7 +93,9 @@ fun PlayerScreen(
                         )
                     }
                 }
-            }
+            },
+            programmeName = state.programmeName,
+            broadcastDate = state.broadcastDate
         )
     } else {
         Column {
@@ -103,7 +117,9 @@ fun PlaybackDestination(
     initialQuality: Quality,
     onBack: () -> Unit,
     onPosition: (Long) -> Unit,
-    onDownload: ((Quality) -> Unit)? = null
+    onDownload: ((Quality) -> Unit)? = null,
+    programmeName: String? = null,
+    broadcastDate: LocalDate? = null
 ) {
     val context = LocalContext.current
     val activity = context.mainActivity()
@@ -117,7 +133,8 @@ fun PlaybackDestination(
             }
         ).collectAsStateWithLifecycle()
     var fullscreen by rememberSaveable { mutableStateOf(false) }
-    var downloadSheet by rememberSaveable { mutableStateOf(false) }
+    var downloadSheet by rememberSaveable(source.id) { mutableStateOf(false) }
+    val canDownload = onDownload != null && source.localUri == null && source.variants.isNotEmpty()
 
     LaunchedEffect(
         source.id,
@@ -169,16 +186,6 @@ fun PlaybackDestination(
                                 "返回节目单"
                             )
                         }
-                    },
-                    actions = {
-                        if (onDownload != null) {
-                            IconButton(onClick = { downloadSheet = true }) {
-                                Icon(
-                                    Icons.Outlined.Download,
-                                    "下载当前节目"
-                                )
-                            }
-                        }
                     }
                 )
             }
@@ -228,20 +235,42 @@ fun PlaybackDestination(
                     { activity?.enterPlayerPictureInPicture() }
                 )
                 if (!fullscreen) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(source.title, style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            if (source.localUri != null) "本地视频" else "按下播放开始回看",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                        Column(
+                            Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(source.title, style = MaterialTheme.typography.titleLarge)
+                            val contextLabel = if (source.localUri != null) {
+                                "本地视频"
+                            } else {
+                                listOfNotNull(programmeName, broadcastDate?.format(PlayerDateLabel)).joinToString(" · ")
+                            }
+                            if (contextLabel.isNotBlank()) {
+                                Text(
+                                    contextLabel,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            if (canDownload) {
+                                Button(
+                                    onClick = { downloadSheet = true },
+                                    modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().heightIn(min = TouchTarget)
+                                ) {
+                                    Icon(Icons.Outlined.Download, null, Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("下载节目")
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    if (downloadSheet && onDownload != null) {
-        QualitySheet(playback.variants, 1, {
+    if (downloadSheet && canDownload) {
+        QualitySheet(source.variants, 1, {
             onDownload(it)
             downloadSheet = false
         }, { downloadSheet = false })

@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.icons)
     implementation(libs.compose.preview)
+    implementation(libs.compose.shimmer)
     implementation(libs.lifecycle.compose)
     debugImplementation(libs.compose.tooling)
     implementation(libs.coil.compose)

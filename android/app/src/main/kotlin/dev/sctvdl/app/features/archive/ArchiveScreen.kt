@@ -2,6 +2,7 @@ package dev.sctvdl.app.features.archive
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,14 +45,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.sctvdl.design.ArchiveContentPlaceholder
+import dev.sctvdl.design.ArchiveHeaderPlaceholder
+import dev.sctvdl.design.BroadcastDatesPlaceholder
 import dev.sctvdl.design.ContentCard
 import dev.sctvdl.design.CoverImage
 import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.QualitySheet
-import dev.sctvdl.design.RefreshableContent
 import dev.sctvdl.design.StatePanel
 import dev.sctvdl.design.TouchTarget
 import dev.sctvdl.domain.BroadcastDate
@@ -62,6 +67,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val RecentDateLabel = DateTimeFormatter.ofPattern("M月d日", Locale.SIMPLIFIED_CHINESE)
+private val BroadcastDateLabel = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.SIMPLIFIED_CHINESE)
 private val WeekdayLabel = DateTimeFormatter.ofPattern("EEE", Locale.SIMPLIFIED_CHINESE)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,6 +89,11 @@ fun ArchiveScreen(
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    val errors = listOfNotNull(state.dates.error, state.contents.error).distinctBy { it.message }
+    val loadingDates = state.dates.data == null && state.dates.error == null
+    val loadingContents = state.date != null && state.contents.data == null && state.contents.error == null
+    val largeText = LocalDensity.current.fontScale >= 1.5f
+    val scroll = rememberLazyListState()
     BackHandler(state.selectionMode) { onExitSelection() }
     LaunchedEffect(state.programmeId, state.date?.id) {
         downloadIds = arrayListOf()
@@ -110,66 +121,79 @@ fun ArchiveScreen(
                 TextButton(onClick = onSelectFull) { Text("仅完整节目") }
             }
         }
-        RefreshableContent(
-            isRefreshing = (state.dates.isRefreshing || state.contents.isRefreshing) &&
-                (state.dates.data != null || state.contents.data != null),
-            onRefresh = onRefresh,
-            enabled = !state.selectionMode && !state.dates.isRefreshing && !state.contents.isRefreshing,
-            modifier = Modifier.weight(1f).fillMaxWidth()
-        ) {
+        Column(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
-                Modifier.fillMaxSize(),
+                Modifier.weight(1f).fillMaxWidth(),
+                state = scroll,
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (!state.selectionMode) {
-                    item(key = "programme") { ArchiveHeader(state, onFavourite) }
+                    item(key = "programme") {
+                        if (state.programme == null && loadingDates) {
+                            ArchiveHeaderPlaceholder()
+                        } else {
+                            ArchiveHeader(state, onFavourite)
+                        }
+                    }
+                    if (loadingDates) {
+                        item(key = "dates") { BroadcastDatesPlaceholder() }
+                    }
                     if (state.dates.data.orEmpty().isNotEmpty()) {
                         item(key = "dates") {
                             BroadcastDates(state.dates.data.orEmpty(), state.date, onDate, { showDates = true })
                         }
                     }
                 }
-                state.dates.error?.let { error ->
-                    item(key = "dates-error") {
+                if (errors.isNotEmpty()) {
+                    item(key = "refresh-error") {
                         Column(Modifier.padding(horizontal = 16.dp)) {
-                            ErrorBanner(error, state.dates.data != null, onRefresh)
-                        }
-                    }
-                }
-                state.contents.error?.let { error ->
-                    item(key = "contents-error") {
-                        Column(Modifier.padding(horizontal = 16.dp)) {
-                            ErrorBanner(error, state.contents.data != null, onRefresh)
+                            ErrorBanner(
+                                errors.first().copy(message = errors.joinToString("\n") { it.message }),
+                                state.contents.data.orEmpty().isNotEmpty(),
+                                onRefresh
+                            )
                         }
                     }
                 }
                 when {
-                    state.dates.data == null && state.dates.error == null -> item(key = "loading-dates") {
-                        StatePanel("加载播出日期", "正在查询往期节目", loading = true)
+                    loadingDates || loadingContents -> item(key = "loading-contents") {
+                        Box(
+                            Modifier.semantics {
+                                contentDescription = "正在加载节目"
+                                liveRegion = LiveRegionMode.Polite
+                            }
+                        ) { ArchiveContentPlaceholder() }
                     }
                     state.dates.data?.isEmpty() == true -> item(key = "empty-dates") {
-                        StatePanel("暂无播出日期", "该栏目暂时没有可回看的节目", onRetry = onRefresh)
-                    }
-                    state.date != null && state.contents.data == null && state.contents.error == null -> item(
-                        key = "loading-contents"
-                    ) {
-                        StatePanel("加载节目", "正在获取当期节目单", loading = true)
+                        StatePanel(
+                            "暂无播出日期",
+                            "该栏目暂时没有可回看的节目",
+                            onRetry = if (errors.isEmpty()) onRefresh else null
+                        )
                     }
                     state.contents.data?.isEmpty() == true -> item(key = "empty-contents") {
-                        StatePanel("这一天暂无节目", "可以选择其他播出日期", onRetry = onRefresh)
+                        StatePanel(
+                            "这一天暂无节目",
+                            "可以选择其他播出日期",
+                            onRetry = if (errors.isEmpty()) onRefresh else null
+                        )
                     }
                     else -> {
                         if (state.contents.data.orEmpty().isNotEmpty()) {
                             item(key = "contents-heading") {
-                                Row(
+                                FlowRow(
                                     Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text("当期节目", style = MaterialTheme.typography.titleLarge)
+                                    Column(if (largeText) Modifier.fillMaxWidth() else Modifier.weight(1f)) {
                                         Text(
-                                            "${state.date?.date ?: ""} · ${state.contents.data.orEmpty().size} 条内容",
+                                            state.date?.date?.format(BroadcastDateLabel) ?: "节目内容",
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                        Text(
+                                            "${state.fullEpisodes.size} 个完整节目 · ${state.clips.size} 个片段",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -190,7 +214,6 @@ fun ArchiveScreen(
                                     {
                                         onPlay(content)
                                     },
-                                    { downloadIds = arrayListOf(content.id) },
                                     { onToggle(content.id) }
                                 )
                             }
@@ -214,7 +237,6 @@ fun ArchiveScreen(
                                     {
                                         onPlay(content)
                                     },
-                                    { downloadIds = arrayListOf(content.id) },
                                     { onToggle(content.id) }
                                 )
                             }
