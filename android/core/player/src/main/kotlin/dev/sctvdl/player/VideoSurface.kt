@@ -10,6 +10,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.compose.ContentFrame
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 
 @Composable
 fun VideoSurface(player: Player, modifier: Modifier = Modifier) {
@@ -27,6 +28,7 @@ fun VideoSurface(player: Player, modifier: Modifier = Modifier) {
             onRelease = { it.player = null }
         )
     } else {
-        ContentFrame(player = player, modifier = modifier)
+        // Compose page fades and predictive-back transforms must also affect the decoded video pixels.
+        ContentFrame(player = player, modifier = modifier, surfaceType = SURFACE_TYPE_TEXTURE_VIEW)
     }
 }

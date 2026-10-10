@@ -72,7 +72,7 @@ Controls overlay the video. Use Media3 Compose Material3 for play/pause and elap
 
 Offer Picture-in-Picture as an explicit action where supported. Ordinary backgrounding pauses playback; Picture-in-Picture continues it. Audio focus loss and becoming noisy follow Media3 behaviour. Back exits fullscreen before leaving playback.
 
-Player ownership is scoped to the playback destination, rather than a reusable card or an application singleton. Pause when dismissal is committed; release once the outgoing transition finishes. A cancelled predictive-back gesture must not prematurely destroy playback. A late callback from an outgoing destination cannot clear a newly opened one.
+Player ownership is scoped to the playback destination, rather than a reusable card or an application singleton. Pause when dismissal is committed; release once the outgoing transition finishes. Use a TextureView-backed video surface so decoded pixels follow the outgoing page opacity and transforms throughout the transition. A cancelled predictive-back gesture must restore the visible frame without prematurely destroying playback. A late callback from an outgoing destination cannot clear a newly opened one.
 
 Opening a completed download reads its content URI locally and works without network access. If the file has been removed outside the app, show a missing-file state with a route to re-download.
 

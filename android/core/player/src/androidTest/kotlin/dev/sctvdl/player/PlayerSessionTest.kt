@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,77 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlayerSessionTest {
+    @Test
+    fun decodedVideoFadesWithThePageAndSurvivesACancelledTransition() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val fixture = encodeFixture(context)
+        var session: PlayerSession? = null
+        val rendered = AtomicBoolean(false)
+        val samplePoint = AtomicReference<Offset?>()
+        var pageAlpha by mutableFloatStateOf(1f)
+        try {
+            onMain {
+                session = PlayerSession(context).also { current ->
+                    current.player.addListener(object : Player.Listener {
+                        override fun onRenderedFirstFrame() {
+                            rendered.set(true)
+                        }
+                    })
+                    current.controller.setSource(
+                        PlaybackSource(
+                            "transition-fixture",
+                            "本地测试",
+                            emptyList(),
+                            android.net.Uri.fromFile(fixture).toString()
+                        )
+                    )
+                }
+            }
+            ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+                scenario.onActivity { host ->
+                    host.setContent {
+                        Box(Modifier.fillMaxSize().background(Color.Red)) {
+                            VideoSurface(
+                                requireNotNull(session).player,
+                                Modifier.fillMaxWidth().height(160.dp).graphicsLayer { alpha = pageAlpha }
+                                    .onGloballyPositioned { samplePoint.set(it.boundsInWindow().center) }
+                            )
+                        }
+                    }
+                }
+                await { rendered.get() && samplePoint.get() != null }
+                val point = requireNotNull(samplePoint.get())
+                awaitScreenPixel(point, "The decoded frame must be visible") {
+                    android.graphics.Color.red(it) in 5..60 && android.graphics.Color.blue(it) in 5..60
+                }
+
+                // A fixed intermediate page alpha exercises the same compositor path as a return fade.
+                onMain { pageAlpha = 0.25f }
+                awaitScreenPixel(point, "Video must fade with the outgoing page") {
+                    android.graphics.Color.red(it) > 150 && android.graphics.Color.blue(it) < 30
+                }
+
+                onMain {
+                    pageAlpha = 1f
+                    assertEquals(Player.STATE_READY, requireNotNull(session).player.playbackState)
+                }
+                awaitScreenPixel(point, "Cancelling the transition must restore the decoded frame") {
+                    android.graphics.Color.red(it) in 5..60 && android.graphics.Color.blue(it) in 5..60
+                }
+
+                scenario.onActivity { host ->
+                    host.setContent { Box(Modifier.fillMaxSize().background(Color.Red)) }
+                }
+                awaitScreenPixel(point, "Leaving the page must remove the video surface") {
+                    android.graphics.Color.red(it) > 240 && android.graphics.Color.blue(it) < 20
+                }
+            }
+        } finally {
+            onMain { session?.release() }
+            fixture.delete()
+        }
+    }
+
     @Test
     fun decodedVideoPreservesThePageBackgroundOutsideItsSurface() {
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -160,6 +234,22 @@ class PlayerSessionTest {
     }
 
     private fun onMain(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+
+    private fun awaitScreenPixel(point: Offset, message: String, matches: (Int) -> Boolean) {
+        val deadline = System.nanoTime() + 3_000_000_000L
+        var pixel = 0
+        while (System.nanoTime() < deadline) {
+            val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            try {
+                pixel = screenshot.getPixel(point.x.toInt(), point.y.toInt())
+                if (matches(pixel)) return
+            } finally {
+                screenshot.recycle()
+            }
+            Thread.sleep(50)
+        }
+        throw AssertionError("$message: ${Integer.toHexString(pixel)}")
+    }
 
     @Test
     fun composeSeekAndQualityKeepPausedIntentAndMenusPreventControlsFromHiding() {
