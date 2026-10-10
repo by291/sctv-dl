@@ -3,11 +3,14 @@ import { RouterLink } from 'vue-router'
 import { ArrowUpRight, Star } from '@lucide/vue'
 
 import CoverImage from '../../../components/CoverImage.vue'
+import { useProgrammeCoverNavigation } from '../composables/useProgrammeCoverNavigation'
 
 import type { Programme } from '../types'
 
-defineProps<{ programme: Programme; favourite: boolean }>()
+const props = defineProps<{ programme: Programme; favourite: boolean }>()
 const emit = defineEmits<{ toggleFavourite: [id: string] }>()
+
+const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.programme.id)
 </script>
 
 <template>
@@ -15,9 +18,11 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
     <RouterLink
       :to="`/programmes/${programme.id}`"
       class="programme-cover"
+      @click.capture="openProgramme"
     >
       <CoverImage
         class="programme-image"
+        :style="coverStyle"
         :src="programme.cover"
         :alt="programme.name"
       />
@@ -42,6 +47,7 @@ const emit = defineEmits<{ toggleFavourite: [id: string] }>()
     <RouterLink
       :to="`/programmes/${programme.id}`"
       class="programme-caption"
+      @click.capture="openProgramme"
     >
       <h3
         class="programme-name"

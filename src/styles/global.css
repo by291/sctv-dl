@@ -112,6 +112,12 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 0.01ms !important;
+    }
   }
 }
 
@@ -187,6 +193,32 @@
 .page-enter-active,
 .page-leave-active {
   transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--motion-fast);
+  animation-timing-function: var(--motion-ease);
+}
+
+::view-transition-group(programme-cover) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--motion-ease);
+}
+
+::view-transition-image-pair(programme-cover) {
+  overflow: hidden;
+  border-radius: 9px;
+}
+
+::view-transition-old(programme-cover),
+::view-transition-new(programme-cover) {
+  height: 100%;
+  object-fit: cover;
 }
 
 .page-enter-from,

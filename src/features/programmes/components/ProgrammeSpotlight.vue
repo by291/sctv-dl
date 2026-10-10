@@ -4,10 +4,11 @@ import { NButton } from 'naive-ui'
 import { ArrowRight, Shuffle } from '@lucide/vue'
 
 import CoverImage from '../../../components/CoverImage.vue'
+import { useProgrammeCoverNavigation } from '../composables/useProgrammeCoverNavigation'
 
 import type { Programme } from '../types'
 
-defineProps<{
+const props = defineProps<{
   programme: Programme
   canChange: boolean
 }>()
@@ -15,6 +16,8 @@ defineProps<{
 const emit = defineEmits<{
   change: []
 }>()
+
+const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.programme.id)
 </script>
 
 <template>
@@ -46,6 +49,7 @@ const emit = defineEmits<{
         <RouterLink
           :to="`/programmes/${programme.id}`"
           class="feature-link"
+          @click.capture="openProgramme"
         >
           查看节目
           <ArrowRight :size="17" />
@@ -65,10 +69,12 @@ const emit = defineEmits<{
       :to="`/programmes/${programme.id}`"
       class="featured-visual"
       :aria-label="`查看${programme.name}`"
+      @click.capture="openProgramme"
     >
       <CoverImage
         :key="programme.id"
         class="featured-image"
+        :style="coverStyle"
         :src="programme.cover"
         :alt="programme.name"
       />

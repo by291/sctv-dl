@@ -286,6 +286,7 @@ onMounted(() => {
   margin-bottom: 34px;
 }
 .detail-cover {
+  view-transition-name: programme-cover;
   aspect-ratio: 16 / 10;
   width: 184px;
   flex-shrink: 0;

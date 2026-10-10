@@ -5,6 +5,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Tv, Library, Settings2 } from '@lucide/vue'
 
 import { useProgrammeStore } from '../features/programmes/store'
+import { viewTransitionActive } from '../shared/view-transition'
 
 const route = useRoute()
 const programmes = useProgrammeStore()
@@ -84,7 +85,8 @@ function isActive(path: string): boolean {
         <RouterView v-slot="{ Component, route: currentRoute }">
           <Transition
             name="page"
-            mode="out-in"
+            :mode="viewTransitionActive ? undefined : 'out-in'"
+            :css="!viewTransitionActive"
           >
             <div
               :key="currentRoute.path"
