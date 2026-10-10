@@ -57,6 +57,7 @@ internal fun BroadcastDatesPlaceholder() {
 internal fun ArchiveContentPlaceholder() {
     val largeText = LocalDensity.current.fontScale >= 1.5f
     val titleHeight = with(LocalDensity.current) { MaterialTheme.typography.titleMedium.lineHeight.toDp() }
+    val timeHeight = with(LocalDensity.current) { MaterialTheme.typography.bodySmall.lineHeight.toDp() }
     Box(Modifier.fillMaxWidth().testTag("archive-content-placeholder")) {
         SkeletonContent(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -73,16 +74,24 @@ internal fun ArchiveContentPlaceholder() {
                         }
                     }
                 }
-                SkeletonBlock(Modifier.width(120.dp).height(titleHeight))
+                Row(
+                    Modifier.fillMaxWidth().height(maxOf(TouchTarget, titleHeight)),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SkeletonBlock(Modifier.width(120.dp).height(titleHeight))
+                    SkeletonBlock(Modifier.width(24.dp).height(24.dp))
+                }
                 repeat(3) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
-                        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (!largeText) SkeletonBlock(Modifier.width(88.dp).aspectRatio(4f / 3f))
+                        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (!largeText) SkeletonBlock(Modifier.width(104.dp).aspectRatio(4f / 3f))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SkeletonBlock(Modifier.fillMaxWidth().height(titleHeight))
                                 SkeletonBlock(Modifier.fillMaxWidth(0.7f).height(titleHeight))
+                                SkeletonBlock(Modifier.width(64.dp).height(timeHeight))
                             }
                         }
                     }

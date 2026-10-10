@@ -74,7 +74,8 @@ fun ArchiveRoute(
                     model::toggleContent,
                     model::exitSelection,
                     onDownload,
-                    onApplyUpdates = model::applyUpdates
+                    onApplyUpdates = model::applyUpdates,
+                    onToggleClipSort = model::toggleClipSort
                 )
             }
         }

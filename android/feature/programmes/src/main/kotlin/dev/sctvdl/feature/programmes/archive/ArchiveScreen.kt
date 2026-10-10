@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,13 +35,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
 import dev.sctvdl.design.components.StatePanel
@@ -78,7 +83,8 @@ internal fun ArchiveScreen(
     onToggle: (String) -> Unit,
     onExitSelection: () -> Unit,
     onDownload: (List<DownloadRequest>) -> Unit,
-    onApplyUpdates: () -> Unit = {}
+    onApplyUpdates: () -> Unit = {},
+    onToggleClipSort: () -> Unit = {}
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
@@ -222,11 +228,37 @@ internal fun ArchiveScreen(
                         }
                         if (state.clips.isNotEmpty()) {
                             item(key = "clips-heading") {
-                                Text(
-                                    "节目片段 · ${state.clips.size}",
-                                    Modifier.padding(horizontal = 16.dp),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "节目片段 · ${state.clips.size}",
+                                        Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    IconButton(
+                                        onClick = onToggleClipSort,
+                                        enabled = !state.selectionMode,
+                                        modifier = Modifier.semantics {
+                                            contentDescription = if (state.clipSortAscending) {
+                                                "切换为时间降序"
+                                            } else {
+                                                "切换为时间升序"
+                                            }
+                                            stateDescription = if (state.clipSortAscending) "时间升序" else "时间降序"
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Outlined.Sort,
+                                            null,
+                                            Modifier.scale(
+                                                scaleX = 1f,
+                                                scaleY = if (state.clipSortAscending) -1f else 1f
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                         items(state.clips, key = { "clip-${it.id}" }) { content ->
@@ -239,7 +271,8 @@ internal fun ArchiveScreen(
                                     {
                                         onPlay(content)
                                     },
-                                    { onToggle(content.id) }
+                                    { onToggle(content.id) },
+                                    broadcastDate = state.date?.date
                                 )
                             }
                         }

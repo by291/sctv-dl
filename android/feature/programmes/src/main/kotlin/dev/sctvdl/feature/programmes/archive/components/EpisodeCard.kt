@@ -38,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.videoVariants
 import dev.sctvdl.domain.programme.ProgrammeContent
+import dev.sctvdl.feature.programmes.archive.clipPublicationLabel
 import dev.sctvdl.ui.media.CoverImage
+import java.time.LocalDate
 
 @Composable
 internal fun EpisodeCard(
@@ -47,7 +49,8 @@ internal fun EpisodeCard(
     selectionMode: Boolean,
     selected: Boolean,
     onPlay: () -> Unit,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    broadcastDate: LocalDate? = null
 ) {
     val colours = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
@@ -107,9 +110,16 @@ internal fun EpisodeCard(
                 Text(
                     content.title,
                     style = if (fullEpisode && !selectionMode) typography.titleLarge else typography.titleMedium,
-                    maxLines = if (largeText) 6 else 3,
+                    maxLines = if (largeText) 6 else 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (!fullEpisode) {
+                    Text(
+                        clipPublicationLabel(content, broadcastDate),
+                        style = typography.bodySmall,
+                        color = colours.onSurfaceVariant
+                    )
+                }
                 if (!playable) {
                     Text("暂未提供视频", style = typography.bodySmall, color = colours.onSurfaceVariant)
                 }

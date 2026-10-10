@@ -86,13 +86,20 @@ internal class ArchiveViewModel @Inject constructor(
             restoredSelection = emptySet()
             restoredSelectionMode = false
         }
+        val clipSortAscending = if (saved.get<String>("programmeId") == programmeId) {
+            saved.get<Boolean>("clipSortAscending") ?: true
+        } else {
+            true
+        }
         saved["programmeId"] = programmeId
+        saved["clipSortAscending"] = clipSortAscending
         mutableState.value =
             ArchiveUiState(
                 programmeId = programmeId,
                 programme = initialProgramme?.takeIf { it.id == programmeId }
                     ?: programmes.firstOrNull { it.id == programmeId },
-                favourite = programmeId in favouriteIds
+                favourite = programmeId in favouriteIds,
+                clipSortAscending = clipSortAscending
             )
 
         datesJob = viewModelScope.launch {
@@ -221,6 +228,13 @@ internal class ArchiveViewModel @Inject constructor(
     fun toggleFavourite() {
         viewModelScope.launch { favourites.toggle(uiState.value.programmeId) }
     }
+
+    fun toggleClipSort() {
+        if (uiState.value.selectionMode) return
+        mutableState.update { it.copy(clipSortAscending = !it.clipSortAscending) }
+        saved["clipSortAscending"] = uiState.value.clipSortAscending
+    }
+
     fun beginSelection() {
         mutableState.update { it.copy(selectionMode = true) }
         persistSelection()
