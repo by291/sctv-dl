@@ -12,6 +12,7 @@ const props = defineProps<{
   label: string
   ariaLabel?: string
   primary?: boolean
+  compact?: boolean
   disabled?: boolean
   loading?: boolean
 }>()
@@ -61,10 +62,10 @@ watch(
   <NDropdown
     v-model:show="show"
     trigger="click"
-    placement="bottom-end"
-    width="trigger"
+    :placement="compact ? 'bottom-start' : 'bottom-end'"
+    :width="144"
     size="medium"
-    :theme-overrides="{ fontSizeMedium: '16px', optionHeightMedium: '36px', padding: '4px 0' }"
+    :theme-overrides="{ fontSizeMedium: '14px', optionHeightMedium: '40px', padding: '4px 0' }"
     :options="options"
     :disabled="!enabled"
     :menu-props="
@@ -76,9 +77,17 @@ watch(
     @select="selectQuality"
   >
     <NButton
-      :theme-overrides="{ heightMedium: '42px', fontSizeMedium: '16px', fontWeight: '600' }"
+      class="download-button"
+      :class="{ 'compact-download': compact }"
+      :theme-overrides="{
+        heightMedium: compact ? '36px' : '40px',
+        fontSizeMedium: '14px',
+        fontWeight: compact ? '500' : '600',
+        paddingMedium: compact ? '0 12px' : '0 16px',
+        iconSizeMedium: '16px',
+        border: '1px solid var(--line)',
+      }"
       :type="primary ? 'primary' : 'default'"
-      :secondary="!primary"
       :disabled="!enabled"
       :loading="loading"
       :aria-label="ariaLabel || label"
@@ -98,5 +107,10 @@ watch(
 <style scoped>
 .download-chevron {
   margin-left: 6px;
+}
+@media (width < 760px) {
+  .download-button {
+    min-height: 44px;
+  }
 }
 </style>
