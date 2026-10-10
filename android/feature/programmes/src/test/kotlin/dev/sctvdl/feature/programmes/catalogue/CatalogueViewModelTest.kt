@@ -5,15 +5,19 @@ import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.CachedResource
 import dev.sctvdl.domain.common.ErrorKind
 import dev.sctvdl.domain.programme.Programme
+import dev.sctvdl.domain.repository.FavouriteRepository
 import dev.sctvdl.domain.testing.FakeFavourites
 import dev.sctvdl.domain.testing.FakeProgrammes
 import dev.sctvdl.domain.testing.MainDispatcherRule
 import dev.sctvdl.feature.programmes.catalogue.CatalogueViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -111,6 +115,145 @@ class CatalogueViewModelTest {
         repo.catalogue.value = CachedResource(emptyList())
         runCurrent()
         assertFalse(model.uiState.value.hasUpdate)
+    }
+
+    @Test fun favouriteChangesKeepTheCurrentServiceOrderAndUpdateTheFavouriteTab() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val favourites = FakeFavourites().apply { ids.value = setOf("3") }
+        val model = CatalogueViewModel(repo, favourites, SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+        assertEquals(listOf("3", "1", "2"), model.uiState.value.rows(false).map { it.id })
+
+        model.toggleFavourite("3")
+        runCurrent()
+        assertTrue(model.uiState.value.favourites.isEmpty())
+        assertEquals(listOf("3", "1", "2"), model.uiState.value.rows(false).map { it.id })
+        assertTrue(model.uiState.value.rows(true).isEmpty())
+
+        model.toggleFavourite("2")
+        runCurrent()
+        assertEquals(setOf("2"), model.uiState.value.favourites)
+        assertEquals(listOf("3", "1", "2"), model.uiState.value.rows(false).map { it.id })
+        assertEquals(listOf("2"), model.uiState.value.rows(true).map { it.id })
+    }
+
+    @Test fun favouritingAndUnfavouritingKeepNameOrderAndTheSelectedSortMode() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val model = CatalogueViewModel(repo, FakeFavourites(), SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        model.sort(true)
+        runCurrent()
+
+        model.toggleFavourite("1")
+        runCurrent()
+        assertEquals(setOf("1"), model.uiState.value.favourites)
+        assertEquals(listOf("2", "3", "1"), model.uiState.value.rows(false).map { it.id })
+        assertTrue(model.uiState.value.byName)
+
+        model.toggleFavourite("1")
+        runCurrent()
+        assertEquals(listOf("2", "3", "1"), model.uiState.value.rows(false).map { it.id })
+        assertTrue(model.uiState.value.byName)
+    }
+
+    @Test fun reentryKeepsStartupFavouritePriorityAfterUiObservationStops() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val favourites = FakeFavourites().apply { ids.value = setOf("3") }
+        val model = CatalogueViewModel(repo, favourites, SavedStateHandle(mapOf("byName" to true)))
+        val observer = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+
+        model.toggleFavourite("3")
+        model.toggleFavourite("2")
+        runCurrent()
+        assertEquals(listOf("3", "2", "1"), model.uiState.value.rows(false).map { it.id })
+        observer.cancel()
+        advanceTimeBy(5_001)
+        runCurrent()
+        favourites.ids.value = setOf("1")
+        runCurrent()
+
+        model.enter()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+        assertEquals(setOf("1"), model.uiState.value.favourites)
+        assertEquals(listOf("3", "2", "1"), model.uiState.value.rows(false).map { it.id })
+        assertTrue(model.uiState.value.byName)
+    }
+
+    @Test fun refreshKeepsStartupFavouritePriorityWithoutAcceptingPendingCatalogue() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val model = CatalogueViewModel(repo, FakeFavourites(), SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+        model.toggleFavourite("3")
+        repo.catalogue.value = CachedResource(rows.map { it.copy(name = "Updated ${it.name}") })
+        runCurrent()
+        assertEquals(listOf("1", "2", "3"), model.uiState.value.rows(false).map { it.id })
+
+        model.refresh()
+        runCurrent()
+        assertEquals(listOf("1", "2", "3"), model.uiState.value.rows(false).map { it.id })
+        assertEquals("Zulu", model.uiState.value.rows(false).first().name)
+        assertTrue(model.uiState.value.hasUpdate)
+    }
+
+    @Test fun acceptingCatalogueUpdatesKeepsStartupFavouritePriority() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val model = CatalogueViewModel(repo, FakeFavourites(), SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+        model.toggleFavourite("3")
+        repo.catalogue.value = CachedResource(rows + Programme("4", "New programme", null, 3))
+        runCurrent()
+
+        model.applyUpdates()
+        runCurrent()
+        assertEquals(listOf("1", "2", "3", "4"), model.uiState.value.rows(false).map { it.id })
+        assertFalse(model.uiState.value.hasUpdate)
+    }
+
+    @Test fun aNewLibrarySessionUsesLatestFavouritePriority() = runTest {
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val favourites = FakeFavourites().apply { ids.value = setOf("3") }
+        val current = CatalogueViewModel(repo, favourites, SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { current.uiState.collect() }
+        runCurrent()
+
+        current.toggleFavourite("3")
+        current.toggleFavourite("2")
+        runCurrent()
+        assertEquals(setOf("2"), current.uiState.value.favourites)
+        assertEquals(listOf("3", "1", "2"), current.uiState.value.rows(false).map { it.id })
+
+        val restarted = CatalogueViewModel(repo, favourites, SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { restarted.uiState.collect() }
+        runCurrent()
+        assertEquals(listOf("2", "1", "3"), restarted.uiState.value.rows(false).map { it.id })
+        assertEquals(listOf("3", "1", "2"), current.uiState.value.rows(false).map { it.id })
+    }
+
+    @Test fun initialFavouritePriorityWaitsForTheFirstRepositoryEmission() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val favourites = object : FavouriteRepository {
+            override fun observeIds() = flow {
+                gate.await()
+                emit(setOf("3"))
+                awaitCancellation()
+            }
+            override suspend fun toggle(id: String) = Unit
+        }
+        val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
+        val model = CatalogueViewModel(repo, favourites, SavedStateHandle())
+        model.enter()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+        assertNull(model.uiState.value.resource.data)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("3", "1", "2"), model.uiState.value.rows(false).map { it.id })
     }
 
     @Test fun filtersAndSortKeepFavouritesFirstAndRetainCacheErrors() = runTest {

@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,6 +32,7 @@ internal class CatalogueViewModel @Inject constructor(
     private val featuredId = saved.getStateFlow<String?>("featuredId", null)
     private val snapshot = AcceptedResourceState<List<Programme>>()
     private val catalogue = MutableStateFlow(CatalogueUiState())
+    private val favouriteState = MutableStateFlow<FavouriteState?>(null)
     private var refreshJob: Job? = null
     private val filters = combine(query, byName, favouritesQuery, favouritesByName, favouritesOnly) {
             query,
@@ -46,16 +48,17 @@ internal class CatalogueViewModel @Inject constructor(
         )
     }
 
-    val uiState = combine(catalogue, favourites.observeIds(), filters, featuredId) {
+    val uiState = combine(catalogue, favouriteState.filterNotNull(), filters, featuredId) {
             catalogue,
-            ids,
+            favourites,
             filters,
             featuredId
         ->
         filters.copy(
             resource = catalogue.resource,
             hasUpdate = catalogue.hasUpdate,
-            favourites = ids,
+            favourites = favourites.current,
+            orderingFavourites = favourites.ordering,
             featuredId = featuredId
         )
     }.stateIn(
@@ -70,6 +73,11 @@ internal class CatalogueViewModel @Inject constructor(
     )
 
     init {
+        viewModelScope.launch {
+            favourites.observeIds().collect { ids ->
+                favouriteState.value = FavouriteState(ids, favouriteState.value?.ordering ?: ids)
+            }
+        }
         viewModelScope.launch {
             repository.observeProgrammes().collect { resource ->
                 snapshot.observe(resource)
@@ -116,4 +124,7 @@ internal class CatalogueViewModel @Inject constructor(
     fun toggleFavourite(id: String) {
         viewModelScope.launch { favourites.toggle(id) }
     }
+
+    // Keep startup favourite priority for this library's lifetime; hearts and favourite membership stay live.
+    private data class FavouriteState(val current: Set<String>, val ordering: Set<String>)
 }

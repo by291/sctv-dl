@@ -7,6 +7,7 @@ import dev.sctvdl.domain.programme.sortProgrammes
 internal data class CatalogueUiState(
     val resource: CachedResource<List<Programme>> = CachedResource(),
     val favourites: Set<String> = emptySet(),
+    val orderingFavourites: Set<String> = favourites,
     val query: String = "",
     val byName: Boolean = false,
     val favouritesOnly: Boolean = false,
@@ -17,7 +18,7 @@ internal data class CatalogueUiState(
 
     fun rows(favouritesOnly: Boolean): List<Programme> = sortProgrammes(
         resource.data.orEmpty(),
-        favourites,
+        if (favouritesOnly) favourites else orderingFavourites,
         byName
     )
         .filter {
