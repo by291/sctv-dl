@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { NConfigProvider, NMessageProvider, darkTheme, zhCN, dateZhCN } from 'naive-ui'
+import {
+  NConfigProvider,
+  NGlobalStyle,
+  NMessageProvider,
+  darkTheme,
+  zhCN,
+  dateZhCN,
+} from 'naive-ui'
 
 import { themeOverrides } from './app/theme'
 import { useAppTheme } from './app/useAppTheme'
@@ -15,6 +22,7 @@ const { isDark } = useAppTheme()
     :locale="zhCN"
     :date-locale="dateZhCN"
   >
+    <NGlobalStyle />
     <NMessageProvider>
       <AppLayout />
     </NMessageProvider>
