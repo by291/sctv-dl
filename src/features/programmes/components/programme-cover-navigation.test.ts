@@ -23,21 +23,29 @@ let router: ReturnType<typeof createRouter>
 let sources: string[]
 let destinationRendered: boolean
 let startTransition: ReturnType<typeof vi.fn>
+let captures: { before: string[]; after: string[]; scroll: number }[]
 const originalTransition = Object.getOwnPropertyDescriptor(document, 'startViewTransition')
+
+function namedCovers(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.cover-image'))
+    .filter((cover) => cover.style.viewTransitionName === 'programme-cover')
+    .map((cover) => cover.className)
+}
 
 beforeEach(async () => {
   localStorage.clear()
   sources = []
+  captures = []
   destinationRendered = false
   vi.mocked(api.dates).mockResolvedValue([])
   startTransition = vi.fn((update: () => Promise<void>) => {
-    sources = Array.from(document.querySelectorAll<HTMLElement>('.cover-image'))
-      .filter((cover) => cover.style.viewTransitionName === 'programme-cover')
-      .map((cover) => cover.className)
+    sources = namedCovers()
+    const before = document.querySelector('.detail-cover') ? ['detail-cover'] : sources
     const updateCallbackDone = Promise.resolve()
       .then(update)
       .then(() => {
         destinationRendered = Boolean(document.querySelector('.detail-cover'))
+        captures.push({ before, after: namedCovers(), scroll: window.scrollY })
       })
 
     return {
@@ -109,6 +117,52 @@ describe('programme cover navigation', () => {
     expect(destinationRendered).toBe(true)
     expect(router.currentRoute.value.path).toBe('/programmes/1')
     expect(wrapper.get('.detail-title').text()).toBe('Programme')
+  })
+
+  it.each([
+    { link: '.programme-cover', cover: 'programme-image', history: false },
+    { link: '.programme-cover', cover: 'programme-image', history: true },
+    { link: '.featured-visual', cover: 'featured-image', history: false },
+    { link: '.featured-visual', cover: 'featured-image', history: true },
+  ])('returns to the original $cover (history: $history)', async ({ link, cover, history }) => {
+    const originalCover = wrapper.get(`.${cover}`).element
+    window.scrollTo({ top: 480, left: 0 })
+    await wrapper.get(link).trigger('click')
+    await flushPromises()
+    window.scrollTo({ top: 0, left: 0 })
+
+    if (history) {
+      router.back()
+    } else {
+      await wrapper.get('.back-link').trigger('click')
+    }
+
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(startTransition).toHaveBeenCalledTimes(2)
+    expect(captures[1]?.before).toEqual(['detail-cover'])
+    expect(captures[1]?.after).toHaveLength(1)
+    expect(captures[1]?.after[0]).toContain(cover)
+    expect(captures[1]?.scroll).toBe(480)
+    expect(wrapper.get(`.${cover}`).element).toBe(originalCover)
+    expect(namedCovers()).toEqual([])
+  })
+
+  it('retries a blocked return without losing the original cover', async () => {
+    await wrapper.get('.featured-visual').trigger('click')
+    await flushPromises()
+    const removeGuard = router.beforeResolve(() => false)
+    await wrapper.get('.back-link').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/programmes/1')
+
+    removeGuard()
+    await wrapper.get('.back-link').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(startTransition).toHaveBeenCalledTimes(3)
+    expect(captures.at(-1)?.after[0]).toContain('featured-image')
+    expect(namedCovers()).toEqual([])
   })
 
   it.each([
@@ -189,11 +243,12 @@ describe('programme cover navigation', () => {
 
     await router.push('/')
     await vi.waitFor(() => expect(wrapper.find('.featured-visual').exists()).toBe(true))
+    await flushPromises()
     startTransition.mockImplementation(capture!)
     await wrapper.get('.featured-visual').trigger('click')
     await flushPromises()
 
-    expect(startTransition).toHaveBeenCalledTimes(2)
+    expect(startTransition).toHaveBeenCalledTimes(3)
     expect(destinationRendered).toBe(true)
   })
 
@@ -255,4 +310,137 @@ describe('programme cover navigation', () => {
       expect(skipTransition).toHaveBeenCalledOnce()
     },
   )
+
+  it.each(['unsupported', 'reduced motion', 'capture failure'])(
+    'returns normally with %s after an animated entry',
+    async (condition) => {
+      await wrapper.get('.programme-cover').trigger('click')
+      await flushPromises()
+
+      if (condition === 'unsupported') {
+        Reflect.deleteProperty(document, 'startViewTransition')
+      } else if (condition === 'reduced motion') {
+        vi.mocked(window.matchMedia).mockReturnValue({ matches: true } as MediaQueryList)
+      } else {
+        startTransition.mockImplementation(() => {
+          throw new Error('Capture unavailable')
+        })
+      }
+
+      await wrapper.get('.back-link').trigger('click')
+      await vi.waitFor(() => expect(wrapper.find('.programme-cover').exists()).toBe(true))
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/')
+      expect(namedCovers()).toEqual([])
+    },
+  )
+
+  it.each([false, true])(
+    'does not replace a newer navigation with a deferred return (pending guard: %s)',
+    async (pending) => {
+      await wrapper.get('.featured-visual').trigger('click')
+      await flushPromises()
+      let runUpdate: () => Promise<void> = async () => {}
+
+      const skipTransition = vi.fn()
+      startTransition.mockImplementation((update: () => Promise<void>) => {
+        const updateCallbackDone = new Promise<void>((resolve, reject) => {
+          runUpdate = async () => {
+            try {
+              await update()
+              resolve()
+            } catch (error) {
+              reject(error)
+            }
+          }
+        })
+
+        return {
+          ready: updateCallbackDone,
+          updateCallbackDone,
+          finished: updateCallbackDone,
+          skipTransition,
+        }
+      })
+      const returning = router.push('/')
+      await flushPromises()
+      expect(startTransition).toHaveBeenCalledTimes(2)
+      expect(router.currentRoute.value.path).toBe('/programmes/1')
+      let releaseGuard: () => void = () => {}
+
+      const guard = new Promise<void>((resolve) => {
+        releaseGuard = resolve
+      })
+      router.beforeResolve(async (to) => {
+        if (pending && to.path === '/settings') {
+          await guard
+        }
+      })
+      const newer = router.push('/settings')
+      await flushPromises()
+      await runUpdate()
+      releaseGuard()
+      await Promise.all([returning, newer])
+      await flushPromises()
+
+      expect(router.currentRoute.value.path).toBe('/settings')
+      expect(skipTransition).toHaveBeenCalledOnce()
+      expect(namedCovers()).toEqual([])
+    },
+  )
+
+  it('uses ordinary navigation if the original source has disappeared', async () => {
+    await wrapper.get('.programme-cover').trigger('click')
+    await flushPromises()
+    useProgrammeStore().programmes = []
+    await flushPromises()
+    await wrapper.get('.back-link').trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('.library-view').exists()).toBe(true))
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(startTransition).toHaveBeenCalledOnce()
+    expect(namedCovers()).toEqual([])
+  })
+
+  it.each([
+    { link: '.programme-cover', replacement: [] },
+    { link: '.featured-visual', replacement: [{ id: '2', name: 'Other', cover: null }] },
+  ])('skips a deferred return when $link changes or unmounts', async ({ link, replacement }) => {
+    await wrapper.get(link).trigger('click')
+    await flushPromises()
+    let runUpdate: () => Promise<void> = async () => {}
+
+    const skipTransition = vi.fn()
+    startTransition.mockImplementation((update: () => Promise<void>) => {
+      const updateCallbackDone = new Promise<void>((resolve, reject) => {
+        runUpdate = async () => {
+          try {
+            await update()
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
+        }
+      })
+
+      return {
+        ready: updateCallbackDone,
+        updateCallbackDone,
+        finished: updateCallbackDone,
+        skipTransition,
+      }
+    })
+    const returning = router.push('/')
+    await flushPromises()
+    useProgrammeStore().programmes = replacement
+    await flushPromises()
+    await runUpdate()
+    await returning
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(skipTransition).toHaveBeenCalledOnce()
+    expect(namedCovers()).toEqual([])
+  })
 })
