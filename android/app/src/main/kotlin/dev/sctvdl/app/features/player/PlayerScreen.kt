@@ -1,7 +1,7 @@
 package dev.sctvdl.app.features.player
 
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,13 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,8 +38,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.QualitySheet
@@ -51,9 +48,8 @@ import dev.sctvdl.design.TouchTarget
 import dev.sctvdl.domain.DownloadRequest
 import dev.sctvdl.domain.Quality
 import dev.sctvdl.player.PlaybackSource
-import dev.sctvdl.player.PlayerControls
 import dev.sctvdl.player.PlayerSession
-import dev.sctvdl.player.VideoSurface
+import dev.sctvdl.player.PlayerVideo
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -169,8 +165,10 @@ fun PlaybackDestination(
     }
 
     val scroll = rememberScrollState()
+    val minimumVideoHeight = if (LocalDensity.current.fontScale >= 1.5f) 208.dp else 176.dp
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val videoHeight = minOf(maxWidth * (9f / 16f), if (maxWidth > maxHeight) maxHeight * 0.4f else maxHeight)
+            .coerceAtLeast(minimumVideoHeight).coerceAtMost(maxHeight)
         Column(
             Modifier.fillMaxSize().then(
                 if (!fullscreen && !pip) Modifier.verticalScroll(scroll) else Modifier
@@ -189,58 +187,35 @@ fun PlaybackDestination(
                     }
                 )
             }
-            Box(
-                Modifier.fillMaxWidth().then(
-                    if (fullscreen || pip) {
-                        Modifier.weight(1f)
-                    } else {
-                        Modifier.height(videoHeight)
-                    }
-                ).background(Color.Black)
-            ) {
-                VideoSurface(session.player, Modifier.fillMaxSize())
-                if (playback.buffering &&
-                    !pip
-                ) {
-                    CircularProgressIndicator(
-                        Modifier.align(Alignment.Center),
-                        color = Color.White
-                    )
+            PlayerVideo(
+                player = session.player,
+                state = playback,
+                onQuality = session.controller::selectQuality,
+                onSpeed = session.controller::setSpeed,
+                fullscreen = fullscreen,
+                onFullscreen = { fullscreen = !fullscreen },
+                onPip = activity?.takeIf {
+                    it.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
                 }
-                playback.error?.takeUnless { pip }?.let { error ->
-                    Surface(
-                        Modifier.align(Alignment.Center).padding(16.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Column(
-                            Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(error)
-                            FilledTonalButton(onClick = session.controller::retry) { Text("重试播放") }
+                    ?.let {
+                        {
+                            it.enterPlayerPictureInPicture()
                         }
-                    }
-                }
-            }
+                    },
+                onRetry = session.controller::retry,
+                modifier = Modifier.fillMaxWidth().then(
+                    if (fullscreen || pip) Modifier.weight(1f) else Modifier.height(videoHeight)
+                ),
+                controlsEnabled = !pip
+            )
             if (!pip) {
-                PlayerControls(
-                    playback,
-                    session.controller::togglePlay,
-                    session.controller::seekTo,
-                    session.controller::selectQuality,
-                    session.controller::setSpeed,
-                    fullscreen,
-                    { fullscreen = !fullscreen },
-                    { activity?.enterPlayerPictureInPicture() }
-                )
                 if (!fullscreen) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                         Column(
                             Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(20.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(source.title, style = MaterialTheme.typography.titleLarge)
+                            Text(source.title, Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleLarge)
                             val contextLabel = if (source.localUri != null) {
                                 "本地视频"
                             } else {
@@ -256,7 +231,7 @@ fun PlaybackDestination(
                             if (canDownload) {
                                 Button(
                                     onClick = { downloadSheet = true },
-                                    modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth().heightIn(min = TouchTarget)
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = TouchTarget)
                                 ) {
                                     Icon(Icons.Outlined.Download, null, Modifier.size(20.dp))
                                     Spacer(Modifier.width(8.dp))
