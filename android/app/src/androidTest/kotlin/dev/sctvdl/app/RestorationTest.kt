@@ -15,8 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.sctvdl.app.navigation.AppNavigationShell
 import dev.sctvdl.app.navigation.AppRoute
-import dev.sctvdl.design.SctvTheme
-import dev.sctvdl.domain.AppSettings
+import dev.sctvdl.domain.settings.AppSettings
+import dev.sctvdl.ui.theme.SctvAppTheme
 import org.junit.Rule
 import org.junit.Test
 
@@ -27,7 +27,7 @@ class RestorationTest {
     fun archiveEntryStateSurvivesTopLevelSwitchAndRecreation() {
         val restore = StateRestorationTester(compose)
         restore.setContent {
-            SctvTheme(AppSettings()) {
+            SctvAppTheme(AppSettings()) {
                 AppNavigationShell { route, navigator ->
                     when (route) {
                         AppRoute.Catalogue -> Button(onClick = { navigator.open(AppRoute.Archive("1")) }) {

@@ -13,6 +13,8 @@ dist/
 android/.idea/
 android/.gradle/
 android/.kotlin/
+android/build-logic/.gradle/
+android/build-logic/.kotlin/
 android/gradle/gradle-daemon-jvm.properties
 android/**/build/
 android/local.properties

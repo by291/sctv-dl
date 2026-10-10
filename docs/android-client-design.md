@@ -138,17 +138,30 @@ Use one Activity and a saved, typed Navigation 3 back stack. Screen-level ViewMo
 
 ViewModels depend on repository contracts and do not own Activity, Context, database objects, Retrofit services, download cursors, or ExoPlayer instances. Constructor injection uses Hilt. Pure domain functions cover quality fallback, full-episode recognition, ordering, ID validation, and safe filenames.
 
-Use a few modules with explicit ownership:
+Use feature modules with explicit ownership:
 
-| Module         | Owns                                                                                                                 | Dependencies                                    |
-| -------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `:app`         | Activity, navigation, DI wiring, catalogue/archive/favourites/downloads/settings feature packages, screen ViewModels | Core modules                                    |
-| `:core:domain` | Domain models, repository contracts, typed errors, pure business policies                                            | Kotlin and coroutines; no Android UI or storage |
-| `:core:data`   | Retrofit API, DTO parsing, Room, DataStore, platform download adapter, repository implementations                    | Domain; Android data libraries                  |
-| `:core:design` | Material theme, tokens, shared media cards and state feedback                                                        | Compose and Material 3                          |
-| `:core:player` | Media3 controller, video surface, Compose playback controls and lifecycle integration                                | Domain; Media3; Compose                         |
+| Module                | Owns                                                                                  | Project dependencies                  |
+| --------------------- | ------------------------------------------------------------------------------------- | ------------------------------------- |
+| `:app`                | Activity/application, root navigation, global state/reconciliation and playback host  | Core modules and feature entry points |
+| `:feature:programmes` | Catalogue/favourites/archive, accepted snapshots, programme/episode UI                | Domain, design, UI                    |
+| `:feature:downloads`  | Task list/actions and native open/share handoff                                       | Domain, design, UI                    |
+| `:feature:settings`   | Settings screen and preference mutation                                               | Domain, design, UI                    |
+| `:feature:player`     | Online/local destination state, source selection and session lifetime                 | Domain, design, UI, player            |
+| `:core:domain`        | Subject-organized models, repository contracts and pure policies                      | Kotlin/coroutines; no Android         |
+| `:core:data`          | Subject-organized repository implementations, remote/local/platform boundaries and DI | Domain                                |
+| `:core:design`        | Generic Material theme/tokens and presentation primitives                             | No project dependencies               |
+| `:core:ui`            | Covers/transitions, download sheet/outcomes, cached errors and app theme adapter      | Domain, design                        |
+| `:core:player`        | Playback model/controller, Media3 session, video surface and controls                 | Domain                                |
 
-Feature packages do not import each other's implementation. Shared modules never depend on feature ViewModels. Introduce a reusable use case only when multiple screens need the operation or a workflow requires coordination; avoid a pass-through class for every repository method.
+Features expose Route entry points and small immutable selection/host contracts; screens, ViewModels and components remain internal. Features never import sibling features, `app`, or data implementations. Core modules never import features or `app`. The root Gradle `checkModuleDependencies` task validates these edges as part of `check`. Android library, Compose and Hilt convention plugins share defaults without introducing another runtime layer. Shared Kotlin repository fakes live in domain test fixtures and are consumed only by tests; component tests live with their owners and app tests cover root navigation/restoration.
+
+`AppViewModel` observes global preferences and retains download feedback with stable identities and cancellation propagation. Catalogue state remains observed from the root across destination changes so accepted artwork/content does not disappear when an archive opens. `ProgrammeLibraryState` retains saveable, independent catalogue/favourite scroll positions for expanded panes across resizing and archive replacement. Individual pane compositions own separate grid controllers so outgoing and incoming entries can coexist during navigation. App navigation maps archive selection into the player's immutable input; it does not pass pending metadata. The player feature binds its session through `PlaybackHost`, implemented by the Activity adapter, and saves position/unbinds/exits fullscreen/releases when the entry is disposed after navigation motion.
+
+Organize source packages by subject and responsibility. Name concrete implementations accurately, including `CachedProgrammeRepository`, `RoomFavouriteRepository`, `ProgrammeResponseParser`, `UpstreamUrlPolicy`, `DownloadManagerRepository`, `DownloadManagerGateway`, and `DownloadEventsReceiver`. Name UI by purpose: `EpisodeCard`, `DownloadQualitySheet`, `OnlinePlayerViewModel`. Keep related small declarations together. Introduce reusable use cases when shared workflows need coordination; simple repository actions can remain direct.
+
+Package moves preserve database filename/version/schema/identity, DataStore filename/keys and enum values, saved filter/selection/position keys and legacy ViewModel owner keys, application ID, backup policy and serialized `AppRoute` names. Update manifest component references and regenerate baseline profiles when class packages move. The checked-in Gradle wrapper is executable on Unix checkouts.
+
+This structure follows the [Android architecture recommendations](https://developer.android.com/topic/architecture/recommendations), [modularization patterns](https://developer.android.com/topic/modularization/patterns), [Navigation 3 modularization guidance](https://developer.android.com/guide/navigation/navigation-3/modularize), and [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html), consulted on 2026-10-10.
 
 Use Retrofit with OkHttp and kotlinx.serialization, Room for the metadata/task index, DataStore for preferences, and Coil for covers. Use the Media3 Compose UI APIs for playback. Keep Gradle configuration in Kotlin DSL, centralize exact dependency versions in a version catalogue, use a verified Gradle wrapper, and pin a mutually compatible stable toolchain. Compose artifacts use the stable BOM; independently versioned libraries are pinned explicitly. Do not adopt alpha dependencies simply because a documentation snippet lists them.
 

@@ -23,7 +23,6 @@ android/gradlew.bat -p android spotlessCheck check :app:assembleDebug :app:assem
 On macOS or Linux:
 
 ```sh
-chmod +x android/gradlew
 ./android/gradlew -p android spotlessCheck check :app:assembleDebug :app:assembleRelease
 ```
 
@@ -33,15 +32,26 @@ Format Kotlin and Gradle scripts with `android/gradlew.bat -p android spotlessAp
 
 ## Architecture
 
-| Module            | Responsibility                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| `app`             | Single activity, Navigation 3 routes, feature ViewModels, Compose screens                    |
-| `core:domain`     | Android-free contracts, IDs, quality/full-episode/filename/sorting policies                  |
-| `core:data`       | Retrofit/OkHttp, validation, Room snapshots/favourites/downloads, DataStore, DownloadManager |
-| `core:design`     | Material 3 colour/shape tokens and reusable stateless components                             |
-| `core:player`     | Media3 ExoPlayer/MediaSession, controller, surface and controls                              |
-| `baselineprofile` | Startup, catalogue/archive/player profile generation                                         |
-| `benchmark`       | Release startup and catalogue scroll Macrobenchmarks                                         |
+| Module               | Responsibility                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `app`                | Application/Activity, typed navigation, global settings/download feedback, foreground reconciliation, playback host |
+| `feature:programmes` | Catalogue, favourites, archive, accepted updates, programme/episode components                                      |
+| `feature:downloads`  | Task lists/actions and native file launchers                                                                        |
+| `feature:settings`   | Preference screen and mutations                                                                                     |
+| `feature:player`     | Online/local routes, playback state, destination session lifetime, host contract                                    |
+| `core:domain`        | Android-free models, repository contracts, quality/full-episode/filename/sorting policies                           |
+| `core:data`          | Validated HTTP, Room snapshots/favourites/tasks, DataStore, DownloadManager and recovery                            |
+| `core:design`        | Generic Material 3 theme/tokens, brand, state feedback and loading primitives                                       |
+| `core:ui`            | Application covers/transitions, quality sheet, outcome/error text and settings theme adapter                        |
+| `core:player`        | Media3 session, playback models/controller, surface and controls                                                    |
+| `baselineprofile`    | Startup and catalogue/archive/player profile generation                                                             |
+| `benchmark`          | Release startup and catalogue scroll Macrobenchmarks                                                                |
+
+Feature modules expose Route composables and small immutable contracts; screens, ViewModels, and helpers are internal. Features depend on shared core contracts and presentation, never siblings, `app`, or data implementations. Core modules never import features. `checkModuleDependencies`, included in `check`, validates actual configured Gradle project dependencies. Android/Compose/Hilt library defaults are shared through `build-logic`, with versions in the existing catalogue.
+
+Within modules, packages follow subjects: domain `common/programme/media/download/settings/repository`; data `programmes/favourites/downloads/settings/database/network/di`; design `theme/components`; player infrastructure `model/controller/media3/ui`. Data stores, remote parsers and platform gateways stay under the subject they implement. Related small declarations stay together. `CachedProgrammeRepository`, `ProgrammeResponseParser`, `DownloadManagerRepository`, `DownloadManagerGateway`, `EpisodeCard`, and `DownloadQualitySheet` name their exact responsibilities.
+
+`AppViewModel` provides lifecycle-collected global settings and durable download feedback. Each feedback has an identity so dismissing an older snackbar cannot acknowledge a newer result. Catalogue observation remains rooted in the app to retain accepted state across destinations; features own its state processing. The programme library retains separate catalogue/favourite positions for its expanded pane across archive replacement and resizing. Each visible pane owns its own grid controller, including overlapping navigation entries. App navigation carries the accepted archive selection into the player without sibling imports. `PlaybackHost` separates Activity window/PiP operations from destination session ownership. Persisted schema, settings keys/enums, application ID, and serialized route names remain compatible.
 
 Hilt provides repository implementations. ViewModels expose immutable screen state and actions; UI collects it with lifecycle awareness. Catalogue and favourites share repository data and preserve independent search/sort state. Room snapshots are keyed by catalogue, programme, and programme/date. Successful empty responses are cached atomically; failures preserve older content with visible error feedback. Request cancellation and generation checks reject stale results. Metadata responses are read with a 2 MiB limit before full-body buffering. DataStore stores theme, dynamic colours, initial quality, and the default network policy for new downloads.
 
@@ -64,8 +74,8 @@ Android 10 embeds Media3's native TextureView through Compose `AndroidView` to a
 Unit tests cover upstream validation, caching/cancellation, preferences, feature state, player lifecycle policy, preflight, submission, retries, cancellation, and restart reconciliation. Device tests use disposable databases and controlled download fixtures.
 
 ```powershell
-android/gradlew.bat -p android :core:domain:test :core:data:testDebugUnitTest :core:player:testDebugUnitTest :app:testDebugUnitTest
-android/gradlew.bat -p android :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest :core:player:connectedDebugAndroidTest
+android/gradlew.bat -p android check
+android/gradlew.bat -p android connectedDebugAndroidTest
 ```
 
 Use a disposable emulator or device; fixture downloads are removed after the test. On API 37, Espresso 3.7.0 currently calls the removed `InputManager.getInstance` method. Run Compose interaction tests on API 29 and use ADB/UI Automator or non-Espresso instrumentation for API 37 until the upstream test library supports it. This does not affect application playback or navigation at runtime.
@@ -101,6 +111,16 @@ The automatic-entry refresh revision passed formatting, lint, 66 unit tests, deb
 The compact-card and toolbar-update refinement was verified on 2026-10-10: formatting, lint, 66 unit tests, debug and R8 release assemblies, and 28 UI Automator cases passed. The device invocation initially included a misspelled navigation test class; the 24 actual cases passed and the four correctly named navigation cases then passed separately. Pending updates do not move the library or archive content, remain explicitly accepted, and stay hidden during batch selection. Manual checks covered real cached catalogue and archive updates, compact one-line title panels, light/dark appearance, 320 dp windows at 200% text, keyboard search, retained cached content after upstream connection failures, and wide layouts. Ordinary one-line programme cards were about 25% shorter on the same device. The existing API 37 Compose/Espresso limitation remains; API 29, physical devices, and data-device cases were not rerun for this layout-only refinement.
 
 The subsequent archive-header and exploration-artwork refinement passed formatting, lint, 66 unit tests, debug and R8 release builds, and 16 affected UI Automator cases on API 37. Manual checks used real cached metadata and covered enlarged tilted artwork, favourite interaction, light/dark appearance, 320 dp windows with normal and 200% text, keyboard search with empty results, and expanded catalogue/archive panes. Loading/error/empty transitions and explicit update acceptance remained covered by the device regressions. The final horizontal layout also passed a fresh build/unit recheck and five archive/update device cases. The existing Compose/Espresso limitation remains; API 29, physical devices, and data-device tests were not rerun for this presentation-only change.
+
+### Feature Module Migration Verification
+
+Verified on 2026-10-11: formatting, Android lint, the configured module-dependency check, 72 unit tests, debug and R8 release builds, both performance harness assemblies, and all relocated test APK assemblies passed. An injected sibling-feature dependency was rejected as expected. The Unix wrapper has executable mode `100755`, and CI invokes it directly.
+
+Forty-eight distinct UI Automator/storage/media device cases passed across focused API 37 invocations. Coverage includes accepted archive/playback context, matching host disposal, a live session retained during navigation exit, fullscreen orientation/status-bar restoration, and independent catalogue/favourite pane positions across archive replacement and compact/expanded resizing. The Room v1 schema remains byte-identical. The system-download fixture now waits for actual Wi-Fi teardown before asserting a pending job; the navigation fixture uses the same saveable-entry decorator as the app.
+
+Both baseline profile journeys passed, regenerated rules use the moved packages, and compiled profiles are packaged in the optimized release APK. A locally debug-signed, optimized `benchmarkRelease` APK passed live catalogue/archive/paused-player navigation, explicit PiP entry and return, light/dark inspection, native keyboard search, and empty results. Live expanded-pane checks retained the same row IDs and pixel offsets after both archive replacement and window resizing. A media HEAD with the required Referer returned `200 video/mp4` with byte-range support; no episode download task was created. No application crash appeared in the smoke-run crash buffer.
+
+Eleven Compose/Espresso cases remain unavailable because of the API 37 `InputManager.getInstance` incompatibility. This migration was not rerun on API 29 or physical devices and does not claim physical performance gains, a full TalkBack walkthrough, or replay of an old app version's implicit Compose saved-state bundle. Explicit persistent schema, preferences, route names, and legacy ViewModel owner keys are preserved; same-version recreation is tested. Prettier, local documentation links, and diff whitespace checks passed. Web business source was unchanged. Disposable emulator display/theme/keyboard preferences were restored afterward.
 
 ## Performance and CI
 

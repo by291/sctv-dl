@@ -1,11 +1,13 @@
 package dev.sctvdl.data.downloads
 
-import dev.sctvdl.domain.DownloadReason
-import dev.sctvdl.domain.DownloadState
-import dev.sctvdl.domain.DownloadTask
+import dev.sctvdl.data.downloads.platform.PlatformDownloadGateway
+import dev.sctvdl.data.downloads.platform.SystemDownloadSnapshot
+import dev.sctvdl.domain.download.DownloadReason
+import dev.sctvdl.domain.download.DownloadState
+import dev.sctvdl.domain.download.DownloadTask
 import java.net.URI
 
-class DownloadReconciler(private val gateway: PlatformDownloadGateway) {
+internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) {
     fun matching(task: DownloadTask, snapshots: List<SystemDownloadSnapshot>): List<SystemDownloadSnapshot> =
         snapshots.filter { snapshot ->
             snapshot.url == task.url &&

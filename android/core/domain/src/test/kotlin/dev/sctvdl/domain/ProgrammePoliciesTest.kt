@@ -1,5 +1,14 @@
 package dev.sctvdl.domain
 
+import dev.sctvdl.domain.download.safeDownloadFilename
+import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.domain.media.VideoVariant
+import dev.sctvdl.domain.media.resolveVideo
+import dev.sctvdl.domain.media.videoVariants
+import dev.sctvdl.domain.programme.Programme
+import dev.sctvdl.domain.programme.ProgrammeContent
+import dev.sctvdl.domain.programme.isFullEpisode
+import dev.sctvdl.domain.programme.sortProgrammes
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

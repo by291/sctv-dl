@@ -4,11 +4,18 @@ These instructions apply inside `android/`. Read [README](README.md) and the rel
 
 ## Ownership
 
-- `app` owns navigation, feature ViewModels, screen state, platform activity lifecycle, and feature Compose screens.
-- `core:domain` contains Kotlin-only models, repository contracts, and programme/download policies. It has no Android dependencies.
-- `core:data` owns HTTP validation, Room, DataStore, the system download gateway, and restart reconciliation.
-- `core:design` owns theme tokens and reusable stateless Compose components. It must not depend on feature ViewModels or repositories.
-- `core:player` owns the destination-scoped Media3 session, playback controller, and native video controls.
+- `app` owns application setup, typed Navigation 3 routes, global preferences/download feedback, foreground reconciliation, and the Activity playback host.
+- `feature:programmes` owns catalogue, favourites, broadcast archives, accepted resource state, and their presentation components.
+- `feature:downloads`, `feature:settings`, and `feature:player` own their destination state, Route entry points, screens, and actions.
+- `core:domain` contains Kotlin-only models, repository contracts, and programme/download policies, grouped by subject. It has no Android dependencies.
+- `core:data` owns HTTP validation, Room, DataStore, DownloadManager, and restart reconciliation. Implementation packages follow the owning feature and remain internal; public qualifiers and the manifest receiver are platform integration contracts.
+- `core:design` owns generic theme tokens and stateless Compose primitives, without domain or feature dependencies. Keep the module name `design`.
+- `core:ui` owns shared application presentation: covers/transitions, download quality/outcome text, cached errors, and the settings-to-theme adapter.
+- `core:player` owns Media3 sessions, playback models/controller, surface, and native controls. `feature:player` owns destination lifetime; `app` implements its `PlaybackHost` contract.
+
+Features never depend on sibling features, `app`, or `core:data`. Core modules never depend on features or `app`. Expose feature Route entry points and small immutable cross-module contracts; keep screens, ViewModels, and component helpers internal. `checkModuleDependencies`, included in `check`, verifies configured Gradle project edges, including test dependencies. Shared JVM fakes live in domain test fixtures and are consumed only by tests. Android/Compose/Hilt defaults live in `build-logic`; versions remain in the version catalogue.
+
+Preserve the database filename, schema/version/identity, DataStore keys and enum strings, application ID, saved-state keys, and serialized `AppRoute` names when moving source packages. Keep accepted playback selections at the app root across navigation entries; features exchange callbacks rather than importing each other. Retain expanded catalogue/favourite positions in the root programme library scope, with separate grid controllers for simultaneously rendered navigation entries.
 
 ## Kotlin and Compose
 
@@ -36,7 +43,7 @@ Run from the repository root:
 
 ```powershell
 android/gradlew.bat -p android spotlessCheck check :app:assembleDebug :app:assembleRelease
-android/gradlew.bat -p android :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest
+android/gradlew.bat -p android connectedDebugAndroidTest
 ```
 
 Use disposable fixtures for system downloads and media tests. Never download whole upstream episodes just to check transport. Validate live media using HEAD or a small Range request. Run `pnpm check` and `pnpm build` when shared Web/tooling files change. Review the diff and record actual checks and unavailable device coverage. Release remains unsigned until the user supplies a signing identity.

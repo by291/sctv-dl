@@ -20,8 +20,8 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import dev.sctvdl.app.navigation.AppNavigationShell
 import dev.sctvdl.app.navigation.AppRoute
-import dev.sctvdl.design.SctvTheme
-import dev.sctvdl.domain.AppSettings
+import dev.sctvdl.domain.settings.AppSettings
+import dev.sctvdl.ui.theme.SctvAppTheme
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -44,7 +44,7 @@ class NavigationTest {
 
     private fun showPrimaryRoutes(activity: ComponentActivity) {
         activity.setContent {
-            SctvTheme(AppSettings()) {
+            SctvAppTheme(AppSettings()) {
                 Box(Modifier.semantics { testTagsAsResourceId = true }) {
                     AppNavigationShell { route, _ -> Text("页面 ${route::class.simpleName}") }
                 }
@@ -56,7 +56,7 @@ class NavigationTest {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
-                    SctvTheme(AppSettings()) {
+                    SctvAppTheme(AppSettings()) {
                         Box(Modifier.semantics { testTagsAsResourceId = true }) {
                             AppNavigationShell { route, navigator ->
                                 when (route) {
@@ -85,7 +85,7 @@ class NavigationTest {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
-                    SctvTheme(AppSettings()) {
+                    SctvAppTheme(AppSettings()) {
                         Box(Modifier.semantics { testTagsAsResourceId = true }) {
                             AppNavigationShell(downloadsRequest = request) { route, navigator ->
                                 Column {

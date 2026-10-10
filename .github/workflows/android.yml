@@ -31,7 +31,6 @@ jobs:
         run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
       - name: Check and assemble
         run: |
-          chmod +x android/gradlew
           ./android/gradlew -p android spotlessCheck check :app:assembleDebug :app:assembleRelease :baselineprofile:assemble :benchmark:assemble --no-daemon
       - name: Preserve APKs and verification reports
         if: always()
