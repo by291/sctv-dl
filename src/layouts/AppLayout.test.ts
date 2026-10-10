@@ -114,6 +114,23 @@ describe('library return navigation', () => {
     expect(scroll).toHaveBeenLastCalledWith({ top: 640, left: 0, behavior: 'instant' })
   })
 
+  it('preserves catalogue positions when favourites change in programme details', async () => {
+    const originalCover = wrapper.get('.programme-cover').element
+    await router.push('/programmes/1')
+    await flushPromises()
+    await wrapper.get('.detail-favourite').trigger('click')
+    await wrapper.get('.back-link').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.programme-name').map((name) => name.text())).toEqual([
+      'Bravo',
+      'Alpha',
+      'Charlie',
+    ])
+    expect(wrapper.get('.programme-cover').element).toBe(originalCover)
+    expect(wrapper.get('[aria-label="收藏Bravo"]').attributes('aria-pressed')).toBe('false')
+  })
+
   it('still unmounts programme details and aborts their pending archive request', async () => {
     let requestSignal: AbortSignal | undefined
     vi.mocked(api.dates).mockImplementation((_id, signal) => {

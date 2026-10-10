@@ -12,10 +12,12 @@ import { useSettingsStore } from '../../settings/store'
 import type { VueWrapper } from '@vue/test-utils'
 
 let wrapper: VueWrapper
+let pinia: ReturnType<typeof createPinia>
+let router: ReturnType<typeof createRouter>
 
 beforeEach(async () => {
   localStorage.clear()
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   useProgrammeStore().programmes = [
     { id: 'c', name: 'Charlie', cover: null },
@@ -24,7 +26,7 @@ beforeEach(async () => {
     { id: 'd', name: 'Delta', cover: null },
   ]
   useSettingsStore().favourites = ['d', 'b']
-  const router = createRouter({
+  router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: LibraryView },
@@ -33,7 +35,7 @@ beforeEach(async () => {
   })
   await router.push('/')
   await router.isReady()
-  wrapper = mount(LibraryView, { global: { plugins: [pinia, router] } })
+  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [pinia, router] } })
 })
 
 afterEach(() => {
@@ -63,12 +65,50 @@ describe('programme catalogue ordering', () => {
     ])
   })
 
-  it('updates the priority immediately when a programme is starred or unstarred', async () => {
-    await wrapper.find('[aria-label="收藏Charlie"]').trigger('click')
-    expect(displayedNames()).toEqual(['Charlie', 'Bravo', 'Delta', 'Alpha'])
+  it.each(['default', 'name'])(
+    'keeps card positions when toggling favourites in %s order',
+    async (sort) => {
+      wrapper.findComponent(NSelect).vm.$emit('update:value', sort)
+      await wrapper.vm.$nextTick()
+      const originalNames = displayedNames()
 
-    await wrapper.find('[aria-label="取消收藏Bravo"]').trigger('click')
+      await wrapper.find('[aria-label="收藏Charlie"]').trigger('click')
+      expect(displayedNames()).toEqual(originalNames)
+      expect(wrapper.get('[aria-label="取消收藏Charlie"]').attributes('aria-pressed')).toBe('true')
+
+      await wrapper.find('[aria-label="取消收藏Bravo"]').trigger('click')
+      expect(displayedNames()).toEqual(originalNames)
+      expect(wrapper.get('[aria-label="收藏Bravo"]').attributes('aria-pressed')).toBe('false')
+      expect(useSettingsStore().favourites).toEqual(['d', 'c'])
+    },
+  )
+
+  it('applies the latest favourite priority when a new browsing session starts', async () => {
+    await wrapper.get('[aria-label="收藏Charlie"]').trigger('click')
+    await wrapper.get('[aria-label="取消收藏Bravo"]').trigger('click')
+    expect(displayedNames()).toEqual(['Bravo', 'Delta', 'Charlie', 'Alpha'])
+
+    wrapper.unmount()
+    wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [pinia, router] } })
+    await router.isReady()
+    await wrapper.vm.$nextTick()
     expect(displayedNames()).toEqual(['Charlie', 'Delta', 'Bravo', 'Alpha'])
+  })
+
+  it('uses live favourites in their tab without resetting the all-programmes priority', async () => {
+    await wrapper.get('[aria-label="收藏Alpha"]').trigger('click')
+    await wrapper.get('input').setValue('a')
+    wrapper.findComponent(NSelect).vm.$emit('update:value', 'name')
+    await wrapper.vm.$nextTick()
+    expect(displayedNames()).toEqual(['Bravo', 'Delta', 'Alpha', 'Charlie'])
+
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click')
+    expect(displayedNames()).toEqual(['Alpha', 'Bravo', 'Delta'])
+    await wrapper.get('[aria-label="取消收藏Bravo"]').trigger('click')
+    expect(displayedNames()).toEqual(['Alpha', 'Delta'])
+
+    await wrapper.findAll('[role="tab"]')[0]!.trigger('click')
+    expect(displayedNames()).toEqual(['Bravo', 'Delta', 'Alpha', 'Charlie'])
   })
 
   it('retains favourite priority when searching and keeps the favourites tab filtered', async () => {

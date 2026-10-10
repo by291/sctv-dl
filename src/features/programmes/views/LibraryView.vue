@@ -17,6 +17,8 @@ const settings = useSettingsStore()
 const query = ref('')
 const tab = ref<'all' | 'favourites'>('all')
 const sort = ref<'default' | 'name'>('default')
+// Keep card positions stable while favourites change; a page reload starts a new session.
+const favouritePriority = new Set(settings.favourites)
 let scrollPosition = { left: 0, top: 0 }
 
 const sortOptions = [
@@ -43,7 +45,10 @@ const filtered = computed(() => {
   )
 
   return items.sort((a, b) => {
-    const priority = Number(favourites.has(b.id)) - Number(favourites.has(a.id))
+    const priority =
+      tab.value === 'all'
+        ? Number(favouritePriority.has(b.id)) - Number(favouritePriority.has(a.id))
+        : 0
 
     // Stable sorting preserves the service order within each group in default mode.
     return priority || (sort.value === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : 0)

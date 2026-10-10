@@ -43,7 +43,7 @@ The programme store caches the catalogue; explicit refresh replaces it. `useProg
 
 The API client validates and normalizes upstream records before they enter feature state. See [Upstream API](upstream-api.md) for schemas, IDs, and field mapping.
 
-Favourites come first under every sort mode. Default order preserves service order within each group; name order sorts each group separately. Search and the favourites tab use the same ordering.
+The all-programmes tab snapshots favourite priority when the library view is created. Those favourites come first under every sort mode for the browsing session, including search results; default order preserves service order within each group, while name order sorts each group separately. Toggling favourites updates stars and counts immediately without moving cards. Returning from details, changing filters or sort mode, and refreshing programme data retain the same priority snapshot; a full browser refresh applies the latest favourites. The favourites tab filters current favourites immediately and orders them by the selected service or name order.
 
 The spotlight selects a catalogue entry when the view is created and changes only on manual shuffle or removal of that entry. Filtering and metadata refresh preserve the chosen ID. There is no automatic rotation.
 
