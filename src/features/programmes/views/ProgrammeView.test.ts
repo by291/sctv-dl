@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { NMessageProvider } from 'naive-ui'
 
 import ProgrammeView from './ProgrammeView.vue'
+import ProgrammeDatePicker from '../components/ProgrammeDatePicker.vue'
 import { api } from '../api'
 import { useProgrammeStore } from '../store'
 import { useSettingsStore } from '../../settings/store'
@@ -84,6 +85,45 @@ afterEach(() => {
 })
 
 describe('programme download choices', () => {
+  it('switches publication order while keeping full episodes first and selected IDs intact', async () => {
+    const early = {
+      ...standardOnly,
+      id: '13',
+      title: 'Earlier clip',
+      publishedAt: '2026-10-06 18:41:00',
+    }
+    const late = {
+      ...standardOnly,
+      id: '14',
+      title: 'Later clip',
+      publishedAt: '2026-10-06 18:55:00',
+    }
+    vi.mocked(api.contents).mockResolvedValue([late, both, early])
+    wrapper.findComponent(ProgrammeDatePicker).vm.$emit('refresh')
+    await flushPromises()
+
+    const titles = () => wrapper.findAll('.content-title').map((row) => row.text())
+    expect(titles()).toEqual([both.title, early.title, late.title])
+    await wrapper.findAll('.content-row')[1]!.get('[role="checkbox"]').trigger('click')
+    await wrapper.get('.content-sort').trigger('click')
+    await flushPromises()
+
+    expect(titles()).toEqual([both.title, late.title, early.title])
+    expect(
+      wrapper.findAll('.content-row')[2]!.get('[role="checkbox"]').attributes('aria-checked'),
+    ).toBe('true')
+    expect(wrapper.get('.selection-summary').text()).toContain('1')
+    expect(wrapper.get('.content-sort').attributes('aria-label')).toContain('时间降序')
+    expect(wrapper.findAll('.content-row time').map((time) => time.text())).toEqual([
+      '2026-10-06 18:55:00',
+      '2026-10-06 18:41:00',
+    ])
+    expect(wrapper.findAll('.content-row')[0]!.find('time').exists()).toBe(false)
+    await wrapper.get('.content-sort').trigger('click')
+    expect(titles()).toEqual([both.title, early.title, late.title])
+    expect(wrapper.get('.content-sort').attributes('aria-label')).toContain('时间升序')
+  })
+
   it('hands a single programme to the browser as soon as a quality is selected', async () => {
     await wrapper.find(`[aria-label="下载${both.title}"]`).trigger('click')
     await flushPromises()
@@ -107,7 +147,7 @@ describe('programme download choices', () => {
 
   it('downloads selected items directly and reports batch quality fallbacks', async () => {
     await wrapper.find('.selection-toolbar [role="checkbox"]').trigger('click')
-    await wrapper.find('.content-toolbar button').trigger('click')
+    await wrapper.get('[aria-label="批量下载"]').trigger('click')
     await flushPromises()
     expect(saves).toEqual([])
     expect(wrapper.findAll('[role="menuitem"]')).toHaveLength(2)
@@ -155,7 +195,7 @@ describe('programme download choices', () => {
   it('continues a batch after one video fails and identifies the failed video', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 403 }))
     await wrapper.find('.selection-toolbar [role="checkbox"]').trigger('click')
-    await wrapper.find('.content-toolbar button').trigger('click')
+    await wrapper.get('[aria-label="批量下载"]').trigger('click')
     await flushPromises()
     await wrapper
       .findAll('[role="menuitem"]')

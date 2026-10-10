@@ -67,10 +67,10 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 24px;
+  padding: 16px 24px;
 }
 .date-heading {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 .date-control {
@@ -91,8 +91,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid var(--line);
-  padding: 0 24px 23px;
+  padding: 0 24px 20px;
 }
 .recent-label {
   margin-right: 10px;

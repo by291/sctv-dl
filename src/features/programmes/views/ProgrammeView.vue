@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { RouterLink } from 'vue-router'
 import { NButton, NCheckbox, useMessage } from 'naive-ui'
-import { ArrowLeft, CalendarDays, Star, Check } from '@lucide/vue'
+import { ArrowLeft, CalendarDays, Star } from '@lucide/vue'
 
 import { errorMessage } from '../../../shared/errors'
 import { makeDownloadFile } from '../../downloads/model'
@@ -20,6 +20,7 @@ import ProgrammePreviewDialog from '../components/ProgrammePreviewDialog.vue'
 import ProgrammeDownloadButton from '../components/ProgrammeDownloadButton.vue'
 
 import type { ProgrammeContent, Quality } from '../types'
+import type { ContentSortOrder } from '../content'
 
 const props = defineProps<{ id: string }>()
 const catalogue = useProgrammeStore()
@@ -47,6 +48,7 @@ const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useCon
 )
 const preview = ref<ProgrammeContent | null>(null)
 const downloadingIds = ref<string[]>([])
+const contentSortOrder = ref<ContentSortOrder>('asc')
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
 )
@@ -172,30 +174,32 @@ onMounted(() => {
     </section>
 
     <div class="content-panel">
-      <ProgrammeDatePicker
-        v-model="selectedDate"
-        :dates="dates"
-        :loading="loadingDates"
-        @refresh="loadDates"
-      />
+      <section class="date-panel">
+        <ProgrammeDatePicker
+          v-model="selectedDate"
+          :dates="dates"
+          :loading="loadingDates"
+          @refresh="loadDates"
+        />
 
-      <StatePanel
-        v-if="loadingDates"
-        loading
-      />
-      <StatePanel
-        v-else-if="dateError"
-        title="播出日期加载失败"
-        :error="dateError"
-        @retry="loadDates"
-      />
-      <StatePanel
-        v-else-if="!dates.length"
-        title="这个栏目还没有可用的节目日期"
-        description="稍后回来看看，或选择其他栏目。"
-      />
+        <StatePanel
+          v-if="loadingDates"
+          loading
+        />
+        <StatePanel
+          v-else-if="dateError"
+          title="播出日期加载失败"
+          :error="dateError"
+          @retry="loadDates"
+        />
+        <StatePanel
+          v-else-if="!dates.length"
+          title="这个栏目还没有可用的节目日期"
+          description="稍后回来看看，或选择其他栏目。"
+        />
+      </section>
 
-      <template v-else>
+      <template v-if="!loadingDates && !dateError && dates.length">
         <div class="content-toolbar">
           <div class="content-count">
             <h2 class="content-date">{{ selectedDate }}</h2>
@@ -204,57 +208,70 @@ onMounted(() => {
               v-if="!loadingContents && !contentError"
               class="content-total"
             >
-              {{ contents.length }} 条内容
+              {{ contents.length }} 条
             </span>
           </div>
-          <ProgrammeDownloadButton
+          <div
             v-if="!loadingContents && !contentError && contents.length"
-            :contents="selectedContents"
-            :disabled="downloadingIds.length > 0"
-            label="批量下载"
-            primary
-            @download="downloadContents(selectedContents, $event)"
-          />
+            class="content-actions"
+          >
+            <div class="selection-toolbar">
+              <span class="selection-summary">已选 {{ selected.length }} 条</span>
+              <NButton
+                v-if="fullIds.length"
+                quaternary
+                :theme-overrides="{
+                  heightMedium: '36px',
+                  fontSizeMedium: '14px',
+                  fontWeight: '500',
+                  paddingMedium: '0 10px',
+                }"
+                @click="selectFullEpisodes"
+              >
+                只选整期
+              </NButton>
+              <NCheckbox
+                :theme-overrides="{ fontSizeMedium: '14px' }"
+                :checked="allSelected"
+                :indeterminate="selected.length > 0 && !allSelected"
+                @update:checked="selectAll"
+              >
+                选择全部
+              </NCheckbox>
+            </div>
+            <ProgrammeDownloadButton
+              :contents="selectedContents"
+              :disabled="downloadingIds.length > 0"
+              label="批量下载"
+              :primary="selected.length > 0"
+              @download="downloadContents(selectedContents, $event)"
+            />
+          </div>
         </div>
 
         <StatePanel
           v-if="loadingContents"
+          class="content-state"
           loading
         />
         <StatePanel
           v-else-if="contentError"
+          class="content-state"
           title="节目内容加载失败"
           :error="contentError"
           @retry="loadContents"
         />
         <StatePanel
           v-else-if="!contents.length"
+          class="content-state"
           title="这一天还没有节目内容"
           description="试试其他播出日期。"
         />
 
         <template v-else>
-          <div class="selection-toolbar">
-            <NCheckbox
-              :checked="allSelected"
-              :indeterminate="selected.length > 0 && !allSelected"
-              @update:checked="selectAll"
-            >
-              选择全部
-            </NCheckbox>
-            <NButton
-              v-if="fullIds.length"
-              text
-              @click="selectFullEpisodes"
-            >
-              <template #icon><Check :size="15" /></template>
-              只选整期
-            </NButton>
-            <span class="selection-summary">已选择 {{ selected.length }} 条</span>
-          </div>
-
           <ProgrammeContentList
             v-model="selected"
+            v-model:sort-order="contentSortOrder"
             :contents="contents"
             :full-ids="fullIds"
             :downloading-ids="downloadingIds"
@@ -277,7 +294,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
   font-size: 14px;
   color: var(--muted);
 }
@@ -285,7 +302,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 24px;
-  margin-bottom: 34px;
+  margin-bottom: 28px;
 }
 .detail-cover {
   view-transition-name: programme-cover;
@@ -301,7 +318,6 @@ onMounted(() => {
   flex: 1;
 }
 .detail-title {
-  margin-top: 6px;
   font-size: 28px;
   overflow-wrap: anywhere;
 }
@@ -317,22 +333,28 @@ onMounted(() => {
 .detail-date-summary {
   white-space: nowrap;
 }
-.content-panel {
+.date-panel,
+.content-state {
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel);
 }
 .content-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 20px;
-  padding: 18px 24px;
+  padding: 24px 0 16px;
 }
 .content-count {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 13px;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.content-actions {
+  display: contents;
 }
 .content-date {
   font-size: 18px;
@@ -340,8 +362,8 @@ onMounted(() => {
   font-weight: 600;
 }
 .content-kind {
-  font-size: 16px;
-  color: var(--text);
+  font-size: 14px;
+  color: var(--muted);
 }
 .content-total {
   font-size: 14px;
@@ -349,16 +371,25 @@ onMounted(() => {
 }
 .selection-toolbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 25px;
-  background: var(--subtle);
-  padding: 11px 24px;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
 }
 .selection-summary {
-  margin-left: auto;
-  font-size: 14px;
+  margin-right: 8px;
+  font-size: 13px;
   color: var(--muted);
+}
+@media (width < 1200px) {
+  .content-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+  .selection-toolbar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }
 @media (hover: hover) {
   .back-link:hover {
@@ -374,10 +405,6 @@ onMounted(() => {
   }
   .detail-favourite {
     align-self: flex-start;
-  }
-  .content-count {
-    flex-wrap: wrap;
-    gap: 7px;
   }
 }
 @media (width < 760px) {
@@ -414,10 +441,8 @@ onMounted(() => {
     min-height: 44px;
   }
   .content-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-    padding: 16px;
+    gap: 4px 12px;
+    padding: 20px 0 8px;
   }
   .content-count {
     display: block;
@@ -434,9 +459,7 @@ onMounted(() => {
     font-size: 13px;
   }
   .selection-toolbar {
-    flex-wrap: nowrap;
-    gap: 8px;
-    padding: 8px 16px;
+    gap: 4px;
   }
   .selection-toolbar :deep(.n-checkbox) {
     min-height: 44px;

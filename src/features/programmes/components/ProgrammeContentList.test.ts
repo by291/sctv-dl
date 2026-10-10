@@ -5,6 +5,57 @@ import ProgrammeContentList from './ProgrammeContentList.vue'
 import type { ProgrammeContent } from '../types'
 
 describe('programme content selection UI', () => {
+  it('separates full episodes from clips while keeping clip sorting within its section', async () => {
+    const content: ProgrammeContent = {
+      id: 'full',
+      title: 'Full episode',
+      cover: null,
+      video: 'https://fscgc.scgchc.com/a.mp4',
+      smoothVideo: null,
+      publishedAt: '2026-10-10 18:30:00',
+    }
+    const wrapper = mount(ProgrammeContentList, {
+      props: {
+        modelValue: [],
+        contents: [
+          { ...content, id: 'late', title: 'Later clip', publishedAt: '2026-10-10 18:55:00' },
+          content,
+          { ...content, id: 'early', title: 'Earlier clip', publishedAt: '2026-10-10 18:41:00' },
+        ],
+        fullIds: ['full'],
+      },
+    })
+
+    try {
+      const fullEpisodes = wrapper.get('section[aria-label="整期节目"]')
+      const clips = wrapper.get('section[aria-label="节目片段"]')
+      const clipTitles = () => clips.findAll('.content-title').map((title) => title.text())
+
+      expect(fullEpisodes.findAll('article')).toHaveLength(1)
+      expect(fullEpisodes.get('.content-title').text()).toBe(content.title)
+      expect(clipTitles()).toEqual(['Earlier clip', 'Later clip'])
+      await fullEpisodes.get('[role="checkbox"]').trigger('click')
+      expect(wrapper.emitted('update:modelValue')).toEqual([[['full']]])
+      await fullEpisodes.get('.content-thumbnail').trigger('click')
+      expect(wrapper.emitted('preview')).toEqual([[content]])
+
+      await clips.get('.content-sort').trigger('click')
+      expect(wrapper.emitted('update:sortOrder')).toEqual([['desc']])
+      await wrapper.setProps({ sortOrder: 'desc' })
+      expect(clipTitles()).toEqual(['Later clip', 'Earlier clip'])
+      expect(fullEpisodes.get('.content-title').text()).toBe(content.title)
+      await wrapper.setProps({ fullIds: [] })
+      expect(wrapper.find('section[aria-label="整期节目"]').exists()).toBe(false)
+      expect(clips.findAll('article')).toHaveLength(3)
+
+      await wrapper.setProps({ contents: [content], fullIds: ['full'] })
+      expect(wrapper.find('section[aria-label="节目片段"]').exists()).toBe(false)
+      expect(wrapper.find('.content-sort').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('reveals a complete title without previewing, downloading, or selecting the content', async () => {
     const title = 'A long programme title '.repeat(12).trim()
     const wrapper = mount(ProgrammeContentList, {
