@@ -28,7 +28,7 @@ class RestorationTest {
         val restore = StateRestorationTester(compose)
         restore.setContent {
             SctvAppTheme(AppSettings()) {
-                AppNavigationShell { route, navigator ->
+                AppNavigationShell { route, navigator, _ ->
                     when (route) {
                         AppRoute.Catalogue -> Button(onClick = { navigator.open(AppRoute.Archive("1")) }) {
                             Text("打开栏目")

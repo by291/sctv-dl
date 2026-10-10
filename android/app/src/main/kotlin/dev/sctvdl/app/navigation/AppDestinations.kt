@@ -3,6 +3,8 @@ package dev.sctvdl.app.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.download.DownloadRequest
 import dev.sctvdl.domain.settings.AppSettings
 import dev.sctvdl.feature.downloads.DownloadsRoute
@@ -25,11 +27,16 @@ internal fun AppDestinations(
     onDownload: (List<DownloadRequest>) -> Unit,
     onMessage: suspend (String) -> Unit,
     playbackSelection: PlaybackSelection?,
-    onPlaybackSelection: (PlaybackSelection) -> Unit
+    onPlaybackSelection: (PlaybackSelection) -> Unit,
+    bottomContentPadding: Dp = 0.dp
 ) {
     when (route) {
         AppRoute.Settings -> SettingsRoute()
-        AppRoute.Catalogue -> CatalogueRoute(library, { navigator.open(AppRoute.Archive(it)) })
+        AppRoute.Catalogue -> CatalogueRoute(
+            library,
+            { navigator.open(AppRoute.Archive(it)) },
+            bottomContentPadding = bottomContentPadding
+        )
         is AppRoute.Archive -> ArchiveRoute(
             route.programmeId,
             library,
@@ -48,7 +55,8 @@ internal fun AppDestinations(
                 )
                 navigator.open(AppRoute.Playback(selection.programmeId, selection.dateId, selection.content.id))
             },
-            onDownload
+            onDownload,
+            bottomContentPadding = bottomContentPadding
         )
         AppRoute.Downloads -> DownloadsRoute({ navigator.open(AppRoute.LocalPlayback(it)) }, onMessage)
         is AppRoute.Playback -> PlayerRoute(

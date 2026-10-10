@@ -46,7 +46,7 @@ class NavigationTest {
         activity.setContent {
             SctvAppTheme(AppSettings()) {
                 Box(Modifier.semantics { testTagsAsResourceId = true }) {
-                    AppNavigationShell { route, _ -> Text("页面 ${route::class.simpleName}") }
+                    AppNavigationShell { route, _, _ -> Text("页面 ${route::class.simpleName}") }
                 }
             }
         }
@@ -58,7 +58,7 @@ class NavigationTest {
                 activity.setContent {
                     SctvAppTheme(AppSettings()) {
                         Box(Modifier.semantics { testTagsAsResourceId = true }) {
-                            AppNavigationShell { route, navigator ->
+                            AppNavigationShell { route, navigator, _ ->
                                 when (route) {
                                     AppRoute.Catalogue -> Button(onClick = { navigator.open(AppRoute.Archive("1")) }) {
                                         Text("打开栏目")
@@ -87,7 +87,7 @@ class NavigationTest {
                 activity.setContent {
                     SctvAppTheme(AppSettings()) {
                         Box(Modifier.semantics { testTagsAsResourceId = true }) {
-                            AppNavigationShell(downloadsRequest = request) { route, navigator ->
+                            AppNavigationShell(downloadsRequest = request) { route, navigator, _ ->
                                 Column {
                                     Text("页面 ${route::class.simpleName}")
                                     Button(onClick = { navigator.open(AppRoute.Archive("1")) }) { Text("打开栏目") }

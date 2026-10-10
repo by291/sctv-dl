@@ -21,7 +21,7 @@ class AdaptiveLayoutTest {
     fun wideWindowPlacesPrimaryDestinationsInALeftRail() {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
-                SctvAppTheme(AppSettings()) { AppNavigationShell { _, _ -> } }
+                SctvAppTheme(AppSettings()) { AppNavigationShell { _, _, _ -> } }
             }
         }
         val catalogue = compose.onNodeWithTag("tab-Catalogue").fetchSemanticsNode().boundsInRoot

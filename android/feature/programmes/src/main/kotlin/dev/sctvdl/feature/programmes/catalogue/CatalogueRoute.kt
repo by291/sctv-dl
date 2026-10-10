@@ -1,13 +1,20 @@
 package dev.sctvdl.feature.programmes.catalogue
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.sctvdl.feature.programmes.presentation.ProgrammeLibraryState
 import dev.sctvdl.feature.programmes.presentation.rememberCatalogueScrollState
 
 @Composable
-fun CatalogueRoute(library: ProgrammeLibraryState, onOpenProgramme: (String) -> Unit, embedded: Boolean = false) {
+fun CatalogueRoute(
+    library: ProgrammeLibraryState,
+    onOpenProgramme: (String) -> Unit,
+    embedded: Boolean = false,
+    bottomContentPadding: Dp = 0.dp
+) {
     val model = library.model
     val state = library.state.value
     val catalogueScroll = rememberCatalogueScrollState(if (embedded) library.cataloguePanePosition else null)
@@ -28,6 +35,7 @@ fun CatalogueRoute(library: ProgrammeLibraryState, onOpenProgramme: (String) -> 
         embedded = embedded,
         onApplyUpdates = model::applyUpdates,
         catalogueScroll = catalogueScroll,
-        favouritesScroll = favouritesScroll
+        favouritesScroll = favouritesScroll,
+        bottomContentPadding = bottomContentPadding
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -26,7 +27,8 @@ fun ArchiveRoute(
     onBack: () -> Unit,
     onOpenProgramme: (String) -> Unit,
     onPlay: (ArchivePlaybackSelection) -> Unit,
-    onDownload: (List<DownloadRequest>) -> Unit
+    onDownload: (List<DownloadRequest>) -> Unit,
+    bottomContentPadding: Dp = 0.dp
 ) {
     // Capture accepted artwork before the entry is resumed; pending metadata must not replace it.
     val entryProgramme = remember(programmeId) {
@@ -48,7 +50,14 @@ fun ArchiveRoute(
 
         Row {
             if (expanded) {
-                Box(Modifier.width(340.dp)) { CatalogueRoute(library, onOpenProgramme, embedded = true) }
+                Box(Modifier.width(340.dp)) {
+                    CatalogueRoute(
+                        library,
+                        onOpenProgramme,
+                        embedded = true,
+                        bottomContentPadding = bottomContentPadding
+                    )
+                }
                 VerticalDivider()
             }
             Box(Modifier.weight(1f)) {
@@ -79,7 +88,8 @@ fun ArchiveRoute(
                     model::exitSelection,
                     onDownload,
                     onApplyUpdates = model::applyUpdates,
-                    onToggleClipSort = model::toggleClipSort
+                    onToggleClipSort = model::toggleClipSort,
+                    bottomContentPadding = bottomContentPadding
                 )
             }
         }

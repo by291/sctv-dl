@@ -38,6 +38,8 @@ Use three primary destinations: `节目库`, `下载`, and `设置`. Catalogue a
 
 Compact windows show bottom navigation only on primary destinations; programme details and playback use the full content area with their own return action. Medium and expanded windows use an adaptive navigation rail, except during playback. Expanded archive layouts show the library alongside programme details; switching window size does not lose selection or player position. Download notifications open the download list and are consumed once so recreation does not override subsequent navigation.
 
+Bottom navigation belongs to its primary page and participates in the same navigation transition. Each entry retains its own bottom spacing until it leaves composition, so opening programme details does not expand the outgoing library and expose cards beneath the disappearing bar. Returning restores the bar with the library without changing the outgoing archive's gesture spacing.
+
 Opening a catalogue card or exploration programme shares its cover with the archive header through Compose's native shared-element transition. Exploration artwork rotates upright while moving into the header; its rotation follows the actual animated bounds, so entering, returning, and predictive back keep both in sync. Grid covers remain upright. Only the clicked source participates, even when the same programme appears in both places; the embedded library does not introduce a third match. The programme ID and cover URL identify the image, and returning restores the original browsing position. Missing covers, absent source items, and large-text archives without artwork use the ordinary page transition. System animation settings remain respected.
 
 The archive header previews the accepted catalogue programme during entry, before the destination starts its normal refresh. Opening the archive retains that programme snapshot; newer names or artwork remain pending until the user accepts the existing update action. Dates, contents, and playback keep their existing cache and lifecycle contracts.
@@ -135,6 +137,8 @@ The library toolbar and adaptive launcher icon share the `core:design` vector re
 Cover images use deterministic aspect ratios, a neutral placeholder, and a graceful failure state. Programme cards and video content are different reusable components rather than one overloaded card.
 
 Support edge-to-edge rendering, display cutouts, gesture navigation, keyboard insets, TalkBack, sufficient text contrast, and font scale up to 200%. Progress and favourite state have spoken labels. Selection is indicated with text or check state as well as colour. Avoid duplicate accessibility announcements from decorative cover images.
+
+Archive video lists extend beneath the system navigation area. The programme library keeps its viewport above a bottom navigation bar; when navigation uses a rail, its grid and the embedded library pane also extend into the system navigation area. Apply bottom safe spacing as scrollable content padding so the last item can settle fully above navigation. The fixed batch download action keeps its controls above system navigation.
 
 Every data screen distinguishes initial loading, successful content, genuinely empty data, empty search results, cached data while refreshing, refresh failure, and unrecoverable initial failure. Cached catalogue and archive records are usable offline, but uncached online media clearly requires connectivity.
 

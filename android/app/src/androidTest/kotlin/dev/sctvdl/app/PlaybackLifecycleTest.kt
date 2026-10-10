@@ -52,7 +52,8 @@ class PlaybackLifecycleTest {
                         Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                             AppNavigationShell(onBackCommitted = activity::pausePlayerForDismissal) {
                                     route,
-                                    navigator
+                                    navigator,
+                                    _
                                 ->
                                 pop = navigator.back
                                 when (route) {

@@ -58,6 +58,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
 import dev.sctvdl.design.components.SctvBrand
@@ -85,7 +86,8 @@ internal fun CatalogueScreen(
     embedded: Boolean = false,
     onApplyUpdates: () -> Unit = {},
     catalogueScroll: LazyGridState = rememberLazyGridState(),
-    favouritesScroll: LazyGridState = rememberLazyGridState()
+    favouritesScroll: LazyGridState = rememberLazyGridState(),
+    bottomContentPadding: Dp = 0.dp
 ) {
     val rows = state.rows(favouritesOnly)
     val initialLoading = state.resource.data == null && state.resource.error == null
@@ -198,7 +200,12 @@ internal fun CatalogueScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("catalogue-grid"),
                 state = if (favouritesOnly) favouritesScroll else catalogueScroll,
                 columns = GridCells.Adaptive(if (largeText) 280.dp else 156.dp),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 16.dp,
+                    end = 16.dp,
+                    bottom = 16.dp + bottomContentPadding
+                ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

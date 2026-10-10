@@ -40,11 +40,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
 import dev.sctvdl.design.components.StatePanel
@@ -84,7 +86,8 @@ internal fun ArchiveScreen(
     onExitSelection: () -> Unit,
     onDownload: (List<DownloadRequest>) -> Unit,
     onApplyUpdates: () -> Unit = {},
-    onToggleClipSort: () -> Unit = {}
+    onToggleClipSort: () -> Unit = {},
+    bottomContentPadding: Dp = 0.dp
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
@@ -135,9 +138,11 @@ internal fun ArchiveScreen(
         }
         Column(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
+                Modifier.weight(1f).fillMaxWidth().testTag("archive-list"),
                 state = scroll,
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(
+                    bottom = 24.dp + if (state.selectionMode) 0.dp else bottomContentPadding
+                ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (!state.selectionMode) {
@@ -289,7 +294,9 @@ internal fun ArchiveScreen(
                 Button(
                     onClick = { downloadIds = ArrayList(state.selectedIds) },
                     enabled = state.selectedIds.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(min = TouchTarget)
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomContentPadding)
+                        .heightIn(min = TouchTarget)
                 ) { Text("下载所选（${state.selectedIds.size}）") }
             }
         }

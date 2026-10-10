@@ -60,6 +60,8 @@ Follow the [Kotlin conventions](https://kotlinlang.org/docs/coding-conventions.h
 
 ## Verification
 
+Use a separate, disposable, agent-owned AVD for emulator and instrumentation tests. Never reuse the user's everyday emulator unless the user explicitly authorizes that device. Select the agent-owned device explicitly for every ADB command and connected test run; do not run tests on all connected devices. Keep test app installations, display size/density changes, and other test settings on that AVD. Restore temporary settings and stop only processes started for testing; leave the user's emulators running and preserve their apps and data. Confirm restored display settings with both reported values and a screenshot before claiming restoration is complete.
+
 Run from the repository root:
 
 ```powershell

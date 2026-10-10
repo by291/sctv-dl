@@ -2,14 +2,21 @@ package dev.sctvdl.app.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.LiveTv
@@ -32,7 +39,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
@@ -50,7 +59,7 @@ import dev.sctvdl.ui.programme.ProgrammeCoverTransitionState
 internal fun AppNavigationShell(
     onBackCommitted: () -> Unit = {},
     downloadsRequest: Int = 0,
-    content: @Composable (AppRoute, AppNavigator) -> Unit
+    content: @Composable (route: AppRoute, navigator: AppNavigator, bottomContentPadding: Dp) -> Unit
 ) {
     val coverTransition = remember { ProgrammeCoverTransitionState() }
     val catalogue = rememberNavBackStack(AppRoute.Catalogue)
@@ -93,50 +102,79 @@ internal fun AppNavigationShell(
             }
         }
     }, back)
-    val decoratedStacks = stacks.mapIndexed { index, backStack ->
-        key(index) {
-            rememberDecoratedNavEntries(
-                backStack = backStack,
-                entryDecorators = listOf(
-                    rememberSaveableStateHolderNavEntryDecorator(),
-                    rememberViewModelStoreNavEntryDecorator()
-                ),
-                entryProvider = { route ->
-                    NavEntry(key = route, contentKey = "$index:$route") {
-                        CompositionLocalProvider(
-                            LocalProgrammeCoverAnimationScope provides LocalNavAnimatedContentScope.current
-                        ) {
-                            content(it as AppRoute, navigator)
-                        }
-                    }
-                }
-            )
-        }
-    }
     val labels = listOf("节目库", "下载", "设置")
     val icons =
         listOf(Icons.Outlined.LiveTv, Icons.Outlined.Download, Icons.Outlined.Settings)
 
     BoxWithConstraints {
-        val rail = maxWidth >= 600.dp && !isPlayer
-        val primary = current in tabs
-        Scaffold(bottomBar = {
-            if (!rail && primary) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    tabs.forEachIndexed { index, route ->
-                        NavigationBarItem(selected = selected == index, onClick = {
-                            selected = index
-                        }, icon = {
-                            Icon(icons[index], null)
-                        }, label = {
-                            Text(labels[index])
-                        }, modifier = Modifier.testTag("tab-${route::class.simpleName}"))
-                    }
+        val rail = maxWidth >= 600.dp
+        Scaffold(
+            contentWindowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+        ) { padding ->
+            val decoratedStacks = stacks.mapIndexed { index, backStack ->
+                key(index) {
+                    rememberDecoratedNavEntries(
+                        backStack = backStack,
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator()
+                        ),
+                        entryProvider = { route ->
+                            NavEntry(key = route, contentKey = "$index:$route") {
+                                CompositionLocalProvider(
+                                    LocalProgrammeCoverAnimationScope provides LocalNavAnimatedContentScope.current
+                                ) {
+                                    val destination = it as AppRoute
+
+                                    // Navigation and its reserved space leave with their page, without resizing it first.
+                                    Scaffold(bottomBar = {
+                                        if (!rail && destination in tabs) {
+                                            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                                                tabs.forEachIndexed { tabIndex, route ->
+                                                    NavigationBarItem(
+                                                        selected = selected == tabIndex,
+                                                        onClick = { selected = tabIndex },
+                                                        icon = { Icon(icons[tabIndex], null) },
+                                                        label = { Text(labels[tabIndex]) },
+                                                        modifier = Modifier.testTag("tab-${route::class.simpleName}")
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }) { destinationPadding ->
+                                        val scrollsBehindNavigation = destination is AppRoute.Archive ||
+                                            (destination == AppRoute.Catalogue && rail)
+                                        val bottomPadding = destinationPadding.calculateBottomPadding()
+
+                                        // A bottom bar bounds the library; beside a rail, lists own the system inset.
+                                        Box(
+                                            Modifier.fillMaxSize().padding(
+                                                bottom = if (scrollsBehindNavigation) 0.dp else bottomPadding
+                                            ).consumeWindowInsets(destinationPadding)
+                                        ) {
+                                            content(
+                                                destination,
+                                                navigator,
+                                                if (scrollsBehindNavigation) bottomPadding else 0.dp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
                 }
             }
-        }) { padding ->
-            Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                if (rail) {
+            val direction = LocalLayoutDirection.current
+
+            Row(
+                Modifier.fillMaxSize().padding(
+                    start = padding.calculateStartPadding(direction),
+                    top = padding.calculateTopPadding(),
+                    end = padding.calculateEndPadding(direction)
+                ).consumeWindowInsets(padding)
+            ) {
+                if (rail && !isPlayer) {
                     NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
                         Spacer(Modifier.height(24.dp))
                         tabs.forEachIndexed { index, route ->

@@ -71,12 +71,12 @@ internal fun SctvApp(activity: MainActivity) {
         SideEffect { activity.setSystemBarIcons(darkIcons) }
 
         Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-            AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) { route, navigator ->
+            AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) { route, navigator, bottomPadding ->
                 AppDestinations(route, navigator, library, state.settings, host, model::enqueue, {
                     snackbar.showSnackbar(it)
                 }, playbackSelection, {
                     playbackSelection = it
-                })
+                }, bottomContentPadding = bottomPadding)
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
         }
