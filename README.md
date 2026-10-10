@@ -19,6 +19,8 @@ Open [http://127.0.0.1:5180](http://127.0.0.1:5180). Internet access is required
 
 Vite serves the frontend and the API/media proxy in one process. Installation uses pnpm's default shared package store.
 
+Web development excludes `android/` from file watching and discovers dependencies from the root `index.html`. Native build outputs and HTML reports stay outside both scans.
+
 ## Build and Serve
 
 ```sh
