@@ -124,150 +124,152 @@ onMounted(() => {
 </script>
 
 <template>
-  <RouterLink
-    to="/"
-    class="back-link"
-  >
-    <ArrowLeft :size="16" />
-    返回节目库
-  </RouterLink>
-
-  <section class="detail-heading">
-    <div class="detail-cover">
-      <CoverImage
-        :src="programme?.cover || null"
-        :alt="programmeName || '电视节目'"
-      />
-    </div>
-    <div class="detail-copy">
-      <h1 class="detail-title">
-        {{ programmeName || '电视节目' }}
-      </h1>
-      <span class="detail-meta">
-        <CalendarDays :size="15" />
-        <span class="detail-date-summary">{{ dateSummary }}</span>
-        <span
-          v-if="dates.length"
-          class="detail-date-summary"
-        >
-          · {{ dates.at(-1)?.date }} 起
-        </span>
-      </span>
-    </div>
-    <NButton
-      v-if="programme"
-      class="detail-favourite"
-      secondary
-      @click="settings.toggleFavourite(programme.id)"
+  <div class="programme-view">
+    <RouterLink
+      to="/"
+      class="back-link"
     >
-      <template #icon>
-        <Star
-          :size="16"
-          :fill="settings.favourites.includes(programme.id) ? 'currentColor' : 'none'"
-        />
-      </template>
-      {{ settings.favourites.includes(programme.id) ? '已收藏' : '收藏栏目' }}
-    </NButton>
-  </section>
+      <ArrowLeft :size="16" />
+      返回节目库
+    </RouterLink>
 
-  <div class="content-panel">
-    <ProgrammeDatePicker
-      v-model="selectedDate"
-      :dates="dates"
-      :loading="loadingDates"
-      @refresh="loadDates"
-    />
-
-    <StatePanel
-      v-if="loadingDates"
-      loading
-    />
-    <StatePanel
-      v-else-if="dateError"
-      title="播出日期加载失败"
-      :error="dateError"
-      @retry="loadDates"
-    />
-    <StatePanel
-      v-else-if="!dates.length"
-      title="这个栏目还没有可用的节目日期"
-      description="稍后回来看看，或选择其他栏目。"
-    />
-
-    <template v-else>
-      <div class="content-toolbar">
-        <div class="content-count">
-          <h2 class="content-date">{{ selectedDate }}</h2>
-          <span class="content-kind">节目内容</span>
-          <span
-            v-if="!loadingContents && !contentError"
-            class="content-total"
-          >
-            {{ contents.length }} 条内容
-          </span>
-        </div>
-        <ProgrammeDownloadButton
-          v-if="!loadingContents && !contentError && contents.length"
-          :contents="selectedContents"
-          :disabled="downloadingIds.length > 0"
-          label="批量下载"
-          primary
-          @download="downloadContents(selectedContents, $event)"
+    <section class="detail-heading">
+      <div class="detail-cover">
+        <CoverImage
+          :src="programme?.cover || null"
+          :alt="programmeName || '电视节目'"
         />
       </div>
+      <div class="detail-copy">
+        <h1 class="detail-title">
+          {{ programmeName || '电视节目' }}
+        </h1>
+        <span class="detail-meta">
+          <CalendarDays :size="15" />
+          <span class="detail-date-summary">{{ dateSummary }}</span>
+          <span
+            v-if="dates.length"
+            class="detail-date-summary"
+          >
+            · {{ dates.at(-1)?.date }} 起
+          </span>
+        </span>
+      </div>
+      <NButton
+        v-if="programme"
+        class="detail-favourite"
+        secondary
+        @click="settings.toggleFavourite(programme.id)"
+      >
+        <template #icon>
+          <Star
+            :size="16"
+            :fill="settings.favourites.includes(programme.id) ? 'currentColor' : 'none'"
+          />
+        </template>
+        {{ settings.favourites.includes(programme.id) ? '已收藏' : '收藏栏目' }}
+      </NButton>
+    </section>
+
+    <div class="content-panel">
+      <ProgrammeDatePicker
+        v-model="selectedDate"
+        :dates="dates"
+        :loading="loadingDates"
+        @refresh="loadDates"
+      />
 
       <StatePanel
-        v-if="loadingContents"
+        v-if="loadingDates"
         loading
       />
       <StatePanel
-        v-else-if="contentError"
-        title="节目内容加载失败"
-        :error="contentError"
-        @retry="loadContents"
+        v-else-if="dateError"
+        title="播出日期加载失败"
+        :error="dateError"
+        @retry="loadDates"
       />
       <StatePanel
-        v-else-if="!contents.length"
-        title="这一天还没有节目内容"
-        description="试试其他播出日期。"
+        v-else-if="!dates.length"
+        title="这个栏目还没有可用的节目日期"
+        description="稍后回来看看，或选择其他栏目。"
       />
 
       <template v-else>
-        <div class="selection-toolbar">
-          <NCheckbox
-            :checked="allSelected"
-            :indeterminate="selected.length > 0 && !allSelected"
-            @update:checked="selectAll"
-          >
-            选择全部
-          </NCheckbox>
-          <NButton
-            v-if="fullIds.length"
-            text
-            @click="selectFullEpisodes"
-          >
-            <template #icon><Check :size="15" /></template>
-            只选整期
-          </NButton>
-          <span class="selection-summary">已选择 {{ selected.length }} 条</span>
+        <div class="content-toolbar">
+          <div class="content-count">
+            <h2 class="content-date">{{ selectedDate }}</h2>
+            <span class="content-kind">节目内容</span>
+            <span
+              v-if="!loadingContents && !contentError"
+              class="content-total"
+            >
+              {{ contents.length }} 条内容
+            </span>
+          </div>
+          <ProgrammeDownloadButton
+            v-if="!loadingContents && !contentError && contents.length"
+            :contents="selectedContents"
+            :disabled="downloadingIds.length > 0"
+            label="批量下载"
+            primary
+            @download="downloadContents(selectedContents, $event)"
+          />
         </div>
 
-        <ProgrammeContentList
-          v-model="selected"
-          :contents="contents"
-          :full-ids="fullIds"
-          :downloading-ids="downloadingIds"
-          @preview="openPreview"
-          @download="downloadContents"
+        <StatePanel
+          v-if="loadingContents"
+          loading
         />
-      </template>
-    </template>
-  </div>
+        <StatePanel
+          v-else-if="contentError"
+          title="节目内容加载失败"
+          :error="contentError"
+          @retry="loadContents"
+        />
+        <StatePanel
+          v-else-if="!contents.length"
+          title="这一天还没有节目内容"
+          description="试试其他播出日期。"
+        />
 
-  <ProgrammePreviewDialog
-    v-model="preview"
-    :quality="settings.quality"
-  />
+        <template v-else>
+          <div class="selection-toolbar">
+            <NCheckbox
+              :checked="allSelected"
+              :indeterminate="selected.length > 0 && !allSelected"
+              @update:checked="selectAll"
+            >
+              选择全部
+            </NCheckbox>
+            <NButton
+              v-if="fullIds.length"
+              text
+              @click="selectFullEpisodes"
+            >
+              <template #icon><Check :size="15" /></template>
+              只选整期
+            </NButton>
+            <span class="selection-summary">已选择 {{ selected.length }} 条</span>
+          </div>
+
+          <ProgrammeContentList
+            v-model="selected"
+            :contents="contents"
+            :full-ids="fullIds"
+            :downloading-ids="downloadingIds"
+            @preview="openPreview"
+            @download="downloadContents"
+          />
+        </template>
+      </template>
+    </div>
+
+    <ProgrammePreviewDialog
+      v-model="preview"
+      :quality="settings.quality"
+    />
+  </div>
 </template>
 
 <style scoped>

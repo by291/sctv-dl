@@ -47,6 +47,8 @@ Favourites come first under every sort mode. Default order preserves service ord
 
 The spotlight selects a catalogue entry when the view is created and changes only on manual shuffle or removal of that entry. Filtering and metadata refresh preserve the chosen ID. There is no automatic rotation.
 
+The route shell keeps one library instance alive for the current app session. Returning from programme details or settings preserves the search, favourites filter, sort order, spotlight, and cover DOM. The library records its scroll position before leaving and restores it after reactivation; the router does not reset this route to the top. A full browser refresh starts a new browsing session. Programme details and settings are not cached, preserving archive cancellation and player cleanup when details unmount.
+
 ## Selection and Downloads
 
 `useContentSelection` owns selectable IDs independently of quality. Rows with either video variant are selectable. Full-episode matching uses the programme name and broadcast date in the title, including supported parentheses variants; list position is not evidence of a full episode.

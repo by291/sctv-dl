@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef } from 'vue'
+import { computed, nextTick, onActivated, onMounted, ref, toRef } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 
 import { NButton, NInput, NSelect, NTab, NTabs } from 'naive-ui'
 import { Search, RefreshCw } from '@lucide/vue'
@@ -16,6 +17,7 @@ const settings = useSettingsStore()
 const query = ref('')
 const tab = ref<'all' | 'favourites'>('all')
 const sort = ref<'default' | 'name'>('default')
+let scrollPosition = { left: 0, top: 0 }
 
 const sortOptions = [
   { label: '默认排序', value: 'default' },
@@ -52,142 +54,155 @@ const { featured, canChange, chooseAnother } = useFeaturedProgramme(toRef(store,
 onMounted(() => {
   void store.load()
 })
+
+onBeforeRouteLeave(() => {
+  scrollPosition = { left: window.scrollX, top: window.scrollY }
+})
+
+onActivated(async () => {
+  await nextTick()
+  window.scrollTo({ ...scrollPosition, behavior: 'instant' })
+})
 </script>
 
 <template>
-  <section class="page-heading">
-    <div>
-      <h1>节目库</h1>
-    </div>
-    <NButton
-      :loading="store.loading"
-      secondary
-      @click="store.load(true)"
-    >
-      <template #icon><RefreshCw :size="16" /></template>
-      刷新节目
-    </NButton>
-  </section>
-
-  <div
-    v-if="featured"
-    class="library-intro"
-  >
-    <ProgrammeSpotlight
-      :programme="featured"
-      :can-change="canChange"
-      @change="chooseAnother"
-    />
-    <div class="library-stat">
-      <h2 class="library-stat-heading">节目概览</h2>
-      <div class="library-stat-row">
-        <span>全部栏目</span>
-        <strong class="library-stat-value">{{ store.programmes.length }}</strong>
+  <div class="library-view">
+    <section class="page-heading">
+      <div>
+        <h1>节目库</h1>
       </div>
-      <div class="library-stat-row">
-        <span>已收藏</span>
-        <strong class="library-stat-value">{{ settings.favourites.length }}</strong>
-      </div>
-    </div>
-  </div>
+      <NButton
+        :loading="store.loading"
+        secondary
+        @click="store.load(true)"
+      >
+        <template #icon><RefreshCw :size="16" /></template>
+        刷新节目
+      </NButton>
+    </section>
 
-  <div class="library-toolbar">
-    <NTabs
-      v-model:value="tab"
-      class="library-tabs"
-      type="line"
-      size="medium"
-      :bar-width="32"
-      :theme-overrides="tabTheme"
-      role="tablist"
-      aria-label="栏目筛选"
+    <div
+      v-if="featured"
+      class="library-intro"
     >
-      <NTab
-        name="all"
-        role="tab"
-        tabindex="0"
-        :aria-selected="tab === 'all'"
-        @keydown.enter.prevent="tab = 'all'"
-        @keydown.space.prevent="tab = 'all'"
-      >
-        全部栏目
-        <span class="filter-count">
-          {{ store.programmes.length }}
-        </span>
-      </NTab>
-      <NTab
-        name="favourites"
-        role="tab"
-        tabindex="0"
-        :aria-selected="tab === 'favourites'"
-        @keydown.enter.prevent="tab = 'favourites'"
-        @keydown.space.prevent="tab = 'favourites'"
-      >
-        我的收藏
-        <span class="filter-count">
-          {{ settings.favourites.length }}
-        </span>
-      </NTab>
-    </NTabs>
-    <div class="library-filters">
-      <NInput
-        v-model:value="query"
-        class="library-search"
-        clearable
-        placeholder="搜索节目名称"
-        aria-label="搜索节目名称"
-      >
-        <template #prefix><Search :size="17" /></template>
-      </NInput>
-      <NSelect
-        v-model:value="sort"
-        class="library-sort"
-        :options="sortOptions"
-        aria-label="节目排序"
+      <ProgrammeSpotlight
+        :programme="featured"
+        :can-change="canChange"
+        @change="chooseAnother"
       />
+      <div class="library-stat">
+        <h2 class="library-stat-heading">节目概览</h2>
+        <div class="library-stat-row">
+          <span>全部栏目</span>
+          <strong class="library-stat-value">{{ store.programmes.length }}</strong>
+        </div>
+        <div class="library-stat-row">
+          <span>已收藏</span>
+          <strong class="library-stat-value">{{ settings.favourites.length }}</strong>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <StatePanel
-    v-if="store.loading && !store.programmes.length"
-    loading
-  />
+    <div class="library-toolbar">
+      <NTabs
+        v-model:value="tab"
+        class="library-tabs"
+        type="line"
+        size="medium"
+        :bar-width="32"
+        :theme-overrides="tabTheme"
+        role="tablist"
+        aria-label="栏目筛选"
+      >
+        <NTab
+          name="all"
+          role="tab"
+          tabindex="0"
+          :aria-selected="tab === 'all'"
+          @keydown.enter.prevent="tab = 'all'"
+          @keydown.space.prevent="tab = 'all'"
+        >
+          全部栏目
+          <span class="filter-count">
+            {{ store.programmes.length }}
+          </span>
+        </NTab>
+        <NTab
+          name="favourites"
+          role="tab"
+          tabindex="0"
+          :aria-selected="tab === 'favourites'"
+          @keydown.enter.prevent="tab = 'favourites'"
+          @keydown.space.prevent="tab = 'favourites'"
+        >
+          我的收藏
+          <span class="filter-count">
+            {{ settings.favourites.length }}
+          </span>
+        </NTab>
+      </NTabs>
+      <div class="library-filters">
+        <NInput
+          v-model:value="query"
+          class="library-search"
+          clearable
+          placeholder="搜索节目名称"
+          aria-label="搜索节目名称"
+        >
+          <template #prefix><Search :size="17" /></template>
+        </NInput>
+        <NSelect
+          v-model:value="sort"
+          class="library-sort"
+          :options="sortOptions"
+          aria-label="节目排序"
+        />
+      </div>
+    </div>
 
-  <StatePanel
-    v-else-if="store.error"
-    :error="store.error"
-    @retry="store.load(true)"
-  />
-
-  <StatePanel
-    v-else-if="!filtered.length"
-    :title="tab === 'favourites' && !query ? '暂无收藏栏目' : '没有找到匹配的栏目'"
-    :description="
-      tab === 'favourites' && !query ? '点击栏目右上角的星标添加收藏。' : '请更换关键词或清空搜索。'
-    "
-  />
-
-  <TransitionGroup
-    v-else
-    name="catalogue"
-    tag="div"
-    class="programme-grid"
-  >
-    <ProgrammeCard
-      v-for="programme in filtered"
-      :key="programme.id"
-      :programme="programme"
-      :favourite="settings.favourites.includes(programme.id)"
-      @toggle-favourite="settings.toggleFavourite"
+    <StatePanel
+      v-if="store.loading && !store.programmes.length"
+      loading
     />
-  </TransitionGroup>
 
-  <div
-    v-if="filtered.length"
-    class="list-footer"
-  >
-    <span>共 {{ filtered.length }} 个栏目</span>
-    <span>内容来自四川观察节目服务</span>
+    <StatePanel
+      v-else-if="store.error"
+      :error="store.error"
+      @retry="store.load(true)"
+    />
+
+    <StatePanel
+      v-else-if="!filtered.length"
+      :title="tab === 'favourites' && !query ? '暂无收藏栏目' : '没有找到匹配的栏目'"
+      :description="
+        tab === 'favourites' && !query
+          ? '点击栏目右上角的星标添加收藏。'
+          : '请更换关键词或清空搜索。'
+      "
+    />
+
+    <TransitionGroup
+      v-else
+      name="catalogue"
+      tag="div"
+      class="programme-grid"
+    >
+      <ProgrammeCard
+        v-for="programme in filtered"
+        :key="programme.id"
+        :programme="programme"
+        :favourite="settings.favourites.includes(programme.id)"
+        @toggle-favourite="settings.toggleFavourite"
+      />
+    </TransitionGroup>
+
+    <div
+      v-if="filtered.length"
+      class="list-footer"
+    >
+      <span>共 {{ filtered.length }} 个栏目</span>
+      <span>内容来自四川观察节目服务</span>
+    </div>
   </div>
 </template>
 

@@ -88,12 +88,16 @@ function isActive(path: string): boolean {
             :mode="viewTransitionActive ? undefined : 'out-in'"
             :css="!viewTransitionActive"
           >
-            <div
-              :key="currentRoute.path"
-              class="page-view"
+            <KeepAlive
+              include="LibraryView"
+              :max="1"
             >
-              <component :is="Component" />
-            </div>
+              <component
+                :is="Component"
+                :key="currentRoute.path"
+                class="page-view"
+              />
+            </KeepAlive>
           </Transition>
         </RouterView>
       </main>

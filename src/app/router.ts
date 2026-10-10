@@ -24,7 +24,9 @@ export const router = createRouter({
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  // The cached library restores its position after its DOM has been reactivated.
+  scrollBehavior: (to, _from, savedPosition) =>
+    to.name === 'library' ? false : (savedPosition ?? { top: 0 }),
 })
 router.afterEach((to) => {
   document.title = `${String(to.meta.title || '节目库')} · sctv-dl`
