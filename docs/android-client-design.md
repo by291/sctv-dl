@@ -126,6 +126,8 @@ Use stable Material 3 components and a custom theme. The default palette uses a 
 
 Favour compact editorial layouts and real programme artwork. Use restrained borders and elevation, and reserve strong filled actions for the screen's main action. Avoid decorative dashboards and excessive chips. Long Chinese titles wrap and remain inspectable; button labels must not be squeezed into icon-only controls.
 
+The library toolbar and adaptive launcher icon share the `core:design` vector resource `ic_sctv_brand`. The toolbar tints it with the active theme; the launcher uses the white mark on the brand background, inset to a 48dp mark within the 108dp layer so it stays clear of circular masks. Its foreground and monochrome layers use the same inset drawable. Keep the television geometry in that shared resource.
+
 Cover images use deterministic aspect ratios, a neutral placeholder, and a graceful failure state. Programme cards and video content are different reusable components rather than one overloaded card.
 
 Support edge-to-edge rendering, display cutouts, gesture navigation, keyboard insets, TalkBack, sufficient text contrast, and font scale up to 200%. Progress and favourite state have spoken labels. Selection is indicated with text or check state as well as colour. Avoid duplicate accessibility announcements from decorative cover images.
