@@ -61,6 +61,7 @@ import dev.sctvdl.design.ErrorBanner
 import dev.sctvdl.design.QualitySheet
 import dev.sctvdl.design.StatePanel
 import dev.sctvdl.design.TouchTarget
+import dev.sctvdl.design.sharedProgrammeCover
 import dev.sctvdl.domain.BroadcastDate
 import dev.sctvdl.domain.DownloadRequest
 import dev.sctvdl.domain.ProgrammeContent
@@ -312,15 +313,19 @@ private fun ArchiveHeader(state: ArchiveUiState, onFavourite: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (!largeText) {
+            val coverModifier = state.programme?.let {
+                Modifier.sharedProgrammeCover(it, MaterialTheme.shapes.medium)
+            } ?: Modifier
             CoverImage(
                 state.programme?.coverUrl,
-                Modifier.width(144.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)
+                coverModifier.width(144.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)
             )
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(state.programme?.name ?: "往期节目", style = MaterialTheme.typography.titleLarge)
             TextButton(
                 onClick = onFavourite,
+                enabled = state.programmeId.isNotBlank(),
                 contentPadding = PaddingValues(horizontal = 0.dp),
                 modifier = Modifier.heightIn(min = TouchTarget)
             ) {

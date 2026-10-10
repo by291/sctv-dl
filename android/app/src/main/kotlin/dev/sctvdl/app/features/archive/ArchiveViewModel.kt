@@ -68,7 +68,7 @@ class ArchiveViewModel @Inject constructor(
         }
     }
 
-    fun open(programmeId: String) {
+    fun open(programmeId: String, initialProgramme: Programme? = null) {
         if (started && state.value.programmeId == programmeId) {
             refresh()
             return
@@ -89,9 +89,8 @@ class ArchiveViewModel @Inject constructor(
         mutableState.value =
             ArchiveUiState(
                 programmeId = programmeId,
-                programme = programmes.firstOrNull {
-                    it.id == programmeId
-                },
+                programme = initialProgramme?.takeIf { it.id == programmeId }
+                    ?: programmes.firstOrNull { it.id == programmeId },
                 favourite = programmeId in favouriteIds
             )
 

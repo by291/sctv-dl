@@ -28,6 +28,27 @@ class ArchiveViewModelTest {
     private val older = BroadcastDate("10", LocalDate.of(2026, 10, 5))
     private val newer = BroadcastDate("11", LocalDate.of(2026, 10, 6))
 
+    @Test fun clickedProgrammeRemainsVisibleUntilNewMetadataIsAccepted() = runTest {
+        val clicked = Programme("1", "Visible programme", "old-cover.jpg", 0)
+        val latest = clicked.copy(name = "Updated programme", coverUrl = "new-cover.jpg")
+        val repo = FakeProgrammes().apply {
+            observeProgrammes().value = CachedResource(listOf(latest))
+        }
+        val model = ArchiveViewModel(repo, FakeFavourites(), SavedStateHandle())
+        runCurrent()
+        model.open("1", clicked)
+        runCurrent()
+        assertEquals(clicked, model.state.value.programme)
+        assertTrue(model.state.value.hasUpdate)
+
+        model.open("1", latest)
+        runCurrent()
+        assertEquals(clicked, model.state.value.programme)
+        model.applyUpdates()
+        runCurrent()
+        assertEquals(latest, model.state.value.programme)
+    }
+
     @Test fun backgroundResultsKeepTheVisibleDateAndSelectedContents() = runTest {
         val repo = FakeProgrammes().apply {
             observeDates("1").value = CachedResource(listOf(newer, older))

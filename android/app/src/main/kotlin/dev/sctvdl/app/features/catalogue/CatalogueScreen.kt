@@ -94,6 +94,8 @@ fun CatalogueScreen(
     var sortMenu by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var requestSearchFocus by remember { mutableStateOf(false) }
+    // A programme can appear in both the spotlight and grid; only the clicked cover participates.
+    var openedCover by rememberSaveable { mutableStateOf<String?>(null) }
     val searching = searchExpanded || state.query.isNotEmpty()
     val searchFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -215,8 +217,12 @@ fun CatalogueScreen(
                                     ProgrammeSpotlight(
                                         programme,
                                         state.resource.data.orEmpty().size > 1,
-                                        { onOpen(programme.id) },
-                                        onExplore
+                                        {
+                                            openedCover = "spotlight:${programme.id}"
+                                            onOpen(programme.id)
+                                        },
+                                        onExplore,
+                                        shareCover = !embedded && openedCover == "spotlight:${programme.id}"
                                     )
                                 }
                             }
@@ -281,7 +287,16 @@ fun CatalogueScreen(
                         }
                     }
                     else -> items(rows, key = { it.id }) { row ->
-                        ProgrammeCard(row, row.id in state.favourites, { onOpen(row.id) }, { onFavourite(row.id) })
+                        ProgrammeCard(
+                            row,
+                            row.id in state.favourites,
+                            {
+                                openedCover = "card:${row.id}"
+                                onOpen(row.id)
+                            },
+                            { onFavourite(row.id) },
+                            shareCover = !embedded && openedCover == "card:${row.id}"
+                        )
                     }
                 }
             }

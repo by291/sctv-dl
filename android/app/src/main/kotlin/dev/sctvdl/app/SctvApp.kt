@@ -116,10 +116,24 @@ fun SctvApp() {
                         )
                     }
                     is AppRoute.Archive -> {
+                        // Keep the accepted catalogue artwork available before the entry becomes resumed.
+                        val entryProgramme = remember(route.programmeId) {
+                            catalogue.resource.data.orEmpty().firstOrNull { it.id == route.programmeId }
+                        }
                         val archiveModel: ArchiveViewModel =
                             hiltViewModel(key = "archive-${route.programmeId}")
                         val archive by archiveModel.state.collectAsStateWithLifecycle()
-                        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { archiveModel.open(route.programmeId) }
+                        val displayedArchive = if (archive.programme == null) {
+                            archive.copy(
+                                programme = entryProgramme,
+                                favourite = route.programmeId in catalogue.favourites
+                            )
+                        } else {
+                            archive
+                        }
+                        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                            archiveModel.open(route.programmeId, entryProgramme)
+                        }
                         BoxWithConstraints {
                             val expanded = maxWidth >= 840.dp
                             Row {
@@ -144,7 +158,7 @@ fun SctvApp() {
                                 }
                                 Box(Modifier.weight(1f)) {
                                     ArchiveScreen(
-                                        archive,
+                                        displayedArchive,
                                         settings.wifiOnlyDownloads,
                                         navigator.back,
                                         archiveModel::selectDate,

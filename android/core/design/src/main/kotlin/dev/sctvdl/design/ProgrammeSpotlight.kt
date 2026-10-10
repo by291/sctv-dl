@@ -37,9 +37,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.Programme
 
+private const val SPOTLIGHT_COVER_ROTATION = -5f
+
 @Composable
-fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> Unit, onChange: () -> Unit) {
+fun ProgrammeSpotlight(
+    programme: Programme,
+    canChange: Boolean,
+    onOpen: () -> Unit,
+    onChange: () -> Unit,
+    shareCover: Boolean = false
+) {
     val colours = MaterialTheme.colorScheme
+    val coverTransition = LocalProgrammeCoverTransitionState.current
     val largeText = LocalDensity.current.fontScale >= 1.5f
     Surface(
         color = colours.primaryContainer.copy(alpha = 0.35f),
@@ -72,12 +81,26 @@ fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> U
                         }
                     }
                     if (!largeText) {
-                        SpotlightCoverFrame(availableWidth) { modifier -> CoverImage(programme.coverUrl, modifier) }
+                        val artworkModifier = if (shareCover) {
+                            Modifier.sharedProgrammeCover(
+                                programme,
+                                MaterialTheme.shapes.small,
+                                SPOTLIGHT_COVER_ROTATION
+                            )
+                        } else {
+                            Modifier.rotate(SPOTLIGHT_COVER_ROTATION).clip(MaterialTheme.shapes.small)
+                        }
+                        SpotlightCoverFrame(availableWidth, artworkModifier) { modifier ->
+                            CoverImage(programme.coverUrl, modifier)
+                        }
                     }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(
-                        onClick = onOpen,
+                        onClick = {
+                            coverTransition?.select(programme, SPOTLIGHT_COVER_ROTATION)
+                            onOpen()
+                        },
                         contentPadding = PaddingValues(horizontal = 14.dp),
                         modifier = Modifier.heightIn(min = TouchTarget).semantics {
                             contentDescription = "查看栏目${programme.name}"
@@ -101,18 +124,21 @@ fun ProgrammeSpotlight(programme: Programme, canChange: Boolean, onOpen: () -> U
 }
 
 @Composable
-internal fun SpotlightCoverFrame(availableWidth: Dp, content: @Composable (Modifier) -> Unit) {
+internal fun SpotlightCoverFrame(
+    availableWidth: Dp,
+    artworkModifier: Modifier = Modifier.rotate(SPOTLIGHT_COVER_ROTATION).clip(MaterialTheme.shapes.small),
+    content: @Composable (Modifier) -> Unit
+) {
     val width = if (availableWidth >= 480.dp) 240.dp else (availableWidth * 0.46f).coerceIn(112.dp, 160.dp)
-    Box(Modifier.padding(8.dp)) {
+    Box(Modifier.padding(8.dp).width(width)) {
         Surface(
-            modifier = Modifier.width(width).rotate(-5f),
+            modifier = Modifier.matchParentSize().rotate(SPOTLIGHT_COVER_ROTATION),
             color = MaterialTheme.colorScheme.surfaceContainerLowest,
             shape = MaterialTheme.shapes.medium,
             shadowElevation = 4.dp
-        ) {
-            Box(Modifier.padding(4.dp).clip(MaterialTheme.shapes.small)) {
-                content(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-            }
+        ) {}
+        Box(Modifier.padding(4.dp)) {
+            content(artworkModifier.fillMaxWidth().aspectRatio(16f / 9f))
         }
     }
 }

@@ -1,6 +1,7 @@
 package dev.sctvdl.app.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,10 +23,12 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -36,7 +39,12 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
+import dev.sctvdl.design.LocalProgrammeCoverAnimationScope
+import dev.sctvdl.design.LocalProgrammeCoverSharedScope
+import dev.sctvdl.design.LocalProgrammeCoverTransitionState
+import dev.sctvdl.design.ProgrammeCoverTransitionState
 
 class AppNavigator(val open: (AppRoute) -> Unit, val back: () -> Unit)
 
@@ -46,6 +54,7 @@ fun AppNavigationShell(
     downloadsRequest: Int = 0,
     content: @Composable (AppRoute, AppNavigator) -> Unit
 ) {
+    val coverTransition = remember { ProgrammeCoverTransitionState() }
     val catalogue = rememberNavBackStack(AppRoute.Catalogue)
     val downloads = rememberNavBackStack(AppRoute.Downloads)
     val settings = rememberNavBackStack(AppRoute.Settings)
@@ -96,7 +105,11 @@ fun AppNavigationShell(
                 ),
                 entryProvider = { route ->
                     NavEntry(key = route, contentKey = "$index:$route") {
-                        content(it as AppRoute, navigator)
+                        CompositionLocalProvider(
+                            LocalProgrammeCoverAnimationScope provides LocalNavAnimatedContentScope.current
+                        ) {
+                            content(it as AppRoute, navigator)
+                        }
                     }
                 }
             )
@@ -139,11 +152,18 @@ fun AppNavigationShell(
                         }
                     }
                 }
-                NavDisplay(
-                    entries = decoratedStacks[selected],
-                    onBack = back,
-                    modifier = Modifier.weight(1f)
-                )
+                SharedTransitionLayout(Modifier.weight(1f)) {
+                    CompositionLocalProvider(
+                        LocalProgrammeCoverSharedScope provides this,
+                        LocalProgrammeCoverTransitionState provides coverTransition
+                    ) {
+                        NavDisplay(
+                            entries = decoratedStacks[selected],
+                            onBack = back,
+                            sharedTransitionScope = this@SharedTransitionLayout
+                        )
+                    }
+                }
             }
         }
     }
