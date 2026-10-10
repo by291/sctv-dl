@@ -3,13 +3,14 @@ import { computed, ref } from 'vue'
 import { NButton, NCheckbox, NCheckboxGroup, NPopover, NTooltip } from 'naive-ui'
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Play } from '@lucide/vue'
 
-import CoverImage from '../../../components/CoverImage.vue'
-import ProgrammeDownloadButton from './ProgrammeDownloadButton.vue'
-import { resolveVideo } from '../video'
-import { programmeContentRows } from '../content'
+import CoverImage from '@/shared/components/CoverImage.vue'
+import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeDownloadButton.vue'
+import { resolveVideo } from '@/features/programmes/model/video-variants'
+import { programmeContentRows } from '@/features/programmes/model/content-presentation'
 
-import type { ProgrammeContent, Quality } from '../types'
-import type { ContentSortOrder } from '../content'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
+import type { Quality } from '@/shared/media/video-quality'
+import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
 
 const selected = defineModel<string[]>({ required: true })
 const sortOrder = defineModel<ContentSortOrder>('sortOrder', { default: 'asc' })
@@ -17,9 +18,9 @@ const props = withDefaults(
   defineProps<{
     contents: ProgrammeContent[]
     fullIds: string[]
-    downloadingIds?: string[]
+    preparingIds?: string[]
   }>(),
-  { downloadingIds: () => [] },
+  { preparingIds: () => [] },
 )
 const emit = defineEmits<{
   preview: [content: ProgrammeContent]
@@ -177,8 +178,8 @@ function hasVideo(content: ProgrammeContent): boolean {
                 label="下载"
                 compact
                 :aria-label="`下载${content.title}`"
-                :disabled="downloadingIds.length > 0"
-                :loading="downloadingIds.includes(content.id)"
+                :disabled="preparingIds.length > 0"
+                :loading="preparingIds.includes(content.id)"
                 @download="emit('download', [content], $event)"
               />
             </div>

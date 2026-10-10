@@ -4,8 +4,8 @@ import { computed, onMounted } from 'vue'
 import { NButton, NRadioGroup, NRadioButton } from 'naive-ui'
 import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
-import { useSettingsStore } from '../store'
-import { useProgrammeStore } from '../../programmes/store'
+import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
+import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 
 const themeOptions = [
   { label: '跟随系统', value: 'system' },
@@ -14,7 +14,7 @@ const themeOptions = [
 ]
 
 const settings = useSettingsStore()
-const programmes = useProgrammeStore()
+const programmes = useProgrammeCatalogueStore()
 const lastUpdated = computed(
   () =>
     programmes.updatedAt?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) ||

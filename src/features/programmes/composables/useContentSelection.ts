@@ -1,9 +1,9 @@
 import { computed, ref, watch } from 'vue'
 
-import { resolveVideo } from '../video'
+import { resolveVideo } from '@/features/programmes/model/video-variants'
 
 import type { Ref } from 'vue'
-import type { ProgrammeContent } from '../types'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
 
 export function useContentSelection(
   contents: Ref<ProgrammeContent[]>,

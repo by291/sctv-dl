@@ -4,12 +4,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, nextTick, ref } from 'vue'
 import { NModal } from 'naive-ui'
 
-import ProgrammePreviewDialog from './ProgrammePreviewDialog.vue'
-import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
+import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePreviewDialog.vue'
+import ProgrammeVideoPlayer from '@/features/programmes/components/ProgrammeVideoPlayer.vue'
 
 import type { VueWrapper } from '@vue/test-utils'
 import type { Ref } from 'vue'
-import type { ProgrammeContent } from '../types'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
 
 const { pause, destroy } = vi.hoisted(() => ({ pause: vi.fn(), destroy: vi.fn() }))
 

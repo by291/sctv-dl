@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
-import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
+import ProgrammeVideoPlayer from '@/features/programmes/components/ProgrammeVideoPlayer.vue'
 
 const { createPlayer } = vi.hoisted(() => ({ createPlayer: vi.fn() }))
 

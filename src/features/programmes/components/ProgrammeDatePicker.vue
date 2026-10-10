@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { NButton, NSelect } from 'naive-ui'
 import { CalendarDays, RefreshCw } from '@lucide/vue'
 
-import type { ProgrammeDate } from '../types'
+import type { ProgrammeDate } from '@/features/programmes/model/programme'
 
 const selectedDate = defineModel<string | null>({ required: true })
 const props = defineProps<{ dates: ProgrammeDate[]; loading: boolean }>()

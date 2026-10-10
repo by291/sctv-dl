@@ -4,7 +4,7 @@ This document describes the current implementation. Development conventions are 
 
 ## Runtime
 
-Development and local build preview use Vite with shared proxy middleware. Production runs `server/index.ts` directly in Node and serves `dist/` without loading Vite. Each mode uses one process and port.
+Development and local build preview use Vite with shared proxy middleware. Production runs `server/main.ts` directly in Node and serves `dist/` without loading Vite. Each mode uses one process and port.
 
 ```mermaid
 flowchart LR
@@ -17,27 +17,59 @@ The service streams video with backpressure. It does not save videos or maintain
 
 ## Module Ownership
 
-| Module                               | Responsibility                                                                   |
-| ------------------------------------ | -------------------------------------------------------------------------------- |
-| `src/app/`                           | Routing, component-library theme, and system theme synchronization               |
-| `src/layouts/`                       | Navigation and application shell                                                 |
-| `src/components/`                    | Shared covers and loading, empty, and error feedback                             |
-| `src/features/programmes/`           | API schemas, catalogue cache, archive requests, selection, library, and previews |
-| `src/features/downloads/`            | Quality resolution, safe filenames, HEAD preflight, and browser handoff          |
-| `src/features/settings/`             | Validated theme, initial preview quality, and favourites                         |
-| `src/shared/`                        | Persistence, errors, media URLs, and stale-request guards                        |
-| `src/styles/global.css`              | Base CSS, theme variables, shared styles, and motion                             |
-| `server/proxy.ts`, `server/media.ts` | Restricted upstream requests and media target/header validation                  |
-| `server/vite-plugin.ts`              | Development and preview proxy adapter                                            |
-| `server/app.ts`, `server/index.ts`   | Production static files, health route, HTTP startup, and shutdown                |
+| Module                                 | Responsibility                                                                     |
+| -------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/main.ts`                          | Browser entry: install Pinia and the router, then mount the app                    |
+| `src/App.vue`                          | Root Naive UI providers                                                            |
+| `src/layouts/`                         | Application navigation shell and cached route presentation                         |
+| `src/router/`                          | Route composition, lazy page imports, and scroll behaviour                         |
+| `src/theme/`                           | Naive UI theme overrides and synchronization with saved preferences                |
+| `src/shared/components/`               | Shared covers and loading, empty, and error feedback                               |
+| `src/shared/composables/`              | Validated reactive persistence                                                     |
+| `src/shared/utils/`                    | Errors, stale-request guards, and browser view transitions                         |
+| `src/shared/media/`                    | Quality schema/types, media-proxy URLs, and browser download handoff               |
+| `src/features/programmes/api/`         | Upstream validation, URL normalization, and the typed programme client             |
+| `src/features/programmes/model/`       | Programme types, content presentation, video variants, and download filenames      |
+| `src/features/programmes/stores/`      | Shared programme catalogue cache                                                   |
+| `src/features/programmes/composables/` | Archive requests, selection, spotlight, cover navigation, and download preparation |
+| `src/features/programmes/components/`  | Programme cards, archive controls, download menus, and player UI                   |
+| `src/features/programmes/views/`       | Programme library and broadcast archive pages                                      |
+| `src/features/settings/model/`         | Preference validation and inferred settings type                                   |
+| `src/features/settings/stores/`        | Persistent settings and favourite programme IDs                                    |
+| `src/features/settings/views/`         | Settings page                                                                      |
+| `src/styles/global.css`                | Base CSS, theme variables, shared styles, and motion                               |
+| `server/main.ts`                       | Production configuration, HTTP startup, and graceful shutdown                      |
+| `server/http-app.ts`                   | Production static assets, readiness, caching, and HTTP method handling             |
+| `server/proxy/proxy-middleware.ts`     | Route dispatch, method handling, and invalid-target responses                      |
+| `server/proxy/proxy-policy.ts`         | API allowlist/pagination, media target validation, and attachment filenames        |
+| `server/proxy/stream-upstream.ts`      | Upstream fetch, headers, timeout, disconnect cancellation, and streaming           |
+| `tooling/upstream-proxy-plugin.ts`     | Vite development and preview adapter for the same proxy middleware                 |
 
 Views compose components and coordinate user feedback. Composables own local lifecycles; Pinia stores own shared state. Domain functions are independent of UI feedback. Shared utilities do not import feature stores, and browser code does not import server modules.
+
+Features group business workflows; responsibility directories explain where a file belongs within each feature. Programme browsing, archive selection, preview, and download preparation form one workflow, so they live in `features/programmes/`. Preferences form `features/settings/`. Each feature uses `views/`, `components/`, `composables/`, `stores/`, `api/`, and `model/` as needed. Omit unused directories. Keep the programme components together; their current size does not require additional library, archive, or player subdivisions.
+
+Place routed pages in their feature's `views/` and business components in its `components/`, including features with a single page or component. Application composition lives at the outer level: `App.vue`, `layouts/`, `router/`, and `theme/`. Shared components and platform helpers stay in `shared/`. A component needs its own folder only when it owns additional implementation files; a colocated test alone does not require another directory.
+
+Dependencies point from application composition to features, and from features to shared code. Programme API/model modules do not depend on settings, stores, composables, or UI. Download preparation uses programme domain rules; the archive view presents its result. Shared quality types let settings validate preview preferences without importing programme API schemas. The browser handoff helper only accepts a URL and filename and has no programme dependency. The production server has no dependency on browser modules or Vite tooling. ESLint enforces these production boundaries, with regression fixtures in `tooling/module-boundaries.test.js`.
+
+Use `@/` for internal browser imports; Vite, Vitest, and the browser TypeScript configuration resolve it to `src/`. Directly executed Node modules use relative imports with explicit `.ts` extensions and `NodeNext` resolution. Both environments enable `verbatimModuleSyntax`; Node additionally requires erasable syntax. Keep runtime and type imports separate. This follows the current [Vue TypeScript guidance](https://vuejs.org/guide/typescript/overview.html) and [Node TypeScript execution rules](https://nodejs.org/api/typescript.html).
+
+Name modules after their responsibility, such as `programme-api.ts`, `content-presentation.ts`, `download-file.ts`, and `settings-schema.ts`. Vue components use PascalCase; views describe the page (`ProgrammeLibraryView`, `ProgrammeArchiveView`), and composable/store filenames match their `useXxx` exports. Tests remain beside their owners. `useProgrammeCoverNavigation.test.ts` is beside the composable even though it mounts the layout and pages to exercise real navigation. Test fixtures may import application composition and consuming modules; browser/server separation still applies to tests.
+
+The directory choices are informed by these actual Vue applications, adjusted to this app's three pages rather than copied wholesale:
+
+| Reference                                                                                                                  | Observed organization                                              | Choice here                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| [create-vue TypeScript/router template](https://github.com/vuejs/create-vue/tree/main/template/code/typescript-router/src) | Root app, router, components, and views                            | Keep application composition explicit and distinguish pages from components                  |
+| [SPlayer source](https://github.com/SPlayer-Dev/SPlayer/tree/dev/src)                                                      | Responsibility directories, with subdirectories for complex groups | Add another grouping level only when the implementation needs it                             |
+| [Directus files module](https://github.com/directus/directus/tree/main/app/src/modules/files)                              | Business modules own their components and route pages              | Keep related programme code within one feature and use consistent responsibility directories |
 
 ## Programme Browsing
 
 The interface uses real upstream data with distinct loading, empty, error, and retry states. It does not fabricate programme records or download progress.
 
-The programme store caches the catalogue; explicit refresh replaces it. `useProgrammeArchive` loads dates for the current programme, then requests contents with the matching date ID. It clears stale content when the programme or date changes and makes no content request without a date.
+`useProgrammeCatalogueStore` caches the catalogue; explicit refresh replaces it. `useProgrammeArchive` loads dates for the current programme, then requests contents with the matching date ID. It clears stale content when the programme or date changes and makes no content request without a date.
 
 `AbortController` cancels obsolete work. `LatestRequest` separately prevents obsolete results from committing state, even if cancellation arrives too late. Requests are cancelled when their scope ends.
 
@@ -59,7 +91,7 @@ Individual rows and the batch action share `ProgrammeDownloadButton`. Clicking o
 
 `makeDownloadFile` resolves the variant and sanitizes the filename. `handOffDownload` performs a HEAD request through the media proxy and validates video content type and attachment headers before clicking a temporary download link.
 
-The view tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. A notification reports handoffs, fallbacks, failures, and the first failed file's error without navigation.
+`useProgrammeDownloads` tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. The composable returns handoffs, fallbacks, and failures; the archive view presents a notification including the first failed file's error without navigation.
 
 A handoff means the browser was asked to save a file. The browser owns transfer progress, destination, pause, cancellation, resume, and completion. There is no persistent queue or download history, and the legacy `sctv-dl:downloads` key is not read. Video is never fully buffered into a page Blob.
 

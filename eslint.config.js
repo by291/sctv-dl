@@ -9,6 +9,19 @@ import css from '@eslint/css'
 import { mergeProcessors } from 'eslint-merge-processors'
 import vueBlocks from 'eslint-processor-vue-blocks'
 
+const browserImportPatterns = [
+  { regex: '^\\.', message: 'Use @/ aliases for browser modules.' },
+  { regex: '(?:^|/)server(?:/|$)', message: 'Browser modules must not import server code.' },
+]
+
+const featureImportPatterns = [
+  ...browserImportPatterns,
+  {
+    regex: '^@/(?:App(?:\\.|$)|main(?:\\.|$)|layouts/|router(?:/|$)|theme/)',
+    message: 'Business and shared modules must not depend on application composition.',
+  },
+]
+
 export default defineConfig(
   { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**', 'android/**'] },
   {
@@ -36,9 +49,71 @@ export default defineConfig(
       ],
     },
   },
-  { files: ['src/**/*.{ts,vue}'], languageOptions: { globals: globals.browser } },
   {
-    files: ['server/**/*.ts', '*.{js,ts}', 'tooling/**/*.js'],
+    files: ['src/**/*.{ts,vue}'],
+    languageOptions: { globals: globals.browser },
+    rules: { 'no-restricted-imports': ['error', { patterns: browserImportPatterns }] },
+  },
+  {
+    files: ['src/features/**/*.{ts,vue}'],
+    ignores: ['src/**/*.test.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: featureImportPatterns }] },
+  },
+  {
+    files: ['src/shared/**/*.{ts,vue}'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            ...featureImportPatterns,
+            {
+              regex: '^@/features/',
+              message: 'Shared modules must be feature-independent.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/features/programmes/{api,model}/**/*.ts'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            ...featureImportPatterns,
+            {
+              regex: '^@/features/(?!programmes/(?:api|model)/)',
+              message:
+                'Programme data and domain rules may only depend on data/domain or shared modules.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['server/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(?:@/|vite(?:/|$)|@vitejs/)|(?:^|/)(?:src|tooling)(?:/|$)',
+              message: 'The production server must not depend on browser or build tooling modules.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['server/**/*.ts', '*.{js,ts}', 'tooling/**/*.{js,ts}'],
     languageOptions: { globals: globals.node },
   },
   {

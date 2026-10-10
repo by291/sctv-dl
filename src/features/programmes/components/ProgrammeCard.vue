@@ -2,10 +2,10 @@
 import { RouterLink } from 'vue-router'
 import { ArrowUpRight, Star } from '@lucide/vue'
 
-import CoverImage from '../../../components/CoverImage.vue'
-import { useProgrammeCoverNavigation } from '../composables/useProgrammeCoverNavigation'
+import CoverImage from '@/shared/components/CoverImage.vue'
+import { useProgrammeCoverNavigation } from '@/features/programmes/composables/useProgrammeCoverNavigation'
 
-import type { Programme } from '../types'
+import type { Programme } from '@/features/programmes/model/programme'
 
 const props = defineProps<{ programme: Programme; favourite: boolean }>()
 const emit = defineEmits<{ toggleFavourite: [id: string] }>()

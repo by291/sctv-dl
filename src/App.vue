@@ -8,9 +8,9 @@ import {
   dateZhCN,
 } from 'naive-ui'
 
-import { themeOverrides } from './app/theme'
-import { useAppTheme } from './app/useAppTheme'
-import AppLayout from './layouts/AppLayout.vue'
+import { themeOverrides } from '@/theme/naive-ui-theme'
+import { useAppTheme } from '@/theme/useAppTheme'
+import AppLayout from '@/layouts/AppLayout.vue'
 
 const { isDark } = useAppTheme()
 </script>

@@ -4,11 +4,11 @@ import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Tv, Library, Settings2 } from '@lucide/vue'
 
-import { useProgrammeStore } from '../features/programmes/store'
-import { viewTransitionActive } from '../shared/view-transition'
+import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
+import { viewTransitionActive } from '@/shared/utils/view-transition'
 
 const route = useRoute()
-const programmes = useProgrammeStore()
+const programmes = useProgrammeCatalogueStore()
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
@@ -89,7 +89,7 @@ function isActive(path: string): boolean {
             :css="!viewTransitionActive"
           >
             <KeepAlive
-              include="LibraryView"
+              include="ProgrammeLibraryView"
               :max="1"
             >
               <component

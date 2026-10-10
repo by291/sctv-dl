@@ -1,14 +1,14 @@
 import { onScopeDispose, ref, watch } from 'vue'
 
-import { api } from '../api'
-import { errorMessage } from '../../../shared/errors'
-import { LatestRequest } from '../../../shared/latest-request'
+import { programmeApi } from '@/features/programmes/api/programme-api'
+import { errorMessage } from '@/shared/utils/errors'
+import { LatestRequest } from '@/shared/utils/latest-request'
 
 import type { Ref } from 'vue'
-import type { ProgrammeApi } from '../api'
-import type { ProgrammeContent, ProgrammeDate } from '../types'
+import type { ProgrammeApi } from '@/features/programmes/api/programme-api'
+import type { ProgrammeContent, ProgrammeDate } from '@/features/programmes/model/programme'
 
-export function useProgrammeArchive(programmeId: Ref<string>, client: ProgrammeApi = api) {
+export function useProgrammeArchive(programmeId: Ref<string>, client: ProgrammeApi = programmeApi) {
   const dates = ref<ProgrammeDate[]>([])
   const selectedDate = ref<string | null>(null)
   const contents = ref<ProgrammeContent[]>([])

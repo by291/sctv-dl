@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import ProgrammeContentList from './ProgrammeContentList.vue'
-import type { ProgrammeContent } from '../types'
+import ProgrammeContentList from '@/features/programmes/components/ProgrammeContentList.vue'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
 
 describe('programme content selection UI', () => {
   it('separates full episodes from clips while keeping clip sorting within its section', async () => {

@@ -3,9 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { NButton, NDropdown } from 'naive-ui'
 import { ChevronDown, Download } from '@lucide/vue'
 
-import { resolveVideo } from '../video'
+import { resolveVideo } from '@/features/programmes/model/video-variants'
 
-import type { ProgrammeContent, Quality } from '../types'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
+import type { Quality } from '@/shared/media/video-quality'
 
 const props = defineProps<{
   contents: ProgrammeContent[]

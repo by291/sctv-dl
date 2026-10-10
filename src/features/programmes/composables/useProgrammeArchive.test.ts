@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
-import { useProgrammeArchive } from './useProgrammeArchive'
-import type { ProgrammeApi } from '../api'
-import type { ProgrammeDate } from '../types'
+import { useProgrammeArchive } from '@/features/programmes/composables/useProgrammeArchive'
+import type { ProgrammeApi } from '@/features/programmes/api/programme-api'
+import type { ProgrammeDate } from '@/features/programmes/model/programme'
 
 describe('programme archive requests', () => {
   it('ignores a stale contents result when the selected date changes', async () => {

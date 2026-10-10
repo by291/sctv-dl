@@ -4,12 +4,12 @@ The Web frontend uses native CSS in Vue scoped styles, CSS variables for themes,
 
 ## Ownership
 
-| Location                                       | Responsibility                                                                                      |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [Vue components](../src/layouts/AppLayout.vue) | Descriptive template classes, component declarations, and responsive rules                          |
-| [Global stylesheet](../src/styles/global.css)  | Application defaults, theme variables, shared presentation classes, transitions, and reduced motion |
-| [Naive UI theme](../src/app/theme.ts)          | Library colors, typography, sizing, and supported component overrides                               |
-| [ESLint configuration](../eslint.config.js)    | Native CSS property, value, and at-rule validation, including Vue style blocks                      |
+| Location                                         | Responsibility                                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| [Vue components](../src/layouts/AppLayout.vue)   | Descriptive template classes, component declarations, and responsive rules                          |
+| [Global stylesheet](../src/styles/global.css)    | Application defaults, theme variables, shared presentation classes, transitions, and reduced motion |
+| [Naive UI theme](../src/theme/naive-ui-theme.ts) | Library colors, typography, sizing, and supported component overrides                               |
+| [ESLint configuration](../eslint.config.js)      | Native CSS property, value, and at-rule validation, including Vue style blocks                      |
 
 Keep feature styles with their owning components. Shared selectors such as `.page-heading`, `.pill`, `.notice`, and `.status-dot` belong in the global stylesheet because several components use them. Introduce a shared class or variable when it represents a repeated design decision; isolated measurements do not need individual tokens.
 

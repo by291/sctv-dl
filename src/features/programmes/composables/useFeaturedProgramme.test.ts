@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 
-import { useFeaturedProgramme } from './useFeaturedProgramme'
+import { useFeaturedProgramme } from '@/features/programmes/composables/useFeaturedProgramme'
 
-import type { Programme } from '../types'
+import type { Programme } from '@/features/programmes/model/programme'
 
 const catalogue: Programme[] = ['1', '2', '3'].map((id) => ({
   id,

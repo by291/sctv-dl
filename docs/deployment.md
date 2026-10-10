@@ -12,7 +12,7 @@ pnpm build
 pnpm start
 ```
 
-The default address is [http://127.0.0.1:3000](http://127.0.0.1:3000). `server/index.ts` executes directly in Node using erasable TypeScript; no TypeScript loader or Vite process is used in production.
+The default address is [http://127.0.0.1:3000](http://127.0.0.1:3000). `server/main.ts` executes directly in Node using erasable TypeScript; no TypeScript loader or Vite process is used in production.
 
 Keep `dist/`, `server/`, `package.json`, and `pnpm-lock.yaml` together. When deploying an already-built frontend, install only runtime dependencies with `pnpm install --prod --frozen-lockfile`, then run `pnpm start`. Building on the host requires development dependencies.
 

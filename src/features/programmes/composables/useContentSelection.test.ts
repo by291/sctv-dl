@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
-import { useContentSelection } from './useContentSelection'
-import type { ProgrammeContent } from '../types'
+import { useContentSelection } from '@/features/programmes/composables/useContentSelection'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
 
 const full: ProgrammeContent = {
   id: '1',

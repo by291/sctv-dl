@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { defineComponent, h } from 'vue'
 import { NButton } from 'naive-ui'
 
-import App from './App.vue'
+import App from '@/App.vue'
 
 import type { Component } from 'vue'
 import type { VueWrapper } from '@vue/test-utils'

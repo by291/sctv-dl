@@ -2,11 +2,12 @@
 import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { NModal } from 'naive-ui'
 
-import { proxyMediaUrl } from '../../../shared/media'
-import { getVideoVariants, resolveVideo } from '../video'
-import ProgrammeVideoPlayer from './ProgrammeVideoPlayer.vue'
+import { proxyMediaUrl } from '@/shared/media/media-proxy-url'
+import { getVideoVariants, resolveVideo } from '@/features/programmes/model/video-variants'
+import ProgrammeVideoPlayer from '@/features/programmes/components/ProgrammeVideoPlayer.vue'
 
-import type { ProgrammeContent, Quality } from '../types'
+import type { ProgrammeContent } from '@/features/programmes/model/programme'
+import type { Quality } from '@/shared/media/video-quality'
 
 const content = defineModel<ProgrammeContent | null>({ required: true })
 const props = defineProps<{ quality: Quality }>()

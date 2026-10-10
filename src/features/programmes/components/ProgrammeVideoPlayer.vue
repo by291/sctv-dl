@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import Artplayer from 'artplayer'
 
-import type { VideoVariant } from '../video'
+import type { VideoVariant } from '@/features/programmes/model/video-variants'
 
 const props = withDefaults(
   defineProps<{

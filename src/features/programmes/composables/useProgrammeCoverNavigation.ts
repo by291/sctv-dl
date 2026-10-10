@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, ref, toValue } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { canStartViewTransition, runViewTransition } from '../../../shared/view-transition'
+import { canStartViewTransition, runViewTransition } from '@/shared/utils/view-transition'
 
 import type { MaybeRefOrGetter } from 'vue'
 

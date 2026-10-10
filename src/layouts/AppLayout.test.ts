@@ -5,18 +5,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { NMessageProvider, NSelect } from 'naive-ui'
 
-import AppLayout from './AppLayout.vue'
-import LibraryView from '../features/programmes/views/LibraryView.vue'
-import ProgrammeView from '../features/programmes/views/ProgrammeView.vue'
-import SettingsView from '../features/settings/views/SettingsView.vue'
-import { api } from '../features/programmes/api'
-import { useProgrammeStore } from '../features/programmes/store'
-import { useSettingsStore } from '../features/settings/store'
+import AppLayout from '@/layouts/AppLayout.vue'
+import ProgrammeLibraryView from '@/features/programmes/views/ProgrammeLibraryView.vue'
+import ProgrammeArchiveView from '@/features/programmes/views/ProgrammeArchiveView.vue'
+import SettingsView from '@/features/settings/views/SettingsView.vue'
+import { programmeApi } from '@/features/programmes/api/programme-api'
+import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
+import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 
 import type { VueWrapper } from '@vue/test-utils'
 
-vi.mock('../features/programmes/api', () => ({
-  api: { dates: vi.fn(), contents: vi.fn(), programmes: vi.fn() },
+vi.mock('@/features/programmes/api/programme-api', () => ({
+  programmeApi: { dates: vi.fn(), contents: vi.fn(), programmes: vi.fn() },
 }))
 
 let wrapper: VueWrapper
@@ -24,10 +24,10 @@ let router: ReturnType<typeof createRouter>
 
 beforeEach(async () => {
   localStorage.clear()
-  vi.mocked(api.dates).mockResolvedValue([])
+  vi.mocked(programmeApi.dates).mockResolvedValue([])
   const pinia = createPinia()
   setActivePinia(pinia)
-  const catalogue = useProgrammeStore()
+  const catalogue = useProgrammeCatalogueStore()
   catalogue.programmes = [
     { id: '1', name: 'Bravo', cover: null },
     { id: '2', name: 'Alpha', cover: null },
@@ -38,8 +38,8 @@ beforeEach(async () => {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'library', component: LibraryView },
-      { path: '/programmes/:id', component: ProgrammeView, props: true },
+      { path: '/', name: 'library', component: ProgrammeLibraryView },
+      { path: '/programmes/:id', component: ProgrammeArchiveView, props: true },
       { path: '/settings', component: SettingsView },
     ],
   })
@@ -57,7 +57,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   wrapper.unmount()
-  useProgrammeStore().$dispose()
+  useProgrammeCatalogueStore().$dispose()
   useSettingsStore().$dispose()
   vi.restoreAllMocks()
 })
@@ -133,7 +133,7 @@ describe('library return navigation', () => {
 
   it('still unmounts programme details and aborts their pending archive request', async () => {
     let requestSignal: AbortSignal | undefined
-    vi.mocked(api.dates).mockImplementation((_id, signal) => {
+    vi.mocked(programmeApi.dates).mockImplementation((_id, signal) => {
       requestSignal = signal
 
       return new Promise(() => {})

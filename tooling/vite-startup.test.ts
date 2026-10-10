@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path'
 import { createServer } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import config from '../vite.config'
+import config from '../vite.config.ts'
 
 import type { ViteDevServer } from 'vite'
 

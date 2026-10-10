@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 
 import type { Ref } from 'vue'
-import type { Programme } from '../types'
+import type { Programme } from '@/features/programmes/model/programme'
 
 export function useFeaturedProgramme(
   programmes: Ref<Programme[]>,

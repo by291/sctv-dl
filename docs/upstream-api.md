@@ -1,6 +1,6 @@
 # Upstream API and Proxy Contracts
 
-This is the contract used by the current implementation, not an official upstream API specification. Frontend validation lives in `src/features/programmes/schemas.ts`; requests in `api.ts`; proxy policy in `server/proxy.ts` and `server/media.ts`.
+This is the contract used by the current implementation, not an official upstream API specification. Frontend validation lives in `src/features/programmes/api/upstream-schemas.ts`; requests in `programme-api.ts`; proxy policy in `server/proxy/proxy-policy.ts` and transport in `stream-upstream.ts`.
 
 ## Programme Endpoints
 
@@ -52,7 +52,7 @@ A browser cannot use [Fetch's referrer option](https://developer.mozilla.org/en-
 
 `/media` accepts an encoded `url` query parameter targeting an HTTPS MP4 on `fscgc.scgchc.com`. Credentials, nondefault ports, other hosts/protocols, and non-MP4 paths are rejected. Redirects are rejected rather than followed.
 
-For preview, use `/media?url=<encoded-upstream-url>`. For browser download, add `download=1` and `filename=<encoded-filename>`; the response supplies a sanitized RFC 5987 Content-Disposition attachment filename. `src/shared/media.ts` builds these query parameters with `URLSearchParams`.
+For preview, use `/media?url=<encoded-upstream-url>`. For browser download, add `download=1` and `filename=<encoded-filename>`; the response supplies a sanitized RFC 5987 Content-Disposition attachment filename. `src/shared/media/media-proxy-url.ts` builds these query parameters with `URLSearchParams`.
 
 The media proxy:
 
