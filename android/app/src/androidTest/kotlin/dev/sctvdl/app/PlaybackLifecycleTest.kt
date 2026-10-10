@@ -134,10 +134,12 @@ class PlaybackLifecycleTest {
 private class ObservingActivityHost(private val delegate: PlaybackHost) : PlaybackHost by delegate {
     var session: PlayerSession? = null
     val unbound = CountDownLatch(1)
+
     override fun bindPlayer(session: PlayerSession) {
         this.session = session
         delegate.bindPlayer(session)
     }
+
     override fun unbindPlayer(session: PlayerSession) {
         delegate.unbindPlayer(session)
         unbound.countDown()

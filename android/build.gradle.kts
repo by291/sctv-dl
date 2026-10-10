@@ -13,10 +13,11 @@ plugins {
 spotless {
     kotlin {
         target("**/src/**/*.kt")
-        ktlint("1.7.1").editorConfigOverride(
+        ktlint("1.7.1").setEditorConfigPath("../.editorconfig").editorConfigOverride(
             mapOf(
                 "ktlint_code_style" to "android_studio",
                 "ktlint_function_naming_ignore_when_annotated_with" to "Composable",
+                "ktlint_standard_blank-line-before-declaration" to "enabled",
                 "max_line_length" to "120"
             )
         )
@@ -24,7 +25,13 @@ spotless {
     kotlinGradle {
         target("**/*.gradle.kts")
         targetExclude("**/build/**", ".gradle/**")
-        ktlint("1.7.1").editorConfigOverride(mapOf("ktlint_code_style" to "android_studio"))
+        ktlint("1.7.1").setEditorConfigPath("../.editorconfig")
+            .editorConfigOverride(
+                mapOf(
+                    "ktlint_code_style" to "android_studio",
+                    "ktlint_standard_blank-line-before-declaration" to "enabled"
+                )
+            )
     }
 }
 

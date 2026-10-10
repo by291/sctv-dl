@@ -16,6 +16,8 @@ private const val LOCAL_PLAYER_VIEW_MODEL_KEY =
 fun LocalPlayerRoute(taskId: String, host: PlaybackHost, onBack: () -> Unit) {
     val model: LocalPlayerViewModel = hiltViewModel(key = LOCAL_PLAYER_VIEW_MODEL_KEY)
     val state by model.uiState.collectAsStateWithLifecycle()
+
     LaunchedEffect(taskId) { model.open(taskId) }
+
     PlayerScreen(state, onBack, model::retry, model::savePosition, {}, false, host)
 }

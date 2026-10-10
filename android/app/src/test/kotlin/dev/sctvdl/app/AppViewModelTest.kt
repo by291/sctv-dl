@@ -97,6 +97,7 @@ class AppViewModelTest {
 
 private class TestSettings : SettingsRepository {
     override val settings = MutableStateFlow(AppSettings())
+
     override suspend fun update(settings: AppSettings) {
         this.settings.value = settings
     }
@@ -104,14 +105,20 @@ private class TestSettings : SettingsRepository {
 
 private class TestDownloads(private val cancelReconcile: Boolean = false) : DownloadRepository {
     var submissions = 0
+
     override fun observeTasks() = MutableStateFlow(emptyList<DownloadTask>())
+
     override suspend fun enqueue(requests: List<DownloadRequest>): BatchDownloadResult {
         submissions++
         return BatchDownloadResult(requests.size, 0, emptyList())
     }
+
     override suspend fun cancel(taskId: String) = Unit
+
     override suspend fun retry(taskId: String) = BatchDownloadResult(1, 0, emptyList())
+
     override suspend fun removeRecord(taskId: String) = Unit
+
     override suspend fun reconcile() {
         if (cancelReconcile) throw CancellationException("Cancelled")
     }

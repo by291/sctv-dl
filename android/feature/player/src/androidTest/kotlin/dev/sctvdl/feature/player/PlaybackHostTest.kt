@@ -68,14 +68,18 @@ private class RecordingHost : PlaybackHost {
     val fullscreenChanges = mutableListOf<Boolean>()
     override val pictureInPicture = MutableStateFlow(false)
     override val supportsPictureInPicture = false
+
     override fun bindPlayer(session: PlayerSession) {
         bindings += session
     }
+
     override fun unbindPlayer(session: PlayerSession) {
         unbindings += session
     }
+
     override fun fullscreen(enabled: Boolean) {
         fullscreenChanges += enabled
     }
+
     override fun enterPictureInPicture() = false
 }

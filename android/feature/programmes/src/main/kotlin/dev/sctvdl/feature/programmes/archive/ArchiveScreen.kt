@@ -88,13 +88,17 @@ internal fun ArchiveScreen(
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+
     val errors = listOfNotNull(state.dates.error, state.contents.error).distinctBy { it.message }
     val loadingDates = state.dates.data == null && state.dates.error == null
     val loadingContents = state.date != null && state.contents.data == null && state.contents.error == null
     val largeText = LocalDensity.current.fontScale >= 1.5f
+
     val scroll = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
     BackHandler(state.selectionMode) { onExitSelection() }
+
     LaunchedEffect(state.programmeId, state.date?.id) {
         downloadIds = arrayListOf()
         showDates = false

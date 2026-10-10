@@ -28,12 +28,14 @@ internal class AppViewModel @Inject constructor(
             AppMessage(saved["downloadMessageId"] ?: 0L, it)
         }
     )
+
     val uiState = combine(settings.settings, messages) { preferences, message ->
         AppUiState(preferences, message)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState(downloadMessage = messages.value))
 
     fun enqueue(requests: List<DownloadRequest>) {
         if (requests.isEmpty()) return
+
         viewModelScope.launch {
             try {
                 showMessage(batchResultMessage(downloads.enqueue(requests)))
@@ -47,13 +49,16 @@ internal class AppViewModel @Inject constructor(
 
     private fun showMessage(text: String) {
         val id = (saved.get<Long>("downloadMessageId") ?: 0L) + 1L
+
         saved["downloadMessageId"] = id
         saved["downloadMessage"] = text
         messages.value = AppMessage(id, text)
     }
 
     fun acknowledgeMessage(id: Long) {
+        // A dismissed snackbar may finish after a newer download result has already arrived.
         if (messages.value?.id != id) return
+
         saved["downloadMessage"] = null
         messages.value = null
     }

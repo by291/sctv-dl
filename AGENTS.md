@@ -10,6 +10,7 @@ Read only the documents relevant to the change:
 - [Architecture](docs/architecture.md): module ownership, request and storage lifecycles, downloads, and player behaviour.
 - [Deployment](docs/deployment.md): server configuration, hosting, and operations.
 - [Upstream API](docs/upstream-api.md): response schemas, IDs, video variants, and proxy contracts.
+- [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
 
 ## Working Conventions
 

@@ -18,8 +18,10 @@ import kotlinx.coroutines.flow.asStateFlow
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private var playerSession: PlayerSession? = null
+
     private val mutablePip = MutableStateFlow(false)
     val pictureInPicture = mutablePip.asStateFlow()
+
     private val mutableDownloadsRequest = MutableStateFlow(0)
     val downloadsRequest = mutableDownloadsRequest.asStateFlow()
 
@@ -54,9 +56,11 @@ class MainActivity : ComponentActivity() {
     fun bindPlayer(session: PlayerSession) {
         playerSession = session
     }
+
     fun unbindPlayer(session: PlayerSession) {
         if (playerSession === session) playerSession = null
     }
+
     fun pausePlayerForDismissal() {
         playerSession?.controller?.pauseForDismissal()
     }

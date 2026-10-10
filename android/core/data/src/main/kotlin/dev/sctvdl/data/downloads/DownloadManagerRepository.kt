@@ -46,9 +46,13 @@ internal class DownloadManagerRepository(
     private val dispatcher: CoroutineDispatcher
 ) : DownloadRepository {
     override fun observeTasks() = store.observe()
+
     private val submissions = Mutex()
+
+    // Share the transition boundary with status queries so an older poll cannot overwrite a newly submitted job.
     private val transitions = Mutex()
     private val reconciliation = Mutex()
+
     private val preparing = ConcurrentHashMap<String, Deferred<Long?>>()
     private val submitting = ConcurrentHashMap.newKeySet<String>()
     private val reconciler = DownloadReconciler(gateway)
@@ -61,8 +65,10 @@ internal class DownloadManagerRepository(
         var queued = 0
         var fallbacks = 0
         val failures = mutableListOf<DownloadFailure>()
+
         for (request in requests) {
             currentCoroutineContext().ensureActive()
+
             val variant = resolveVideo(request.content, request.requestedQuality)
             val url = variant?.url?.let(UpstreamUrlPolicy::media)
             if (variant == null || url == null) {
@@ -77,6 +83,7 @@ internal class DownloadManagerRepository(
                 )
                 continue
             }
+
             val task = DownloadTask(
                 retryId ?: UUID.randomUUID().toString(),
                 request.content.id,
@@ -95,8 +102,10 @@ internal class DownloadManagerRepository(
                 request.wifiOnly,
                 createdAt = clock.instant()
             )
+
             var submittedId: Long? = null
             try {
+                // Reserve the identity and planned filename before any system job can be created.
                 val reserved = transitions.withLock {
                     store.reserve(task).also { if (it) submitting.add(task.id) }
                 }
@@ -112,6 +121,7 @@ internal class DownloadManagerRepository(
                     )
                     continue
                 }
+
                 val total = coroutineScope {
                     val preparation = async { preflight.check(task.url) }
                     preparing[task.id] = preparation
@@ -121,6 +131,8 @@ internal class DownloadManagerRepository(
                         preparing.remove(task.id)
                     }
                 }
+
+                // Cancellation between system submission and persisting its ID would leave an untracked transfer.
                 val submitted = withContext(NonCancellable) {
                     transitions.withLock {
                         if (store.get(task.id)?.state == DownloadState.Cancelled) {
@@ -145,6 +157,7 @@ internal class DownloadManagerRepository(
                         }
                     }
                 }
+
                 if (submitted) {
                     queued++
                     if (variant.quality != request.requestedQuality) fallbacks++
@@ -175,6 +188,8 @@ internal class DownloadManagerRepository(
                         }
                     }
                 }
+
+                // Cancelling one preparation reports that item; cancelling the batch propagates to its caller.
                 if (!currentCoroutineContext().isActive) throw error
                 failures.add(DownloadFailure(task.contentId, AppError(ErrorKind.Download, "已取消下载")))
             } catch (error: Exception) {
@@ -183,6 +198,7 @@ internal class DownloadManagerRepository(
                     is IOException -> AppError(ErrorKind.Network, "视频连接失败，请重试")
                     else -> AppError(ErrorKind.Download, "无法创建下载任务，请重试")
                 }
+
                 if (submittedId == null) {
                     transitions.withLock {
                         store.get(task.id)?.takeUnless {
@@ -202,14 +218,17 @@ internal class DownloadManagerRepository(
                         }
                     }
                 } else {
+                    // The platform already owns the transfer; its planned destination allows later recovery.
                     queued++
                     if (variant.quality != request.requestedQuality) fallbacks++
                 }
+
                 failures.add(DownloadFailure(task.contentId, mapped))
             } finally {
                 submitting.remove(task.id)
             }
         }
+
         return BatchDownloadResult(queued, fallbacks, failures)
     }
 
@@ -218,6 +237,7 @@ internal class DownloadManagerRepository(
             transitions.withLock {
                 val task = store.get(taskId) ?: return@withLock
                 if (!task.state.isActive) return@withLock
+
                 task.systemId?.let { gateway.remove(it) }
                 store.update(
                     task.copy(
@@ -255,7 +275,9 @@ internal class DownloadManagerRepository(
                     )
                 )
             }
+
             if (task.reasonCode == DownloadReason.Ambiguous) {
+                // A retry must not duplicate an unresolved system job from an interrupted submission.
                 if (reconciler.matching(
                         task,
                         gateway.queryOwned()
@@ -279,6 +301,7 @@ internal class DownloadManagerRepository(
                     store.update(task.copy(reasonCode = DownloadReason.Interrupted))
                 }
             }
+
             val content = ProgrammeContent(
                 task.contentId,
                 task.title,
@@ -318,6 +341,7 @@ internal class DownloadManagerRepository(
                     )
                 )
             }
+
             store.remove(taskId)
         }
     }

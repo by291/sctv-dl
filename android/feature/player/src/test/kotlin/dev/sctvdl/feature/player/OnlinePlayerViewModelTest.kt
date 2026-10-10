@@ -27,6 +27,7 @@ class OnlinePlayerViewModelTest {
     @get:Rule val main = MainDispatcherRule()
     private val settings = object : SettingsRepository {
         override val settings = MutableStateFlow(AppSettings(initialQuality = Quality.Smooth))
+
         override suspend fun update(settings: AppSettings) {
             this.settings.value = settings
         }

@@ -12,7 +12,9 @@ fun CatalogueRoute(library: ProgrammeLibraryState, onOpenProgramme: (String) -> 
     val state = library.state.value
     val catalogueScroll = rememberCatalogueScrollState(if (embedded) library.cataloguePanePosition else null)
     val favouritesScroll = rememberCatalogueScrollState(if (embedded) library.favouritesPanePosition else null)
+
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { model.enter() }
+
     CatalogueScreen(
         state,
         state.favouritesOnly,

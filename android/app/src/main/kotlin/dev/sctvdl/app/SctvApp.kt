@@ -41,7 +41,9 @@ internal fun SctvApp(activity: MainActivity) {
     val model: AppViewModel = hiltViewModel(key = APP_VIEW_MODEL_KEY)
     val state by model.uiState.collectAsStateWithLifecycle()
     val downloadsRequest by activity.downloadsRequest.collectAsStateWithLifecycle()
+
     var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
+
     val library = rememberProgrammeLibraryState()
     val host = remember(activity) { ActivityPlaybackHost(activity) }
     val snackbar = remember { SnackbarHostState() }
@@ -55,22 +57,25 @@ internal fun SctvApp(activity: MainActivity) {
             }
         }
     }
+
     LaunchedEffect(state.downloadMessage) {
         state.downloadMessage?.let {
             snackbar.showSnackbar(it.text)
             model.acknowledgeMessage(it.id)
         }
     }
+
     SctvAppTheme(state.settings) {
         val darkIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+
         SideEffect { activity.setSystemBarIcons(darkIcons) }
+
         Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
             AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) { route, navigator ->
                 AppDestinations(route, navigator, library, state.settings, host, model::enqueue, {
                     snackbar.showSnackbar(it)
                 }, playbackSelection, {
-                    playbackSelection =
-                        it
+                    playbackSelection = it
                 })
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))

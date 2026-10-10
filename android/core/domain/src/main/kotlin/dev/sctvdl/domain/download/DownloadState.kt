@@ -10,6 +10,7 @@ enum class DownloadState {
     Cancelled,
     Missing
 }
+
 enum class DownloadReason {
     Network,
     Wifi,
@@ -23,6 +24,7 @@ enum class DownloadReason {
     Cancelled,
     Unknown
 }
+
 val DownloadState.isActive: Boolean get() = this in setOf(
     DownloadState.Preparing,
     DownloadState.Pending,

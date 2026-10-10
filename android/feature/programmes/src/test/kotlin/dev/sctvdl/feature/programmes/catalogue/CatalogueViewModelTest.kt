@@ -242,6 +242,7 @@ class CatalogueViewModelTest {
                 emit(setOf("3"))
                 awaitCancellation()
             }
+
             override suspend fun toggle(id: String) = Unit
         }
         val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }

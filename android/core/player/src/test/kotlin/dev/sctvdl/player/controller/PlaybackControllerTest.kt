@@ -22,24 +22,30 @@ class PlaybackControllerTest {
         var releases = 0
         var prepares = 0
         var callback: ((Long, PlaybackBackendSnapshot) -> Unit)? = null
+
         override fun setListener(listener: (Long, PlaybackBackendSnapshot) -> Unit) {
             this.callback = listener
         }
+
         override fun setMedia(uri: String, token: Long, positionMs: Long) {
             this.uri = uri
             this.token = token
             this.positionMs = positionMs
         }
+
         override fun prepare() {
             prepares++
         }
+
         override fun seekTo(positionMs: Long) {
             this.positionMs = positionMs
         }
+
         override fun release() {
             releases++
         }
     }
+
     private val source =
         PlaybackSource(
             "1",

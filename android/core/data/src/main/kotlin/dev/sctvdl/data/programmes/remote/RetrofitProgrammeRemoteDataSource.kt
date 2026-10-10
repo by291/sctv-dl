@@ -9,7 +9,9 @@ import okhttp3.ResponseBody
 internal class RetrofitProgrammeRemoteDataSource @Inject constructor(private val api: ProgrammeApi) :
     ProgrammeRemoteDataSource {
     override suspend fun programmes() = read(api.programmes())
+
     override suspend fun dates(programmeId: String) = read(api.dates(checkedId(programmeId)))
+
     override suspend fun contents(programmeId: String, dateId: String) = read(
         api.contents(
             checkedId(programmeId),
@@ -22,10 +24,13 @@ internal class RetrofitProgrammeRemoteDataSource @Inject constructor(private val
     private fun read(body: ResponseBody): String = body.use {
         val source = body.source()
         val limit = 2L * 1024 * 1024
+
+        // Inspect a bounded buffer before decoding; even an unknown-length response must respect the metadata cap.
         source.request(limit + 1)
         if (source.buffer.size > limit) {
             throw AppException(AppError(ErrorKind.InvalidData, "节目数据过大，请稍后重试"))
         }
+
         source.readUtf8()
     }
 }

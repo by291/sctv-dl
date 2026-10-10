@@ -7,6 +7,7 @@ import dev.sctvdl.domain.download.isActive
 internal enum class DownloadTab { Active, Completed }
 
 val DownloadState.isInActiveSection: Boolean get() = isActive || this == DownloadState.Failed
+
 internal data class DownloadsUiState(
     val tasks: List<DownloadTask> = emptyList(),
     val tab: DownloadTab = DownloadTab.Active,

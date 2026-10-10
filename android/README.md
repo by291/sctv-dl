@@ -30,7 +30,7 @@ On macOS or Linux:
 
 Outputs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release-unsigned.apk`. The debug APK is installable. The optimized release APK uses R8 and resource shrinking and requires your release signing identity before distribution. Signing keys and passwords must remain outside tracked files.
 
-Format Kotlin and Gradle scripts with `android/gradlew.bat -p android spotlessApply`. Compose functions follow the normal PascalCase convention; explicit imports, four spaces, and 120-column source lines are enforced. Dependency versions live in `gradle/libs.versions.toml`. AGP supplies built-in Kotlin for Android modules; do not apply the legacy `kotlin-android` plugin.
+Format Kotlin and Gradle scripts with `android/gradlew.bat -p android spotlessApply`. Compose functions follow the normal PascalCase convention; explicit imports, four spaces, 120-column source lines, and blank lines between declarations are enforced. Spotless reads the repository's `.editorconfig`. Follow [Android Instructions](AGENTS.md#readability) for logical grouping and contract comments that formatting cannot check. Dependency versions live in `gradle/libs.versions.toml`. AGP supplies built-in Kotlin for Android modules; do not apply the legacy `kotlin-android` plugin.
 
 ## Architecture
 

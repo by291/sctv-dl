@@ -25,6 +25,27 @@ Expose immutable `StateFlow` state and named UI actions. Use lifecycle-aware col
 
 Use Material 3 semantic colours, 48 dp touch targets, accessible labels, and adaptive layouts. Check both themes, keyboard interaction, 200% text, loading/empty/error states, and window resizing. Keep upstream titles intact. Never invent covers, durations, file sizes, or successful downloads.
 
+### Readability
+
+Follow the [Kotlin conventions](https://kotlinlang.org/docs/coding-conventions.html) and [Android Kotlin guide](https://developer.android.com/kotlin/style-guide), with this project's formatter configuration taking precedence for mechanical details.
+
+- Separate functions, initializer blocks, and nested declarations with one blank line. Keep annotations and KDoc attached to their declaration. EditorConfig and Spotless explicitly enable ktlint's `blank-line-before-declaration` rule, including in tests and Gradle scripts.
+- Group properties by responsibility: dependencies, backing state with its exposed state, request/lifecycle bookkeeping, and derived state. Separate these groups with one blank line; do not insert blank lines between every related property. Preserve initialization order when organizing declarations.
+- Inside functions, separate guards, preparation, external work, and state/persistence updates when they form distinct steps. Keep each small cohesive operation together; avoid both dense blocks and a blank line after every statement.
+- In composables, separate remembered/collected state, derived values and callbacks, effects, and rendered content. Keep each effect beside the lifecycle concern it owns. Do not move effect keys, state owners, or disposal timing for formatting.
+- In `build-logic`, separate plugin application, extension configuration, version-catalog lookup, and dependency registration. Separate top-level Gradle DSL blocks with one blank line, and explain non-obvious plugin or dependency-version constraints.
+- Use expression bodies for short expressions and simple delegates. Make multistep actions readable with normal blocks or multiline lambdas. Keep short argument lists and `catch` headers together; break long calls at argument or chain boundaries, not around a lone argument.
+- Use descriptive names and named arguments when adjacent booleans, nullable values, or same-typed arguments are ambiguous. Name lambda parameters when nested `it` references obscure which object is being read or updated.
+- Keep related methods and their helpers together in reading order. Extract a helper or component when it gives a substantial operation a useful name; do not introduce an abstraction just to shorten a file or satisfy an arbitrary line count.
+- Apply the same grouping in tests: arrange fixtures, perform the action, then assert the outcome, with blank lines between these phases.
+
+### Comments and Contracts
+
+- Use KDoc on shared contracts and nontrivial state holders to explain caller obligations, return-value meaning, side effects, and lifecycle ownership that types and names do not convey. Link referenced declarations with KDoc syntax. Simple delegates, self-explanatory models, and every parameter do not need boilerplate documentation.
+- Place concise `//` comments immediately before non-obvious decisions: cancellation/stale-response guards, accepted versus pending cache data, transaction/lock boundaries, download submission recovery, storage compatibility, and player disposal. Explain why the constraint exists and what would break if removed, rather than narrating the next statement.
+- Keep comments accurate when code changes. Prefer a clear name or small helper when an explanation merely compensates for an opaque expression. Avoid section banners, commented-out code, and repeated comments on identical cancellation handling.
+- During review, check semantic grouping and contract comments in addition to Spotless; a formatter pass alone does not establish readability. Readability cleanup must preserve saved keys, coroutine cancellation, request identity, UI copy, and lifecycle timing.
+
 ## Contracts
 
 - IDs remain strings. Large numeric JSON IDs are rejected unless exactly representable within the upstream contract.

@@ -2,10 +2,14 @@ package dev.sctvdl.feature.programmes.presentation
 
 import dev.sctvdl.domain.common.CachedResource
 
-// Keep the current browsing snapshot stable until the user accepts a newer cached result.
+/**
+ * Presents the first available data immediately, then keeps it stable until [accept] applies a newer snapshot.
+ * Refresh status and errors remain live so a failed refresh does not hide feedback or replace accepted rows.
+ */
 internal class AcceptedResourceState<T> {
     var resource: CachedResource<T> = CachedResource()
         private set
+
     private var latest: CachedResource<T> = CachedResource()
 
     val hasUpdate: Boolean
@@ -13,10 +17,12 @@ internal class AcceptedResourceState<T> {
 
     fun observe(value: CachedResource<T>): CachedResource<T> {
         latest = value
+
         resource = value.copy(
             data = resource.data ?: value.data,
             updatedAt = if (resource.data == null) value.updatedAt else resource.updatedAt
         )
+
         return resource
     }
 
@@ -25,6 +31,7 @@ internal class AcceptedResourceState<T> {
             data = latest.data ?: resource.data,
             updatedAt = if (latest.data == null) resource.updatedAt else latest.updatedAt
         )
+
         return resource
     }
 }

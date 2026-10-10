@@ -32,6 +32,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadManagerRepositoryTest {
     private val clock = Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC)
+
     private fun request(id: String, smoothOnly: Boolean = false) = DownloadRequest(
         "新闻栏目",
         LocalDate.of(

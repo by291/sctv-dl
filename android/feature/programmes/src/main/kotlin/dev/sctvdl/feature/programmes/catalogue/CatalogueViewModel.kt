@@ -26,14 +26,18 @@ internal class CatalogueViewModel @Inject constructor(
 ) : ViewModel() {
     private val query = saved.getStateFlow("query", "")
     private val byName = saved.getStateFlow("byName", false)
+
     private val favouritesQuery = saved.getStateFlow("favouritesQuery", "")
     private val favouritesByName = saved.getStateFlow("favouritesByName", false)
     private val favouritesOnly = saved.getStateFlow("favouritesOnly", false)
     private val featuredId = saved.getStateFlow<String?>("featuredId", null)
+
     private val snapshot = AcceptedResourceState<List<Programme>>()
     private val catalogue = MutableStateFlow(CatalogueUiState())
     private val favouriteState = MutableStateFlow<FavouriteState?>(null)
+
     private var refreshJob: Job? = null
+
     private val filters = combine(query, byName, favouritesQuery, favouritesByName, favouritesOnly) {
             query,
             byName,
@@ -78,6 +82,7 @@ internal class CatalogueViewModel @Inject constructor(
                 favouriteState.value = FavouriteState(ids, favouriteState.value?.ordering ?: ids)
             }
         }
+
         viewModelScope.launch {
             repository.observeProgrammes().collect { resource ->
                 snapshot.observe(resource)
@@ -97,6 +102,7 @@ internal class CatalogueViewModel @Inject constructor(
 
     private fun publish() {
         catalogue.value = CatalogueUiState(resource = snapshot.resource, hasUpdate = snapshot.hasUpdate)
+
         val programmes = snapshot.resource.data ?: return
         if (programmes.none { it.id == featuredId.value }) {
             saved["featuredId"] = programmes.randomOrNull()?.id
@@ -106,21 +112,28 @@ internal class CatalogueViewModel @Inject constructor(
     fun query(value: String) {
         saved[if (favouritesOnly.value) "favouritesQuery" else "query"] = value.take(200)
     }
+
     fun sort(byName: Boolean) {
         saved[if (favouritesOnly.value) "favouritesByName" else "byName"] = byName
     }
+
     fun filter(favouritesOnly: Boolean) {
         saved["favouritesOnly"] = favouritesOnly
     }
+
     fun exploreAnother() {
         val programmes = uiState.value.resource.data.orEmpty()
         val alternatives = programmes.filterNot { it.id == featuredId.value }
+
         saved["featuredId"] = alternatives.ifEmpty { programmes }.randomOrNull()?.id
     }
+
     fun refresh() {
         if (refreshJob?.isActive == true) return
+
         refreshJob = viewModelScope.launch { repository.refreshProgrammes() }
     }
+
     fun toggleFavourite(id: String) {
         viewModelScope.launch { favourites.toggle(id) }
     }

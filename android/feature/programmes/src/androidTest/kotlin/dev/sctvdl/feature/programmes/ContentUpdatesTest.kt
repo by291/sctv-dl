@@ -193,15 +193,22 @@ private class UpdateRepository : ProgrammeRepository {
     val programmes = MutableStateFlow(CachedResource(listOf(Programme("one", "Alpha", null, 0))))
     val dates = MutableStateFlow(CachedResource<List<BroadcastDate>>())
     val contents = MutableStateFlow(CachedResource<List<ProgrammeContent>>())
+
     override fun observeProgrammes() = programmes
+
     override suspend fun refreshProgrammes() {}
+
     override fun observeDates(programmeId: String) = dates
+
     override suspend fun refreshDates(programmeId: String) {}
+
     override fun observeContents(programmeId: String, dateId: String) = contents
+
     override suspend fun refreshContents(programmeId: String, dateId: String) {}
 }
 
 private class UpdateFavourites : FavouriteRepository {
     override fun observeIds() = MutableStateFlow(emptySet<String>())
+
     override suspend fun toggle(id: String) {}
 }

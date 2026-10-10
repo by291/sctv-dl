@@ -43,7 +43,9 @@ class FakeDownloads : DownloadRepository {
     val retried = mutableListOf<String>()
     val removed = mutableListOf<String>()
     var markMissing = false
+
     override fun observeTasks() = tasks
+
     override suspend fun enqueue(requests: List<DownloadRequest>) = BatchDownloadResult(
         1,
         1,
@@ -57,16 +59,20 @@ class FakeDownloads : DownloadRepository {
             )
         )
     )
+
     override suspend fun cancel(taskId: String) {
         cancelled.add(taskId)
     }
+
     override suspend fun retry(taskId: String): BatchDownloadResult {
         retried.add(taskId)
         return BatchDownloadResult(1, 0, emptyList())
     }
+
     override suspend fun removeRecord(taskId: String) {
         removed.add(taskId)
     }
+
     override suspend fun reconcile() {
         if (markMissing) tasks.value = tasks.value.map { it.copy(state = DownloadState.Missing) }
     }

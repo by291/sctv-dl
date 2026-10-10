@@ -29,25 +29,32 @@ import org.junit.Test
 class CachedProgrammeRepositoryTest {
     private class Store : SnapshotStore {
         private val values = mutableMapOf<String, MutableStateFlow<StoredSnapshot?>>()
+
         override fun observe(key: String) = values.getOrPut(key) { MutableStateFlow(null) }
+
         override suspend fun put(snapshot: StoredSnapshot) {
             observe(snapshot.key).value = snapshot
         }
     }
+
     private class Source : ProgrammeRemoteDataSource {
         var response = """{"rs":200,"data":[]}"""
         var failure = false
         var slow = CompletableDeferred<Unit>()
+
         override suspend fun programmes() = """{"rs":200,"data":{"records":[]}}"""
+
         override suspend fun dates(programmeId: String): String {
             if (failure) throw IOException("offline")
             return response
         }
+
         override suspend fun contents(programmeId: String, dateId: String): String {
             if (dateId == "1") slow.await()
             return """{"rs":200,"data":[{"id":"$dateId","title":"$dateId"}]}"""
         }
     }
+
     private val clock = Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC)
 
     @Test fun successfulEmptySnapshotSurvivesRepositoryRecreation() = runTest {

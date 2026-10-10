@@ -7,7 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.snapshotFlow
 
-// Retain positions, rather than sharing a layout controller between overlapping archive entries.
+/** Stores scroll coordinates so overlapping navigation entries can each own a separate grid controller. */
 internal class CatalogueScrollPosition(var index: Int = 0, var offset: Int = 0) {
     companion object {
         val Saver = listSaver<CatalogueScrollPosition, Int>(
@@ -20,6 +20,7 @@ internal class CatalogueScrollPosition(var index: Int = 0, var offset: Int = 0) 
 @Composable
 internal fun rememberCatalogueScrollState(position: CatalogueScrollPosition?): LazyGridState {
     val state = rememberLazyGridState(position?.index ?: 0, position?.offset ?: 0)
+
     LaunchedEffect(state, position) {
         if (position != null) {
             snapshotFlow {
@@ -30,5 +31,6 @@ internal fun rememberCatalogueScrollState(position: CatalogueScrollPosition?): L
             }
         }
     }
+
     return state
 }

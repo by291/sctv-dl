@@ -19,12 +19,14 @@ fun DownloadsRoute(onLocalPlayback: (String) -> Unit, onMessage: suspend (String
     val state by model.uiState.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
     LaunchedEffect(message) {
         message?.let {
             onMessage(it)
             model.consumeMessage()
         }
     }
+
     DownloadsScreen(
         state,
         model::tab,

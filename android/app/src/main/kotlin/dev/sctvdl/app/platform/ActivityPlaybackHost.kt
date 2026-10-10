@@ -14,8 +14,11 @@ class ActivityPlaybackHost(private val activity: MainActivity) : PlaybackHost {
     override val supportsPictureInPicture = activity.packageManager.hasSystemFeature(
         PackageManager.FEATURE_PICTURE_IN_PICTURE
     )
+
     override fun bindPlayer(session: PlayerSession) = activity.bindPlayer(session)
+
     override fun unbindPlayer(session: PlayerSession) = activity.unbindPlayer(session)
+
     override fun enterPictureInPicture() = activity.enterPlayerPictureInPicture()
 
     override fun fullscreen(enabled: Boolean) {

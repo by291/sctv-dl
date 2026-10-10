@@ -9,6 +9,7 @@ internal data class PlatformDownloadRequest(
     val filename: String,
     val wifiOnly: Boolean
 )
+
 internal data class SystemDownloadSnapshot(
     val id: Long,
     val url: String,
@@ -23,9 +24,14 @@ internal data class SystemDownloadSnapshot(
 
 internal interface PlatformDownloadGateway {
     fun destinationFor(filename: String): String
+
     suspend fun enqueue(request: PlatformDownloadRequest): Long
+
     suspend fun query(ids: List<Long>): List<SystemDownloadSnapshot>
+
     suspend fun queryOwned(): List<SystemDownloadSnapshot>
+
     suspend fun remove(id: Long)
+
     suspend fun isAvailable(uri: String): Boolean
 }

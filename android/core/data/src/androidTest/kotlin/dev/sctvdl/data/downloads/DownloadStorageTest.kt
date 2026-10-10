@@ -34,6 +34,7 @@ import org.junit.Test
 class DownloadStorageTest {
     @Test fun aQueuedJobRetainsItsPlannedIdentityBeforeAnyFileExists() = runBlocking {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+
         fun shell(command: String) = automation.executeShellCommand(command).use {
             android.os.ParcelFileDescriptor.AutoCloseInputStream(it).bufferedReader().readText().trim()
         }

@@ -8,9 +8,14 @@ import kotlinx.coroutines.flow.map
 
 internal class RoomDownloadStore @Inject constructor(private val database: SctvDatabase) : DownloadStore {
     private val dao get() = database.downloads()
+
     override fun observe() = dao.observe().map { it.map(DownloadEntity::toTask) }
+
     override suspend fun all() = dao.all().map(DownloadEntity::toTask)
+
     override suspend fun get(id: String) = dao.get(id)?.toTask()
+
+    // The existence check and insert must be atomic or concurrent batches can create duplicate active jobs.
     override suspend fun reserve(task: DownloadTask): Boolean = database.withTransaction {
         if (dao.activeExists(activeDownloadKey(task))) {
             false
@@ -19,6 +24,8 @@ internal class RoomDownloadStore @Inject constructor(private val database: SctvD
             true
         }
     }
+
     override suspend fun update(task: DownloadTask) = dao.put(task.toEntity())
+
     override suspend fun remove(id: String) = dao.remove(id)
 }

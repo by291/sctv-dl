@@ -24,6 +24,8 @@ fun PlayerRoute(
 ) {
     val model: OnlinePlayerViewModel = hiltViewModel(key = ONLINE_PLAYER_VIEW_MODEL_KEY)
     val state by model.uiState.collectAsStateWithLifecycle()
+
     LaunchedEffect(programmeId, dateId, contentId) { model.open(programmeId, dateId, contentId, selection) }
+
     PlayerScreen(state, onBack, model::retry, model::savePosition, onDownload, wifiOnly, host)
 }

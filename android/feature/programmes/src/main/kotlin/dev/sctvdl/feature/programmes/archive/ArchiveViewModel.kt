@@ -35,14 +35,18 @@ internal class ArchiveViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(ArchiveUiState())
     val uiState = mutableState.asStateFlow()
+
     private var datesJob: Job? = null
     private var contentsJob: Job? = null
     private var datesRefreshJob: Job? = null
     private var contentsRefreshJob: Job? = null
+
     private var datesSnapshot = AcceptedResourceState<List<BroadcastDate>>()
     private var contentsSnapshot = AcceptedResourceState<List<ProgrammeContent>>()
+
     private var programmes = emptyList<Programme>()
     private var favouriteIds = emptySet<String>()
+
     private var requestedDateId: String? = saved["dateId"]
     private val restoredProgrammeId: String? = saved["programmeId"]
     private var restoredSelection = saved.get<ArrayList<String>>("selectedIds").orEmpty().toSet()
@@ -74,23 +78,29 @@ internal class ArchiveViewModel @Inject constructor(
             refresh()
             return
         }
+
         started = true
         datesJob?.cancel()
         contentsJob?.cancel()
         datesRefreshJob?.cancel()
         contentsRefreshJob?.cancel()
+
         datesSnapshot = AcceptedResourceState()
         contentsSnapshot = AcceptedResourceState()
+
+        // Saved date and batch selections belong only to the archive they were captured from.
         if (restoredProgrammeId != programmeId) {
             requestedDateId = null
             restoredSelection = emptySet()
             restoredSelectionMode = false
         }
+
         val clipSortAscending = if (saved.get<String>("programmeId") == programmeId) {
             saved.get<Boolean>("clipSortAscending") ?: true
         } else {
             true
         }
+
         saved["programmeId"] = programmeId
         saved["clipSortAscending"] = clipSortAscending
         mutableState.value =
@@ -104,7 +114,9 @@ internal class ArchiveViewModel @Inject constructor(
 
         datesJob = viewModelScope.launch {
             repository.observeDates(programmeId).collect { resource ->
+                // Cancellation can race a final emission from the previous archive observer.
                 if (uiState.value.programmeId != programmeId) return@collect
+
                 presentDates(datesSnapshot.observe(resource))
             }
         }
@@ -113,6 +125,7 @@ internal class ArchiveViewModel @Inject constructor(
 
     private fun presentDates(resource: CachedResource<List<BroadcastDate>>) {
         mutableState.update { it.copy(dates = resource) }
+
         val dates = resource.data
         if (dates != null) {
             val selected = dates.firstOrNull { it.id == (uiState.value.date?.id ?: requestedDateId) }
@@ -141,33 +154,38 @@ internal class ArchiveViewModel @Inject constructor(
         ) {
             return
         }
+
         contentsJob?.cancel()
         contentsRefreshJob?.cancel()
         contentsSnapshot = AcceptedResourceState()
+
         val restore = date.id == requestedDateId
         mutableState.update {
             it.copy(
                 date = date,
                 contents = CachedResource(),
                 selectedIds = if (restore) restoredSelection else emptySet(),
-                selectionMode =
-                restore && restoredSelectionMode
+                selectionMode = restore && restoredSelectionMode
             )
         }
+
         requestedDateId = date.id
         restoredSelection = emptySet()
         restoredSelectionMode = false
         saved["dateId"] = date.id
         persistSelection()
+
         val programmeId = current.programmeId
 
         contentsJob = viewModelScope.launch {
             repository.observeContents(programmeId, date.id).collect { resource ->
+                // Both identities must still match before an old request can publish its rows.
                 if (uiState.value.programmeId != programmeId ||
                     uiState.value.date?.id != date.id
                 ) {
                     return@collect
                 }
+
                 presentContents(contentsSnapshot.observe(resource))
             }
         }
@@ -188,12 +206,15 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     fun applyUpdates() {
+        // Accepting new rows during batch selection would change the items under the user's checkboxes.
         if (uiState.value.selectionMode) return
+
         val dateId = uiState.value.date?.id
         mutableState.update { current ->
             current.copy(programme = programmes.firstOrNull { it.id == current.programmeId } ?: current.programme)
         }
         presentDates(datesSnapshot.accept())
+
         // A changed date owns a new content snapshot and request, never the previous date's pending rows.
         if (dateId == uiState.value.date?.id) presentContents(contentsSnapshot.accept())
     }
@@ -211,17 +232,20 @@ internal class ArchiveViewModel @Inject constructor(
     fun refresh() {
         val current = uiState.value
         if (current.programmeId.isBlank()) return
+
         refreshDates(current.programmeId)
         current.date?.let { refreshContents(current.programmeId, it.id) }
     }
 
     private fun refreshDates(programmeId: String) {
         if (datesRefreshJob?.isActive == true) return
+
         datesRefreshJob = viewModelScope.launch { repository.refreshDates(programmeId) }
     }
 
     private fun refreshContents(programmeId: String, dateId: String) {
         if (contentsRefreshJob?.isActive == true) return
+
         contentsRefreshJob = viewModelScope.launch { repository.refreshContents(programmeId, dateId) }
     }
 
@@ -231,6 +255,7 @@ internal class ArchiveViewModel @Inject constructor(
 
     fun toggleClipSort() {
         if (uiState.value.selectionMode) return
+
         mutableState.update { it.copy(clipSortAscending = !it.clipSortAscending) }
         saved["clipSortAscending"] = uiState.value.clipSortAscending
     }
@@ -239,12 +264,14 @@ internal class ArchiveViewModel @Inject constructor(
         mutableState.update { it.copy(selectionMode = true) }
         persistSelection()
     }
+
     fun selectAll() {
         mutableState.update {
             it.copy(selectionMode = true, selectedIds = selectableIds(it.contents.data.orEmpty()))
         }
         persistSelection()
     }
+
     fun selectFullEpisodes() {
         mutableState.update {
             it.copy(selectionMode = true, selectedIds = selectableIds(it.fullEpisodes))
@@ -254,6 +281,7 @@ internal class ArchiveViewModel @Inject constructor(
 
     fun toggleContent(id: String) {
         if (id !in selectableIds(uiState.value.contents.data.orEmpty())) return
+
         mutableState.update {
             it.copy(
                 selectionMode = true,
@@ -275,6 +303,7 @@ internal class ArchiveViewModel @Inject constructor(
     fun downloadRequests(quality: Quality, wifiOnly: Boolean): List<DownloadRequest> {
         val current = uiState.value
         val date = current.date ?: return emptyList()
+
         return current.contents.data.orEmpty().filter {
             it.id in current.selectedIds &&
                 videoVariants(it).isNotEmpty()

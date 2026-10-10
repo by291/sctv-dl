@@ -27,11 +27,13 @@ internal class LocalPlayerViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PlayerUiState())
     val uiState = mutableState.asStateFlow()
+
     private var taskId: String? = null
     private var job: Job? = null
 
     fun open(taskId: String) {
         if (this.taskId == taskId) return
+
         this.taskId = taskId
         observe(taskId)
     }
@@ -39,9 +41,12 @@ internal class LocalPlayerViewModel @Inject constructor(
     private fun observe(id: String) {
         job?.cancel()
         mutableState.value = PlayerUiState()
+
         job = viewModelScope.launch {
             try {
+                // Recheck the completed URI before trusting a download record restored from disk.
                 repository.reconcile()
+
                 repository.observeTasks().collect { tasks ->
                     val task = tasks.firstOrNull { it.id == id }
                     val source = task?.takeIf {
@@ -69,9 +74,7 @@ internal class LocalPlayerViewModel @Inject constructor(
                             )
                     }
                 }
-            } catch (
-                error: CancellationException
-            ) {
+            } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
                 mutableState.value =
@@ -83,6 +86,7 @@ internal class LocalPlayerViewModel @Inject constructor(
     fun retry() {
         taskId?.let(::observe)
     }
+
     fun savePosition(positionMs: Long) {
         saved["positionMs"] = positionMs.coerceAtLeast(0)
     }

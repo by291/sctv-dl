@@ -36,34 +36,35 @@ internal class CachedProgrammeRepository(
     private val dispatcher: CoroutineDispatcher
 ) : ProgrammeRepository {
     private data class RefreshState(val active: Boolean = false, val error: AppError? = null)
+
     private val states = ConcurrentHashMap<String, MutableStateFlow<RefreshState>>()
     private val versions = ConcurrentHashMap<String, AtomicLong>()
     private val writeLock = Mutex()
 
     override fun observeProgrammes() = observe("programmes", parser::programmes)
+
     override suspend fun refreshProgrammes() = refresh(
         "programmes",
         source::programmes,
         parser::programmes
     )
+
     override fun observeDates(programmeId: String) = observe("dates:$programmeId", parser::dates)
+
     override suspend fun refreshDates(programmeId: String) = refresh(
         "dates:$programmeId",
         { source.dates(programmeId) },
         parser::dates
     )
+
     override fun observeContents(programmeId: String, dateId: String) = observe(
         "contents:$programmeId:$dateId",
         parser::contents
     )
+
     override suspend fun refreshContents(programmeId: String, dateId: String) = refresh(
         "contents:$programmeId:$dateId",
-        {
-            source.contents(
-                programmeId,
-                dateId
-            )
-        },
+        { source.contents(programmeId, dateId) },
         parser::contents
     )
 
@@ -96,8 +97,11 @@ internal class CachedProgrammeRepository(
 
             try {
                 val raw = fetch()
+                // Validate before persisting; invalid responses must leave the previous snapshot intact.
                 parse(raw)
                 ensureActive()
+
+                // Cancellation alone cannot reject a late response from an older refresh of the same key.
                 writeLock.withLock {
                     if (ticket == version.get()) store.put(StoredSnapshot(key, raw, clock.millis()))
                 }
@@ -114,6 +118,7 @@ internal class CachedProgrammeRepository(
                     is IOException -> AppError(ErrorKind.Network, "网络连接失败，请检查网络后重试")
                     else -> AppError(ErrorKind.Storage, "暂时无法保存节目数据")
                 }
+
                 if (ticket == version.get()) state(key).value = RefreshState(error = mapped)
             } finally {
                 if (ticket == version.get()) state(key).update { it.copy(active = false) }

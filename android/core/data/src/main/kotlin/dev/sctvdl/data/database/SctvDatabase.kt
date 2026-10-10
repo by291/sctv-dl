@@ -16,6 +16,8 @@ import dev.sctvdl.data.programmes.local.SnapshotEntity
 )
 internal abstract class SctvDatabase : RoomDatabase() {
     abstract fun snapshots(): ProgrammeSnapshotDao
+
     abstract fun favourites(): FavouriteDao
+
     abstract fun downloads(): DownloadDao
 }

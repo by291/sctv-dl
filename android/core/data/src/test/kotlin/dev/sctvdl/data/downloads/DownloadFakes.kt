@@ -13,9 +13,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 internal class FakeDownloadStore : DownloadStore {
     val rows = MutableStateFlow(emptyList<DownloadTask>())
+
     override fun observe() = rows
+
     override suspend fun all() = rows.value
+
     override suspend fun get(id: String) = rows.value.firstOrNull { it.id == id }
+
     override suspend fun reserve(task: DownloadTask): Boolean {
         if (rows.value.any {
                 (it.state.isActive || it.reasonCode == DownloadReason.Ambiguous) &&
@@ -27,14 +31,17 @@ internal class FakeDownloadStore : DownloadStore {
         update(task)
         return true
     }
+
     override suspend fun update(task: DownloadTask) {
         rows.value =
             rows.value.filterNot { it.id == task.id } + task
     }
+
     override suspend fun remove(id: String) {
         rows.value = rows.value.filterNot { it.id == id }
     }
 }
+
 internal class FakeDownloadGateway : PlatformDownloadGateway {
     val requests = mutableListOf<PlatformDownloadRequest>()
     val snapshots = mutableListOf<SystemDownloadSnapshot>()
@@ -42,7 +49,9 @@ internal class FakeDownloadGateway : PlatformDownloadGateway {
     var available = true
     var failEnqueue = false
     var failRemove = false
+
     override fun destinationFor(filename: String) = "file:///downloads/$filename"
+
     override suspend fun enqueue(request: PlatformDownloadRequest): Long {
         if (failEnqueue) throw IllegalStateException("system unavailable")
         requests.add(request)
@@ -57,8 +66,11 @@ internal class FakeDownloadGateway : PlatformDownloadGateway {
         )
         return id
     }
+
     override suspend fun query(ids: List<Long>) = snapshots.filter { it.id in ids }
+
     override suspend fun queryOwned() = snapshots.toList()
+
     override suspend fun remove(id: Long) {
         if (failRemove) throw IllegalStateException("system unavailable")
         removed.add(id)
@@ -66,5 +78,6 @@ internal class FakeDownloadGateway : PlatformDownloadGateway {
             it.id == id
         }
     }
+
     override suspend fun isAvailable(uri: String) = available
 }

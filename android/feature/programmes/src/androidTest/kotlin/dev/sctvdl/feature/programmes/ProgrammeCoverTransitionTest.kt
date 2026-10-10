@@ -182,6 +182,7 @@ class ProgrammeCoverTransitionTest {
         val rectangle = Rect(left, top, right, bottom)
         val firstX = left + rectangle.width() / 4
         val lastX = right - rectangle.width() / 4
+
         fun stripeAt(x: Int) = (top..bottom).firstOrNull {
             val pixel = pixels[it * bitmap.width + x]
             Color.red(pixel) < 12 && abs(Color.green(pixel) - 244) < 12 && abs(Color.blue(pixel) - 20) < 12

@@ -9,5 +9,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun SettingsRoute() {
     val model: SettingsViewModel = hiltViewModel()
     val settings by model.uiState.collectAsStateWithLifecycle()
+
     SettingsScreen(settings, model::setTheme, model::setDynamicColour, model::setQuality, model::setWifiOnly)
 }

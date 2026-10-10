@@ -47,7 +47,9 @@ internal class DownloadManagerGateway @Inject constructor(@ApplicationContext pr
 
     override suspend fun query(ids: List<Long>) =
         if (ids.isEmpty()) emptyList() else query(DownloadManager.Query().setFilterById(*ids.toLongArray()))
+
     override suspend fun queryOwned() = query(DownloadManager.Query())
+
     private fun query(query: DownloadManager.Query): List<SystemDownloadSnapshot> = manager.query(query).use { cursor ->
         buildList {
             while (cursor.moveToNext()) {
@@ -111,6 +113,7 @@ internal class DownloadManagerGateway @Inject constructor(@ApplicationContext pr
         }
         return destinationFor(filename)
     }
+
     override suspend fun isAvailable(uri: String): Boolean = try {
         val target = Uri.parse(uri)
         target.scheme == "content" && context.contentResolver.openFileDescriptor(
@@ -124,5 +127,6 @@ internal class DownloadManagerGateway @Inject constructor(@ApplicationContext pr
     }
 
     private fun Cursor.long(column: String) = getLong(getColumnIndexOrThrow(column))
+
     private fun Cursor.string(column: String) = getString(getColumnIndexOrThrow(column))
 }

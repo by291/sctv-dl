@@ -22,11 +22,15 @@ internal class SettingsViewModel @Inject constructor(private val repository: Set
         SharingStarted.WhileSubscribed(5_000),
         AppSettings()
     )
+
     private val writes = Mutex()
 
     fun setTheme(value: ThemeMode) = change { copy(theme = value) }
+
     fun setDynamicColour(value: Boolean) = change { copy(dynamicColour = value) }
+
     fun setQuality(value: Quality) = change { copy(initialQuality = value) }
+
     fun setWifiOnly(value: Boolean) = change { copy(wifiOnlyDownloads = value) }
 
     private fun change(update: AppSettings.() -> AppSettings) {

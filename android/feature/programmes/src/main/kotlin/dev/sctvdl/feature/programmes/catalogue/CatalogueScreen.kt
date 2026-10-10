@@ -91,23 +91,28 @@ internal fun CatalogueScreen(
     val initialLoading = state.resource.data == null && state.resource.error == null
     val showExploration = !embedded && !favouritesOnly && state.query.isBlank()
     val largeText = LocalDensity.current.fontScale >= 1.5f
+
     val scope = rememberCoroutineScope()
     var sortMenu by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var requestSearchFocus by remember { mutableStateOf(false) }
     // A programme can appear in both the spotlight and grid; only the clicked cover participates.
     var openedCover by rememberSaveable { mutableStateOf<String?>(null) }
+
     val searching = searchExpanded || state.query.isNotEmpty()
     val searchFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+
     val closeSearch: () -> Unit = {
         onQuery("")
         searchExpanded = false
         focusManager.clearFocus()
         keyboard?.hide()
     }
+
     BackHandler(searching) { closeSearch() }
+
     LaunchedEffect(requestSearchFocus) {
         if (requestSearchFocus) {
             searchFocus.requestFocus()

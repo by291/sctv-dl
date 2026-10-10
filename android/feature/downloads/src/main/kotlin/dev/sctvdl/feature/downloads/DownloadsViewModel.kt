@@ -25,6 +25,7 @@ internal class DownloadsViewModel @Inject constructor(
     private val saved: SavedStateHandle
 ) : ViewModel() {
     private val selectedTab = saved.getStateFlow("downloadTab", DownloadTab.Active.name)
+
     val uiState = combine(repository.observeTasks(), selectedTab) { tasks, selected ->
         DownloadsUiState(
             tasks,
@@ -37,22 +38,28 @@ internal class DownloadsViewModel @Inject constructor(
     fun tab(tab: DownloadTab) {
         saved["downloadTab"] = tab.name
     }
+
     fun cancel(id: String) = action { repository.cancel(id) }
+
     fun retry(id: String) = action { saved["taskMessage"] = batchResultMessage(repository.retry(id)) }
+
     fun remove(id: String) = action {
         repository.removeRecord(id)
-        saved["taskMessage"] =
-            "已移除记录，下载文件会保留"
+        saved["taskMessage"] = "已移除记录，下载文件会保留"
     }
+
     fun consumeMessage() {
         saved["taskMessage"] = null
     }
+
     fun showMessage(text: String) {
         saved["taskMessage"] = text
     }
 
     fun withFile(id: String, onReady: (DownloadTask) -> Unit) = action {
+        // A completed record can outlive its file or URI permission; reconcile before handing it to another app.
         repository.reconcile()
+
         val task = repository.observeTasks().first().firstOrNull { it.id == id }
         if (task?.state == DownloadState.Completed && task.contentUri != null) {
             onReady(task)
@@ -65,13 +72,10 @@ internal class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 block()
-            } catch (
-                error: CancellationException
-            ) {
+            } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                saved["taskMessage"] =
-                    (error as? AppException)?.error?.message ?: "操作未完成，请重试"
+                saved["taskMessage"] = (error as? AppException)?.error?.message ?: "操作未完成，请重试"
             }
         }
     }

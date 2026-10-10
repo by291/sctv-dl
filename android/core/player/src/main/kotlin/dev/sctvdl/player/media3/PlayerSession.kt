@@ -19,35 +19,39 @@ import dev.sctvdl.player.controller.PlaybackController
 import dev.sctvdl.player.model.PlaybackBackendSnapshot
 import okhttp3.OkHttpClient
 
+/** Owns Media3 resources for one playback destination; release when that destination is disposed. */
 class PlayerSession(context: Context, initialQuality: Quality = Quality.Standard) {
     private val backend = ExoBackend(context.applicationContext)
     val player: ExoPlayer get() = backend.player
     val controller = PlaybackController(backend, initialQuality)
+
     fun release() = controller.release()
 }
 
 private class ExoBackend(context: Context) : PlaybackBackend {
-    private val client = OkHttpClient.Builder().followRedirects(
-        false
-    ).followSslRedirects(false).build()
-    private val http = OkHttpDataSource.Factory(
-        client
-    ).setDefaultRequestProperties(mapOf("Referer" to "https://scgc.video.play/"))
+    private val client = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+    private val http = OkHttpDataSource.Factory(client)
+        .setDefaultRequestProperties(mapOf("Referer" to "https://scgc.video.play/"))
+
     val player = ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
         .build().apply {
             setAudioAttributes(
-                AudioAttributes.Builder().setUsage(
-                    C.USAGE_MEDIA
-                ).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
                 true
             )
             setHandleAudioBecomingNoisy(true)
         }
-    private val session = MediaSession.Builder(
-        context,
-        player
-    ).setId(java.util.UUID.randomUUID().toString()).build()
+
+    private val session = MediaSession.Builder(context, player)
+        .setId(java.util.UUID.randomUUID().toString())
+        .build()
     private var callback: ((Long, PlaybackBackendSnapshot) -> Unit)? = null
 
     init {
@@ -71,17 +75,22 @@ private class ExoBackend(context: Context) : PlaybackBackend {
         set(value) {
             player.playbackParameters = PlaybackParameters(value)
         }
+
     override fun setListener(listener: (Long, PlaybackBackendSnapshot) -> Unit) {
         callback = listener
     }
+
     override fun setMedia(uri: String, token: Long, positionMs: Long) {
         player.setMediaItem(
             MediaItem.Builder().setUri(uri).setMediaId(token.toString()).build(),
             positionMs
         )
     }
+
     override fun prepare() = player.prepare()
+
     override fun seekTo(positionMs: Long) = player.seekTo(positionMs)
+
     override fun snapshot() = PlaybackBackendSnapshot(
         positionMs,
         player.duration.takeIf {
@@ -94,6 +103,7 @@ private class ExoBackend(context: Context) : PlaybackBackend {
             "播放失败，请重试或切换清晰度"
         }
     )
+
     override fun release() {
         callback = null
         session.release()

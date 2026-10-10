@@ -18,6 +18,7 @@ import dev.sctvdl.ui.programme.ProgrammeCoverTransitionState
 
 internal sealed interface ProgrammeTestRoute : NavKey {
     data object Catalogue : ProgrammeTestRoute
+
     data class Archive(val programmeId: String) : ProgrammeTestRoute
 }
 

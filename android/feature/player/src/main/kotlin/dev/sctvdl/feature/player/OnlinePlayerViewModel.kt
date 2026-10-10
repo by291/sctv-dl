@@ -27,24 +27,29 @@ internal class OnlinePlayerViewModel @Inject constructor(
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PlayerUiState())
     val uiState = mutableState.asStateFlow()
+
     private var job: Job? = null
     private var key: Triple<String, String, String>? = null
 
     fun open(programmeId: String, dateId: String, contentId: String, selection: PlaybackSelection? = null) {
         val currentKey = Triple(programmeId, dateId, contentId)
         if (key == currentKey) return
+
         key = currentKey
         job?.cancel()
         mutableState.value = PlayerUiState()
+
         job = viewModelScope.launch {
             val accepted = selection?.takeIf {
                 it.programmeId == programmeId && it.dateId == dateId && it.content.id == contentId &&
                     videoVariants(it.content).isNotEmpty()
             }
+            // Pin the accepted item so background metadata refreshes cannot change playback or download identity.
             var selectedContent = accepted?.content
             var source: PlaybackSource? = null
             var programmeName = accepted?.programmeName
             var broadcastDate = accepted?.broadcastDate
+
             launch { repository.refreshContents(programmeId, dateId) }
             combine(
                 repository.observeContents(programmeId, dateId),
@@ -68,11 +73,13 @@ internal class OnlinePlayerViewModel @Inject constructor(
                     programmeName = programmes.data?.firstOrNull { it.id == programmeId }?.name
                 }
                 if (broadcastDate == null) broadcastDate = dates.data?.firstOrNull { it.id == dateId }?.date
+
                 val error = when {
                     source != null -> null
                     resource.data != null -> AppError(ErrorKind.NoVideo, "该节目暂时无法播放")
                     else -> resource.error
                 }
+
                 PlayerUiState(
                     source == null && resource.data == null && resource.error == null,
                     source,
@@ -91,6 +98,7 @@ internal class OnlinePlayerViewModel @Inject constructor(
             viewModelScope.launch { repository.refreshContents(programmeId, dateId) }
         }
     }
+
     fun savePosition(positionMs: Long) {
         saved["positionMs"] = positionMs.coerceAtLeast(0)
     }

@@ -28,6 +28,7 @@ val LocalProgrammeCoverAnimationScope = compositionLocalOf<AnimatedVisibilitySco
 val LocalProgrammeCoverTransitionState = compositionLocalOf<ProgrammeCoverTransitionState?> { null }
 
 private data class ProgrammeCoverKey(val programmeId: String, val url: String)
+
 private data class ProgrammeCoverSource(val key: ProgrammeCoverKey, val rotation: Float)
 
 private class ProgrammeCoverMotion(initialRotation: Float) {
@@ -72,6 +73,7 @@ fun Modifier.sharedProgrammeCover(programme: Programme, shape: Shape, rotation: 
     val url = programme.coverUrl ?: return rotate(rotation).clip(shape)
     val sourceRotation = LocalProgrammeCoverTransitionState.current?.sourceRotation(programme) ?: 0f
     val motion = remember(programme.id, url) { ProgrammeCoverMotion(rotation) }
+
     fun rotationFor(visibility: EnterExitState): Float = if (visibility == EnterExitState.Visible) {
         rotation
     } else if (rotation == 0f) {

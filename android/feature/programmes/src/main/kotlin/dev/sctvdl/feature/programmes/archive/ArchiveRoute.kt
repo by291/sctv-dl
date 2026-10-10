@@ -34,14 +34,18 @@ fun ArchiveRoute(
     }
     val model: ArchiveViewModel = hiltViewModel(key = "archive-$programmeId")
     val archive by model.uiState.collectAsStateWithLifecycle()
+
     val displayed = if (archive.programme == null) {
         archive.copy(programme = entryProgramme, favourite = programmeId in library.state.value.favourites)
     } else {
         archive
     }
+
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { model.open(programmeId, entryProgramme) }
+
     BoxWithConstraints {
         val expanded = maxWidth >= 840.dp
+
         Row {
             if (expanded) {
                 Box(Modifier.width(340.dp)) { CatalogueRoute(library, onOpenProgramme, embedded = true) }

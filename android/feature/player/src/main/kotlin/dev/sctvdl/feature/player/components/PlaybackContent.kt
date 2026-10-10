@@ -70,15 +70,14 @@ internal fun PlaybackContent(
     val session = remember(source.id) { PlayerSession(context, initialQuality) }
     val playback by session.controller.state.collectAsStateWithLifecycle()
     val pip by host.pictureInPicture.collectAsStateWithLifecycle()
+
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var downloadSheet by rememberSaveable(source.id) { mutableStateOf(false) }
+
     val canDownload = onDownload != null && source.localUri == null && source.variants.isNotEmpty()
 
-    LaunchedEffect(
-        source.id,
-        source.variants,
-        source.localUri
-    ) { session.controller.setSource(source) }
+    LaunchedEffect(source.id, source.variants, source.localUri) { session.controller.setSource(source) }
+
     LaunchedEffect(session) {
         while (true) {
             session.controller.tick()
@@ -86,7 +85,10 @@ internal fun PlaybackContent(
             delay(500)
         }
     }
+
     LaunchedEffect(fullscreen) { host.fullscreen(fullscreen) }
+
+    // Disposal happens after the leave animation; releasing on Back would tear down the outgoing video surface.
     DisposableEffect(session) {
         host.bindPlayer(session)
         onDispose {
@@ -96,7 +98,9 @@ internal fun PlaybackContent(
             session.release()
         }
     }
+
     BackHandler(fullscreen && !pip) { fullscreen = false }
+
     val back = {
         if (fullscreen) {
             fullscreen = false
@@ -108,6 +112,7 @@ internal fun PlaybackContent(
 
     val scroll = rememberScrollState()
     val minimumVideoHeight = if (LocalDensity.current.fontScale >= 1.5f) 208.dp else 176.dp
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val videoHeight = minOf(maxWidth * (9f / 16f), if (maxWidth > maxHeight) maxHeight * 0.4f else maxHeight)
             .coerceAtLeast(minimumVideoHeight).coerceAtMost(maxHeight)
@@ -183,6 +188,7 @@ internal fun PlaybackContent(
             }
         }
     }
+
     if (downloadSheet && canDownload) {
         DownloadQualitySheet(source.variants, 1, {
             onDownload(it)

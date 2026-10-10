@@ -21,6 +21,7 @@ import org.junit.Test
 
 class DownloadFlowTest {
     @get:Rule val compose = createComposeRule()
+
     private fun task(state: DownloadState, total: Long? = null) = DownloadTask(
         "task", "1", "四川新闻联播", "四川新闻联播",
         LocalDate.of(

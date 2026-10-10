@@ -8,6 +8,7 @@ import dev.sctvdl.domain.download.DownloadTask
 import java.net.URI
 
 internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) {
+    // A source URL can be shared by several attempts; only the unique planned destination identifies this one.
     fun matching(task: DownloadTask, snapshots: List<SystemDownloadSnapshot>): List<SystemDownloadSnapshot> =
         snapshots.filter { snapshot ->
             snapshot.url == task.url &&
@@ -19,6 +20,7 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
 
     suspend fun resolve(task: DownloadTask, snapshots: List<SystemDownloadSnapshot>): DownloadTask {
         if (task.state == DownloadState.Cancelled) return task
+
         if (task.systemId == null && task.reasonCode == DownloadReason.Ambiguous) {
             return if (matching(
                     task,
@@ -33,10 +35,12 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
                 task
             }
         }
+
         val snapshot = if (task.systemId != null) {
             snapshots.firstOrNull { it.id == task.systemId }
         } else {
             if (task.state != DownloadState.Preparing) return task
+
             val candidates = matching(task, snapshots)
             when (candidates.size) {
                 1 -> candidates.single()
@@ -52,7 +56,9 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
                 )
             }
         }
+
         if (snapshot == null) {
+            // System history may disappear while the completed file remains readable through its content URI.
             if (task.state == DownloadState.Completed &&
                 task.contentUri?.let { gateway.isAvailable(it) } == true
             ) {
@@ -74,15 +80,16 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
                 )
             }
         }
+
         val missing =
             snapshot.state == DownloadState.Completed &&
                 (snapshot.contentUri == null || !gateway.isAvailable(snapshot.contentUri))
+
         return task.copy(
             systemId = snapshot.id,
             state = if (missing) DownloadState.Missing else snapshot.state,
             bytes = snapshot.bytes,
-            totalBytes =
-            snapshot.total ?: task.totalBytes,
+            totalBytes = snapshot.total ?: task.totalBytes,
             contentUri = snapshot.contentUri,
             reason = if (missing) {
                 "文件已移除或无法访问"
