@@ -160,6 +160,7 @@ onMounted(() => {
       <NButton
         v-if="programme"
         class="detail-favourite"
+        :type="settings.favourites.includes(programme.id) ? 'primary' : 'default'"
         secondary
         @click="settings.toggleFavourite(programme.id)"
       >
