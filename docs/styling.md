@@ -36,13 +36,15 @@ Keep related responsive adjustments in the same scoped stylesheet. Conditions su
 
 Mobile layouts support widths down to `320px`. Below `760px`, use one compact navigation bar, retain the connection warning when the service fails, and keep page titles in the content. The programme spotlight is compact, recent dates scroll horizontally, and content entries and settings controls use consistent vertical layouts. Keep native mobile action targets at least `44px` tall. Preview cards reduce padding and clamp long visible titles to two lines while retaining the full accessible text. Player controls use named container queries based on the available video width, so modal padding and screen size cannot select incompatible control layouts.
 
+The shell's `.main-content` owns the shared page width and horizontal padding. Settings panels and the programme library fill that same content area; constrain explanatory text locally instead of narrowing an entire page.
+
 Programme cards, the spotlight, and content entries clamp visible titles to two lines with an ellipsis; cover placeholders use one line. Keep complete titles in the DOM and native title attributes. Content titles open a Naive UI popover on click or keyboard activation, including entries without playable video; Escape dismisses it. Programme detail headings wrap in full. Truncation must not alter source data, accessible action labels, or download filenames.
 
 ## Themes and Cascade
 
 Use semantic variables such as `background: var(--panel)`, `color: var(--text)`, and `border: 1px solid var(--line)`. Their values change under `:root[data-theme='dark']`. Naive UI receives its corresponding theme through [App.vue](../src/App.vue).
 
-Naive UI's default preflight supplies body margins, typography, and input font inheritance. Keep it enabled. Application defaults add the border-box model, explicit heading and paragraph spacing, navigation link presentation, and native button typography. CoverImage and Artplayer own media sizing. Do not duplicate a full browser reset or add a reset dependency without a concrete need.
+Naive UI's default preflight supplies typography and input font inheritance. Keep it enabled. Application defaults set zero body margins before library components mount, preventing the shell from expanding when preflight styles arrive. They also add the border-box model, explicit heading and paragraph spacing, navigation link presentation, and native button typography. CoverImage and Artplayer own media sizing. Do not duplicate a full browser reset or add a reset dependency without a concrete need.
 
 The native `@layer base` contains application defaults. Component and library styles are unlayered, so their normal declarations override those defaults without raising selector specificity. Important declarations reverse this layer order: reduced-motion rules in the base layer retain priority over component animations.
 
@@ -52,7 +54,7 @@ Keep the root's stable scrollbar gutter and its Naive UI margin-compensation ove
 
 ## Motion and Verification
 
-Named keyframes and Vue route/catalogue transitions live in the global stylesheet. Components opt into those animations explicitly. Preserve reduced-motion handling, catalogue sorting without positional animation, and the modal/player cleanup contract in [Architecture](architecture.md).
+Named keyframes and Vue route/catalogue transitions live in the global stylesheet. Page and content reveals animate opacity only, keeping elements in place. Components opt into those animations explicitly. Preserve reduced-motion handling, catalogue sorting without positional animation, and the modal/player cleanup contract in [Architecture](architecture.md).
 
 [CSS lint tests](../tooling/css-lint.test.js) verify that invalid declarations are reported in both standalone CSS and Vue styles, while responsive rules and references to external theme variables remain valid. ESLint validates individual stylesheets; it does not resolve variables across files.
 

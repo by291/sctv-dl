@@ -52,12 +52,14 @@
   }
 
   body {
+    /* Keep the shell geometry stable before Naive UI mounts its preflight styles. */
+    margin: 0;
     min-width: 0;
     background: var(--bg);
     color: var(--text);
   }
 
-  /* Naive UI supplies body defaults; application headings and copy use explicit spacing. */
+  /* Naive UI supplies typography; application headings and copy use explicit spacing. */
   h1,
   h2,
   h3,
@@ -116,11 +118,9 @@
 @keyframes content-reveal {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -186,16 +186,10 @@
 
 .page-enter-active,
 .page-leave-active {
-  transition:
-    opacity var(--motion-fast) var(--motion-ease),
-    transform var(--motion-fast) var(--motion-ease);
+  transition: opacity var(--motion-fast) var(--motion-ease);
 }
 
-.page-enter-from {
-  transform: translateY(4px);
-  opacity: 0;
-}
-
+.page-enter-from,
 .page-leave-to,
 .fade-enter-from,
 .fade-leave-to,
