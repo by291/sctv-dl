@@ -53,7 +53,9 @@ The development and preview ports are strict. If 5180 is occupied, choose a free
 
 [GitHub Actions](.github/workflows/ci.yml) runs on pull requests and pushes to `main`, and can also be started manually. It installs the pnpm version from `package.json` with a frozen lockfile, then runs `pnpm check` and `pnpm build` on Ubuntu with Node.js 24.15.0 and 26. Superseded runs are cancelled, and the shared pnpm store is cached between runs.
 
-[Dependabot](.github/dependabot.yml) checks npm dependencies and GitHub Actions every Monday at 09:00 Asia/Shanghai. Minor and patch updates are grouped by production dependencies, development dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
+[Dependabot](.github/dependabot.yml) checks npm dependencies, Android Gradle dependencies and the Gradle Wrapper, and GitHub Actions every Monday at 09:00 Asia/Shanghai. The `/android` entry includes the version catalogue, declared modules, and included `build-logic` build. Minor and patch updates are grouped by production dependencies, development dependencies, Android dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
+
+[Android CI](.github/workflows/android.yml) also submits the resolved Gradle dependency graph in a separate job on pushes to `main` and manual runs on `main`. Only that job has `contents: write`; pull-request checks keep read-only permissions. Dependabot alerts and security updates are repository settings enabled separately from the YAML configuration. Security updates open reviewable pull requests and do not enable automatic merging.
 
 Both configurations take effect after they reach the default branch on GitHub. Dependabot's update parser handles multi-document pnpm lockfiles, but GitHub's dependency graph and security alerts still have a [reported pnpm 12 limitation](https://github.com/dependabot/dependabot-core/issues/15904). Do not rely on an empty dependency graph as evidence that dependencies are secure.
 
