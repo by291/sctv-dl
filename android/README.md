@@ -142,3 +142,24 @@ Run `android/gradlew.bat -p android :benchmark:connectedBenchmarkReleaseAndroidT
 [Android CI](../.github/workflows/android.yml) explicitly configures Android command-line tools and installs the pinned SDK with `android-actions/setup-android`, uses JDK 21 and the verified wrapper, checks formatting/unit tests/lint, assembles app and performance APKs, and preserves reports. It does not rely on the runner image providing `sdkmanager` on `PATH`. Connected device tests and physical performance measurements run separately.
 
 A separate CI job resolves and submits the Gradle dependency graph on pushes to `main` and manual runs on `main`, so Dependabot can report vulnerable dependencies. The [Dependabot configuration](../.github/dependabot.yml) checks the Android version catalogue, modules, included build logic, and Gradle Wrapper every week. See the root [CI and Dependency Updates](../README.md#ci-and-dependency-updates) section for update grouping and security settings.
+
+### Dependency Security
+
+The submitted graph retains all resolved dependencies and uses the plugin's [scope configuration](https://github.com/gradle/github-dependency-graph-gradle-plugin#controlling-the-scope-of-dependencies-in-the-dependency-graph):
+
+| Scope         | Resolved dependencies                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `runtime`     | `:app`'s `releaseRuntimeClasspath`, including transitive dependencies from its core and feature modules.             |
+| `development` | All other resolutions: build plugins, processors, debug tools, tests, benchmarks, and the Baseline Profile producer. |
+
+When the same package version appears in both scopes, it is reported as `runtime`. These labels describe dependency resolution before release shrinking; they do not prove that vulnerable code is reachable. Development dependencies can still affect build and CI security, and their alerts remain enabled.
+
+GitHub [cannot automatically update undeclared Gradle transitive dependencies](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#gradle). An updater failure such as `security_update_dependency_not_found` therefore needs assessment of the advisory and the owning dependency, rather than a scope change or blanket dismissal.
+
+Check the alert's scope and affected behaviour, then trace the dependency in the relevant module and configuration. For example, check whether Netty is on the release app's dependency path:
+
+```powershell
+android/gradlew.bat -p android :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency io.netty:netty-codec-http
+```
+
+For build plugin dependencies, inspect the owning project's `buildEnvironment` report. Upgrade the declared parent library or plugin in the version catalogue or build logic, run the Android checks above, and confirm that the next submitted graph removes the vulnerable version. Avoid adding an unused direct dependency or forcing a version solely to make the updater succeed. If no compatible fix is available, record the dependency path, exposure assessment, and upstream fix to track before dismissing an alert.
