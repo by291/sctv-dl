@@ -23,6 +23,9 @@ android {
     }
     buildFeatures { compose = true }
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

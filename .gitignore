@@ -17,6 +17,8 @@ android/build-logic/.gradle/
 android/build-logic/.kotlin/
 android/gradle/gradle-daemon-jvm.properties
 android/**/build/
+android/app/debug/
+android/app/release/
 android/local.properties
 android/*.jks
 android/*.keystore
