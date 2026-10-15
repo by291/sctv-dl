@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.Quality
@@ -86,7 +87,12 @@ internal fun PlaybackContent(
         }
     }
 
-    LaunchedEffect(fullscreen) { host.fullscreen(fullscreen) }
+    LifecycleResumeEffect(fullscreen) {
+        // Predictive previews are STARTED; only a committed destination may change the Activity window.
+        host.fullscreen(fullscreen)
+        // Keep the outgoing window intact through the leave animation; disposal below restores it.
+        onPauseOrDispose { }
+    }
 
     // Disposal happens after the leave animation; releasing on Back would tear down the outgoing video surface.
     DisposableEffect(session) {

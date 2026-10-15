@@ -1,7 +1,6 @@
 package dev.sctvdl.feature.programmes.archive.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +11,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +28,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,32 +51,73 @@ internal fun EpisodeCard(
     broadcastDate: LocalDate? = null
 ) {
     val colours = MaterialTheme.colorScheme
-    val typography = MaterialTheme.typography
     val playable = videoVariants(content).isNotEmpty()
-    val largeText = LocalDensity.current.fontScale >= 1.5f
-    val interaction = if (selectionMode) {
-        Modifier.toggleable(selected, enabled = playable, role = Role.Checkbox, onValueChange = { onSelect() })
-            .semantics { contentDescription = "${if (selected) "取消选择" else "选择"}${content.title}" }
-    } else {
-        Modifier.clickable(
-            enabled = playable,
-            role = Role.Button,
-            onClickLabel = "进入播放页",
-            onClick = onPlay
-        ).semantics { contentDescription = "播放节目：${content.title}" }
+    val containerColor = if (selectionMode && selected) colours.primaryContainer else colours.surfaceContainerLow
+    val border = BorderStroke(
+        if (selected) 2.dp else 1.dp,
+        if (selected) colours.primary else colours.outlineVariant.copy(alpha = 0.5f)
+    )
+    val cardModifier = Modifier.fillMaxWidth().heightIn(min = TouchTarget).testTag("content-${content.id}")
+        .semantics {
+            if (selectionMode) {
+                role = Role.Checkbox
+                contentDescription = "${if (selected) "取消选择" else "选择"}${content.title}"
+            } else {
+                role = Role.Button
+                contentDescription = "播放节目：${content.title}"
+                onClick(label = "进入播放页", action = null)
+            }
+        }
+    val cardContent: @Composable () -> Unit = {
+        EpisodeCardBody(
+            content = content,
+            fullEpisode = fullEpisode,
+            selectionMode = selectionMode,
+            selected = selected,
+            playable = playable,
+            broadcastDate = broadcastDate
+        )
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth().heightIn(min = TouchTarget).testTag("content-${content.id}")
-            .then(interaction),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selectionMode && selected) colours.primaryContainer else colours.surfaceContainerLow
-        ),
-        border = BorderStroke(
-            if (selected) 2.dp else 1.dp,
-            if (selected) colours.primary else colours.outlineVariant.copy(alpha = 0.5f)
+    // Material's interactive surfaces keep the indication inside the same shape that clips the card content.
+    if (selectionMode) {
+        Surface(
+            checked = selected,
+            onCheckedChange = { onSelect() },
+            enabled = playable,
+            modifier = cardModifier,
+            shape = MaterialTheme.shapes.medium,
+            color = containerColor,
+            border = border,
+            content = cardContent
         )
-    ) {
+    } else {
+        Surface(
+            onClick = onPlay,
+            enabled = playable,
+            modifier = cardModifier,
+            shape = MaterialTheme.shapes.medium,
+            color = containerColor,
+            border = border,
+            content = cardContent
+        )
+    }
+}
+
+@Composable
+private fun EpisodeCardBody(
+    content: ProgrammeContent,
+    fullEpisode: Boolean,
+    selectionMode: Boolean,
+    selected: Boolean,
+    playable: Boolean,
+    broadcastDate: LocalDate?
+) {
+    val colours = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val largeText = LocalDensity.current.fontScale >= 1.5f
+
+    Column {
         if (fullEpisode && !selectionMode) {
             ContentPreview(content, true, playable, Modifier.fillMaxWidth())
         }

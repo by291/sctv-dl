@@ -28,7 +28,6 @@ import dev.sctvdl.domain.settings.AppSettings
 import dev.sctvdl.domain.settings.ThemeMode
 import dev.sctvdl.ui.theme.SctvAppTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,7 +66,7 @@ class NavigationMotionTest {
                     heights.all { it == initialHeight }
                 )
             }
-            assertNull(device.findObject(By.res("tab-Catalogue")))
+            assertTrue(device.wait(Until.gone(By.res("tab-Catalogue")), 3_000))
         }
     }
 

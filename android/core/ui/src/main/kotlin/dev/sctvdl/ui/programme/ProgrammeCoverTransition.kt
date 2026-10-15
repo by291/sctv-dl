@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.toSize
+import dev.sctvdl.design.theme.PAGE_TRANSITION_DURATION_MILLIS
 import dev.sctvdl.domain.programme.Programme
 
 val LocalProgrammeCoverSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
@@ -91,7 +92,7 @@ fun Modifier.sharedProgrammeCover(programme: Programme, shape: Shape, rotation: 
                 motion.targetBounds = target
                 motion.initialRotation = rotationFor(animationScope.transition.currentState)
                 motion.targetRotation = rotationFor(animationScope.transition.targetState)
-                tween(400, easing = FastOutSlowInEasing)
+                tween(PAGE_TRANSITION_DURATION_MILLIS, easing = FastOutSlowInEasing)
             }
         ).layout { measurable, constraints ->
             val placeable = measurable.measure(constraints)
