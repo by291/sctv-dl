@@ -113,6 +113,10 @@ The default network policy permits ordinary connected networks. Offer `仅 Wi-Fi
 
 Use a primary settings page with separate surface groups for appearance, playback, downloads, and app information. Provide `跟随系统 / 浅色 / 深色`, an optional system dynamic-colour setting, the initial playback quality, and the Wi-Fi-only download preference. The theme defaults to following the system; dynamic colour defaults off to preserve the product palette.
 
+Switch rows span the card width, including their horizontal content insets, and retain a single accessible switch action. Their ripple is clipped by the enclosing card shape. Noninteractive preference content owns its own padding.
+
+Changes to light/dark mode or dynamic colour interpolate all Material colour roles over 300 ms through Compose's native colour animation. Keep the current destination, scroll position, focus, and playback content in composition. Interrupted changes continue from the currently displayed colours, and the system animator duration scale controls or disables the transition.
+
 Do not require onboarding, account registration, notification permission, or broad storage permissions merely to browse programmes. Request any future capability-specific permission at the action that needs it.
 
 ## Visual and Interaction System

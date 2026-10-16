@@ -1,28 +1,46 @@
 package dev.sctvdl.feature.settings
 
-import androidx.compose.ui.test.assertHasClickAction
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isToggleable
-import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.performClick
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
 import dev.sctvdl.domain.settings.AppSettings
-import dev.sctvdl.feature.settings.SettingsScreen
 import dev.sctvdl.ui.theme.SctvAppTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
 
 class SettingsAccessibilityTest {
-    @get:Rule val compose = createComposeRule()
+    private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
     @Test fun wifiSettingExposesItsLabelAndToggleAsOneAccessibleControl() {
         var enabled = false
-        compose.setContent {
-            SctvAppTheme(AppSettings()) {
-                SettingsScreen(AppSettings(), {}, {}, {}, { enabled = it })
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    SctvAppTheme(AppSettings()) {
+                        SettingsScreen(AppSettings(), {}, {}, {}, { enabled = it })
+                    }
+                }
             }
+            val label = requireNotNull(device.wait(Until.findObject(By.text("仅 Wi-Fi 下载")), 5_000))
+            val controls = device.findObjects(By.checkable(true))
+                .filter { it.visibleBounds.contains(label.visibleBounds) }
+            assertEquals("The label must belong to one accessible switch", 1, controls.size)
+            val control = controls.single()
+            assertTrue(control.isClickable)
+            assertEquals(
+                "The visual switch must not create a second accessible action",
+                1,
+                device.findObjects(By.checkable(true)).count { control.visibleBounds.contains(it.visibleBounds) }
+            )
+
+            control.click()
+            device.waitForIdle()
+            scenario.onActivity { assertTrue(enabled) }
         }
-        compose.onNode(hasText("仅 Wi-Fi 下载") and isToggleable()).assertHasClickAction().performClick()
-        compose.runOnIdle { assertTrue(enabled) }
     }
 }

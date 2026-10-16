@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.settings.AppSettings
 import dev.sctvdl.domain.settings.ThemeMode
+import dev.sctvdl.feature.settings.components.PreferenceContent
 import dev.sctvdl.feature.settings.components.PreferenceGroup
 import dev.sctvdl.feature.settings.components.SettingSwitch
 
@@ -49,18 +51,20 @@ internal fun SettingsScreen(
         ) {
             item(key = "appearance") {
                 PreferenceGroup("外观") {
-                    Text("显示模式", style = MaterialTheme.typography.bodyLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ThemeMode.entries.forEach { mode ->
-                            FilterChip(selected = settings.theme == mode, onClick = { onTheme(mode) }, label = {
-                                Text(
-                                    when (mode) {
-                                        ThemeMode.System -> "跟随系统"
-                                        ThemeMode.Light -> "浅色"
-                                        ThemeMode.Dark -> "深色"
-                                    }
-                                )
-                            })
+                    PreferenceContent {
+                        Text("显示模式", style = MaterialTheme.typography.bodyLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ThemeMode.entries.forEach { mode ->
+                                FilterChip(selected = settings.theme == mode, onClick = { onTheme(mode) }, label = {
+                                    Text(
+                                        when (mode) {
+                                            ThemeMode.System -> "跟随系统"
+                                            ThemeMode.Light -> "浅色"
+                                            ThemeMode.Dark -> "深色"
+                                        }
+                                    )
+                                })
+                            }
                         }
                     }
                     SettingSwitch(
@@ -74,14 +78,16 @@ internal fun SettingsScreen(
             }
             item(key = "playback") {
                 PreferenceGroup("播放") {
-                    Text("默认播放清晰度", style = MaterialTheme.typography.bodyLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Quality.entries.forEach { quality ->
-                            FilterChip(
-                                selected = settings.initialQuality == quality,
-                                onClick = { onQuality(quality) },
-                                label = { Text(quality.label) }
-                            )
+                    PreferenceContent {
+                        Text("默认播放清晰度", style = MaterialTheme.typography.bodyLarge)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Quality.entries.forEach { quality ->
+                                FilterChip(
+                                    selected = settings.initialQuality == quality,
+                                    onClick = { onQuality(quality) },
+                                    label = { Text(quality.label) }
+                                )
+                            }
                         }
                     }
                 }
@@ -91,6 +97,7 @@ internal fun SettingsScreen(
                     SettingSwitch("仅 Wi-Fi 下载", "适用于之后创建的下载任务", settings.wifiOnlyDownloads, onWifi)
                     Text(
                         "文件保存在 Downloads/sctv-dl，可通过系统文件管理器访问。",
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -98,19 +105,21 @@ internal fun SettingsScreen(
             }
             item(key = "about") {
                 PreferenceGroup("关于") {
-                    Text("蜀台回看", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "sctv-dl · $versionName",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("浏览四川广播电视台节目，回看往期内容。", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "节目与图片来自公开节目服务。收藏和设置保存在本机。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    PreferenceContent {
+                        Text("蜀台回看", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "sctv-dl · $versionName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("浏览四川广播电视台节目，回看往期内容。", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "节目与图片来自公开节目服务。收藏和设置保存在本机。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

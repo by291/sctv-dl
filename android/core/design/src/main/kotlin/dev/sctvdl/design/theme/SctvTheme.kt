@@ -48,5 +48,5 @@ fun SctvTheme(darkTheme: Boolean, dynamicColour: Boolean, content: @Composable (
     } else {
         Light
     }
-    MaterialTheme(colorScheme = colours, shapes = SctvShapes, content = content)
+    MaterialTheme(colorScheme = animatedColourScheme(colours), shapes = SctvShapes, content = content)
 }

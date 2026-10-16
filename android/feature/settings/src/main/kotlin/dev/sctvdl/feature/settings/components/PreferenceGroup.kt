@@ -27,10 +27,15 @@ internal fun PreferenceGroup(title: String, content: @Composable () -> Unit) {
             color = MaterialTheme.colorScheme.primary
         )
         Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.medium) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                content()
-            }
+            Column(Modifier.fillMaxWidth()) { content() }
         }
+    }
+}
+
+@Composable
+internal fun PreferenceContent(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        content()
     }
 }
 
@@ -44,7 +49,7 @@ internal fun SettingSwitch(
 ) {
     Row(
         Modifier.fillMaxWidth().toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
