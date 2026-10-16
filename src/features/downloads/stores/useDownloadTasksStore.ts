@@ -98,7 +98,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
       throw new Error('桌面下载服务尚未连接')
     }
 
-    // Initial downloads may start before the lazily loaded task panel attaches its observer.
+    // Initial downloads may start while the shell is still connecting its observer.
     const result = await source.start(request)
     recordStart(result)
 

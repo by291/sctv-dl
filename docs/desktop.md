@@ -60,7 +60,7 @@ Commands preserve the `{code, message}` error response. Native code uses a close
 - `src/shared/platform/` defines injectable programme, playback, download, and settings ports. Components consume ports; native API imports in Vue components are rejected by ESLint.
 - `src/platform/create-platform.ts` calls the official `isTauri()` detector once and dynamically imports the complete Web or native factory. Native initialization errors use the recoverable startup screen; startup never silently substitutes Web business services.
 - Node exposes normalized `/client-api/v1` routes alongside the preserved `/api` and `/media` proxies. See [Upstream API](upstream-api.md) for contracts and [Deployment](deployment.md) for configuration migration.
-- Browser downloads still use HEAD preflight and browser handoff. Native task progress, file saving, and directory selection are implemented behind the native download port. The native shell provides the task drawer and native close/menu confirmation.
+- Browser downloads still use HEAD preflight and browser handoff. Native task progress, file saving, and directory selection are implemented behind the native download port. The native shell provides download navigation, persistent task observation, and native close/menu confirmation.
 
 ## Native Programme Commands
 
@@ -98,7 +98,7 @@ Flush, sync, and writer closure precede no-clobber finalization. A retained file
 
 After a process interruption, recovery treats an exact versioned UUID record plus its matching regular temporary path as an owned pair; it has no live file identity handle. Unknown files and records remain untouched.
 
-The TypeScript adapter validates command/channel payloads. The shared download store subscribes before requesting its snapshot and merges monotonic revisions, preserving terminal events that arrive during hydration. Its desktop-only task drawer remains in the application shell across page navigation, shows received bytes/unknown totals, and offers cancel/retry. Retry uses the content reference and actual quality. Preparation failures remain visible in the drawer. The drawer loads lazily, so Web startup does not load its UI chunk.
+The TypeScript adapter validates command/channel payloads. The shared download store subscribes before requesting its snapshot and merges monotonic revisions, preserving terminal events that arrive during hydration. `AppLayout` owns observation until the shell unmounts, so leaving the task page does not disconnect progress or cancel work. The desktop sidebar links to the lazy `#/downloads` page and shows a numeric badge for queued/running tasks; zero counts are hidden and counts above 99 display as `99+`. The page uses the shared page heading and theme, shows received bytes/unknown totals, and offers cancel/retry. Retry uses the content reference and actual quality. Preparation failures remain visible on that page. The Web router does not register this page or show its navigation entry, and Web startup does not load its UI chunk.
 
 Task history is limited to the current process; no restart resume is implemented. Application exit stops admission and awaits blocking directory preparation, transfer cancellation, and file cleanup before releasing directory locks. Rust coordinates close/menu confirmation and pending native operations as described below. Installed Windows behaviour is still unverified; the macOS probe and automated evidence are recorded below.
 

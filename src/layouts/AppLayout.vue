@@ -1,26 +1,30 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Tv, Library, Settings2 } from '@lucide/vue'
+import { NBadge } from 'naive-ui'
+import { Tv, Library, Download, Settings2 } from '@lucide/vue'
 
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
+import { useDownloadTasksStore } from '@/features/downloads/stores/useDownloadTasksStore'
 import { viewTransitionActive } from '@/shared/utils/view-transition'
 import { usePlatform } from '@/shared/platform/usePlatform'
 
 const route = useRoute()
 const platform = usePlatform()
 const programmes = useProgrammeCatalogueStore()
+const tasks = useDownloadTasksStore()
 const downloads = platform.downloads
 const appVersion = import.meta.env.APP_VERSION
-const DownloadTasksPanel = defineAsyncComponent(
-  () => import('@/features/downloads/components/DownloadTasksPanel.vue'),
-)
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
+  ...(downloads.kind === 'native' ? [{ to: '/downloads', label: '下载任务', icon: Download }] : []),
   { to: '/settings', label: '设置', icon: Settings2 },
 ]
+const downloadNavigationLabel = computed(() =>
+  tasks.activeCount ? `下载任务，${tasks.activeCount} 个进行中` : '下载任务',
+)
 const connectionLabel = computed(() => {
   if (programmes.error) {
     return '连接暂时不可用'
@@ -32,6 +36,19 @@ const connectionLabel = computed(() => {
 function isActive(path: string): boolean {
   return path === '/' ? route.path === '/' || route.name === 'programme' : route.path === path
 }
+
+// The shell keeps progress observation alive while individual pages mount and unmount.
+onMounted(() => {
+  if (downloads.kind === 'native') {
+    void tasks.attach(downloads)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (downloads.kind === 'native') {
+    tasks.detach()
+  }
+})
 </script>
 
 <template>
@@ -50,6 +67,7 @@ function isActive(path: string): boolean {
       </RouterLink>
       <nav
         class="primary-nav"
+        :class="{ 'with-downloads': downloads.kind === 'native' }"
         aria-label="主导航"
       >
         <RouterLink
@@ -58,6 +76,7 @@ function isActive(path: string): boolean {
           :to="link.to"
           class="nav-link"
           :class="{ active: isActive(link.to) }"
+          :aria-label="link.to === '/downloads' ? downloadNavigationLabel : undefined"
         >
           <component
             :is="link.icon"
@@ -65,6 +84,13 @@ function isActive(path: string): boolean {
             :stroke-width="1.7"
           />
           <span>{{ link.label }}</span>
+          <NBadge
+            v-if="link.to === '/downloads' && tasks.activeCount"
+            class="nav-count"
+            :value="tasks.activeCount"
+            :max="99"
+            aria-hidden="true"
+          />
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
@@ -96,10 +122,6 @@ function isActive(path: string): boolean {
         />
         {{ connectionLabel }}
       </div>
-      <DownloadTasksPanel
-        v-if="downloads.kind === 'native'"
-        :downloads="downloads"
-      />
       <main
         id="main-content"
         class="main-content"
@@ -181,6 +203,7 @@ function isActive(path: string): boolean {
   margin-top: 40px;
 }
 .nav-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -192,6 +215,11 @@ function isActive(path: string): boolean {
   transition:
     background 150ms ease,
     color 150ms ease;
+}
+.nav-count {
+  position: absolute;
+  top: 7px;
+  right: 8px;
 }
 .nav-link.active {
   background: var(--accent-soft);
@@ -301,6 +329,18 @@ function isActive(path: string): boolean {
     gap: 5px;
     padding: 8px;
     font-size: 14px;
+  }
+  .with-downloads .nav-link {
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 9px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .nav-count {
+    top: 0;
+    right: 0;
   }
   .mobile-connection-warning {
     display: flex;

@@ -23,6 +23,16 @@ export function createAppRouter(kind: 'web' | 'tauri') {
         component: () => import('@/features/settings/views/SettingsView.vue'),
         meta: { title: '设置' },
       },
+      ...(kind === 'tauri'
+        ? [
+            {
+              path: '/downloads',
+              name: 'downloads',
+              component: () => import('@/features/downloads/views/DownloadTasksView.vue'),
+              meta: { title: '下载任务' },
+            },
+          ]
+        : []),
       { path: '/:pathMatch(.*)*', redirect: '/' },
     ],
     // The cached library restores its position after its DOM has been reactivated.

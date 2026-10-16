@@ -43,3 +43,11 @@ it('uses hash URLs for desktop routes so asset protocol reloads stay on the entr
   expect(desktop.resolve('/settings').href).toBe('#/settings')
   expect(router.resolve('/settings').href).toBe('/settings')
 })
+
+it('registers the download task page only for desktop routing', () => {
+  const desktop = createAppRouter('tauri')
+
+  expect(desktop.resolve('/downloads').name).toBe('downloads')
+  expect(desktop.resolve('/downloads').href).toBe('#/downloads')
+  expect(router.resolve('/downloads').name).not.toBe('downloads')
+})
