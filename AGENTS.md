@@ -11,6 +11,7 @@ Read only the documents relevant to the change:
 - [Deployment](docs/deployment.md): server configuration, hosting, and operations.
 - [Upstream API](docs/upstream-api.md): response schemas, IDs, video variants, and proxy contracts.
 - [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
+- [Desktop Development](docs/desktop.md): Tauri scaffold, shared contracts, native commands, and current integration limits.
 
 ## Working Conventions
 

@@ -8,6 +8,9 @@
     "node": ">=24.15.0"
   },
   "scripts": {
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
     "dev": "vite --host 127.0.0.1",
     "build": "pnpm typecheck && vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
@@ -22,6 +25,7 @@
   },
   "dependencies": {
     "@lucide/vue": "^1.53.0",
+    "@tauri-apps/api": "2.12.4",
     "@vueuse/core": "^15.0.0",
     "artplayer": "^5.4.0",
     "naive-ui": "^2.45.3",
@@ -35,6 +39,7 @@
     "@eslint/css": "^2.0.0",
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
+    "@tauri-apps/cli": "2.12.3",
     "@types/node": "^26.6.4",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",

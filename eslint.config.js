@@ -23,7 +23,17 @@ const featureImportPatterns = [
 ]
 
 export default defineConfig(
-  { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**', 'android/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.cache/**',
+      '.superpowers/**',
+      'android/**',
+      'src-tauri/target/**',
+      'src-tauri/gen/**',
+    ],
+  },
   {
     files: ['shared/**/*.ts'],
     rules: {

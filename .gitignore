@@ -9,6 +9,13 @@ dist/
 !.env.example
 *.tsbuildinfo
 
+# Tauri build outputs, generated schemas, and signing material
+src-tauri/target/
+src-tauri/gen/
+*.p12
+*.pfx
+*.key
+
 # Android local tooling and generated products
 android/.idea/
 android/.gradle/

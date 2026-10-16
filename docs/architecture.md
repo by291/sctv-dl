@@ -13,7 +13,7 @@ flowchart LR
     Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com"]
 ```
 
-The service streams video with backpressure. It does not save videos or maintain download jobs.
+The service streams video with backpressure. It does not save videos or maintain download jobs. A Tauri scaffold under `src-tauri/` bundles the same frontend; native business integration is still in progress. See [Desktop Development](desktop.md) for the current boundary.
 
 ## Module Ownership
 
