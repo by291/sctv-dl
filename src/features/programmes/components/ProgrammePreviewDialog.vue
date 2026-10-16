@@ -82,6 +82,7 @@ function updateVisible(show: boolean) {
 }
 
 function clearPreview() {
+  // Closing pauses immediately; after-leave releases the snapshot/session unless a new preview opened.
   if (!content.value) {
     releaseSession()
     displayedContent.value = null

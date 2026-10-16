@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 
-import { resolveVideo } from '@/features/programmes/model/video-variants'
+import { isFullEpisode } from '@/features/programmes/model/full-episodes'
+import { hasPlayableVideo } from '@/features/programmes/model/video-capabilities'
 
 import type { Ref } from 'vue'
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
@@ -12,27 +13,18 @@ export function useContentSelection(
 ) {
   const selected = ref<string[]>([])
 
-  const hasVideo = (content: ProgrammeContent) => !!resolveVideo(content, 'standard')
-  const available = computed(() => contents.value.filter(hasVideo))
+  const available = computed(() => contents.value.filter(hasPlayableVideo))
   const allSelected = computed(
     () =>
       available.value.length > 0 &&
       available.value.every((item) => selected.value.includes(item.id)),
   )
 
-  const fullIds = computed(() => {
-    if (!programmeName.value || !selectedDate.value) {
-      return []
-    }
-
-    const date = selectedDate.value.replaceAll('-', '.')
-    const titles = [`${programmeName.value}（${date}）`, `${programmeName.value}(${date})`]
-
-    // Match the programme name and date explicitly; the first item is not necessarily a full episode.
-    return contents.value
-      .filter((item) => titles.includes(item.title.replace(/\s/g, '')))
-      .map((item) => item.id)
-  })
+  const fullIds = computed(() =>
+    contents.value
+      .filter((item) => isFullEpisode(item.title, programmeName.value, selectedDate.value))
+      .map((item) => item.id),
+  )
 
   function selectAll(checked: boolean) {
     selected.value = checked ? available.value.map((item) => item.id) : []
@@ -52,7 +44,6 @@ export function useContentSelection(
     selected,
     allSelected,
     fullIds,
-    hasVideo,
     selectAll,
     selectFullEpisodes,
   }

@@ -19,12 +19,12 @@ import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePr
 import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeDownloadButton.vue'
 
 import type { ContentRef } from '@shared/contracts/programmes'
-
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
 import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
 
 const props = defineProps<{ id: string }>()
+
 const catalogue = useProgrammeCatalogueStore()
 const settings = useSettingsStore()
 const message = useMessage()
@@ -32,6 +32,10 @@ const message = useMessage()
 const programmeId = computed(() => props.id)
 const programme = computed(() => catalogue.programmes.find((item) => item.id === programmeId.value))
 const programmeName = computed(() => programme.value?.name ?? '')
+const isFavourite = computed(
+  () => !!programme.value && settings.favourites.includes(programme.value.id),
+)
+
 const {
   dates,
   selectedDate,
@@ -48,22 +52,26 @@ const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useCon
   programmeName,
   selectedDate,
 )
+
 const preview = ref<ProgrammeContent | null>(null)
+const contentSortOrder = ref<ContentSortOrder>('asc')
+const { preparingIds, prepareDownloads } = useProgrammeDownloads()
+
+const selectedDateId = computed(
+  () => dates.value.find((date) => date.date === selectedDate.value)?.id || '',
+)
 const previewReference = computed<ContentRef | null>(() =>
   preview.value
     ? {
         programmeId: props.id,
-        dateId: dates.value.find((date) => date.date === selectedDate.value)?.id || '',
+        dateId: selectedDateId.value,
         contentId: preview.value.id,
       }
     : null,
 )
-const { preparingIds, prepareDownloads } = useProgrammeDownloads()
-const contentSortOrder = ref<ContentSortOrder>('asc')
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
 )
-
 const dateSummary = computed(() => {
   if (loadingDates.value) {
     return '播出日期加载中'
@@ -76,14 +84,21 @@ const dateSummary = computed(() => {
   return dates.value.length ? `${dates.value.length.toLocaleString()} 个播出日期` : '暂无播出日期'
 })
 
+const selectionButtonTheme = {
+  heightMedium: '36px',
+  fontSizeMedium: '14px',
+  fontWeight: '500',
+  paddingMedium: '0 10px',
+}
+
 function openPreview(content: ProgrammeContent) {
   preview.value = content
 }
 
 async function downloadContents(items: ProgrammeContent[], quality: Quality) {
   try {
-    const dateId = dates.value.find((date) => date.date === selectedDate.value)?.id || ''
-    const result = await prepareDownloads(items, dateId, quality, props.id)
+    const result = await prepareDownloads(items, selectedDateId.value, quality, props.id)
+
     if (!result || result.kind === 'cancelled') {
       return
     }
@@ -158,17 +173,17 @@ onMounted(() => {
       <NButton
         v-if="programme"
         class="detail-favourite"
-        :type="settings.favourites.includes(programme.id) ? 'primary' : 'default'"
+        :type="isFavourite ? 'primary' : 'default'"
         secondary
         @click="settings.toggleFavourite(programme.id)"
       >
         <template #icon>
           <Star
             :size="16"
-            :fill="settings.favourites.includes(programme.id) ? 'currentColor' : 'none'"
+            :fill="isFavourite ? 'currentColor' : 'none'"
           />
         </template>
-        {{ settings.favourites.includes(programme.id) ? '已收藏' : '收藏栏目' }}
+        {{ isFavourite ? '已收藏' : '收藏栏目' }}
       </NButton>
     </section>
 
@@ -219,12 +234,7 @@ onMounted(() => {
               <NButton
                 v-if="fullIds.length"
                 quaternary
-                :theme-overrides="{
-                  heightMedium: '36px',
-                  fontSizeMedium: '14px',
-                  fontWeight: '500',
-                  paddingMedium: '0 10px',
-                }"
+                :theme-overrides="selectionButtonTheme"
                 @click="selectFullEpisodes"
               >
                 只选整期

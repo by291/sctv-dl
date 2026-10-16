@@ -2,18 +2,19 @@
 import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import Artplayer from 'artplayer'
 
-import type { VideoVariant } from '@/features/programmes/model/video-variants'
+import type { PlaybackSession } from '@shared/contracts/media'
 
 const props = withDefaults(
   defineProps<{
     url: string
     poster: string | null
     title: string
-    variants?: VideoVariant[]
+    variants?: PlaybackSession['sources']
   }>(),
   { variants: () => [] },
 )
 const emit = defineEmits<{ error: []; ready: [] }>()
+
 const container = useTemplateRef<HTMLDivElement>('container')
 let player: Artplayer | undefined
 

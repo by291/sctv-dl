@@ -23,16 +23,18 @@ export function useProgrammeDownloads() {
     }
 
     preparingIds.value = items.map((item) => item.id)
+
     try {
-      const result = await downloads.start({
+      const request = {
         programmeId,
         dateId,
         contentIds: items.map((item) => item.id),
         quality,
-      })
-      tasks?.recordStart(result)
+      }
 
-      return result
+      return downloads.kind === 'native' && tasks
+        ? await tasks.start(request, downloads)
+        : await downloads.start(request)
     } finally {
       preparingIds.value = []
     }

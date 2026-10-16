@@ -21,6 +21,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
   const error = ref('')
   const loading = ref(false)
   const pendingActions = ref<string[]>([])
+
   const activeCount = computed(() => tasks.value.filter((task) => !terminal(task)).length)
 
   let port: NativeDownloadPort | undefined
@@ -30,6 +31,8 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
   function merge(task: DownloadTask) {
     const index = tasks.value.findIndex((value) => value.id === task.id)
     const previous = tasks.value[index]
+
+    // A delayed snapshot cannot roll back an event, and retries always receive a new task ID.
     if (previous && (previous.revision >= task.revision || terminal(previous))) {
       return
     }
@@ -55,7 +58,9 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     const current = generation
     loading.value = true
     error.value = ''
+
     try {
+      // Subscribe before listing so work completed during hydration is retained by merge().
       const unsubscribe = await next.subscribe((task) => {
         if (current === generation) {
           merge(task)
@@ -85,12 +90,16 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     }
   }
 
-  async function start(request: DownloadRequest): Promise<DownloadStartResult> {
-    if (!port) {
+  async function start(
+    request: DownloadRequest,
+    source: NativeDownloadPort | undefined = port,
+  ): Promise<DownloadStartResult> {
+    if (!source) {
       throw new Error('桌面下载服务尚未连接')
     }
 
-    const result = await port.start(request)
+    // Initial downloads may start before the lazily loaded task panel attaches its observer.
+    const result = await source.start(request)
     recordStart(result)
 
     return result
@@ -158,7 +167,6 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     attach,
     detach,
     start,
-    recordStart,
     cancel,
     retry,
   }

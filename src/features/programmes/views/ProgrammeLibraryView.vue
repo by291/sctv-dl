@@ -14,6 +14,7 @@ import { useFeaturedProgramme } from '@/features/programmes/composables/useFeatu
 
 const store = useProgrammeCatalogueStore()
 const settings = useSettingsStore()
+
 const query = ref('')
 const tab = ref<'all' | 'favourites'>('all')
 const sort = ref<'default' | 'name'>('default')
@@ -54,6 +55,15 @@ const filtered = computed(() => {
     return priority || (sort.value === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : 0)
   })
 })
+const emptyState = computed(() => {
+  const emptyFavourites = tab.value === 'favourites' && !query.value
+
+  return {
+    title: emptyFavourites ? '暂无收藏栏目' : '没有找到匹配的栏目',
+    description: emptyFavourites ? '点击栏目右上角的星标添加收藏。' : '请更换关键词或清空搜索。',
+  }
+})
+
 const { featured, canChange, chooseAnother } = useFeaturedProgramme(toRef(store, 'programmes'))
 
 onMounted(() => {
@@ -178,12 +188,8 @@ onActivated(async () => {
 
     <StatePanel
       v-else-if="!filtered.length"
-      :title="tab === 'favourites' && !query ? '暂无收藏栏目' : '没有找到匹配的栏目'"
-      :description="
-        tab === 'favourites' && !query
-          ? '点击栏目右上角的星标添加收藏。'
-          : '请更换关键词或清空搜索。'
-      "
+      :title="emptyState.title"
+      :description="emptyState.description"
     />
 
     <TransitionGroup

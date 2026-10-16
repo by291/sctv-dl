@@ -20,6 +20,47 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
+it('starts before task observation is attached and retains per-file preparation failures', async () => {
+  const port: NativeDownloadPort = {
+    kind: 'native',
+    async start(request) {
+      expect(request).toEqual({
+        programmeId: '1',
+        dateId: '2',
+        contentIds: ['3', '4'],
+        quality: 'smooth',
+      })
+
+      return {
+        kind: 'native',
+        taskIds: ['job'],
+        usedFallback: true,
+        failures: [{ contentId: '4', message: 'Content unavailable' }],
+      }
+    },
+    list: async () => [],
+    subscribe: async () => () => {},
+    cancel: async () => {},
+    getDirectory: async () => null,
+    chooseDirectory: async () => null,
+  }
+  const store = useDownloadTasksStore()
+
+  const result = await store.start(
+    { programmeId: '1', dateId: '2', contentIds: ['3', '4'], quality: 'smooth' },
+    port,
+  )
+
+  expect(result).toEqual({
+    kind: 'native',
+    taskIds: ['job'],
+    usedFallback: true,
+    failures: [{ contentId: '4', message: 'Content unavailable' }],
+  })
+  expect(store.failures).toEqual([{ contentId: '4', message: 'Content unavailable' }])
+  expect(store.tasks).toEqual([])
+})
+
 it('subscribes before snapshot and retains a newer terminal event during hydration', async () => {
   let listener: (task: DownloadTask) => void = () => {}
 

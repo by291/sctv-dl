@@ -5,7 +5,7 @@ import { ArrowDownWideNarrow, ArrowUpNarrowWide, Play } from '@lucide/vue'
 
 import CoverImage from '@/shared/components/CoverImage.vue'
 import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeDownloadButton.vue'
-import { resolveVideo } from '@/features/programmes/model/video-variants'
+import { hasPlayableVideo } from '@/features/programmes/model/video-capabilities'
 import { programmeContentRows } from '@/features/programmes/model/content-presentation'
 
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
@@ -47,10 +47,6 @@ function closeTitle() {
 
 function toggleContentSort() {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-}
-
-function hasVideo(content: ProgrammeContent): boolean {
-  return !!resolveVideo(content, 'standard')
 }
 </script>
 
@@ -104,7 +100,7 @@ function hasVideo(content: ProgrammeContent): boolean {
         >
           <button
             class="content-thumbnail"
-            :disabled="!hasVideo(content)"
+            :disabled="!hasPlayableVideo(content)"
             :aria-label="`预览${content.title}`"
             @click="emit('preview', content)"
           >
@@ -113,7 +109,7 @@ function hasVideo(content: ProgrammeContent): boolean {
               :alt="content.title"
             />
             <span
-              v-if="hasVideo(content)"
+              v-if="hasPlayableVideo(content)"
               class="thumbnail-play"
             >
               <Play
@@ -131,7 +127,7 @@ function hasVideo(content: ProgrammeContent): boolean {
               整期节目
             </p>
             <p
-              v-if="!hasVideo(content)"
+              v-if="!hasPlayableVideo(content)"
               class="content-unavailable"
             >
               暂无视频
@@ -187,7 +183,7 @@ function hasVideo(content: ProgrammeContent): boolean {
           <NCheckbox
             class="content-checkbox"
             :value="content.id"
-            :disabled="!hasVideo(content)"
+            :disabled="!hasPlayableVideo(content)"
             :aria-label="`选择${content.title}`"
           />
         </article>
