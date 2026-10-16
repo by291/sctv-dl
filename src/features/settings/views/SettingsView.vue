@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { NButton, NRadioGroup, NRadioButton } from 'naive-ui'
 import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
+
+import { usePlatform } from '@/shared/platform/usePlatform'
+import { errorMessage } from '@/shared/utils/errors'
 
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
@@ -13,6 +16,63 @@ const themeOptions = [
   { label: '深色', value: 'dark' },
 ]
 
+const downloads = usePlatform().downloads
+const nativeDownloads = downloads.kind === 'native' ? downloads : undefined
+const directory = ref<string | null>(null)
+const directoryError = ref('')
+const directoryBusy = ref(false)
+let disposed = false
+let directoryRevision = 0
+
+async function loadDirectory() {
+  if (!nativeDownloads) {
+    return
+  }
+
+  const current = ++directoryRevision
+  try {
+    const path = await nativeDownloads.getDirectory()
+    if (!disposed && current === directoryRevision) {
+      directory.value = path
+      directoryError.value = ''
+    }
+  } catch (cause) {
+    if (!disposed && current === directoryRevision) {
+      directoryError.value = errorMessage(cause)
+    }
+  }
+}
+
+async function chooseDirectory() {
+  if (!nativeDownloads || directoryBusy.value) {
+    return
+  }
+
+  directoryBusy.value = true
+  const current = ++directoryRevision
+  try {
+    const path = await nativeDownloads.chooseDirectory()
+    if (!disposed && current === directoryRevision && path !== null) {
+      directory.value = path
+      directoryError.value = ''
+    } else if (!disposed && current === directoryRevision) {
+      await loadDirectory()
+    }
+  } catch (cause) {
+    if (!disposed && current === directoryRevision) {
+      directoryError.value = errorMessage(cause)
+    }
+  } finally {
+    if (!disposed) {
+      directoryBusy.value = false
+    }
+  }
+}
+
+onBeforeUnmount(() => {
+  disposed = true
+})
+
 const settings = useSettingsStore()
 const programmes = useProgrammeCatalogueStore()
 const lastUpdated = computed(
@@ -22,6 +82,7 @@ const lastUpdated = computed(
 )
 onMounted(() => {
   void programmes.load()
+  void loadDirectory()
 })
 </script>
 
@@ -37,7 +98,7 @@ onMounted(() => {
       v-if="!settings.persisted"
       class="notice warning"
     >
-      浏览器未允许本地存储，本次设置可能无法在刷新后保留。
+      设置暂时无法保存到本地。当前操作仍可使用，重新打开后可能无法保留。
     </div>
 
     <div class="settings-sections">
@@ -64,11 +125,43 @@ onMounted(() => {
         <div class="setting-row">
           <div class="setting-description">
             <h3 class="setting-label">保存位置</h3>
-            <p class="setting-help">
+            <p
+              v-if="nativeDownloads"
+              class="setting-help download-directory"
+            >
+              {{
+                directory ||
+                (directoryError ? '请选择可用的下载文件夹。' : '尚未选择，首次下载时会询问。')
+              }}
+            </p>
+            <p
+              v-else
+              class="setting-help"
+            >
               由浏览器的下载设置决定。若要每次选择目录，请在浏览器中开启“下载前询问保存位置”。
             </p>
+            <p
+              v-if="directoryError"
+              class="setting-help directory-error"
+              role="alert"
+            >
+              {{ directoryError }}
+            </p>
           </div>
-          <span class="pill">浏览器管理</span>
+          <NButton
+            v-if="nativeDownloads"
+            secondary
+            :loading="directoryBusy"
+            @click="chooseDirectory"
+          >
+            选择文件夹
+          </NButton>
+          <span
+            v-else
+            class="pill"
+          >
+            浏览器管理
+          </span>
         </div>
       </section>
       <section class="settings-card">
@@ -181,6 +274,12 @@ onMounted(() => {
   font-size: 14px;
   line-height: 1.9;
   color: var(--muted);
+}
+.download-directory {
+  overflow-wrap: anywhere;
+}
+.directory-error {
+  color: var(--accent);
 }
 .setting-options {
   flex-shrink: 0;
