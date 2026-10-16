@@ -1,32 +1,79 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue'
-import { NModal } from 'naive-ui'
+import { computed, onBeforeUnmount, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { NButton, NModal, NSpin } from 'naive-ui'
 
-import { proxyMediaUrl } from '@/shared/media/media-proxy-url'
-import { getVideoVariants, resolveVideo } from '@/features/programmes/model/video-variants'
+import { usePlatform } from '@/shared/platform/usePlatform'
+import { LatestRequest } from '@/shared/utils/latest-request'
+import { errorMessage } from '@/shared/utils/errors'
 import ProgrammeVideoPlayer from '@/features/programmes/components/ProgrammeVideoPlayer.vue'
 
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
+import type { ContentRef } from '@shared/contracts/programmes'
+import type { PlaybackSession } from '@shared/contracts/media'
 
 const content = defineModel<ProgrammeContent | null>({ required: true })
-const props = defineProps<{ quality: Quality }>()
+const props = defineProps<{ quality: Quality; reference: ContentRef | null }>()
+const playback = usePlatform().playback
 const displayedContent = shallowRef(content.value)
+const session = shallowRef<PlaybackSession | null>(null)
 const videoPlayer = useTemplateRef('videoPlayer')
-const failed = ref(false)
-const url = computed(() => {
-  const variant = displayedContent.value && resolveVideo(displayedContent.value, props.quality)
+const loading = ref(false)
+const failed = ref('')
+const gate = new LatestRequest()
 
-  return variant ? proxyMediaUrl(variant.url) : ''
-})
-const variants = computed(() =>
-  displayedContent.value
-    ? getVideoVariants(displayedContent.value).map((variant) => ({
-        ...variant,
-        url: proxyMediaUrl(variant.url),
-      }))
-    : [],
+const url = computed(
+  () =>
+    session.value?.sources.find((source) => source.quality === session.value?.selectedQuality)
+      ?.url ||
+    session.value?.sources[0]?.url ||
+    '',
 )
+const variants = computed(() => session.value?.sources || [])
+
+function releaseSession() {
+  const previous = session.value
+  session.value = null
+  if (previous) {
+    void playback.close(previous.id).catch(() => {})
+  }
+}
+
+async function loadPreview() {
+  const value = content.value
+  const reference = props.reference
+  if (!value) {
+    return
+  }
+
+  const request = gate.begin()
+  releaseSession()
+  displayedContent.value = value
+  failed.value = ''
+  loading.value = true
+  try {
+    if (!reference) {
+      throw new Error('节目内容已不可用，请刷新后重试')
+    }
+
+    const opened = await playback.open({ ...reference, quality: props.quality }, request.signal)
+    if (!request.isCurrent()) {
+      await playback.close(opened.id)
+
+      return
+    }
+
+    session.value = opened
+  } catch (cause) {
+    if (request.isCurrent()) {
+      failed.value = errorMessage(cause)
+    }
+  } finally {
+    if (request.isCurrent()) {
+      loading.value = false
+    }
+  }
+}
 
 function updateVisible(show: boolean) {
   if (!show) {
@@ -36,21 +83,29 @@ function updateVisible(show: boolean) {
 
 function clearPreview() {
   if (!content.value) {
+    releaseSession()
     displayedContent.value = null
+    loading.value = false
+    failed.value = ''
   }
 }
 
-watch(content, (value) => {
-  if (value) {
-    displayedContent.value = value
-  } else {
-    // Pause immediately, but keep the closing dialog's content and height intact.
-    videoPlayer.value?.pause()
-  }
-})
+watch(
+  () => [content.value, props.reference, props.quality] as const,
+  ([value]) => {
+    if (value) {
+      void loadPreview()
+    } else {
+      gate.cancel()
+      videoPlayer.value?.pause()
+    }
+  },
+  { immediate: true },
+)
 
-watch(url, () => {
-  failed.value = false
+onBeforeUnmount(() => {
+  gate.cancel()
+  releaseSession()
 })
 </script>
 
@@ -66,22 +121,38 @@ watch(url, () => {
   >
     <ProgrammeVideoPlayer
       v-if="displayedContent && url"
-      :key="url"
+      :key="session?.id"
       ref="videoPlayer"
       :url="url"
       :poster="displayedContent.cover"
       :title="displayedContent.title"
       :variants="variants"
-      @error="failed = true"
-      @ready="failed = false"
+      @error="failed = '这个视频暂时无法播放，请检查网络或换一个日期。'"
+      @ready="failed = ''"
     />
+    <div
+      v-if="loading"
+      class="preview-loading"
+      role="status"
+      aria-label="正在准备视频"
+    >
+      <NSpin size="small" />
+    </div>
     <p
       v-if="failed"
       class="preview-error"
       role="alert"
     >
-      这个视频暂时无法播放，请检查网络或换一个日期。
+      {{ failed }}
     </p>
+    <NButton
+      v-if="failed"
+      secondary
+      class="preview-retry"
+      @click="loadPreview"
+    >
+      重试
+    </NButton>
   </NModal>
 </template>
 
@@ -89,6 +160,14 @@ watch(url, () => {
 /* Naive UI creates the teleported card without this component's scope attribute. */
 :global(.preview-modal) {
   width: min(860px, calc(100vw - 32px)) !important;
+}
+.preview-loading {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+}
+.preview-retry {
+  margin-top: 12px;
 }
 .preview-error {
   padding-top: 12px;

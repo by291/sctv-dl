@@ -25,7 +25,16 @@ onMounted(() => {
   }
 
   try {
-    // The dialog keys this component by URL so each source owns one instance.
+    const video = document.createElement('video') as HTMLVideoElement & {
+      webkitSupportsPresentationMode?: (mode: string) => boolean
+      webkitSetPresentationMode?: (mode: string) => void
+    }
+    const pip =
+      (!!document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') ||
+      (!!video.webkitSupportsPresentationMode?.('picture-in-picture') &&
+        typeof video.webkitSetPresentationMode === 'function')
+
+    // The dialog keys this component by session so each preview owns one instance.
     player = new Artplayer({
       container: container.value,
       url: props.url,
@@ -45,8 +54,10 @@ onMounted(() => {
             }))
           : [],
       playbackRate: true,
-      pip: true,
-      fullscreen: true,
+      pip,
+      fullscreen:
+        !!document.fullscreenEnabled ||
+        !!(document as Document & { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled,
       hotkey: true,
       moreVideoAttr: { controls: false, preload: 'metadata' },
     })

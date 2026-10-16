@@ -85,3 +85,31 @@ describe('programme player lifecycle', () => {
     wrapper.unmount()
   })
 })
+
+it('omits unsupported native controls instead of advertising unavailable APIs', () => {
+  const wrapper = mount(ProgrammeVideoPlayer, { props })
+  expect(createPlayer.mock.calls[0]?.[0].pip).toBe(false)
+  expect(createPlayer.mock.calls[0]?.[0].fullscreen).toBe(false)
+  wrapper.unmount()
+})
+
+it('keeps WebKit picture-in-picture available when the standard API is absent', () => {
+  const supports = vi.fn(() => true)
+  Object.defineProperty(HTMLVideoElement.prototype, 'webkitSupportsPresentationMode', {
+    value: supports,
+    configurable: true,
+  })
+  Object.defineProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode', {
+    value: vi.fn(),
+    configurable: true,
+  })
+  try {
+    const wrapper = mount(ProgrammeVideoPlayer, { props })
+    expect(createPlayer.mock.calls[0]?.[0].pip).toBe(true)
+    expect(supports).toHaveBeenCalledWith('picture-in-picture')
+    wrapper.unmount()
+  } finally {
+    Reflect.deleteProperty(HTMLVideoElement.prototype, 'webkitSupportsPresentationMode')
+    Reflect.deleteProperty(HTMLVideoElement.prototype, 'webkitSetPresentationMode')
+  }
+})

@@ -18,6 +18,8 @@ import ProgrammeContentList from '@/features/programmes/components/ProgrammeCont
 import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePreviewDialog.vue'
 import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeDownloadButton.vue'
 
+import type { ContentRef } from '@shared/contracts/programmes'
+
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
 import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
@@ -47,6 +49,15 @@ const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useCon
   selectedDate,
 )
 const preview = ref<ProgrammeContent | null>(null)
+const previewReference = computed<ContentRef | null>(() =>
+  preview.value
+    ? {
+        programmeId: props.id,
+        dateId: dates.value.find((date) => date.date === selectedDate.value)?.id || '',
+        contentId: preview.value.id,
+      }
+    : null,
+)
 const { preparingIds, prepareDownloads } = useProgrammeDownloads()
 const contentSortOrder = ref<ContentSortOrder>('asc')
 const selectedContents = computed(() =>
@@ -273,6 +284,7 @@ onMounted(() => {
     <ProgrammePreviewDialog
       v-model="preview"
       :quality="settings.quality"
+      :reference="previewReference"
     />
   </div>
 </template>
