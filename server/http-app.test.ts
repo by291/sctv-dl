@@ -1,11 +1,15 @@
-import { createServer } from 'node:http'
+import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+import { Socket } from 'node:net'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { once } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 import { createHttpApp } from './http-app.ts'
+import { preparedDownloadsSchema } from '../shared/contracts/downloads.ts'
+import { clientApiMiddleware } from './client-api/client-api-middleware.ts'
 
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
@@ -29,6 +33,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   if (server?.listening) {
     server.closeAllConnections()
@@ -41,6 +46,191 @@ afterEach(async () => {
 })
 
 describe('production HTTP app', () => {
+  it('rejects malformed request targets without throwing outside the request handler', () => {
+    const socket = new Socket()
+    const request = new IncomingMessage(socket)
+    request.url = '//['
+    request.method = 'GET'
+    const response = new ServerResponse(request)
+
+    try {
+      expect(() => clientApiMiddleware(request, response, () => {})).not.toThrow()
+      expect(response.statusCode).toBe(400)
+    } finally {
+      socket.destroy()
+    }
+  })
+
+  it('allows sequential preparation requests whose individual headers arrive within the deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    let firstStarted!: () => void
+    let secondStarted!: () => void
+    const first = new Promise<void>((resolve) => {
+      firstStarted = resolve
+    })
+    const second = new Promise<void>((resolve) => {
+      secondStarted = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url, options) => {
+        const isContents = String(url).includes('/contents/')
+        ;(isContents ? secondStarted : firstStarted)()
+
+        return new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(
+            () =>
+              resolve(
+                Response.json({
+                  rs: 200,
+                  data: isContents
+                    ? [{ id: '3', title: 'News', video: '/news.mp4' }]
+                    : [{ id: '2', date: '2026-10-16' }],
+                }),
+              ),
+            12_000,
+          )
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer)
+              reject(options.signal.reason)
+            },
+            { once: true },
+          )
+        })
+      }),
+    )
+    const responsePromise = httpFetch(`${origin}/client-api/v1/downloads/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        programmeId: '1',
+        dateId: '2',
+        contentIds: ['3'],
+        quality: 'standard',
+      }),
+    })
+    await first
+    await vi.advanceTimersByTimeAsync(12_000)
+    await second
+    await vi.advanceTimersByTimeAsync(12_000)
+    const response = await responsePromise
+    expect(response.status).toBe(200)
+    expect(
+      z.object({ data: preparedDownloadsSchema }).parse(await response.json()).data.files,
+    ).toHaveLength(1)
+  })
+
+  it('serves normalized programme data without exposing upstream envelopes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              rs: 200,
+              data: { records: [{ id: '9007199254740992', name: 'News', cover: '/cover.jpg' }] },
+            }),
+          ),
+      ),
+    )
+    const response = await httpFetch(`${origin}/client-api/v1/programmes`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      data: [{ id: '9007199254740992', name: 'News', cover: 'https://kscgc.sctv.com/cover.jpg' }],
+    })
+    const head = await httpFetch(`${origin}/client-api/v1/programmes`, { method: 'HEAD' })
+    expect(head.status).toBe(200)
+    expect(await head.text()).toBe('')
+  })
+
+  it('prepares files on the backend using one guest identity for the entire request', async () => {
+    const identities: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url, options) => {
+        identities.push(options.headers.deviceId)
+        const data = String(url).includes('/contents/')
+          ? [{ id: '3', title: 'News', video: '/news.mp4' }]
+          : [{ id: '2', date: '2026-10-16' }]
+
+        return new Response(JSON.stringify({ rs: 200, data }))
+      }),
+    )
+    const response = await httpFetch(`${origin}/client-api/v1/downloads/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        programmeId: '1',
+        dateId: '2',
+        contentIds: ['3', '4'],
+        quality: 'smooth',
+      }),
+    })
+    expect(response.status).toBe(200)
+    const payload = z.object({ data: preparedDownloadsSchema }).parse(await response.json())
+    expect(payload.data.files).toEqual([
+      {
+        contentId: '3',
+        title: 'News',
+        url: 'https://fscgc.scgchc.com/news.mp4',
+        filename: '2026-10-16_News_标准.mp4',
+        quality: 'standard',
+      },
+    ])
+    expect(payload.data.usedFallback).toBe(true)
+    expect(payload.data.failures).toHaveLength(1)
+    expect(identities).toHaveLength(2)
+    expect(identities[0]).toBe(identities[1])
+    expect(response.headers.get('set-cookie')).toContain('Path=/client-api')
+  })
+
+  it.each([
+    ['/client-api/v1/programmes/nope/dates', 'GET', undefined, 400],
+    ['/client-api/v1/missing', 'GET', undefined, 404],
+    ['/client-api/v1/programmes', 'DELETE', undefined, 405],
+    ['/client-api/v1/downloads/prepare', 'POST', '{bad', 400],
+    ['/client-api/v1/downloads/prepare', 'POST', ' '.repeat(16_385), 400],
+    [
+      '/client-api/v1/downloads/prepare',
+      'POST',
+      JSON.stringify({
+        programmeId: '1',
+        dateId: '2',
+        contentIds: Array.from({ length: 101 }, (_, i) => String(i)),
+        quality: 'standard',
+      }),
+      400,
+    ],
+  ] as const)('rejects invalid client request %s with %s', async (path, method, body, status) => {
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    const response = await httpFetch(`${origin}${path}`, {
+      method,
+      body,
+      headers: { 'Content-Type': 'application/json' },
+    })
+    expect(response.status).toBe(status)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('rejects upstream redirects instead of following them', async () => {
+    const upstream = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(null, { status: 302, headers: { Location: 'https://example.com' } }),
+      )
+    vi.stubGlobal('fetch', upstream)
+    const response = await httpFetch(`${origin}/client-api/v1/programmes`)
+    expect(response.status).toBe(502)
+    expect(upstream).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+  })
+
   it('serves the frontend for direct programme navigation', async () => {
     const response = await httpFetch(`${origin}/programmes/1`)
 

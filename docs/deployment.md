@@ -14,7 +14,7 @@ pnpm start
 
 The default address is [http://127.0.0.1:3000](http://127.0.0.1:3000). `server/main.ts` executes directly in Node using erasable TypeScript; no TypeScript loader or Vite process is used in production.
 
-Keep `dist/`, `server/`, `package.json`, and `pnpm-lock.yaml` together. When deploying an already-built frontend, install only runtime dependencies with `pnpm install --prod --frozen-lockfile`, then run `pnpm start`. Building on the host requires development dependencies.
+Keep `dist/`, `server/`, `shared/`, `package.json`, and `pnpm-lock.yaml` together. Node imports the shared application schemas at runtime. When deploying an already-built frontend, install only runtime dependencies with `pnpm install --prod --frozen-lockfile`, then run `pnpm start`. Building on the host requires development dependencies.
 
 Rebuild and restart the service when deploying changes. Static-file lookup is initialized at startup, so replacing `dist/` under a running process is insufficient.
 
@@ -22,24 +22,27 @@ Rebuild and restart the service when deploying changes. Static-file lookup is in
 
 Use [.env.example](../.env.example) as the template. `pnpm start` reads an optional `.env` file; existing process environment variables take precedence.
 
-| Variable          | Evaluated      | Default   | Purpose                                 |
-| ----------------- | -------------- | --------- | --------------------------------------- |
-| `HOST`            | Server startup | `0.0.0.0` | Listen address                          |
-| `PORT`            | Server startup | `3000`    | Listen port, an integer from 1 to 65535 |
-| `VITE_API_BASE`   | Frontend build | `/api`    | Programme API base                      |
-| `VITE_MEDIA_BASE` | Frontend build | `/media`  | Media proxy endpoint                    |
+| Variable               | Evaluated      | Default          | Purpose                                 |
+| ---------------------- | -------------- | ---------------- | --------------------------------------- |
+| `HOST`                 | Server startup | `0.0.0.0`        | Listen address                          |
+| `PORT`                 | Server startup | `3000`           | Listen port, an integer from 1 to 65535 |
+| `VITE_CLIENT_API_BASE` | Frontend build | `/client-api/v1` | Normalized application API base         |
+| `VITE_MEDIA_BASE`      | Frontend build | `/media`         | Media proxy endpoint                    |
 
 Keep the default relative frontend routes for a single-origin deployment. Changing a `VITE_*` value requires rebuilding; changing `HOST` or `PORT` requires restarting. Frontend endpoint overrides do not change the server's upstream allowlist.
 
+`VITE_API_BASE` previously selected the raw upstream-shaped API and is deprecated for frontend builds. Default deployments need only the updated `.env.example`. A custom legacy value without an explicit `VITE_CLIENT_API_BASE` produces a build diagnostic. Point the new variable to a service implementing the normalized client routes; changing only the variable name does not convert a raw proxy into that service. Existing raw `/api` proxy clients retain their route contract.
+
 ## Routes and Hosting
 
-| Route                               | Behaviour                                       |
-| ----------------------------------- | ----------------------------------------------- |
-| `/`, `/programmes/:id`, `/settings` | Built frontend with Vue Router history fallback |
-| `/assets/*`                         | Hashed assets with immutable caching            |
-| `/api/app/v1/programs...`           | Restricted programme metadata proxy             |
-| `/media?url=...`                    | MP4 preview or attachment streaming             |
-| `/healthz`                          | Local readiness response: `{"status":"ok"}`     |
+| Route                               | Behaviour                                                        |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `/`, `/programmes/:id`, `/settings` | Built frontend with Vue Router history fallback                  |
+| `/assets/*`                         | Hashed assets with immutable caching                             |
+| `/api/app/v1/programs...`           | Restricted programme metadata proxy                              |
+| `/client-api/v1/*`                  | Normalized programme data and POST playback/download preparation |
+| `/media?url=...`                    | MP4 preview or attachment streaming                              |
+| `/healthz`                          | Local readiness response: `{"status":"ok"}`                      |
 
 The service serves only `dist/`. HTML revalidates with ETags. Missing assets, reserved proxy paths, and dotfiles do not receive the SPA fallback. Static files ignore Range headers; Range support belongs to the media proxy.
 

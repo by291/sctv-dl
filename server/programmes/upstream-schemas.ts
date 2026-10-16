@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { imageUrl, mediaUrl } from '@/features/programmes/api/upstream-urls'
+import { imageUrl, mediaUrl } from './upstream-urls.ts'
 
 // Preserve large IDs as strings; converting an already-rounded number cannot recover its ID.
 export const idSchema = z.union([

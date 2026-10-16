@@ -7,6 +7,8 @@ import { defineComponent, h } from 'vue'
 import { NButton } from 'naive-ui'
 
 import App from '@/App.vue'
+import { platformKey } from '@/shared/platform/usePlatform'
+import { createPlatformFixture } from '@/shared/platform/platform.test-support'
 
 import type { Component } from 'vue'
 import type { VueWrapper } from '@vue/test-utils'
@@ -38,7 +40,13 @@ describe('application startup typography', () => {
     })
     const navigation = router.push('/')
     pinia = createPinia()
-    wrapper = mount(App, { attachTo: document.body, global: { plugins: [pinia, router] } })
+    wrapper = mount(App, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia, router],
+        provide: { [platformKey as symbol]: createPlatformFixture() },
+      },
+    })
     await flushPromises()
 
     const link = wrapper.get('.nav-link').element

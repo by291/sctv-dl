@@ -8,7 +8,7 @@ Development and local build preview use Vite with shared proxy middleware. Produ
 
 ```mermaid
 flowchart LR
-    Browser["Vue Web app"] -->|"Frontend, /api, /media"| Server["Vite or production Node service"]
+    Browser["Vue Web app"] -->|"Frontend, /client-api, /api, /media"| Server["Vite or production Node service"]
     Server -->|"Programme JSON"| API["gw.scgchc.com"]
     Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com"]
 ```
@@ -28,8 +28,8 @@ The service streams video with backpressure. It does not save videos or maintain
 | `src/shared/composables/`              | Validated reactive persistence                                                     |
 | `src/shared/utils/`                    | Errors, stale-request guards, and browser view transitions                         |
 | `src/shared/media/`                    | Quality schema/types, media-proxy URLs, and browser download handoff               |
-| `src/features/programmes/api/`         | Upstream validation, URL normalization, and the typed programme client             |
-| `src/features/programmes/model/`       | Programme types, content presentation, video variants, and download filenames      |
+| `src/features/programmes/api/`         | Normalized programme DTO validation and Web programme/playback/download adapters   |
+| `src/features/programmes/model/`       | Programme types, content presentation, and displayed video variants                |
 | `src/features/programmes/stores/`      | Shared programme catalogue cache                                                   |
 | `src/features/programmes/composables/` | Archive requests, selection, spotlight, cover navigation, and download preparation |
 | `src/features/programmes/components/`  | Programme cards, archive controls, download menus, and player UI                   |
@@ -45,6 +45,8 @@ The service streams video with backpressure. It does not save videos or maintain
 | `server/proxy/programme-headers.ts`    | Android guest request profile and browser-scoped upstream device identity          |
 | `server/proxy/stream-upstream.ts`      | Upstream fetch, headers, timeout, disconnect cancellation, and streaming           |
 | `tooling/upstream-proxy-plugin.ts`     | Vite development and preview adapter for the same proxy middleware                 |
+
+`shared/contracts/` owns platform-neutral application DTO schemas/types and `shared/fixtures/` owns cross-language contract examples. `src/shared/platform/` owns injectable ports; `src/platform/` composes their concrete adapters. `server/programmes/` owns upstream validation, normalization, quality resolution, and filenames. `server/client-api/` owns normalized routes and reference-based preparation. These sources are shared by production and Vite middleware without importing browser modules into Node.
 
 Views compose components and coordinate user feedback. Composables own local lifecycles; Pinia stores own shared state. Domain functions are independent of UI feedback. Shared utilities do not import feature stores, and browser code does not import server modules.
 
@@ -76,7 +78,7 @@ The interface uses real upstream data with distinct loading, empty, error, and r
 
 `AbortController` cancels obsolete work. `LatestRequest` separately prevents obsolete results from committing state, even if cancellation arrives too late. Requests are cancelled when their scope ends.
 
-The API client validates and normalizes upstream records before they enter feature state. See [Upstream API](upstream-api.md) for schemas, IDs, and field mapping.
+The Node programme client validates and normalizes upstream records. The browser validates the resulting application DTOs before they enter feature state. The catalogue/archive consume the injected programme port, keeping transport selection outside their stores and views. See [Upstream API](upstream-api.md) for schemas, IDs, and field mapping.
 
 The all-programmes tab snapshots favourite priority when the library view is created. Those favourites come first under every sort mode for the browsing session, including search results; default order preserves service order within each group, while name order sorts each group separately. Toggling favourites updates stars and counts immediately without moving cards. Returning from details, changing filters or sort mode, and refreshing programme data retain the same priority snapshot; a full browser refresh applies the latest favourites. The favourites tab filters current favourites immediately and orders them by the selected service or name order.
 
@@ -92,9 +94,9 @@ Content presentation separates the date picker, full episodes, and clips into si
 
 Individual rows and the batch action share `ProgrammeDownloadButton`. Clicking opens a quality menu. Selecting a quality immediately prepares files and starts browser handoff; dismissing the menu does nothing. A mixed batch can fall back to an available variant, and filenames reflect the actual quality.
 
-`makeDownloadFile` resolves the variant and sanitizes the filename. `handOffDownload` performs a HEAD request through the media proxy and validates video content type and attachment headers before clicking a temporary download link.
+`server/programmes/download-file.ts` resolves the actual quality and sanitizes filenames. The browser submits programme/date/content IDs to `/client-api/v1/downloads/prepare`; the backend fetches matching records and derives the broadcast date. The Web download adapter processes prepared files independently. `handOffDownload` performs a HEAD request through the media proxy and validates video content type and attachment headers before clicking a temporary download link.
 
-`useProgrammeDownloads` tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. The composable returns handoffs, fallbacks, and failures; the archive view presents a notification including the first failed file's error without navigation.
+`useProgrammeDownloads` tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. The composable returns the selected platform's typed start result; the archive view presents browser handoffs, fallbacks, and per-file failures without navigation. Native result types exist for later integration, but current startup composes only Web adapters.
 
 A handoff means the browser was asked to save a file. The browser owns transfer progress, destination, pause, cancellation, resume, and completion. There is no persistent queue or download history, and the legacy `sctv-dl:downloads` key is not read. Video is never fully buffered into a page Blob.
 

@@ -4,10 +4,13 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { NSelect } from 'naive-ui'
+import { createApp } from 'vue'
 
 import ProgrammeLibraryView from '@/features/programmes/views/ProgrammeLibraryView.vue'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
+import { platformKey } from '@/shared/platform/usePlatform'
+import { createPlatformFixture } from '@/shared/platform/platform.test-support'
 
 import type { VueWrapper } from '@vue/test-utils'
 
@@ -18,6 +21,7 @@ let router: ReturnType<typeof createRouter>
 beforeEach(async () => {
   localStorage.clear()
   pinia = createPinia()
+  createApp({}).provide(platformKey, createPlatformFixture()).use(pinia)
   setActivePinia(pinia)
   useProgrammeCatalogueStore().programmes = [
     { id: 'c', name: 'Charlie', cover: null },

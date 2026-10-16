@@ -1,10 +1,10 @@
 # Upstream API and Proxy Contracts
 
-This is the contract used by the current implementation, not an official upstream API specification. Frontend validation lives in `src/features/programmes/api/upstream-schemas.ts`; requests in `programme-api.ts`; proxy policy in `server/proxy/proxy-policy.ts` and transport in `stream-upstream.ts`.
+This is the contract used by the current implementation, not an official upstream API specification. Upstream validation and normalization live in `server/programmes/`; application DTO schemas live in `shared/contracts/`; proxy policy lives in `server/proxy/proxy-policy.ts` and media transport in `stream-upstream.ts`.
 
 ## Programme Endpoints
 
-The upstream origin is `https://gw.scgchc.com`. The default browser-facing base is `/api`.
+The upstream origin is `https://gw.scgchc.com`. The raw proxy base is `/api`; the current frontend uses the normalized client API described below.
 
 | Method | Upstream path                                                 | Response data                         |
 | ------ | ------------------------------------------------------------- | ------------------------------------- |
@@ -34,7 +34,7 @@ The native programme client and the Web metadata proxy reproduce the anonymous r
 
 Android stores its UUID in the `upstream_client` shared preferences, outside the settings-only backup allowlist. First requests serialize identity creation so concurrent calls retain one persisted value. The interceptor belongs only to the programme API client; covers, media probes, playback, and system downloads do not receive these business headers.
 
-The Web proxy uses an HTTP-only `sctv-dl-device-id` cookie scoped to `/api`, with `SameSite=Lax` and a one-year lifetime. A missing or invalid UUID causes a new one to be issued. Browser cookies must be enabled to retain the identity, and clearing the cookie creates a new simulated installation. The proxy uses only this validated UUID; it does not forward browser cookies, authorization, or device headers upstream. It also retains `Accept: application/json`. These headers apply when using the project's `/api` proxy; a custom `VITE_API_BASE` bypassing that proxy owns its own transport contract.
+The raw Web proxy uses an HTTP-only `sctv-dl-device-id` cookie scoped to `/api`, with `SameSite=Lax` and a one-year lifetime. The normalized client API uses the same cookie name scoped to `/client-api`, retaining one identity across its requests and reusing it for all upstream calls within a preparation operation. The two scopes are independent: upgrading from the raw frontend establishes the new scoped identity once, while preserving browser settings/favourites and the raw proxy cookie contract. A missing or invalid UUID causes a new one to be issued. Browser cookies must be enabled to retain the identity, and clearing the cookie creates a new simulated installation. The proxy uses only this validated UUID; it does not forward browser cookies, authorization, or device headers upstream. It also retains `Accept: application/json`. These headers apply to the project's raw proxy and normalized client service. Custom normalized API deployments own the equivalent transport contract; see [Deployment](deployment.md) for the API-base migration.
 
 All three programme requests remain GET requests without a body or additional signature parameters. Host and connection management remain with the HTTP transport. Media keeps its separate Referer and Range contract below.
 
@@ -83,3 +83,23 @@ The media proxy:
 - Handles HEAD without a response body and returns upstream HTTP errors or a 502 for connection failures.
 
 An alternate media endpoint must support HEAD and return an attachment response with a video or octet-stream content type. See [Architecture](architecture.md) for the browser download flow.
+
+## Normalized Client API
+
+The frontend's default base is `/client-api/v1`, overridden at build time by `VITE_CLIENT_API_BASE`. Successful responses are `{ data: T }`; failures are `{ error: { code, message } }`. Application DTO IDs are strings, including values above the JavaScript safe integer boundary. Upstream numeric IDs above that boundary remain invalid.
+
+| Method     | Path relative to base                               | Result                                                       |
+| ---------- | --------------------------------------------------- | ------------------------------------------------------------ |
+| GET / HEAD | `/programmes`                                       | Normalized programme array                                   |
+| GET / HEAD | `/programmes/{programmeId}/dates`                   | Deduplicated dates, newest first                             |
+| GET / HEAD | `/programmes/{programmeId}/dates/{dateId}/contents` | Normalized content array                                     |
+| POST       | `/playback/prepare`                                 | Session ID, selected quality, distinct validated source URLs |
+| POST       | `/downloads/prepare`                                | Prepared files, per-file failures, fallback indicator        |
+
+Playback input is `{ programmeId, dateId, contentId, quality }`; download input is `{ programmeId, dateId, contentIds, quality }`. JSON bodies are limited to 16 KiB and batches to 100 distinct content IDs. Invalid or extra request fields are rejected. Neither route accepts caller-supplied media URLs, filenames, or filesystem paths. Preparation resolves the date and contents against upstream records; filenames and actual quality come from the backend.
+
+Normalized metadata and preparation requests use a separate 20-second response-header deadline for each upstream request. Incoming preparation bodies have their own 20-second reception limit. Disconnecting the client cancels active upstream work. Sequential successful requests do not share a whole-operation timeout, and a received response body is not cut off merely because 20 seconds have elapsed since the operation began.
+
+Invalid input returns 400, missing records/routes 404, unsupported methods 405, upstream failure 502, timeout 504, and unexpected server failure 500. Client API errors never fall through to frontend HTML. Preparation returns HTTP 200 when individual files fail but the batch itself can be evaluated; inspect `failures` alongside `files`.
+
+Web playback adapters wrap the validated source URLs with the existing media proxy. Web playback preparation owns no server-side session resource, so closing that adapter does not make another HTTP request. The current preview component retains its existing direct media-proxy integration until the native playback-session phase.

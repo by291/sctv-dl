@@ -9,6 +9,7 @@ const deviceIdSchema = z.uuidv4()
 export function programmeHeaders(
   request: IncomingMessage,
   response: ServerResponse,
+  cookiePath = '/api',
 ): Record<string, string> {
   const stored = request.headers.cookie
     ?.split(';')
@@ -22,7 +23,7 @@ export function programmeHeaders(
     // Keep one simulated installation per browser; this cookie never goes upstream.
     response.setHeader(
       'Set-Cookie',
-      `${deviceCookieName}=${deviceId}; Path=/api; Max-Age=31536000; HttpOnly; SameSite=Lax`,
+      `${deviceCookieName}=${deviceId}; Path=${cookiePath}; Max-Age=31536000; HttpOnly; SameSite=Lax`,
     )
   }
 

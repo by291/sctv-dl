@@ -7,19 +7,30 @@ import { NMessageProvider } from 'naive-ui'
 
 import ProgrammeArchiveView from '@/features/programmes/views/ProgrammeArchiveView.vue'
 import ProgrammeDatePicker from '@/features/programmes/components/ProgrammeDatePicker.vue'
-import { programmeApi } from '@/features/programmes/api/programme-api'
+import type { ProgrammeApi } from '@/shared/platform/ports'
+import type { PreparedDownload } from '@shared/contracts/downloads'
+import { downloadRequestSchema } from '@shared/contracts/downloads'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 
 import type { VueWrapper } from '@vue/test-utils'
 
-vi.mock('@/features/programmes/api/programme-api', () => ({
-  programmeApi: { dates: vi.fn(), contents: vi.fn(), programmes: vi.fn() },
+const programmeApi = vi.hoisted(() => ({
+  dates: vi.fn<ProgrammeApi['dates']>(),
+  contents: vi.fn<ProgrammeApi['contents']>(),
+  programmes: vi.fn<ProgrammeApi['programmes']>(),
 }))
+
+vi.mock('@/shared/platform/usePlatform', async () => {
+  const { createWebDownloads } = await import('@/features/programmes/api/downloads.web')
+
+  return { usePlatform: () => ({ programmes: programmeApi, downloads: createWebDownloads() }) }
+})
 
 let wrapper: VueWrapper
 let router: ReturnType<typeof createRouter>
 let saves: { url: string; filename: string }[]
+const mediaFetch = vi.fn<typeof fetch>()
 
 function videoResponse() {
   return new Response(null, {
@@ -43,9 +54,55 @@ const standardOnly = { ...both, id: '12', title: 'Clip', smoothVideo: null }
 beforeEach(async () => {
   localStorage.clear()
   saves = []
+  mediaFetch.mockReset().mockImplementation(async () => videoResponse())
+  const preparedFiles: Record<string, PreparedDownload> = {
+    '11:standard': {
+      contentId: '11',
+      title: both.title,
+      url: both.video,
+      filename: '2026-10-06_Programme（2026.10.06）_标准.mp4',
+      quality: 'standard',
+    },
+    '11:smooth': {
+      contentId: '11',
+      title: both.title,
+      url: both.smoothVideo,
+      filename: '2026-10-06_Programme（2026.10.06）_流畅.mp4',
+      quality: 'smooth',
+    },
+    '12:standard': {
+      contentId: '12',
+      title: 'Clip',
+      url: standardOnly.video,
+      filename: '2026-10-06_Clip_标准.mp4',
+      quality: 'standard',
+    },
+    '12:smooth': {
+      contentId: '12',
+      title: 'Clip',
+      url: standardOnly.video,
+      filename: '2026-10-06_Clip_标准.mp4',
+      quality: 'standard',
+    },
+  }
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation(async () => videoResponse()),
+    vi.fn<typeof fetch>(async (input, init) => {
+      if (init?.method === 'POST' && typeof init.body === 'string') {
+        const request = downloadRequestSchema.parse(JSON.parse(init.body))
+        const files = request.contentIds.map((id) => preparedFiles[`${id}:${request.quality}`]!)
+
+        return Response.json({
+          data: {
+            files,
+            failures: [],
+            usedFallback: files.some((file) => file.quality !== request.quality),
+          },
+        })
+      }
+
+      return mediaFetch(input, init)
+    }),
   )
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
     this: HTMLAnchorElement,
@@ -186,7 +243,7 @@ describe('programme download choices', () => {
   })
 
   it('reports a failed download and allows retrying from the same row', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 403 }))
+    mediaFetch.mockResolvedValueOnce(new Response(null, { status: 403 }))
     await chooseSingleQuality('标准')
 
     expect(saves).toEqual([])
@@ -196,7 +253,7 @@ describe('programme download choices', () => {
   })
 
   it('continues a batch after one video fails and identifies the failed video', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 403 }))
+    mediaFetch.mockResolvedValueOnce(new Response(null, { status: 403 }))
     await wrapper.find('.selection-toolbar [role="checkbox"]').trigger('click')
     await wrapper.get('[aria-label="批量下载"]').trigger('click')
     await flushPromises()
@@ -215,7 +272,7 @@ describe('programme download choices', () => {
 
   it('prevents repeated download clicks during preparation and permits another download afterward', async () => {
     let finish!: (response: Response) => void
-    vi.mocked(fetch).mockReturnValueOnce(
+    mediaFetch.mockReturnValueOnce(
       new Promise((resolve) => {
         finish = resolve
       }),
@@ -224,7 +281,7 @@ describe('programme download choices', () => {
     const button = wrapper.find(`[aria-label="下载${both.title}"]`)
     expect(button.attributes('disabled')).toBeDefined()
     await button.trigger('click')
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(mediaFetch).toHaveBeenCalledTimes(1)
 
     finish(videoResponse())
     await flushPromises()

@@ -71,21 +71,26 @@ function openPreview(content: ProgrammeContent) {
 
 async function downloadContents(items: ProgrammeContent[], quality: Quality) {
   try {
-    const result = await prepareDownloads(items, selectedDate.value || '', quality)
-    if (!result) {
+    const dateId = dates.value.find((date) => date.date === selectedDate.value)?.id || ''
+    const result = await prepareDownloads(items, dateId, quality, props.id)
+    if (!result || result.kind === 'cancelled') {
       return
     }
 
-    const { failures, handedOff, usedFallback } = result
+    const { failures, usedFallback } = result
+    const accepted = result.kind === 'browser' ? result.handedOff : result.taskIds.length
     const fallback = usedFallback
       ? `，缺少${quality === 'smooth' ? '流畅' : '标准'}版本的内容使用${quality === 'smooth' ? '标准' : '流畅'}画质`
       : ''
-    const success = `${handedOff} 个视频已交给浏览器${fallback}`
+    const success =
+      result.kind === 'browser'
+        ? `${accepted} 个视频已交给浏览器${fallback}`
+        : `${accepted} 个视频已加入下载队列${fallback}`
 
     if (failures.length) {
-      const error = `${failures.length} 个视频下载失败。${failures[0]}`
+      const error = `${failures.length} 个视频下载失败。${failures[0]?.message}`
 
-      if (handedOff) {
+      if (accepted) {
         message.warning(`${success}；${error}`, { duration: 8000 })
       } else {
         message.error(error, { duration: 8000 })

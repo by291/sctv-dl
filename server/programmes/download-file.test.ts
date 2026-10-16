@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeDownloadFile } from '@/features/programmes/model/download-file'
+import { makeDownloadFile } from './download-file.ts'
 
 const content = {
   id: '2107426129285414913',

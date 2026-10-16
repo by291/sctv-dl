@@ -8,15 +8,23 @@ import { NMessageProvider } from 'naive-ui'
 import AppLayout from '@/layouts/AppLayout.vue'
 import ProgrammeLibraryView from '@/features/programmes/views/ProgrammeLibraryView.vue'
 import ProgrammeArchiveView from '@/features/programmes/views/ProgrammeArchiveView.vue'
-import { programmeApi } from '@/features/programmes/api/programme-api'
+import type { ProgrammeApi } from '@/shared/platform/ports'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 
 import type { VueWrapper } from '@vue/test-utils'
 
-vi.mock('@/features/programmes/api/programme-api', () => ({
-  programmeApi: { dates: vi.fn(), contents: vi.fn(), programmes: vi.fn() },
+const programmeApi = vi.hoisted(() => ({
+  dates: vi.fn<ProgrammeApi['dates']>(),
+  contents: vi.fn<ProgrammeApi['contents']>(),
+  programmes: vi.fn<ProgrammeApi['programmes']>(),
 }))
+
+vi.mock('@/shared/platform/usePlatform', async () => {
+  const { createWebDownloads } = await import('@/features/programmes/api/downloads.web')
+
+  return { usePlatform: () => ({ programmes: programmeApi, downloads: createWebDownloads() }) }
+})
 
 let wrapper: VueWrapper
 let router: ReturnType<typeof createRouter>

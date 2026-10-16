@@ -1,6 +1,6 @@
 import { onScopeDispose, ref, watch } from 'vue'
 
-import { programmeApi } from '@/features/programmes/api/programme-api'
+import { usePlatform } from '@/shared/platform/usePlatform'
 import { errorMessage } from '@/shared/utils/errors'
 import { LatestRequest } from '@/shared/utils/latest-request'
 
@@ -8,7 +8,10 @@ import type { Ref } from 'vue'
 import type { ProgrammeApi } from '@/features/programmes/api/programme-api'
 import type { ProgrammeContent, ProgrammeDate } from '@/features/programmes/model/programme'
 
-export function useProgrammeArchive(programmeId: Ref<string>, client: ProgrammeApi = programmeApi) {
+export function useProgrammeArchive(
+  programmeId: Ref<string>,
+  client: ProgrammeApi = usePlatform().programmes,
+) {
   const dates = ref<ProgrammeDate[]>([])
   const selectedDate = ref<string | null>(null)
   const contents = ref<ProgrammeContent[]>([])

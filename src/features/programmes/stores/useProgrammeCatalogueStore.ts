@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-import { programmeApi } from '@/features/programmes/api/programme-api'
+import { usePlatform } from '@/shared/platform/usePlatform'
 import { errorMessage } from '@/shared/utils/errors'
 import { LatestRequest } from '@/shared/utils/latest-request'
 
 import type { Programme } from '@/features/programmes/model/programme'
 
 export const useProgrammeCatalogueStore = defineStore('programmes', () => {
+  const programmeApi = usePlatform().programmes
   const programmes = ref<Programme[]>([])
   const loading = ref(false)
   const error = ref('')

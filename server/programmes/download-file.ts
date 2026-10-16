@@ -1,7 +1,7 @@
-import { resolveVideo } from '@/features/programmes/model/video-variants'
+import { resolveVideo } from './video-variants.ts'
 
-import type { ProgrammeContent } from '@/features/programmes/model/programme'
-import type { Quality } from '@/shared/media/video-quality'
+import type { ProgrammeContent } from '../../shared/contracts/programmes.ts'
+import type { Quality } from '../../shared/contracts/programmes.ts'
 
 export interface DownloadFile {
   contentId: string

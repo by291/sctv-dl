@@ -1,8 +1,11 @@
 import { proxyMediaUrl } from '@/shared/media/media-proxy-url'
 
-export async function handOffDownload(file: { url: string; filename: string }): Promise<void> {
+export async function handOffDownload(
+  file: { url: string; filename: string },
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
   const url = proxyMediaUrl(file.url, file.filename)
-  const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(25_000) })
+  const response = await fetcher(url, { method: 'HEAD', signal: AbortSignal.timeout(25_000) })
 
   if (!response.ok) {
     throw new Error(`视频暂时无法访问（HTTP ${response.status}）`)
