@@ -109,6 +109,34 @@ class PredictiveNavigationTest {
         }
     }
 
+    @Test fun cancellingPrimaryBackRestoresTabSwitchingFromBothEdges() {
+        for (destination in listOf(AppRoute.Downloads, AppRoute.Settings)) {
+            for (edge in listOf(BackEventCompat.EDGE_LEFT, BackEventCompat.EDGE_RIGHT)) {
+                val active = mutableSetOf<AppRoute>()
+                showRoutes(onEnter = { active.add(it) }, onDispose = { active.remove(it) }).use { scenario ->
+                    requireNotNull(device.wait(Until.findObject(By.res("tab-${destination::class.simpleName}")), 5_000))
+                        .click()
+                    awaitActive(scenario, active, setOf(destination))
+
+                    startBack(scenario, edge)
+                    awaitActive(scenario, active, setOf(destination, AppRoute.Catalogue))
+                    scenario.onActivity { it.onBackPressedDispatcher.dispatchOnBackCancelled() }
+                    awaitActive(scenario, active, setOf(destination))
+
+                    val alternative = if (destination == AppRoute.Downloads) AppRoute.Settings else AppRoute.Downloads
+                    val tab = device.wait(Until.findObject(By.res("tab-${alternative::class.simpleName}")), 3_000)
+                    assertTrue("Cancelling back must restore accessible tab actions", tab != null)
+                    tab!!.click()
+                    awaitActive(scenario, active, setOf(alternative))
+                    assertTrue(device.wait(Until.hasObject(By.text("Page ${alternative::class.simpleName}")), 3_000))
+
+                    requireNotNull(device.wait(Until.findObject(By.res("tab-Catalogue")), 3_000)).click()
+                    awaitActive(scenario, active, setOf(AppRoute.Catalogue))
+                }
+            }
+        }
+    }
+
     @Test fun primarySwitchFinishesWithinAHalfSecond() {
         lateinit var navigator: AppNavigator
         val disposed = CountDownLatch(1)
@@ -131,14 +159,14 @@ class PredictiveNavigationTest {
         }
     }
 
-    private fun startBack(scenario: ActivityScenario<ComponentActivity>) {
+    private fun startBack(scenario: ActivityScenario<ComponentActivity>, edge: Int = BackEventCompat.EDGE_LEFT) {
         scenario.onActivity {
-            it.onBackPressedDispatcher.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0f, BackEventCompat.EDGE_LEFT))
+            it.onBackPressedDispatcher.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0f, edge))
         }
         device.waitForIdle()
         scenario.onActivity {
             it.onBackPressedDispatcher.dispatchOnBackProgressed(
-                BackEventCompat(180f, 400f, 0.6f, BackEventCompat.EDGE_LEFT)
+                BackEventCompat(180f, 400f, 0.6f, edge)
             )
         }
         device.waitForIdle()

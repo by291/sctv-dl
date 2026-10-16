@@ -2,7 +2,6 @@ package dev.sctvdl.app.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -60,6 +59,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
@@ -73,6 +75,7 @@ import androidx.navigation3.scene.rememberSceneState
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import androidx.navigationevent.NavigationEvent
+import androidx.navigationevent.NavigationEventTransitionState
 import dev.sctvdl.design.theme.PAGE_TRANSITION_DURATION_MILLIS
 import dev.sctvdl.ui.programme.LocalProgrammeCoverAnimationScope
 import dev.sctvdl.ui.programme.LocalProgrammeCoverSharedScope
@@ -85,6 +88,7 @@ private const val PRIMARY_EXIT_MILLIS = 90
 private const val PRIMARY_ENTER_MILLIS = 160
 private const val PRIMARY_TRANSITION_MILLIS = PRIMARY_EXIT_MILLIS + PRIMARY_ENTER_MILLIS
 private val LocalNavigationSharedScope = compositionLocalOf<SharedTransitionScope?> { null }
+private val LocalNavigationGestureInProgress = compositionLocalOf { false }
 
 private data class PrimaryDestination(val route: AppRoute, val label: String, val icon: ImageVector)
 
@@ -244,18 +248,23 @@ internal fun AppNavigationShell(
                         val navigationEventState = rememberNavigationEventState(sceneState)
                         NavigationBackHandler(sceneState, navigationEventState, onBackCompleted = back)
 
-                        NavDisplay(
-                            sceneState = sceneState,
-                            navigationEventState = navigationEventState,
-                            modifier = Modifier.fillMaxSize().clipToBounds(),
-                            transitionSpec = { destinationTransition(primaryDistance, pageDistance, pop = false) },
-                            popTransitionSpec = {
-                                destinationTransition(primaryDistance, pageDistance, pop = true)
-                            },
-                            predictivePopTransitionSpec = { edge ->
-                                destinationTransition(primaryDistance, pageDistance, pop = true, edge = edge)
-                            }
-                        )
+                        CompositionLocalProvider(
+                            LocalNavigationGestureInProgress provides
+                                (navigationEventState.transitionState !is NavigationEventTransitionState.Idle)
+                        ) {
+                            NavDisplay(
+                                sceneState = sceneState,
+                                navigationEventState = navigationEventState,
+                                modifier = Modifier.fillMaxSize().clipToBounds(),
+                                transitionSpec = { destinationTransition(primaryDistance, pageDistance, pop = false) },
+                                popTransitionSpec = {
+                                    destinationTransition(primaryDistance, pageDistance, pop = true)
+                                },
+                                predictivePopTransitionSpec = { edge ->
+                                    destinationTransition(primaryDistance, pageDistance, pop = true, edge = edge)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -266,8 +275,9 @@ internal fun AppNavigationShell(
 @Composable
 private fun PrimaryNavigationBar(sharedScope: SharedTransitionScope, selected: Int, onSelect: (Int) -> Unit) {
     val animationScope = LocalNavAnimatedContentScope.current
-    val interactive = animationScope.transition.currentState == EnterExitState.Visible &&
-        animationScope.transition.targetState == EnterExitState.Visible && !animationScope.transition.isRunning
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    // NavDisplay resumes the settled entry after cancellation; its child visibility transition can remain unfinished.
+    val interactive = lifecycleState == Lifecycle.State.RESUMED && !LocalNavigationGestureInProgress.current
     val semantics = if (interactive) Modifier else Modifier.clearAndSetSemantics { }
 
     // Equal shared bounds keep one bar at rest across primary entries while each Scaffold retains its own spacing.
