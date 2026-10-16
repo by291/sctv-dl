@@ -12,6 +12,8 @@ fn main() {
             "cancel_download",
             "get_download_directory",
             "choose_download_directory",
+            "load_settings",
+            "save_settings",
         ]),
     ))
     .expect("failed to build Tauri application permissions");

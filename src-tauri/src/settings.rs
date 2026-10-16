@@ -10,15 +10,17 @@ use uuid::Uuid;
 
 use crate::error::{AppError, Result};
 
-pub struct DirectorySettings<R: Runtime> {
+pub struct DesktopSettings<R: Runtime> {
     pub store: Result<Arc<Store<R>>>,
     selection: tokio::sync::Mutex<()>,
+    pub writes: Arc<std::sync::Mutex<()>>,
 }
-impl<R: Runtime> DirectorySettings<R> {
+impl<R: Runtime> DesktopSettings<R> {
     pub fn new(store: Result<Arc<Store<R>>>) -> Self {
         Self {
             store,
             selection: tokio::sync::Mutex::new(()),
+            writes: Arc::default(),
         }
     }
 
@@ -48,6 +50,7 @@ impl<R: Runtime> DirectorySettings<R> {
         let path = path
             .into_path()
             .map_err(|_| AppError::new("storage", "请选择本机文件夹"))?;
+        let _write = self.writes.lock().unwrap();
         save_download_directory(store, &path)?;
         download_directory(store)
     }
@@ -133,4 +136,81 @@ fn read_installation_id<R: Runtime>(store: &Store<R>) -> Result<String> {
         .save()
         .map_err(|_| AppError::new("storage", "无法保存桌面设备标识，请检查应用数据目录"))?;
     Ok(id)
+}
+
+#[derive(serde::Serialize)]
+pub struct Preferences {
+    quality: String,
+    theme: String,
+    favourites: Vec<String>,
+}
+
+impl Preferences {
+    fn normalize(value: &serde_json::Value) -> Self {
+        let quality = value["quality"]
+            .as_str()
+            .filter(|value| ["standard", "smooth"].contains(value))
+            .unwrap_or("standard");
+        let theme = value["theme"]
+            .as_str()
+            .filter(|value| ["system", "light", "dark"].contains(value))
+            .unwrap_or("system");
+        let mut favourites = Vec::new();
+        if let Some(values) = value["favourites"].as_array() {
+            for value in values {
+                if let Some(id) = value
+                    .as_str()
+                    .filter(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
+                    && !favourites.iter().any(|previous| previous == id)
+                {
+                    favourites.push(id.to_owned());
+                }
+            }
+        }
+        Self {
+            quality: quality.into(),
+            theme: theme.into(),
+            favourites,
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct SettingsSnapshot {
+    value: Preferences,
+    persisted: bool,
+}
+
+pub fn load_preferences<R: Runtime>(store: Result<&Store<R>>) -> SettingsSnapshot {
+    let persisted = store.is_ok();
+    let value = store
+        .ok()
+        .and_then(|store| store.get("preferences"))
+        .unwrap_or_default();
+    SettingsSnapshot {
+        value: Preferences::normalize(&value),
+        persisted,
+    }
+}
+
+pub fn save_preferences<R: Runtime>(store: &Store<R>, value: serde_json::Value) -> Result<()> {
+    if !value.is_object()
+        || serde_json::to_vec(&value).map_or(true, |bytes| bytes.len() > 16 * 1024)
+    {
+        return Err(AppError::new("invalid-input", "设置数据无效或过大"));
+    }
+    let value = serde_json::to_value(Preferences::normalize(&value))
+        .map_err(|_| AppError::new("invalid-input", "设置数据无效"))?;
+    let previous = store.get("preferences");
+    store.set("preferences", value);
+    if store.save().is_err() {
+        if let Some(previous) = previous {
+            store.set("preferences", previous);
+        } else {
+            store.delete("preferences");
+        }
+        store.close_resource();
+        return Err(AppError::new("storage", "无法保存设置，请检查应用数据目录"));
+    }
+    Ok(())
 }

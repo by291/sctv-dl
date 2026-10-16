@@ -7,7 +7,7 @@ use sctv_dl_desktop_lib::{
     commands,
     downloads::{DownloadConfig, DownloadManager},
     programmes::{Deadlines, ProgrammeService},
-    settings::{DirectorySettings, save_download_directory},
+    settings::{DesktopSettings, save_download_directory},
     state::AppState,
 };
 use serde_json::{Value, json};
@@ -76,6 +76,9 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
     let app = mock_builder()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .manage(std::sync::Arc::new(
+            sctv_dl_desktop_lib::lifecycle::ExitController::default(),
+        ))
         .manage(AppState::new(Ok(ProgrammeService::new(
             &origin,
             "guest".into(),
@@ -106,7 +109,7 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         .build()
         .unwrap();
     save_download_directory(&store, &target).unwrap();
-    app.manage(DirectorySettings::new(Ok(store)));
+    app.manage(DesktopSettings::new(Ok(store)));
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();

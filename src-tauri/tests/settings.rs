@@ -193,3 +193,88 @@ fn preserves_corrupt_storage_after_the_application_exits() {
     });
     assert_eq!(std::fs::read(&path).unwrap(), b"not-json");
 }
+
+#[test]
+fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
+    use sctv_dl_desktop_lib::settings::{load_preferences, save_preferences};
+    let root = tempfile::tempdir().unwrap();
+    let app = mock_builder()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let store = app
+        .store_builder(root.path().join("desktop.json"))
+        .disable_auto_save()
+        .build()
+        .unwrap();
+    let identity = installation_id(&store).unwrap();
+    store.set("downloadDirectory", json!(root.path().to_str().unwrap()));
+    store.set("preferences", json!({"theme":"dark", "quality":"invalid", "favourites":["1", 2, "../3", "1", "004"], "installationId":"leak"}));
+    let snapshot = serde_json::to_value(load_preferences(Ok(&store))).unwrap();
+    assert_eq!(
+        snapshot,
+        json!({"value":{"theme":"dark","quality":"standard","favourites":["1","004"]}, "persisted":true})
+    );
+    save_preferences(
+        &store,
+        json!({"theme":"light", "quality":"smooth", "favourites":["8"]}),
+    )
+    .unwrap();
+    let reloaded = app
+        .store_builder(root.path().join("desktop.json"))
+        .disable_auto_save()
+        .create_new()
+        .build()
+        .unwrap();
+    assert_eq!(installation_id(&reloaded).unwrap(), identity);
+    assert_eq!(
+        serde_json::to_value(load_preferences(Ok(&reloaded))).unwrap()["value"],
+        json!({"theme":"light","quality":"smooth","favourites":["8"]})
+    );
+    assert_eq!(
+        reloaded.get("downloadDirectory").unwrap(),
+        root.path().to_str().unwrap()
+    );
+}
+
+#[test]
+fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_values() {
+    use sctv_dl_desktop_lib::{
+        error::AppError,
+        settings::{load_preferences, save_preferences},
+    };
+    let snapshot = serde_json::to_value(load_preferences::<tauri::test::MockRuntime>(Err(
+        AppError::new("storage", "denied"),
+    )))
+    .unwrap();
+    assert_eq!(
+        snapshot,
+        json!({"value":{"theme":"system","quality":"standard","favourites":[]}, "persisted":false})
+    );
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    std::fs::write(
+        &path,
+        br#"{"preferences":{"theme":"dark"},"installationId":"keep"}"#,
+    )
+    .unwrap();
+    let original = std::fs::read(&path).unwrap();
+    let app = mock_builder()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let store = app
+        .store_builder(&path)
+        .disable_auto_save()
+        .serialize(|_| Err(std::io::Error::other("injected write failure").into()))
+        .build()
+        .unwrap();
+    assert_eq!(
+        save_preferences(&store, json!({"theme":"light"}))
+            .unwrap_err()
+            .code,
+        "storage"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(store.get("preferences").unwrap(), json!({"theme":"dark"}));
+}

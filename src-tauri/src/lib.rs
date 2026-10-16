@@ -1,12 +1,14 @@
 pub mod commands;
 pub mod downloads;
 pub mod error;
+pub mod lifecycle;
 pub mod media;
 pub mod programmes;
 pub mod requests;
 pub mod settings;
 pub mod state;
 
+use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
@@ -14,7 +16,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .manage(Arc::new(lifecycle::ExitController::default()))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                lifecycle::request_exit(window.app_handle());
+            }
+        })
         .setup(|app| {
+            lifecycle::install_menu(app.handle())?;
             // Initialize identity once before any metadata command can access the service.
             let store = app
                 .store_builder("desktop.json")
@@ -30,7 +40,7 @@ pub fn run() {
                 Err(error) => Err(error.clone()),
             };
             let service = identity.and_then(programmes::ProgrammeService::production);
-            app.manage(settings::DirectorySettings::new(directory_store));
+            app.manage(settings::DesktopSettings::new(directory_store));
             app.manage(tauri::async_runtime::block_on(async {
                 downloads::DownloadManager::new(downloads::DownloadConfig::default())
             })?);
@@ -48,11 +58,19 @@ pub fn run() {
             commands::unsubscribe_downloads,
             commands::cancel_download,
             commands::get_download_directory,
-            commands::choose_download_directory
+            commands::choose_download_directory,
+            commands::load_settings,
+            commands::save_settings
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the desktop application")
         .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = &event
+                && !app.state::<Arc<lifecycle::ExitController>>().committed()
+            {
+                api.prevent_exit();
+                lifecycle::request_exit(app);
+            }
             if matches!(event, tauri::RunEvent::Exit) {
                 tauri::async_runtime::block_on(
                     app.state::<downloads::DownloadManager>().shutdown(),

@@ -1,10 +1,12 @@
+use crate::lifecycle::ExitController;
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime, State, ipc::Channel};
 
 use crate::{
     downloads::{DownloadManager, DownloadRequest, DownloadStart, DownloadTask},
     error::Result,
     programmes::{Programme, ProgrammeContent, ProgrammeDate},
-    settings::DirectorySettings,
+    settings::DesktopSettings,
     state::AppState,
 };
 
@@ -19,10 +21,12 @@ pub enum DownloadResult {
 pub async fn start_downloads<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
-    directories: State<'_, DirectorySettings<R>>,
+    directories: State<'_, DesktopSettings<R>>,
     downloads: State<'_, DownloadManager>,
     request: DownloadRequest,
+    lifecycle: State<'_, Arc<ExitController>>,
 ) -> Result<DownloadResult> {
+    let _operation = lifecycle.enter().await?;
     let service = state.programmes.as_ref().map_err(Clone::clone)?;
     let quality = request.quality;
     let prepared = downloads.prepare(service, request).await?;
@@ -66,16 +70,18 @@ pub fn unsubscribe_downloads(downloads: State<'_, DownloadManager>, subscription
 #[tauri::command]
 pub fn get_download_directory<R: Runtime>(
     _app: AppHandle<R>,
-    directories: State<'_, DirectorySettings<R>>,
+    directories: State<'_, DesktopSettings<R>>,
 ) -> Result<Option<String>> {
     crate::settings::download_directory(directories.store.as_ref().map_err(Clone::clone)?)
         .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
 }
 #[tauri::command]
 pub async fn choose_download_directory<R: Runtime>(
+    lifecycle: State<'_, Arc<ExitController>>,
     app: AppHandle<R>,
-    directories: State<'_, DirectorySettings<R>>,
+    directories: State<'_, DesktopSettings<R>>,
 ) -> Result<Option<String>> {
+    let _operation = lifecycle.enter().await?;
     directories
         .choose(&app, false)
         .await
@@ -142,4 +148,38 @@ pub async fn list_programme_contents(
 #[tauri::command]
 pub fn cancel_request(state: State<'_, AppState>, request_id: String) -> Result<()> {
     state.requests.cancel(&request_id)
+}
+
+#[tauri::command]
+pub fn load_settings<R: Runtime>(
+    _app: AppHandle<R>,
+    settings: State<'_, DesktopSettings<R>>,
+) -> crate::settings::SettingsSnapshot {
+    let _write = settings.writes.lock().unwrap();
+    crate::settings::load_preferences(
+        settings
+            .store
+            .as_ref()
+            .map(|store| store.as_ref())
+            .map_err(Clone::clone),
+    )
+}
+
+#[tauri::command]
+pub async fn save_settings<R: Runtime>(
+    _app: AppHandle<R>,
+    lifecycle: State<'_, Arc<ExitController>>,
+    settings: State<'_, DesktopSettings<R>>,
+    value: serde_json::Value,
+) -> Result<()> {
+    let operation = lifecycle.enter().await?;
+    let store = settings.store.as_ref().map_err(Clone::clone)?.clone();
+    let writes = settings.writes.clone();
+    tokio::task::spawn_blocking(move || {
+        let _operation = operation;
+        let _write = writes.lock().unwrap();
+        crate::settings::save_preferences(&store, value)
+    })
+    .await
+    .map_err(|_| crate::error::AppError::new("storage", "保存设置异常终止"))?
 }
