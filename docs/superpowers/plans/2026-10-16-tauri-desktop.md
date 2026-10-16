@@ -14,17 +14,18 @@
 
 Planning was committed as `bb36aa1`. The initial implementation is on `feat/tauri-foundation`, grouped into commits for shared contracts/ports, normalized Node/Web services, the Tauri shell, and phase documentation.
 
-| Task | Status   | Evidence and remaining work                                                                                                                                                       |
-| ---- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Partial  | Standard Tauri shell builds and launches on macOS with bundled assets and no Node server. Native media investigation, transport selection, and Windows validation remain pending. |
-| 2    | Complete | Shared schemas, fixtures, injectable ports, and dependency boundaries are implemented and tested.                                                                                 |
-| 3    | Complete | Normalized Node routes and Web adapters are integrated; browser behaviour, production, and preview were checked.                                                                  |
-| 4    | Complete | Native metadata services, persistent identity, cancellation, command ACL, and the validated adapter pass native tests and a macOS bundled probe.                                  |
-| 5–9  | Pending  | Native playback, downloads, preference integration, full UI acceptance, and distribution work remain pending.                                                                     |
+| Task | Status   | Evidence and remaining work                                                                                                                                          |
+| ---- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Partial  | The macOS shell and media-only HTTP candidate pass bundled checks. The custom-protocol interface is unsuitable; Windows and complete memory evidence remain pending. |
+| 2    | Complete | Shared schemas, fixtures, injectable ports, and dependency boundaries are implemented and tested.                                                                    |
+| 3    | Complete | Normalized Node routes and Web adapters are integrated; browser behaviour, production, and preview were checked.                                                     |
+| 4    | Complete | Native metadata services, persistent identity, cancellation, command ACL, and the validated adapter pass native tests and a macOS bundled probe.                     |
+| 5    | Partial  | Tested Rust media HTTP/session foundation only. Production transport acceptance, playback commands, adapter, and shared preview integration remain pending.          |
+| 6–9  | Pending  | Native downloads, preference integration, full UI acceptance, and distribution work remain pending.                                                                  |
 
-Tasks 2 and 3 proceeded while the two-platform media gate remains open because they do not select or depend on the native playback transport. Task 5 must still wait for that gate. The packaged application currently renders the interface but cannot load programme data through native services.
+Tasks 2 and 3 proceeded while the two-platform media gate remains open because they do not depend on the native playback transport. Media investigation now includes a tested HTTP candidate and macOS playback evidence. This is candidate validation and reusable backend groundwork; production playback integration still waits for the gate. The normal packaged application continues to compose Web adapters, and no media listener starts there yet.
 
-Validation: `pnpm check` passes with 215 tests in 35 files. Task 4 has 18 native integration tests. `pnpm build`, Rust formatting, Clippy, Cargo tests, and a local macOS application bundle pass. Browser checks covered desktop/narrow layouts and themes. Production and built-preview APIs returned the real catalogue; the existing Web media proxy returned HEAD 200 and Range 206 for a 1,024-byte probe. See [desktop development](../../desktop.md) and [validation evidence](../../desktop-media-validation.md) for limitations.
+Validation: `pnpm check` passes with 215 tests in 35 files. Native integration coverage totals 30 tests, including 12 media tests. `pnpm build`, Rust formatting, Clippy, Cargo tests, and a local macOS application bundle pass. Browser checks covered desktop/narrow layouts and themes. Production and built-preview APIs returned the real catalogue. Both the existing Web proxy and the Rust candidate returned HEAD 200 and Range 206 for a 1,024-byte live probe. A disposable bundled WKWebView probe passed playback, forward/backward seek, source switching, and close/reopen. See [desktop development](../../desktop.md) and [validation evidence](../../desktop-media-validation.md) for memory and platform limits.
 
 Implementation details: retain `programme-api.ts` as the Web adapter's existing public module path; isolate the normalized route's guest cookie under `/client-api` while retaining the raw `/api` cookie scope. Playback UI integration and settings-store hydration remain assigned to Tasks 5 and 7 respectively.
 
@@ -66,34 +67,33 @@ Public release signing is a separate acceptance dimension from application funct
 
 Paths below are planned additions or modifications. They do not exist merely because this plan names them. Keep tests beside their owners; Rust integration tests live in `src-tauri/tests/`.
 
-| Paths                                                                                                     | Responsibility                                                                                     |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `shared/contracts/{programmes,media,downloads,settings,errors}.ts`                                        | Platform-neutral Zod DTO schemas, inferred types, normalized errors                                |
-| `shared/fixtures/{programmes,media-policy,download-names,settings}.json`                                  | Equivalent Node/Rust contract examples and edge cases                                              |
-| `src/shared/platform/ports.ts`, `usePlatform.ts`                                                          | Port interfaces, injection key, and typed access; no feature imports                               |
-| `src/platform/{create-platform,web-platform,tauri-platform}.ts`                                           | Environment detection, lazy native loading, application composition                                |
-| `src/features/programmes/api/programme-api.{web,tauri}.ts`                                                | Equivalent normalized catalogue/date/content adapters                                              |
-| `src/features/programmes/api/playback.{web,tauri}.ts`                                                     | Playback session control; Web proxy URL adaptation                                                 |
-| `src/features/programmes/api/downloads.{web,tauri}.ts`                                                    | Browser handoff or native task bridge                                                              |
-| `src/features/settings/api/settings.{web,tauri}.ts`                                                       | Storage adapter, Web cross-tab synchronization, Rust-backed desktop persistence                    |
-| `src/features/downloads/stores/useDownloadTasksStore.ts`                                                  | Shared presentation state for native tasks                                                         |
-| `src/features/downloads/components/DownloadTasksPanel.vue`                                                | Native task progress, cancel, retry, and failure feedback                                          |
-| Existing programme composables, stores, and preview components                                            | Consume injected ports; preserve page and player lifecycles                                        |
-| `server/client-api/{client-api-middleware,programme-service}.ts`                                          | Normalized HTTP routes and request-scoped orchestration                                            |
-| `server/programmes/{programme-client,upstream-schemas,upstream-urls,video-variants,download-file}.ts`     | Upstream transport, normalization, quality, and filename rules moved from browser business modules |
-| `src-tauri/{Cargo.toml,Cargo.lock,build.rs,tauri.conf.json}`                                              | Standard native application definition and build configuration                                     |
-| `src-tauri/{capabilities/default.json,permissions/app.toml,icons/}`                                       | Main-window permissions, custom-command allowlist, and application icons                           |
-| `src-tauri/src/{main,lib,commands,state,requests,error}.rs`                                               | Application composition, thin command handlers, state and cancellation                             |
-| `src-tauri/src/programmes/{mod,client,models}.rs`                                                         | Rust programme service, upstream normalization, stable installation profile                        |
-| `src-tauri/src/media/{mod,policy,protocol}.rs`                                                            | Opaque playback sessions, validation, selected custom-protocol transport                           |
-| `src-tauri/src/media/http.rs`                                                                             | Conditional replacement transport if the custom protocol fails the gate                            |
-| `src-tauri/src/downloads/{mod,manager,files}.rs`                                                          | Native queue, task states, transfer lifecycle, collision-safe file finalization                    |
-| `src-tauri/src/settings.rs`                                                                               | Rust-owned preferences, installation UUID, and selected directory                                  |
-| `src-tauri/tests/{programme_api,media,downloads,settings}.rs`                                             | HTTP stubs, temporary directories, integration regressions                                         |
-| `package.json`, `pnpm-lock.yaml`, Vite/Vitest/TypeScript/ESLint configuration                             | Scripts, aliases, build targets, and dependency-boundary checks                                    |
-| `server/http-app.ts`, `tooling/upstream-proxy-plugin.ts`                                                  | Integrate normalized routes in production, development, and preview                                |
-| `.gitignore`, `.prettierignore`, `.github/workflows/desktop.yml`, `.github/workflows/desktop-release.yml` | Native artifacts, checks, and manually triggered distribution                                      |
-| `docs/desktop.md`, `docs/desktop-media-validation.md`, existing owning docs                               | Desktop operation and evidence; durable contracts and handoff                                      |
+| Paths                                                                                                     | Responsibility                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `shared/contracts/{programmes,media,downloads,settings,errors}.ts`                                        | Platform-neutral Zod DTO schemas, inferred types, normalized errors                                      |
+| `shared/fixtures/{programmes,media-policy,download-names,settings}.json`                                  | Equivalent Node/Rust contract examples and edge cases                                                    |
+| `src/shared/platform/ports.ts`, `usePlatform.ts`                                                          | Port interfaces, injection key, and typed access; no feature imports                                     |
+| `src/platform/{create-platform,web-platform,tauri-platform}.ts`                                           | Environment detection, lazy native loading, application composition                                      |
+| `src/features/programmes/api/programme-api.{web,tauri}.ts`                                                | Equivalent normalized catalogue/date/content adapters                                                    |
+| `src/features/programmes/api/playback.{web,tauri}.ts`                                                     | Playback session control; Web proxy URL adaptation                                                       |
+| `src/features/programmes/api/downloads.{web,tauri}.ts`                                                    | Browser handoff or native task bridge                                                                    |
+| `src/features/settings/api/settings.{web,tauri}.ts`                                                       | Storage adapter, Web cross-tab synchronization, Rust-backed desktop persistence                          |
+| `src/features/downloads/stores/useDownloadTasksStore.ts`                                                  | Shared presentation state for native tasks                                                               |
+| `src/features/downloads/components/DownloadTasksPanel.vue`                                                | Native task progress, cancel, retry, and failure feedback                                                |
+| Existing programme composables, stores, and preview components                                            | Consume injected ports; preserve page and player lifecycles                                              |
+| `server/client-api/{client-api-middleware,programme-service}.ts`                                          | Normalized HTTP routes and request-scoped orchestration                                                  |
+| `server/programmes/{programme-client,upstream-schemas,upstream-urls,video-variants,download-file}.ts`     | Upstream transport, normalization, quality, and filename rules moved from browser business modules       |
+| `src-tauri/{Cargo.toml,Cargo.lock,build.rs,tauri.conf.json}`                                              | Standard native application definition and build configuration                                           |
+| `src-tauri/{capabilities/default.json,permissions/app.toml,icons/}`                                       | Main-window permissions, custom-command allowlist, and application icons                                 |
+| `src-tauri/src/{main,lib,commands,state,requests,error}.rs`                                               | Application composition, thin command handlers, state and cancellation                                   |
+| `src-tauri/src/programmes/{mod,client,models}.rs`                                                         | Rust programme service, upstream normalization, stable installation profile                              |
+| `src-tauri/src/media/{mod,policy,http}.rs`                                                                | Opaque playback sessions, validation, and media-only HTTP candidate; production acceptance remains gated |
+| `src-tauri/src/downloads/{mod,manager,files}.rs`                                                          | Native queue, task states, transfer lifecycle, collision-safe file finalization                          |
+| `src-tauri/src/settings.rs`                                                                               | Rust-owned preferences, installation UUID, and selected directory                                        |
+| `src-tauri/tests/{programme_api,media,downloads,settings}.rs`                                             | HTTP stubs, temporary directories, integration regressions                                               |
+| `package.json`, `pnpm-lock.yaml`, Vite/Vitest/TypeScript/ESLint configuration                             | Scripts, aliases, build targets, and dependency-boundary checks                                          |
+| `server/http-app.ts`, `tooling/upstream-proxy-plugin.ts`                                                  | Integrate normalized routes in production, development, and preview                                      |
+| `.gitignore`, `.prettierignore`, `.github/workflows/desktop.yml`, `.github/workflows/desktop-release.yml` | Native artifacts, checks, and manually triggered distribution                                            |
+| `docs/desktop.md`, `docs/desktop-media-validation.md`, existing owning docs                               | Desktop operation and evidence; durable contracts and handoff                                            |
 
 Keep `src/shared/media/browser-download.ts` as the browser handoff implementation. Move upstream-only schemas, URL normalization, quality resolution for transfers, and naming coverage into the server-owned files above. Preserve frontend helpers that still implement presentation, such as full-episode matching and formatting. Delete unused former modules only after their callers and meaningful tests have migrated.
 
@@ -123,13 +123,16 @@ Execute in this order for the initial implementation. Tasks 2–4 establish inte
 - [x] Initialize Tauri 2 against the current Vue/Vite root, using the official integration instructions. Resolve compatible versions at execution time, commit lockfiles only when committing is requested, and record the tested Rust compiler and dependency MSRV. Configure `frontendDist: ../dist`, development port `5180`, strict port handling, and native build-output ignores.
 - [x] Add scripts `tauri: tauri`, `desktop:dev: tauri dev`, and `desktop:build: tauri build`. Preserve every existing Web command. Add WebView-compatible Vite targets for the proposed minimum systems and ignore `src-tauri/` in frontend file watching and dependency discovery.
 - [x] Build and launch a release-mode application to prove bundled HTML/assets load without Node. Record native origin, route behaviour, and CSP requirements; this is a shell check, not full product acceptance.
-- [ ] Exercise a disposable Rust media harness using a deterministic HTTP stub first. Check HEAD, `bytes=0-1023`, open-ended ranges, suffix ranges, 416, an initial no-Range request, and response buffering bounded to 1 MiB. Confirm Referer insertion, redirect rejection, and cancellation.
+- [x] Exercise a disposable Rust media harness using a deterministic HTTP stub first. Check HEAD, `bytes=0-1023`, open-ended ranges, suffix ranges, 416, and an initial no-Range request. Confirm Referer insertion, redirect rejection, cancellation, backpressure, and termination of stalled clients.
+- [ ] Complete full process-memory observations on both target WebViews for the HTTP fallback. Current evidence checks a capacity-one producer, a paused-reader regression against whole-file buffering, and two Rust-process RSS samples. The custom protocol's 1 MiB per-response limit does not describe the HTTP fallback's total process/WebView memory.
 - [ ] Run initial playback, forward/backward seek, variant switching, and close/reopen on actual Windows WebView2 and macOS WKWebView. Sample live upstream access with HEAD or a small Range request; any longer playback is a deliberate interactive check, not a bulk media download. Observe memory on a large fixture rather than infer bounded memory from source alone.
 - [ ] Apply the spec's decision rule. If custom-protocol requirements fail, validate the media-only loopback endpoint under the same cases and record why it is needed. Record exact OS/WebView versions, chosen transport, measured observations, and missing coverage in `docs/desktop-media-validation.md`. Remove the disposable harness.
 
 **Verification:** Existing Web checks pass; `pnpm tauri build --no-bundle` builds the host application; a packaged application loads without the development server. The media gate requires interactive evidence on both platforms. Do not quietly substitute a local browser for either native WebView.
 
 **Checkpoint:** Review the transport result before implementing Task 5. If no bounded streaming approach passes both targets, stop the affected playback work with evidence and revise the proposal before promising support.
+
+Current investigation: the installed Tauri responder requires a complete response body and exposes no request-stop callback, so the custom-protocol approach cannot meet this design's no-Range and cancellation contract. The Rust HTTP candidate passed local protocol/lifecycle tests and bundled macOS interactions; a live native HEAD/1 KiB Range probe also passed. Windows, complete memory measurement, and final installed-app integration remain open. The disposable harness has been removed.
 
 ### Task 2: Define DTOs and Injectable Platform Ports
 
@@ -181,18 +184,20 @@ Execute in this order for the initial implementation. Tasks 2–4 establish inte
 
 ### Task 5: Integrate Production Playback Sessions
 
-**Files:** Create `src-tauri/src/media/{mod,policy,protocol}.rs` or the selected `http.rs`, `src-tauri/tests/media.rs`, and `playback.tauri.ts` with tests. Modify `commands.rs`, `state.rs`, `tauri.conf.json`, `ProgrammePreviewDialog.vue`, `ProgrammeVideoPlayer.vue`, their tests, and the archive's preview context.
+**Files:** Create `src-tauri/src/media/{mod,policy,http}.rs`, `src-tauri/tests/media.rs`, and `playback.tauri.ts` with tests. Modify `commands.rs`, `state.rs`, `tauri.conf.json`, `ProgrammePreviewDialog.vue`, `ProgrammeVideoPlayer.vue`, their tests, and the archive's preview context.
 
 **Interfaces:** Expose `open_playback(request: PlaybackRequest, requestId): PlaybackSession` and `close_playback(sessionId): void`. Produce `PlaybackPort`. Add `ContentRef` context to preview opening so the backend resolves source identity rather than accepting an arbitrary URL. Preserve the existing Artplayer component API for display/control wherever possible.
 
-- [ ] Write failing media-policy tests from the shared fixtures: permitted CDN MP4, forbidden host/protocol/credentials/nondefault port, redirect refusal, Referer insertion, and no guest headers. Test closed/unknown session IDs and concurrent range requests.
-- [ ] Write failing transport tests for HEAD, bounded/open-ended/suffix Range, 206 and 416 headers, disconnect cancellation, slow-but-progressing bodies, and the no-Range behaviour selected by Task 1. For the HTTP fallback, assert loopback-only binding, unpredictable session tokens, unknown-token rejection, and backpressure.
+- [x] Write failing media-policy tests from the shared fixtures: permitted CDN MP4, forbidden host/protocol/credentials/nondefault port, redirect refusal, Referer insertion, and no guest headers. Test closed/unknown session IDs and concurrent range requests.
+- [x] Write failing transport tests for HEAD, bounded/open-ended/suffix Range, 206 and 416 headers, disconnect cancellation, slow-but-progressing bodies, and full streaming no-Range behaviour. For the HTTP fallback candidate, assert loopback-only binding, unpredictable session tokens, unknown-token rejection, and backpressure. Include cancellation/shutdown when downstream body polling stalls.
 - [ ] Implement the selected transport only; remove unused experimental alternatives. Store validated source mappings in Rust and release them on session close or application teardown. Keep MP4 bytes outside frontend IPC and memory-heavy Blob handling.
 - [ ] Write failing preview tests: closing pauses immediately but releases after leave; reopen during leave keeps the new session; an aborted open that later resolves is closed; URL changes destroy only the old player; quality switching retains playback time and uses the selected session's variants.
 - [ ] Adapt the shared preview dialog to await `PlaybackPort.open` with loading/error/retry feedback and stale-response guards. Preserve modal focus restoration, cancellation on scope disposal, and no autoplay. Gate PiP/fullscreen controls on actual WebView support.
 - [ ] Run `cargo test --manifest-path src-tauri/Cargo.toml --test media` and `pnpm test src/features/programmes/components/ProgrammePreviewDialog.test.ts src/features/programmes/components/ProgrammeVideoPlayer.test.ts src/features/programmes/api`. Recheck installed Windows/macOS playback and update the evidence document.
 
 **Checkpoint:** Both target transports pass the media gate, and shared preview lifecycle tests pass. After Task 7 activates the complete native platform, repeat installed-application playback as part of Task 9; a working development server URL or a unit-tested transport alone cannot satisfy that final acceptance.
+
+Current scope: only the HTTP/session foundation exists and has been probed on macOS. Rust-only source registration is not yet a domain-level `open_playback` command. The command ACL, playback adapter, shared player lifecycle, normal startup composition, and production CSP remain unchanged in this batch.
 
 ### Task 6: Implement Native Downloads and Task Presentation
 
