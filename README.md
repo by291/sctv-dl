@@ -70,3 +70,5 @@ Both configurations take effect after they reach the default branch on GitHub. D
 | [Upstream API](docs/upstream-api.md)                   | Programme endpoints, video fields, and proxy contracts        |
 | [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |
 | [Android Client](android/README.md)                    | Native setup, modules, downloads, playback, and verification  |
+
+Proposed Windows and macOS work is described in the [Tauri desktop implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md). These documents describe planned work; desktop applications are not implemented yet.
