@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
@@ -28,16 +29,18 @@ internal fun ArchiveHeaderPlaceholder() {
     val titleHeight = with(LocalDensity.current) { typography.titleLarge.lineHeight.toDp() }
     val labelHeight = with(LocalDensity.current) { typography.labelLarge.lineHeight.toDp() }
     val labelSize = with(LocalDensity.current) { typography.labelLarge.fontSize.toDp() }
-    SkeletonContent(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (LocalDensity.current.fontScale < 1.5f) {
-                SkeletonBlock(Modifier.width(144.dp).aspectRatio(16f / 9f))
+    SkeletonContent {
+        ArchiveHeaderLayout(
+            cover = { modifier -> SkeletonBlock(modifier) },
+            details = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SkeletonBlock(Modifier.fillMaxWidth(0.75f).height(titleHeight))
+                    Box(Modifier.heightIn(min = TouchTarget), contentAlignment = Alignment.CenterStart) {
+                        SkeletonBlock(Modifier.width(labelSize * 4 + 24.dp).height(labelHeight))
+                    }
+                }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SkeletonBlock(Modifier.fillMaxWidth(0.75f).height(titleHeight))
-                SkeletonBlock(Modifier.width(labelSize * 4 + 24.dp).height(maxOf(TouchTarget, labelHeight)))
-            }
-        }
+        )
     }
 }
 

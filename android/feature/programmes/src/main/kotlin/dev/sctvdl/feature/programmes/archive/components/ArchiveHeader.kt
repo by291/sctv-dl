@@ -1,6 +1,8 @@
 package dev.sctvdl.feature.programmes.archive.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.programme.BroadcastDate
@@ -47,36 +50,56 @@ private val WeekdayLabel = DateTimeFormatter.ofPattern("EEE", Locale.SIMPLIFIED_
 
 @Composable
 internal fun ArchiveHeader(state: ArchiveUiState, onFavourite: () -> Unit) {
-    val largeText = LocalDensity.current.fontScale >= 1.5f
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (!largeText) {
-            val coverModifier = state.programme?.let {
+    ArchiveHeaderLayout(
+        cover = { modifier ->
+            val sharedCover = state.programme?.let {
                 Modifier.sharedProgrammeCover(it, MaterialTheme.shapes.medium)
             } ?: Modifier
-            CoverImage(
-                state.programme?.coverUrl,
-                coverModifier.width(144.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)
-            )
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(state.programme?.name ?: "往期节目", style = MaterialTheme.typography.titleLarge)
-            TextButton(
-                onClick = onFavourite,
-                enabled = state.programmeId.isNotBlank(),
-                contentPadding = PaddingValues(horizontal = 0.dp),
-                modifier = Modifier.heightIn(min = TouchTarget)
-            ) {
-                Icon(
-                    if (state.favourite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    null,
-                    Modifier.size(18.dp)
+            CoverImage(state.programme?.coverUrl, sharedCover.then(modifier).clip(MaterialTheme.shapes.medium))
+        },
+        details = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    state.programme?.name ?: "往期节目",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(if (state.favourite) "已收藏" else "收藏栏目")
+                TextButton(
+                    onClick = onFavourite,
+                    enabled = state.programmeId.isNotBlank(),
+                    contentPadding = PaddingValues(horizontal = 0.dp),
+                    modifier = Modifier.heightIn(min = TouchTarget)
+                ) {
+                    Icon(
+                        if (state.favourite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        null,
+                        Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (state.favourite) "已收藏" else "收藏栏目")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+internal fun ArchiveHeaderLayout(cover: @Composable (Modifier) -> Unit, details: @Composable () -> Unit) {
+    val largeText = LocalDensity.current.fontScale >= 1.5f
+
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        if (largeText) {
+            details()
+        } else {
+            val compact = maxWidth < 348.dp
+            val gap = if (compact) 12.dp else 16.dp
+            val coverWidth = ((maxWidth - gap) * if (compact) 0.52f else 0.54f).coerceAtMost(256.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                cover(Modifier.width(coverWidth).aspectRatio(16f / 9f))
+                Box(Modifier.weight(1f)) { details() }
             }
         }
     }

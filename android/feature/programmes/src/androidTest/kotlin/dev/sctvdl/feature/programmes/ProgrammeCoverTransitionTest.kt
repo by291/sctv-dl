@@ -8,13 +8,23 @@ import android.graphics.Rect
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import dev.sctvdl.domain.common.CachedResource
 import dev.sctvdl.domain.programme.Programme
@@ -41,8 +51,9 @@ class ProgrammeCoverTransitionTest {
             val source = awaitCover(card.visibleBounds).bounds
             device.click(card.visibleBounds.centerX(), card.visibleBounds.centerY())
             val forwardFrames = captureTransition()
-            assertTrue(device.wait(Until.hasObject(By.text("栏目详情")), 5_000))
+            assertTrue(device.wait(Until.hasObject(By.res("archive-toolbar")), 5_000))
             val destination = awaitCover().bounds
+            assertIdentityBesideCover(destination)
             assertTravelsBetween(forwardFrames.map { it.bounds }, source, destination)
 
             val back = requireNotNull(device.findObject(By.desc("返回")))
@@ -59,16 +70,22 @@ class ProgrammeCoverTransitionTest {
             val source = awaitCover(spotlight.visibleBounds)
             assertTrue("The spotlight starts tilted: $source", source.rotation in -6.0..-4.0)
             val open = requireNotNull(device.findObject(By.desc("查看栏目转场测试栏目")))
+            val imageRegion = Rect(
+                0,
+                0,
+                device.displayWidth,
+                requireNotNull(device.findObject(By.res("programme-fixture"))).visibleBounds.top - 4
+            )
             device.click(open.visibleBounds.centerX(), open.visibleBounds.centerY())
-            val frames = captureTransition()
-            assertTrue(device.wait(Until.hasObject(By.text("栏目详情")), 5_000))
+            val frames = captureTransition(imageRegion)
+            assertTrue(device.wait(Until.hasObject(By.res("archive-toolbar")), 5_000))
             val destination = awaitCover()
             assertTravelsBetween(frames.map { it.bounds }, source.bounds, destination.bounds)
             assertRotatesWhileTravelling(frames, source, destination)
 
             val back = requireNotNull(device.findObject(By.desc("返回")))
             device.click(back.visibleBounds.centerX(), back.visibleBounds.centerY())
-            val returnFrames = captureTransition()
+            val returnFrames = captureTransition(imageRegion)
             assertTrue(device.wait(Until.hasObject(By.res("programme-fixture")), 5_000))
             assertRotatesWhileTravelling(returnFrames, destination, source)
 
@@ -82,12 +99,46 @@ class ProgrammeCoverTransitionTest {
         }
     }
 
-    private fun withCatalogue(block: (ActivityScenario<ComponentActivity>) -> Unit) {
+    @Test fun embeddedArchiveKeepsArtworkAndIdentityInOneCompactRow() {
+        withCatalogue(embeddedArchive = true) {
+            val archive = requireNotNull(device.wait(Until.findObject(By.res("embedded-archive")), 5_000))
+            val destination = awaitCover(archive.visibleBounds).bounds
+
+            assertIdentityBesideCover(destination, archive)
+            assertTrue(
+                "Artwork leaves room for the full title and action in the adjacent pane: $destination",
+                destination.width() <= 256
+            )
+        }
+    }
+
+    private fun assertIdentityBesideCover(cover: Rect, archive: UiObject2? = null) {
+        val title = requireNotNull(
+            if (archive == null) {
+                device.findObject(By.text("转场测试栏目"))
+            } else {
+                archive.findObject(By.text("转场测试栏目"))
+            }
+        ).visibleBounds
+        val favourite = requireNotNull(
+            if (archive == null) device.findObject(By.text("收藏栏目")) else archive.findObject(By.text("收藏栏目"))
+        ).visibleBounds
+        assertTrue("The complete title sits beside the artwork: $cover -> $title", title.left >= cover.right)
+        assertTrue("The favourite action stays beside the artwork: $cover -> $favourite", favourite.left >= cover.right)
+        assertTrue("The favourite action follows the title", favourite.top >= title.bottom)
+    }
+
+    private fun withCatalogue(embeddedArchive: Boolean = false, block: (ActivityScenario<ComponentActivity>) -> Unit) {
+        val originalScale = device.executeShellCommand(
+            "settings get global animator_duration_scale"
+        ).trim().toFloatOrNull()
         val cover = File(instrumentation.targetContext.cacheDir, "shared-cover-fixture.png")
         val bitmap = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888).apply { eraseColor(coverColour) }
         // The internal stripe remains measurable even when the shared layer clips the outer image edges.
         Canvas(bitmap).drawRect(0f, 84f, 320f, 96f, Paint().apply { color = Color.rgb(0, 244, 20) })
         try {
+            // Slow native motion only for pixel sampling; restore the device setting after every fixture.
+            device.executeShellCommand("settings put global animator_duration_scale 2.0")
             cover.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val programme = Programme("fixture", "转场测试栏目", cover.toURI().toString(), 0)
             ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
@@ -95,41 +146,73 @@ class ProgrammeCoverTransitionTest {
                     activity.setContent {
                         SctvAppTheme(AppSettings()) {
                             Box(Modifier.semantics { testTagsAsResourceId = true }) {
-                                ProgrammeNavigationFixture { route, navigator ->
-                                    when (route) {
-                                        ProgrammeTestRoute.Catalogue -> CatalogueScreen(
-                                            CatalogueUiState(
-                                                resource = CachedResource(listOf(programme)),
-                                                featuredId = programme.id
-                                            ),
-                                            false,
-                                            {},
-                                            {},
-                                            {},
-                                            {},
-                                            { navigator.open(ProgrammeTestRoute.Archive(it)) },
-                                            {}
-                                        )
-                                        is ProgrammeTestRoute.Archive -> ArchiveScreen(
-                                            ArchiveUiState(
-                                                programmeId = programme.id,
-                                                programme = programme,
-                                                dates = CachedResource(emptyList())
-                                            ),
-                                            false, navigator.back, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-                                        )
-                                        else -> Unit
+                                if (embeddedArchive) {
+                                    CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                                        Row(Modifier.width(840.dp).height(700.dp)) {
+                                            Box(Modifier.width(340.dp).testTag("embedded-library")) {
+                                                CatalogueScreen(
+                                                    CatalogueUiState(resource = CachedResource(listOf(programme))),
+                                                    false, {}, {}, {}, {}, {}, {}, embedded = true
+                                                )
+                                            }
+                                            VerticalDivider()
+                                            Box(Modifier.weight(1f).testTag("embedded-archive")) {
+                                                ArchiveScreen(
+                                                    ArchiveUiState(
+                                                        programmeId = programme.id,
+                                                        programme = programme,
+                                                        dates = CachedResource(emptyList())
+                                                    ),
+                                                    false, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    ProgrammeNavigationFixture { route, navigator ->
+                                        when (route) {
+                                            ProgrammeTestRoute.Catalogue -> CatalogueScreen(
+                                                CatalogueUiState(
+                                                    resource = CachedResource(listOf(programme)),
+                                                    featuredId = programme.id
+                                                ),
+                                                false,
+                                                {},
+                                                {},
+                                                {},
+                                                {},
+                                                { navigator.open(ProgrammeTestRoute.Archive(it)) },
+                                                {}
+                                            )
+                                            is ProgrammeTestRoute.Archive -> ArchiveScreen(
+                                                ArchiveUiState(
+                                                    programmeId = programme.id,
+                                                    programme = programme,
+                                                    dates = CachedResource(emptyList())
+                                                ),
+                                                false, navigator.back, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+                                            )
+                                            else -> Unit
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+                device.waitForIdle()
                 block(scenario)
             }
         } finally {
             bitmap.recycle()
             cover.delete()
+            device.executeShellCommand(
+                if (originalScale == null) {
+                    "settings delete global animator_duration_scale"
+                } else {
+                    "settings put global animator_duration_scale $originalScale"
+                }
+            )
         }
     }
 
@@ -147,12 +230,12 @@ class ProgrammeCoverTransitionTest {
         return requireNotNull(result) { "The real cover must be decoded before navigation" }
     }
 
-    private fun captureTransition(): List<CoverFrame> {
+    private fun captureTransition(region: Rect? = null): List<CoverFrame> {
         val frames = mutableListOf<CoverFrame>()
-        val deadline = System.currentTimeMillis() + 900
+        val deadline = System.currentTimeMillis() + 1_800
         while (System.currentTimeMillis() < deadline) {
             val screenshot = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
-            findCover(screenshot)?.let(frames::add)
+            findCover(screenshot, region)?.let(frames::add)
             screenshot.recycle()
             Thread.sleep(20)
         }
@@ -203,7 +286,8 @@ class ProgrammeCoverTransitionTest {
                 (it.bounds.exactCenterX() - source.bounds.exactCenterX()) / displacement in 0.2f..0.8f
         }
         assertTrue(
-            "Rotation must have intermediate frames during displacement: $movingFrames",
+            "Rotation must have intermediate frames during displacement: $movingFrames; all=$frames; " +
+                "$source -> $destination",
             movingFrames.isNotEmpty()
         )
         movingFrames.forEach {
@@ -219,7 +303,8 @@ class ProgrammeCoverTransitionTest {
     private fun assertTravelsBetween(frames: List<Rect>, source: Rect, destination: Rect) {
         val upper = minOf(source.top, destination.top) + 12
         val lower = maxOf(source.top, destination.top) - 12
-        val horizontalMovement = abs(source.left - destination.left) > 24
+        // A card gutter is too small to require a separate sampled horizontal midpoint.
+        val horizontalMovement = abs(source.left - destination.left) > minOf(source.width(), destination.width()) / 4
         val left = minOf(source.left, destination.left) + 12
         val right = maxOf(source.left, destination.left) - 12
         assertTrue(

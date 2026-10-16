@@ -109,6 +109,8 @@ internal fun ArchiveScreen(
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
+            modifier = Modifier.testTag("archive-toolbar"),
+            expandedHeight = if (largeText) 88.dp else 64.dp,
             title = { Text(if (state.selectionMode) "已选 ${state.selectedIds.size} 个" else "栏目详情") },
             navigationIcon = {
                 IconButton(onClick = if (state.selectionMode) onExitSelection else onBack) {
