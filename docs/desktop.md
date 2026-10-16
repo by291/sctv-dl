@@ -1,10 +1,10 @@
 # Desktop Development
 
-The repository contains a Tauri 2 desktop scaffold and the shared contracts/Web adapters needed for native integration. The installed application currently loads the shared interface, but native programme services, playback transport, downloads, and settings are not connected. It is not a complete desktop client.
+The repository contains a Tauri 2 shell, shared contracts/Web adapters, and native programme services with a TypeScript adapter. The normal application still starts with Web adapters; full native composition, playback, downloads, and preference hydration remain later phases. It is not a complete desktop client.
 
 ## Commands and Prerequisites
 
-Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). The generated Cargo manifest declares Rust 1.90; this initial batch was built with Rust 1.98.0. The declared minimum compiler has not been separately tested.
+Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). The generated Cargo manifest declares Rust 1.90; the native phases were built with Rust 1.98.0. The declared minimum compiler has not been separately tested.
 
 Run from the repository root:
 
@@ -13,7 +13,7 @@ pnpm desktop:dev
 pnpm desktop:build
 ```
 
-Development starts Vite on port 5180. At this stage it still uses the Web business adapters and Node middleware. Production bundles `dist/` into the application using Tauri's default asset protocol. A packaged shell can display the interface without Node, but programme requests cannot work there until the native adapter phase is implemented.
+Development starts Vite on port 5180. At this stage it still uses the Web business adapters and Node middleware. Production bundles `dist/` into the application using Tauri's default asset protocol. A packaged shell can display the interface without Node, but its regular pages do not select the native adapter yet. The native command bridge has been checked separately with bundled assets and Node stopped; full startup selection remains Task 7.
 
 To build only a local macOS application bundle:
 
@@ -31,14 +31,24 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-The scaffold contains no native business tests yet; successful Cargo checks currently verify compilation and linting of the shell only. Native build products and generated schemas are ignored. Application icons are generated from `public/favicon.svg` with `pnpm tauri icon public/favicon.svg`; keep only the desktop icon outputs when regenerating them.
+Native tests cover programme normalization/HTTP, cancellation, command permissions, and installation-identity persistence. HTTP tests use disposable local Axum stubs; Axum is a development dependency, not a selected production media transport. Native build products and generated schemas are ignored. Application icons are generated from `public/favicon.svg` with `pnpm tauri icon public/favicon.svg`; keep only the desktop icon outputs when regenerating them.
 
 ## Current Integration Boundary
 
-- `shared/contracts/` contains application DTO schemas and inferred types shared by browser and Node. `shared/fixtures/` contains examples for future equivalent Rust tests.
+- `shared/contracts/` contains application DTO schemas and inferred types shared by browser and Node. `shared/fixtures/` contains normalization examples consumed by both Node and Rust tests.
 - `src/shared/platform/` defines injectable programme, playback, download, and settings ports. Components consume ports; native API imports in Vue components are rejected by ESLint.
-- `src/platform/web-platform.ts` composes the current Web adapters. Environment selection and the Rust adapters are later phases; startup does not silently pretend a native implementation exists.
+- `src/platform/web-platform.ts` composes the current Web adapters. The native programme adapter exists in `programme-api.tauri.ts`, but environment selection remains Task 7 so regular startup cannot mix native metadata with unfinished Web playback/download behaviour.
 - Node exposes normalized `/client-api/v1` routes alongside the preserved `/api` and `/media` proxies. See [Upstream API](upstream-api.md) for contracts and [Deployment](deployment.md) for configuration migration.
 - Browser downloads still use HEAD preflight and browser handoff. Native task progress, files, directory selection, and exit confirmation remain future work.
+
+## Native Programme Commands
+
+Rust owns `list_programmes(requestId)`, `list_programme_dates(programmeId, requestId)`, `list_programme_contents(programmeId, dateId, requestId)`, and `cancel_request(requestId)`. Commands accept string domain IDs and version-4 UUID request IDs. The application manifest and `programme-api` permission restrict them to the local `main` window. The frontend has no general HTTP, filesystem, or Store command permission.
+
+The programme client fixes production access to `https://gw.scgchc.com`, rejects redirects, and uses the existing anonymous guest headers for metadata only. Each operation has a 20-second response-header deadline and a 30-second idle-read deadline. Rust normalizes upstream values into the same DTOs as Node; `videoStandard` maps to `smoothVideo`. The TypeScript adapter validates command results, bridges `AbortSignal`, removes listeners after terminal results, and rejects cancelled requests even if IPC resolves late. Existing `LatestRequest` guards remain in the shared archive flow.
+
+Before exposing services, startup loads a private `desktop.json` using the [official Tauri Store plugin](https://v2.tauri.app/plugin/store/), validates or creates `installationId`, and explicitly saves it. Concurrent requests then share the immutable identity. This value is separate from future shared preferences. Read/write failures surface as `storage` command errors without using an ephemeral identity or terminating the shell. Invalid UUID fields are repaired while unrelated values are retained; unreadable/corrupt files are preserved and reported. Failed stores are unregistered so the plugin cannot overwrite them during its exit-time save.
+
+Cancellation drops pending native HTTP/body futures. Cancellation that precedes registration is retained for at most 60 seconds, with a maximum of 1,024 unique markers. Registration consumes its marker; dropping or completing a request releases its active entry. No production command accepts a test origin or timeout override.
 
 The [implementation plan](superpowers/plans/2026-10-16-tauri-desktop.md) tracks phase status. [Media validation](desktop-media-validation.md) records what was actually checked and what remains open.

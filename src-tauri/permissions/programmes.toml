@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "programme-api"
+description = "Allows the local main window to read programme metadata and cancel its requests."
+commands.allow = ["list_programmes", "list_programme_dates", "list_programme_contents", "cancel_request"]

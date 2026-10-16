@@ -38,5 +38,45 @@
         "publishedAt": null
       }
     ]
+  },
+  {
+    "name": "ECMAScript BOM trimming",
+    "raw": [
+      {
+        "id": 1,
+        "title": "Clip",
+        "video": "\ufeff/clip.mp4\ufeff"
+      }
+    ],
+    "expected": [
+      {
+        "id": "1",
+        "title": "Clip",
+        "cover": null,
+        "video": "https://fscgc.scgchc.com/clip.mp4",
+        "smoothVideo": null,
+        "publishedAt": null
+      }
+    ]
+  },
+  {
+    "name": "ECMAScript preserves next-line character",
+    "raw": [
+      {
+        "id": 1,
+        "title": "Clip",
+        "video": "\u0085/clip.mp4\u0085"
+      }
+    ],
+    "expected": [
+      {
+        "id": "1",
+        "title": "Clip",
+        "cover": null,
+        "video": "https://fscgc.scgchc.com/%C2%85/clip.mp4%C2%85",
+        "smoothVideo": null,
+        "publishedAt": null
+      }
+    ]
   }
 ]

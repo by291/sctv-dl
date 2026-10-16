@@ -30,6 +30,16 @@ Through the existing Web media proxy:
 
 No full episode was downloaded for this verification. These observations apply to the tested upstream object and date, not every video or native WebView.
 
+## Native Metadata Phase
+
+A temporary release bundle used the real Rust command handlers and `programme-api.tauri.ts`, with normal Tauri bundled assets and a separate test application identifier. With project Node servers stopped, the macOS native document at `tauri://localhost` reported 40 programmes, 3,394 dates for programme `1`, and 14 contents for its latest tested date (`2026-10-15`). Adapter cancellation, cancellation before registration, and native invalid-ID rejection all passed. The probe was closed and its temporary source, bundle, and application data were removed.
+
+Automated native tests cover delayed headers/bodies, idle timeout versus progressing bodies, cancellation cleanup, bounded/expiring early cancellation, shared normalization fixtures, identity persistence/errors (including preservation of corrupt files through application exit), and IPC command routing. ACL tests reject secondary windows, remote origins, and direct frontend Store access. The native adapter is also exercised through the existing archive composable with out-of-order programme replies. Deterministically slow upstream responses were tested against Rust HTTP stubs; the native window probe used live upstream data and immediate cancellation. Windows interactive coverage remains pending.
+
+Final checks passed 215 TypeScript tests and 18 native integration tests, including raw floating-point JSON at the safe-integer boundary and cross-language BOM/NEL URL fixtures. A dedicated Store save-failure injection test remains deferred to the settings phase; read failures, successful persistence, and corrupt-file preservation through exit are covered.
+
+This phase verifies the native metadata service and bridge. Regular application startup still composes Web adapters; it does not establish complete native browsing/playback/download integration or settle the media transport gate.
+
 ## Pending Native Transport Gate
 
 No production media transport has been selected. The disposable custom-protocol/streaming investigation, bounded-memory measurement, native seek/quality/close-reopen checks, and Windows comparison remain pending. The Web HEAD/Range probes above do not replace those checks.
