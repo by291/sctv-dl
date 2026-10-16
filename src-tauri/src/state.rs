@@ -13,3 +13,5 @@ impl AppState {
         }
     }
 }
+
+pub struct PlaybackState(pub Result<crate::media::PlaybackService>);

@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "settings-api"
 description = "Allows the local main window to load and save validated shared preferences."
-commands.allow = ["load_settings", "save_settings"]
+commands.allow = ["load_settings", "save_settings", "subscribe_exit", "unsubscribe_exit", "complete_exit_preparation"]

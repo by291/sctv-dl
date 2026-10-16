@@ -14,6 +14,11 @@ fn main() {
             "choose_download_directory",
             "load_settings",
             "save_settings",
+            "open_playback",
+            "close_playback",
+            "subscribe_exit",
+            "unsubscribe_exit",
+            "complete_exit_preparation",
         ]),
     ))
     .expect("failed to build Tauri application permissions");

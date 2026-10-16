@@ -17,6 +17,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(lifecycle::ExitController::default()))
+        .manage(lifecycle::ExitPreparation::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -25,6 +26,8 @@ pub fn run() {
         })
         .setup(|app| {
             lifecycle::install_menu(app.handle())?;
+            #[cfg(target_os = "macos")]
+            lifecycle::macos::install(app.handle())?;
             // Initialize identity once before any metadata command can access the service.
             let store = app
                 .store_builder("desktop.json")
@@ -44,6 +47,9 @@ pub fn run() {
             app.manage(tauri::async_runtime::block_on(async {
                 downloads::DownloadManager::new(downloads::DownloadConfig::default())
             })?);
+            app.manage(state::PlaybackState(tauri::async_runtime::block_on(
+                media::PlaybackService::new(media::MediaConfig::default()),
+            )));
             app.manage(state::AppState::new(service));
             Ok(())
         })
@@ -60,7 +66,12 @@ pub fn run() {
             commands::get_download_directory,
             commands::choose_download_directory,
             commands::load_settings,
-            commands::save_settings
+            commands::save_settings,
+            commands::open_playback,
+            commands::close_playback,
+            commands::subscribe_exit,
+            commands::unsubscribe_exit,
+            commands::complete_exit_preparation
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the desktop application")
@@ -72,9 +83,12 @@ pub fn run() {
                 lifecycle::request_exit(app);
             }
             if matches!(event, tauri::RunEvent::Exit) {
-                tauri::async_runtime::block_on(
-                    app.state::<downloads::DownloadManager>().shutdown(),
-                );
+                tauri::async_runtime::block_on(async {
+                    app.state::<downloads::DownloadManager>().shutdown().await;
+                    if let Ok(playback) = &app.state::<state::PlaybackState>().0 {
+                        playback.shutdown().await;
+                    }
+                });
             }
         });
 }

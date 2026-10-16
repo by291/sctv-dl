@@ -1,3 +1,8 @@
+#[cfg(target_os = "macos")]
+pub mod macos;
+mod preparation;
+pub use preparation::ExitPreparation;
+
 use std::{
     future::Future,
     sync::{
@@ -19,6 +24,7 @@ pub struct ExitController {
     operations: Arc<RwLock<()>>,
     closing: AtomicBool,
     committed: AtomicBool,
+    frozen: AtomicBool,
 }
 
 impl ExitController {
@@ -28,6 +34,17 @@ impl ExitController {
         }
         let guard = self.operations.clone().read_owned().await;
         if self.closing.load(Ordering::SeqCst) {
+            return Err(closing());
+        }
+        Ok(guard)
+    }
+
+    pub async fn enter_save(&self) -> Result<OwnedRwLockReadGuard<()>> {
+        if self.frozen.load(Ordering::SeqCst) || self.committed() {
+            return Err(closing());
+        }
+        let guard = self.operations.clone().read_owned().await;
+        if self.frozen.load(Ordering::SeqCst) || self.committed() {
             return Err(closing());
         }
         Ok(guard)
@@ -61,9 +78,27 @@ impl ExitRequest {
         F: FnOnce() -> Fut,
         Fut: Future<Output = bool>,
     {
+        self.complete_prepared(downloads, async { true }, |_| confirm())
+            .await
+    }
+
+    pub async fn complete_prepared<P, F, Fut>(
+        self,
+        downloads: &DownloadManager,
+        prepare: P,
+        confirm: F,
+    ) -> bool
+    where
+        P: Future<Output = bool>,
+        F: FnOnce(bool) -> Fut,
+        Fut: Future<Output = bool>,
+    {
+        // Drain frontend save queues before refusing new preference writes.
+        let saved = prepare.await;
+        self.controller.frozen.store(true, Ordering::SeqCst);
         // Existing picker/prepare/save work must settle before the final task snapshot.
         let _operations = self.controller.operations.clone().write_owned().await;
-        if downloads.has_active() && !confirm().await {
+        if (!saved || downloads.has_active()) && !confirm(saved).await {
             return false;
         }
         downloads.shutdown().await;
@@ -75,6 +110,7 @@ impl ExitRequest {
 impl Drop for ExitRequest {
     fn drop(&mut self) {
         if !self.controller.committed() {
+            self.controller.frozen.store(false, Ordering::SeqCst);
             self.controller.closing.store(false, Ordering::SeqCst);
         }
     }
@@ -88,19 +124,27 @@ pub fn request_exit<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let downloads = app.state::<DownloadManager>();
+        let app_ref = &app;
+        let downloads_ref = &downloads;
         if request
-            .complete(&downloads, || async {
+            .complete_prepared(&downloads, app.state::<ExitPreparation>().prepare(std::time::Duration::from_secs(5)), |saved| async move {
+                let app = app_ref;
+                let downloads = downloads_ref;
                 let Some(window) = app.get_webview_window("main") else {
                     return false;
                 };
                 let (send, receive) = tokio::sync::oneshot::channel();
                 app.dialog()
-                    .message("还有下载任务正在进行。退出将取消这些任务，是否继续？")
+                    .message(match (saved, downloads.has_active()) {
+                        (false, true) => "部分设置未能保存，且还有下载任务。退出将放弃未保存的设置并取消下载，是否继续？",
+                        (false, false) => "部分设置未能保存。退出将放弃这些设置，是否继续？",
+                        _ => "还有下载任务正在进行。退出将取消这些任务，是否继续？",
+                    })
                     .title("退出 SCTV DL")
                     .parent(&window)
                     .buttons(MessageDialogButtons::OkCancelCustom(
-                        "取消下载并退出".into(),
-                        "继续下载".into(),
+                        "仍然退出".into(),
+                        "返回应用".into(),
                     ))
                     .show(move |accepted| {
                         let _ = send.send(accepted);

@@ -1,4 +1,6 @@
 mod http;
+mod playback;
+pub use playback::{PlaybackRequest, PlaybackService};
 pub(crate) mod policy;
 
 pub use http::{MediaConfig, MediaServer};

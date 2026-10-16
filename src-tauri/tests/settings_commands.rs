@@ -72,7 +72,12 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
         assert!(invoke(&secondary, command, body.clone(), origin).is_err());
         assert!(invoke(&main, command, body.clone(), "https://external.invalid").is_err());
     }
-    let _closing = controller.begin().unwrap();
+    let closing = controller.begin().unwrap();
+    // Queued frontend saves still reach Rust during exit preparation.
+    invoke(&main, "save_settings", body.clone(), origin).unwrap();
+    let downloads =
+        sctv_dl_desktop_lib::downloads::DownloadManager::new(Default::default()).unwrap();
+    assert!(closing.complete(&downloads, || async { false }).await);
     assert_eq!(
         invoke(&main, "save_settings", body, origin).unwrap_err()["code"],
         "cancelled"

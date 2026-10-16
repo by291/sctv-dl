@@ -95,3 +95,36 @@ async fn rejecting_exit_reopens_operations_and_keeps_downloads_running() {
     assert!(sctv_dl_desktop_lib::downloads::files::DownloadDirectory::open(root.path()).is_ok());
     server.abort();
 }
+
+#[tokio::test]
+async fn exit_allows_queued_settings_until_preparation_then_freezes_and_can_recover() {
+    let controller = Arc::new(ExitController::default());
+    let downloads = DownloadManager::new(DownloadConfig::default()).unwrap();
+    let request = controller.begin().unwrap();
+    let controller = &controller;
+    let preparation = async {
+        assert!(controller.enter().await.is_err());
+        assert!(controller.enter_save().await.is_ok());
+        false
+    };
+    assert!(
+        !request
+            .complete_prepared(&downloads, preparation, |saved| async move {
+                assert!(!saved);
+                assert!(controller.enter_save().await.is_err());
+                false
+            })
+            .await
+    );
+    assert!(controller.enter_save().await.is_ok());
+    assert!(
+        controller
+            .begin()
+            .unwrap()
+            .complete_prepared(&downloads, async { true }, |_| async {
+                panic!("saved and idle")
+            })
+            .await
+    );
+    assert!(controller.enter_save().await.is_err());
+}

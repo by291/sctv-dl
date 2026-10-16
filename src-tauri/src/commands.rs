@@ -172,7 +172,7 @@ pub async fn save_settings<R: Runtime>(
     settings: State<'_, DesktopSettings<R>>,
     value: serde_json::Value,
 ) -> Result<()> {
-    let operation = lifecycle.enter().await?;
+    let operation = lifecycle.enter_save().await?;
     let store = settings.store.as_ref().map_err(Clone::clone)?.clone();
     let writes = settings.writes.clone();
     tokio::task::spawn_blocking(move || {
@@ -182,4 +182,60 @@ pub async fn save_settings<R: Runtime>(
     })
     .await
     .map_err(|_| crate::error::AppError::new("storage", "保存设置异常终止"))?
+}
+
+#[tauri::command]
+pub async fn open_playback(
+    state: State<'_, AppState>,
+    playback: State<'_, crate::state::PlaybackState>,
+    lifecycle: State<'_, Arc<ExitController>>,
+    request: crate::media::PlaybackRequest,
+    request_id: String,
+) -> Result<crate::media::PlaybackSession> {
+    state
+        .requests
+        .register(&request_id)?
+        .run(async {
+            let _operation = lifecycle.enter().await?;
+            let programmes = state.programmes.as_ref().map_err(Clone::clone)?;
+            playback
+                .0
+                .as_ref()
+                .map_err(Clone::clone)?
+                .open(programmes, request)
+                .await
+        })
+        .await
+}
+
+#[tauri::command]
+pub fn close_playback(playback: State<'_, crate::state::PlaybackState>, session_id: String) {
+    if let Ok(service) = &playback.0 {
+        service.close(&session_id);
+    }
+}
+
+#[tauri::command]
+pub fn subscribe_exit(
+    preparation: State<'_, crate::lifecycle::ExitPreparation>,
+    on_event: Channel<String>,
+) -> String {
+    preparation.subscribe(move |id| on_event.send(id).is_ok())
+}
+
+#[tauri::command]
+pub fn unsubscribe_exit(
+    preparation: State<'_, crate::lifecycle::ExitPreparation>,
+    subscription_id: String,
+) {
+    preparation.unsubscribe(&subscription_id);
+}
+
+#[tauri::command]
+pub fn complete_exit_preparation(
+    preparation: State<'_, crate::lifecycle::ExitPreparation>,
+    request_id: String,
+    saved: bool,
+) {
+    preparation.complete(&request_id, saved);
 }

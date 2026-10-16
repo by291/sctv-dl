@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "playback-api"
+description = "Allows the local main window to open domain playback sessions and release them."
+commands.allow = ["open_playback", "close_playback"]
