@@ -56,6 +56,21 @@ class ProgrammeResponseParserTest {
         expect(ErrorKind.InvalidData) { parser.programmes("""{"rs":200,"data":[]}""") }
     }
 
+    @Test fun historicalCdnSourcesRetainTheirPlaybackQualities() {
+        val standard = "https://fscgc.sctv-tf.com/NewsTV/2021/02/09/archive.mp4"
+        val smooth = "https://fscgc.scgchc.com/archive-smooth.mp4"
+
+        val row = parser.contents(
+            """{"rs":200,"data":[{"id":"60888","video":"$standard","videoStandard":"$smooth"}]}"""
+        ).single()
+
+        assertEquals(standard, row.standardUrl)
+        assertEquals(smooth, row.smoothUrl)
+        assertEquals(standard, resolveVideo(row, Quality.Standard)?.url)
+        assertEquals(smooth, resolveVideo(row, Quality.Smooth)?.url)
+        assertEquals(2, videoVariants(row).size)
+    }
+
     @Test fun duplicateVideoUrlsExposeOneChoice() {
         val row = parser.contents(
             """{"rs":200,"data":[{"id":"1","video":"a.mp4","videoStandard":"a.mp4"}]}"""

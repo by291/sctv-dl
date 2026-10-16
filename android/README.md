@@ -66,7 +66,7 @@ Within modules, packages follow subjects: domain `common/programme/media/downloa
 
 Hilt provides repository implementations. ViewModels expose immutable screen state and actions; UI collects it with lifecycle awareness. Catalogue and favourites share repository data and preserve independent search/sort state. Room snapshots are keyed by catalogue, programme, and programme/date. Successful empty responses are cached atomically; failures preserve older content with visible error feedback. Request cancellation and generation checks reject stale results. Metadata responses are read with a 2 MiB limit before full-body buffering. DataStore stores theme, dynamic colours, initial quality, and the default network policy for new downloads.
 
-The public upstream endpoint schemas and security constraints are documented in [Upstream API](../docs/upstream-api.md). Native transport validates the same IDs and URL families, preserves the `video`/`videoStandard` mapping, and uses `https://scgc.video.play/` as the media Referer. Application-controlled metadata, cover, and player clients do not follow redirects. Android's system transfer service owns its own redirect handling.
+The public upstream endpoint schemas and security constraints are documented in [Upstream API](../docs/upstream-api.md). Native transport validates the same IDs and URL families, including HTTPS MP4 media on `fscgc.scgchc.com` and the historical `fscgc.sctv-tf.com` CDN. It preserves the `video`/`videoStandard` mapping and uses `https://scgc.video.play/` as the media Referer. Application-controlled metadata, cover, and player clients do not follow redirects. Android's system transfer service owns its own redirect handling.
 
 ## Downloads and Playback
 

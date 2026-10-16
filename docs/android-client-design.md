@@ -195,7 +195,7 @@ Retain the current business contracts:
 - Parse broadcast dates as valid ISO calendar dates, retain the last returned record per date, and sort newest first.
 - Normalize missing optional media and cover fields. Preserve `video` as standard and `videoStandard` as smooth.
 - Resolve relative media against `https://fscgc.scgchc.com/` and relative covers against `https://kscgc.sctv.com/`.
-- Require initial media targets to be credential-free HTTPS MP4 URLs on `fscgc.scgchc.com` with the default port. Never accept arbitrary user-entered media URLs.
+- Require initial media targets to be credential-free HTTPS MP4 URLs on `fscgc.scgchc.com` or `fscgc.sctv-tf.com` with the default port. Never accept arbitrary user-entered media URLs.
 - Allow HTTPS cover hosts observed in the existing service: `kscgc.sctv.com`, `kscgc.scgchc.com`, and `kscgc.sctv-tf.com`. Unrecognized covers use the fallback rather than weakening media validation.
 - Send `Referer: https://scgc.video.play/` for native playback, media preflight, and download requests. Metadata requests do not require a browser CORS proxy.
 - Disable redirects in application-controlled API and media clients. Android's platform download service owns its transfer redirect handling; do not claim the app can impose the Node proxy's redirect policy on it.

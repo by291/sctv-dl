@@ -6,11 +6,12 @@ internal object UpstreamUrlPolicy {
     const val REFERER = "https://scgc.video.play/"
     private val mediaBase = "https://fscgc.scgchc.com/".toHttpUrl()
     private val coverBase = "https://kscgc.sctv.com/".toHttpUrl()
+    private val mediaHosts = setOf("fscgc.scgchc.com", "fscgc.sctv-tf.com")
     private val coverHosts = setOf("kscgc.sctv.com", "kscgc.scgchc.com", "kscgc.sctv-tf.com")
 
     fun media(value: String?): String? {
         val url = value?.trim()?.takeIf(String::isNotEmpty)?.let(mediaBase::resolve) ?: return null
-        if (!url.isHttps || url.host != mediaBase.host || url.port != 443 ||
+        if (!url.isHttps || url.host !in mediaHosts || url.port != 443 ||
             url.username.isNotEmpty() ||
             url.password.isNotEmpty()
         ) {

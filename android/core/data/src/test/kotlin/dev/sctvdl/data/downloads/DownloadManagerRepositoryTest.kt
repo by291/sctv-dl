@@ -50,6 +50,34 @@ class DownloadManagerRepositoryTest {
         true
     )
 
+    @Test fun historicalCdnDownloadsReachTheSystemQueue() = runTest {
+        val url = "https://fscgc.sctv-tf.com/NewsTV/2021/02/09/archive.mp4"
+        val store = FakeDownloadStore()
+        val gateway = FakeDownloadGateway()
+        val probed = mutableListOf<String>()
+        val repo = DownloadManagerRepository(
+            store,
+            gateway,
+            MediaPreflight { target, _, _ ->
+                probed.add(target)
+                ProbeResponse(200, "video/mp4", 4096)
+            },
+            clock,
+            StandardTestDispatcher(testScheduler)
+        )
+        val historical = request("60888").copy(
+            content = ProgrammeContent("60888", "音你而来", standardUrl = url)
+        )
+
+        val result = repo.enqueue(listOf(historical))
+
+        assertEquals(1, result.queued)
+        assertTrue(result.failures.isEmpty())
+        assertEquals(listOf(url), probed)
+        assertEquals(url, gateway.requests.single().url)
+        assertEquals(url, store.all().single().url)
+    }
+
     @Test fun anOldSystemQueryCannotInvalidateANewSubmission() = runTest {
         val store = FakeDownloadStore()
         val native = FakeDownloadGateway()

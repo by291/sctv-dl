@@ -6,6 +6,19 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UpstreamUrlPolicyTest {
+    @Test fun historicalCdnUrlsRemainPlayable() {
+        listOf(
+            "https://fscgc.sctv-tf.com/NewsTV/2021/02/09/archive.mp4",
+            "https://fscgc.sctv-tf.com/archive.MP4?version=1"
+        ).forEach { url ->
+            assertEquals(url, UpstreamUrlPolicy.media(url))
+        }
+        assertEquals(
+            "https://fscgc.sctv-tf.com/archive.mp4",
+            UpstreamUrlPolicy.media("https://FSCGC.sctv-tf.com:443/archive.mp4")
+        )
+    }
+
     @Test fun relativeUrlsResolveOnlyToApprovedOrigins() {
         assertEquals(
             "https://fscgc.scgchc.com/NewsMedia/a.mp4",
@@ -24,7 +37,13 @@ class UpstreamUrlPolicyTest {
             "https://evil.test/a.mp4",
             "https://user:pass@fscgc.scgchc.com/a.mp4",
             "https://fscgc.scgchc.com:8443/a.mp4",
-            "https://fscgc.scgchc.com/a.m3u8"
+            "https://fscgc.scgchc.com/a.m3u8",
+            "http://fscgc.sctv-tf.com/a.mp4",
+            "https://fscgc.sctv-tf.com:8443/a.mp4",
+            "https://user:pass@fscgc.sctv-tf.com/a.mp4",
+            "https://fscgc.sctv-tf.com.evil.test/a.mp4",
+            "https://other.sctv-tf.com/a.mp4",
+            "https://fscgc.sctv-tf.com/a.html?file=a.mp4"
         ).forEach {
             assertNull(UpstreamUrlPolicy.media(it))
         }
