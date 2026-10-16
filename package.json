@@ -21,7 +21,8 @@
     "lint:fix": "eslint . --fix",
     "check": "pnpm typecheck && pnpm test && pnpm lint && pnpm format:check",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "desktop:check": "node tooling/desktop-check.ts"
   },
   "dependencies": {
     "@lucide/vue": "^1.53.0",

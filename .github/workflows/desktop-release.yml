@@ -1,0 +1,137 @@
+name: Desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (for example v0.1.0)
+        type: string
+        required: true
+      publish:
+        description: Publish after every signed platform build succeeds
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  signed:
+    name: Signed (${{ matrix.target }})
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: macos-15
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          runtime: node@26
+          cache: true
+          install: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: '1.98.0'
+          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri -> target
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node tooling/desktop-release.ts version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm desktop:check
+      - name: Prepare macOS signing
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node tooling/desktop-release.ts macos
+      - name: Prepare Windows signing
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (!$env:WINDOWS_CERTIFICATE -or !$env:WINDOWS_CERTIFICATE_PASSWORD) {
+            throw 'Windows signing credentials are required.'
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'desktop-signing.pfx'
+          try {
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+            $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
+            if (!$certificate.Thumbprint -or !$certificate.HasPrivateKey) { throw 'No signing private key was imported.' }
+            "DESKTOP_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+            $config = @{ bundle = @{ windows = @{ certificateThumbprint = $certificate.Thumbprint; digestAlgorithm = 'sha256'; timestampUrl = 'http://timestamp.digicert.com' } } }
+            $config | ConvertTo-Json -Depth 5 | Set-Content src-tauri/tauri.release.conf.json
+          } finally {
+            Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
+          }
+      - name: Build and upload signed draft packages
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ inputs.tag }}
+          releaseName: SCTV DL ${{ inputs.tag }}
+          releaseDraft: true
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+      - name: Remove Windows certificate
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:DESKTOP_CERTIFICATE_THUMBPRINT) {
+            Remove-Item "Cert:\CurrentUser\My\$env:DESKTOP_CERTIFICATE_THUMBPRINT" -Force -ErrorAction SilentlyContinue
+          }
+      - name: Remove temporary configuration
+        if: always()
+        shell: bash
+        run: rm -f src-tauri/tauri.release.conf.json
+
+  publish:
+    if: inputs.publish
+    needs: signed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the complete signed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false
