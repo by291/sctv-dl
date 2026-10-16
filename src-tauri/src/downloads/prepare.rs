@@ -13,7 +13,7 @@ use crate::{
 pub async fn prepare_downloads(
     service: &ProgrammeService,
     request: DownloadRequest,
-    origin: &Url,
+    origins: &[Url],
 ) -> Result<PreparedBatch> {
     let size = serde_json::to_vec(&request)
         .map_err(|_| AppError::new(ErrorCode::InvalidInput, "下载请求无效"))?
@@ -53,7 +53,7 @@ pub async fn prepare_downloads(
             .find(|content| content.id == id)
             .and_then(|content| {
                 let (quality, url) = preferred_source(content, request.quality)?;
-                policy::target(url, origin).ok()?;
+                policy::target(url, origins).ok()?;
                 Some(PreparedDownload {
                     content: ContentRef {
                         programme_id: request.programme_id.clone(),

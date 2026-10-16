@@ -19,7 +19,7 @@ use std::{
 
 async fn media(stub: &Stub) -> MediaServer {
     MediaServer::bind(MediaConfig {
-        upstream_origin: stub.origin.clone(),
+        upstream_origins: vec![stub.origin.clone()],
         ..MediaConfig::default()
     })
     .await
@@ -89,6 +89,31 @@ async fn enforces_the_shared_media_target_policy_before_creating_sessions() {
         );
     }
     assert!(server.open(vec![], Quality::Standard).is_err());
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn configured_media_origins_replace_the_production_allowlist() {
+    let stub = serve(Router::new()).await;
+    let server = media(&stub).await;
+
+    let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
+    for host in ["fscgc.scgchc.com", "fscgc.sctv-tf.com"] {
+        assert!(
+            server
+                .open(
+                    vec![MediaSource {
+                        quality: Quality::Standard,
+                        url: format!("https://{host}/clip.mp4"),
+                    }],
+                    Quality::Standard,
+                )
+                .is_err()
+        );
+    }
+
+    server.close(&session.id);
+    server.shutdown().await;
 }
 
 #[tokio::test]
@@ -120,6 +145,7 @@ async fn streams_head_full_and_single_range_shapes_with_media_only_headers() {
             .header("Origin", "tauri://localhost")
             .header("Cookie", "private=ignored")
             .header("Authorization", "ignored")
+            .header("User-Agent", "untrusted-webview")
             .header("deviceId", "ignored");
         if let Some(range) = range {
             request = request
@@ -145,6 +171,10 @@ async fn streams_head_full_and_single_range_shapes_with_media_only_headers() {
     for headers in seen.lock().unwrap().iter() {
         assert_eq!(headers["referer"], "https://scgc.video.play/");
         assert_eq!(headers["accept-encoding"], "identity");
+        assert_eq!(
+            headers["user-agent"],
+            concat!("sctv-dl/", env!("CARGO_PKG_VERSION"))
+        );
         assert!(!headers.contains_key("deviceid"));
         assert!(!headers.contains_key("cookie"));
         assert!(!headers.contains_key("authorization"));
@@ -331,7 +361,7 @@ async fn separates_header_and_idle_deadlines_without_a_whole_video_timeout() {
     }))
     .await;
     let config = |stub: &Stub| MediaConfig {
-        upstream_origin: stub.origin.clone(),
+        upstream_origins: vec![stub.origin.clone()],
         header_timeout: Duration::from_millis(80),
         idle_timeout: Duration::from_millis(100),
         ..MediaConfig::default()

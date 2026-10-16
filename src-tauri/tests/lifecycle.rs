@@ -42,7 +42,7 @@ async fn rejecting_exit_reopens_operations_and_keeps_downloads_running() {
     });
     let root = tempfile::tempdir().unwrap();
     let downloads = DownloadManager::new(DownloadConfig {
-        upstream_origin: origin.clone(),
+        upstream_origins: vec![origin.clone()],
         ..Default::default()
     })
     .unwrap();

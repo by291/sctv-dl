@@ -25,7 +25,7 @@ use uuid::Uuid;
 const TRANSFER_CONCURRENCY: usize = 2;
 
 pub struct DownloadConfig {
-    pub upstream_origin: String,
+    pub upstream_origins: Vec<String>,
     pub header_timeout: Duration,
     pub idle_timeout: Duration,
     pub queue_capacity: usize,
@@ -34,7 +34,7 @@ pub struct DownloadConfig {
 impl Default for DownloadConfig {
     fn default() -> Self {
         Self {
-            upstream_origin: "https://fscgc.scgchc.com/".into(),
+            upstream_origins: policy::default_origins(),
             header_timeout: Duration::from_secs(20),
             idle_timeout: Duration::from_secs(30),
             queue_capacity: 100,
@@ -64,7 +64,7 @@ pub(super) struct Inner {
     stop: CancellationToken,
     tracker: TaskTracker,
     pub(super) config: DownloadConfig,
-    origin: Url,
+    origins: Vec<Url>,
     pub(super) client: Client,
 }
 
@@ -89,7 +89,7 @@ impl DownloadManager {
         tokio::select! {
             biased;
             _ = self.inner.stop.cancelled() => Err(AppError::new(ErrorCode::Cancelled, "应用正在退出")),
-            result = super::prepare::prepare_downloads(service, request, &self.inner.origin) => result,
+            result = super::prepare::prepare_downloads(service, request, &self.inner.origins) => result,
         }
     }
 
@@ -97,10 +97,9 @@ impl DownloadManager {
         if config.queue_capacity == 0 || config.queue_capacity > 10_000 {
             return Err(AppError::new(ErrorCode::InvalidInput, "下载队列容量无效"));
         }
-        let origin = Url::parse(&config.upstream_origin).map_err(|error| {
-            AppError::with_source(ErrorCode::InvalidInput, "视频服务地址无效", error)
-        })?;
+        let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
+            .user_agent(crate::media::USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .gzip(false)
             .read_timeout(config.idle_timeout)
@@ -126,7 +125,7 @@ impl DownloadManager {
             stop: CancellationToken::new(),
             tracker: TaskTracker::new(),
             config,
-            origin,
+            origins,
             client,
         });
         let owner = inner.clone();
@@ -330,7 +329,7 @@ impl Inner {
     }
 
     fn admit(&self, file: PreparedDownload, directory: &Arc<DownloadDirectory>) -> Result<String> {
-        policy::target(&file.url, &self.origin)?;
+        policy::target(&file.url, &self.origins)?;
         {
             let state = self.state.lock().unwrap();
             if !state.accepting || self.stop.is_cancelled() {

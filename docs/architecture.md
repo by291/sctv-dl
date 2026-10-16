@@ -10,7 +10,7 @@ Development and local build preview use Vite with shared proxy middleware. Produ
 flowchart LR
     Browser["Vue Web app"] -->|"Frontend, /client-api, /api, /media"| Server["Vite or production Node service"]
     Server -->|"Programme JSON"| API["gw.scgchc.com"]
-    Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com"]
+    Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com / fscgc.sctv-tf.com"]
 ```
 
 The service streams video with backpressure. It does not save videos or maintain download jobs. The Tauri client under `src-tauri/` bundles the same frontend and selects native adapters at startup. Rust owns its metadata, opaque playback sessions and streaming media listener, file downloads, and persistence. Desktop routing uses hash history; Web retains ordinary history routes. See [Desktop Development](desktop.md) for the current boundary.

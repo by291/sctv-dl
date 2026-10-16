@@ -18,7 +18,7 @@ use super::{MediaSource, PlaybackSession, PlaybackSource, Quality, handler, poli
 use crate::error::{AppError, ErrorCode, Result};
 
 pub struct MediaConfig {
-    pub upstream_origin: String,
+    pub upstream_origins: Vec<String>,
     pub webview_origins: Vec<String>,
     pub header_timeout: Duration,
     pub idle_timeout: Duration,
@@ -32,7 +32,7 @@ impl Default for MediaConfig {
         }
 
         Self {
-            upstream_origin: "https://fscgc.scgchc.com/".into(),
+            upstream_origins: policy::default_origins(),
             webview_origins,
             header_timeout: Duration::from_secs(20),
             idle_timeout: Duration::from_secs(30),
@@ -47,7 +47,7 @@ pub(super) struct Session {
 
 pub(super) struct Inner {
     pub config: MediaConfig,
-    pub origin: Url,
+    pub origins: Vec<Url>,
     pub client: Client,
     pub address: SocketAddr,
     pub sessions: Mutex<HashMap<String, Arc<Session>>>,
@@ -63,10 +63,9 @@ pub struct MediaServer {
 impl MediaServer {
     // Production callers use the default fixed CDN configuration; no command accepts this configuration.
     pub async fn bind(config: MediaConfig) -> Result<Self> {
-        let origin = Url::parse(&config.upstream_origin).map_err(|error| {
-            AppError::with_source(ErrorCode::InvalidInput, "视频服务地址无效", error)
-        })?;
+        let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
+            .user_agent(super::USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .gzip(false)
             .read_timeout(config.idle_timeout)
@@ -91,7 +90,7 @@ impl MediaServer {
 
         let inner = Arc::new(Inner {
             config,
-            origin,
+            origins,
             client,
             address,
             sessions: Mutex::new(HashMap::new()),
@@ -125,7 +124,7 @@ impl MediaServer {
             return Err(AppError::new(ErrorCode::InvalidInput, "视频来源无效"));
         }
         for source in &sources {
-            policy::target(&source.url, &self.inner.origin)?;
+            policy::target(&source.url, &self.inner.origins)?;
         }
 
         let id = Uuid::new_v4().to_string();

@@ -30,6 +30,29 @@ function programmeClient(contents: ProgrammeContent[]): ProgrammeApi {
 }
 
 describe('programme preparation service', () => {
+  it.each(['fscgc.scgchc.com', 'fscgc.sctv-tf.com'])(
+    'prepares playback and downloads from %s',
+    async (host) => {
+      const url = `https://${host}/NewsTV/2021/02/09/archive.mp4`
+      const service = createProgrammeService(
+        programmeClient([{ ...content, video: url }]),
+        new AbortController().signal,
+      )
+
+      const playback = await service.playback({ ...reference, quality: 'standard' })
+      const downloads = await service.downloads({
+        programmeId: '1',
+        dateId: '2',
+        contentIds: ['3'],
+        quality: 'standard',
+      })
+
+      expect(playback.sources).toEqual([{ quality: 'standard', url }])
+      expect(downloads.files).toMatchObject([{ contentId: '3', quality: 'standard', url }])
+      expect(downloads.failures).toEqual([])
+    },
+  )
+
   it('uses the available smooth source when the requested standard source is missing', async () => {
     const service = createProgrammeService(
       programmeClient([{ ...content, video: null, smoothVideo: content.video }]),

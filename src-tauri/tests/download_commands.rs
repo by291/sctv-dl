@@ -87,7 +87,7 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         .unwrap())))
         .manage(
             DownloadManager::new(DownloadConfig {
-                upstream_origin: origin,
+                upstream_origins: vec![origin],
                 ..DownloadConfig::default()
             })
             .unwrap(),

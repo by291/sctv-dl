@@ -18,7 +18,7 @@ describe('cross-platform contract fixtures', () => {
 
   it.each(media)('enforces the media allowlist for $url', (fixture) => {
     if (fixture.allowed) {
-      expect(validateMediaTarget(fixture.url).hostname).toBe('fscgc.scgchc.com')
+      expect(validateMediaTarget(fixture.url).href).toBe(new URL(fixture.url).href)
     } else {
       expect(() => validateMediaTarget(fixture.url)).toThrow()
     }

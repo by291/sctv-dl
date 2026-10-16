@@ -254,7 +254,7 @@ mod tests {
             .unwrap();
         });
         let manager = super::super::DownloadManager::new(super::super::DownloadConfig {
-            upstream_origin: origin.clone(),
+            upstream_origins: vec![origin.clone()],
             ..super::super::DownloadConfig::default()
         })
         .unwrap();

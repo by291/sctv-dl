@@ -8,6 +8,38 @@
     "allowed": true
   },
   {
+    "url": "https://fscgc.sctv-tf.com/NewsTV/2021/02/09/a.mp4",
+    "allowed": true
+  },
+  {
+    "url": "https://FSCGC.sctv-tf.com:443/a.MP4?version=1",
+    "allowed": true
+  },
+  {
+    "url": "http://fscgc.sctv-tf.com/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://fscgc.sctv-tf.com:444/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://user:password@fscgc.sctv-tf.com/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://fscgc.sctv-tf.com.evil.example/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://other.sctv-tf.com/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://fscgc.sctv-tf.com/a.html?file=a.mp4",
+    "allowed": false
+  },
+  {
     "url": "http://fscgc.scgchc.com/a.mp4",
     "allowed": false
   },

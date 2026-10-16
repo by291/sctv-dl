@@ -175,6 +175,10 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
     let server = stub(Router::new().fallback(|request: Request<Body>| async move {
         assert_eq!(request.headers()["referer"], "https://scgc.video.play/");
         assert_eq!(request.headers()["accept-encoding"], "identity");
+        assert_eq!(
+            request.headers()["user-agent"],
+            concat!("sctv-dl/", env!("CARGO_PKG_VERSION"))
+        );
         assert!(!request.headers().contains_key("deviceid"));
         assert!(!request.headers().contains_key("cookie"));
         Response::builder()
@@ -185,7 +189,7 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
     .await;
     let root = tempfile::tempdir().unwrap();
     let manager = DownloadManager::new(DownloadConfig {
-        upstream_origin: server.origin.clone(),
+        upstream_origins: vec![server.origin.clone()],
         ..DownloadConfig::default()
     })
     .unwrap();
@@ -237,7 +241,7 @@ async fn limits_concurrency_deduplicates_active_jobs_and_cancels_waiting_jobs() 
     .await;
     let root = tempfile::tempdir().unwrap();
     let manager = DownloadManager::new(DownloadConfig {
-        upstream_origin: server.origin.clone(),
+        upstream_origins: vec![server.origin.clone()],
         ..DownloadConfig::default()
     })
     .unwrap();
@@ -335,7 +339,7 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
     .await;
     let root = tempfile::tempdir().unwrap();
     let manager = DownloadManager::new(DownloadConfig {
-        upstream_origin: server.origin.clone(),
+        upstream_origins: vec![server.origin.clone()],
         ..DownloadConfig::default()
     })
     .unwrap();
@@ -376,7 +380,7 @@ async fn bounds_outstanding_work_and_releases_a_cancelled_slot_for_waiting_downl
             .await;
     let root = tempfile::tempdir().unwrap();
     let manager = DownloadManager::new(DownloadConfig {
-        upstream_origin: server.origin.clone(),
+        upstream_origins: vec![server.origin.clone()],
         queue_capacity: 2,
         ..DownloadConfig::default()
     })
@@ -444,7 +448,7 @@ async fn throttles_progress_and_keeps_the_latest_written_count_when_cancelled() 
     .await;
     let root = tempfile::tempdir().unwrap();
     let manager = DownloadManager::new(DownloadConfig {
-        upstream_origin: server.origin.clone(),
+        upstream_origins: vec![server.origin.clone()],
         ..DownloadConfig::default()
     })
     .unwrap();

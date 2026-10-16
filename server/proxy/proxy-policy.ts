@@ -1,6 +1,8 @@
 export type ProxyTarget =
   { kind: 'programme-api'; url: URL } | { kind: 'media'; url: URL; filename: string | null }
 
+const mediaHosts = new Set(['fscgc.scgchc.com', 'fscgc.sctv-tf.com'])
+
 export function isProxyPath(pathname: string): boolean {
   return pathname === '/media' || pathname === '/api' || pathname.startsWith('/api/')
 }
@@ -37,13 +39,13 @@ export function validateMediaTarget(raw: string): URL {
   const url = new URL(raw)
   if (
     url.protocol !== 'https:' ||
-    url.hostname !== 'fscgc.scgchc.com' ||
+    !mediaHosts.has(url.hostname) ||
     url.port ||
     url.username ||
     url.password ||
     !url.pathname.toLowerCase().endsWith('.mp4')
   ) {
-    throw new Error('仅支持已验证的视频 CDN MP4 地址')
+    throw new Error('暂不支持此视频来源')
   }
 
   return url

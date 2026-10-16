@@ -64,13 +64,15 @@ Verification on **2026-10-06** recorded:
 
 These are dated observations, not a guarantee for every current response. Recheck them when troubleshooting upstream behaviour. The default deployment proxies metadata as well as media for one consistent origin.
 
+Verification on **2026-10-16** of the 2021-02-05 音你而来 video on `fscgc.sctv-tf.com` also found that HEAD requests without a User-Agent returned 403, while the application's `sctv-dl/<package-version>` identifier returned 200 with the same media Referer. Native playback and download clients therefore send that identifier explicitly.
+
 A browser cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to assign an arbitrary foreign-origin Referer. The media proxy supplies the required player origin.
 
 ## Proxy Contracts
 
 `/api` accepts only the three programme path shapes above. It forwards GET or HEAD, requests JSON, and rejects unsupported paths. Redirects are not followed.
 
-`/media` accepts an encoded `url` query parameter targeting an HTTPS MP4 on `fscgc.scgchc.com`. Credentials, nondefault ports, other hosts/protocols, and non-MP4 paths are rejected. Redirects are rejected rather than followed.
+`/media` accepts an encoded `url` query parameter targeting an HTTPS MP4 on `fscgc.scgchc.com` or `fscgc.sctv-tf.com`. The latter also serves historical programme videos, including the 2021-02-05 broadcast of 音你而来. Credentials, nondefault ports, other hosts/protocols, and non-MP4 paths are rejected. Redirects are rejected rather than followed. The Web preparation service and native playback/download services enforce the same allowlist, covered by `shared/fixtures/media-policy.json`.
 
 For preview, use `/media?url=<encoded-upstream-url>`. For browser download, add `download=1` and `filename=<encoded-filename>`; the response supplies a sanitized RFC 5987 Content-Disposition attachment filename. `src/shared/media/media-proxy-url.ts` builds these query parameters with `URLSearchParams`.
 
