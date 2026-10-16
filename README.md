@@ -64,14 +64,15 @@ Both configurations take effect after they reach the default branch on GitHub. D
 
 ## Documentation
 
-| Document                                               | Purpose                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------- |
-| [Agent Instructions](AGENTS.md)                        | Project constraints, coding conventions, and verification     |
-| [Architecture](docs/architecture.md)                   | Module ownership, data flow, and important behaviour          |
-| [Web Styling](docs/styling.md)                         | Native CSS conventions, theme ownership, and UI verification  |
-| [Deployment](docs/deployment.md)                       | Production service, configuration, and operations             |
-| [Upstream API](docs/upstream-api.md)                   | Programme endpoints, video fields, and proxy contracts        |
-| [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |
-| [Android Client](android/README.md)                    | Native setup, modules, downloads, playback, and verification  |
+| Document                                                                            | Purpose                                                           |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [Agent Instructions](AGENTS.md)                                                     | Project constraints, coding conventions, and verification         |
+| [Architecture](docs/architecture.md)                                                | Module ownership, data flow, and important behaviour              |
+| [Web Styling](docs/styling.md)                                                      | Native CSS conventions, theme ownership, and UI verification      |
+| [Deployment](docs/deployment.md)                                                    | Production service, configuration, and operations                 |
+| [Upstream API](docs/upstream-api.md)                                                | Programme endpoints, video fields, and proxy contracts            |
+| [Android Client Design](docs/android-client-design.md)                              | Native Compose product, architecture, and acceptance criteria     |
+| [Android Client](android/README.md)                                                 | Native setup, modules, downloads, playback, and verification      |
+| [Flutter Mobile Design](docs/superpowers/specs/2026-10-16-flutter-mobile-design.md) | Proposed Android/iOS scope, architecture, and acceptance criteria |
 
 The [Desktop Development guide](docs/desktop.md) describes the integrated Tauri client, native commands, CI, and platform validation limits. Windows and macOS work is tracked in the [implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md); [media validation](docs/desktop-media-validation.md) records actual evidence and pending platform checks.
