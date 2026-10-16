@@ -13,9 +13,9 @@ describe('CSS lint configuration', () => {
       line: 3,
     },
   ])('reports invalid native declarations in $filePath', async ({ filePath, source, line }) => {
-    const [result] = await lint.lintText(source, { filePath })
+    const results = await lint.lintText(source, { filePath })
 
-    expect(result.messages).toEqual(
+    expect(results.flatMap(({ messages }) => messages)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ruleId: 'css/no-invalid-properties', line }),
       ]),
@@ -31,8 +31,8 @@ describe('CSS lint configuration', () => {
 <style>
 :root { --text: #242a33; }
 </style>`
-    const [result] = await lint.lintText(source, { filePath: 'src/CssLintFixture.vue' })
+    const results = await lint.lintText(source, { filePath: 'src/CssLintFixture.vue' })
 
-    expect(result.errorCount).toBe(0)
+    expect(results.reduce((total, result) => total + result.errorCount, 0)).toBe(0)
   })
 })

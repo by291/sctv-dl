@@ -1,8 +1,10 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath } from 'node:url'
+import packageMetadata from './package.json' with { type: 'json' }
 
 export default defineConfig({
+  define: { 'import.meta.env.APP_VERSION': JSON.stringify(packageMetadata.version) },
   plugins: [vue()],
   resolve: {
     alias: {

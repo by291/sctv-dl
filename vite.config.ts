@@ -2,8 +2,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath } from 'node:url'
 import { upstreamProxyPlugin } from './tooling/upstream-proxy-plugin.ts'
+import packageMetadata from './package.json' with { type: 'json' }
 
 export default defineConfig({
+  define: { 'import.meta.env.APP_VERSION': JSON.stringify(packageMetadata.version) },
   clearScreen: false,
   build: process.env.TAURI_ENV_PLATFORM
     ? { target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari16' }

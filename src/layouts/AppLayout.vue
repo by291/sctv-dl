@@ -12,6 +12,7 @@ const route = useRoute()
 const platform = usePlatform()
 const programmes = useProgrammeCatalogueStore()
 const downloads = platform.downloads
+const appVersion = import.meta.env.APP_VERSION
 const DownloadTasksPanel = defineAsyncComponent(
   () => import('@/features/downloads/components/DownloadTasksPanel.vue'),
 )
@@ -67,7 +68,9 @@ function isActive(path: string): boolean {
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
-        <div class="version">{{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v0.1.0</div>
+        <div class="version">
+          {{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v{{ appVersion }}
+        </div>
       </div>
     </aside>
     <div class="workspace">

@@ -8,6 +8,12 @@ import { defineConfig } from 'eslint/config'
 import css from '@eslint/css'
 import { mergeProcessors } from 'eslint-merge-processors'
 import vueBlocks from 'eslint-processor-vue-blocks'
+import { builtinModules } from 'node:module'
+
+const nativeApiImportPattern = {
+  regex: '^@tauri-apps/',
+  message: 'Vue components must consume platform ports rather than native APIs.',
+}
 
 const browserImportPatterns = [
   { regex: '^\\.', message: 'Use @/ aliases for browser modules.' },
@@ -21,6 +27,57 @@ const featureImportPatterns = [
     message: 'Business and shared modules must not depend on application composition.',
   },
 ]
+
+const sharedImportPatterns = [
+  {
+    regex: '^@/|(?:^|/)(?:src|server)(?:/|$)',
+    message: 'Shared contracts must not depend on browser or server implementations.',
+  },
+]
+
+const contractImportPatterns = [
+  ...sharedImportPatterns,
+  {
+    regex: `^node:|^(?:${builtinModules.join('|')})(?:/|$)|^@tauri-apps/`,
+    message: 'Shared contracts must not depend on Node or native platform APIs.',
+  },
+  {
+    regex: '^(?:vue|vue-router|pinia|@vueuse/[^/]+|naive-ui|artplayer|@lucide/vue)(?:/|$)',
+    message: 'Shared contracts must not depend on browser frameworks.',
+  },
+]
+
+function importBoundaryRules(patterns) {
+  return {
+    'no-restricted-imports': ['error', { patterns }],
+    // Lazy imports follow the same ownership rules as static imports.
+    'no-restricted-syntax': [
+      'error',
+      ...patterns.map(({ regex, message }) => {
+        const pathPattern = regex.replaceAll('/', '\\/')
+
+        return {
+          selector: [
+            `ImportExpression[source.value=/${pathPattern}/]`,
+            'ImportExpression[source.type="TemplateLiteral"][source.expressions.length=0]' +
+              `[source.quasis.0.value.cooked=/${pathPattern}/]`,
+          ].join(', '),
+          message,
+        }
+      }),
+    ],
+  }
+}
+
+function browserImportBoundaries(root, patterns, ignores = []) {
+  return ['ts', 'vue'].map((extension) => ({
+    files: [`${root}/**/*.${extension}`],
+    ignores,
+    rules: importBoundaryRules(
+      extension === 'vue' ? [...patterns, nativeApiImportPattern] : patterns,
+    ),
+  }))
+}
 
 export default defineConfig(
   {
@@ -36,19 +93,12 @@ export default defineConfig(
   },
   {
     files: ['shared/**/*.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              regex: '^@/|(?:^|/)(?:src|server)(?:/|$)',
-              message: 'Shared contracts must not depend on browser or server implementations.',
-            },
-          ],
-        },
-      ],
-    },
+    rules: importBoundaryRules(sharedImportPatterns),
+  },
+  {
+    files: ['shared/contracts/**/*.ts'],
+    ignores: ['shared/**/*.test.ts'],
+    rules: importBoundaryRules(contractImportPatterns),
   },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,vue}'],
@@ -78,65 +128,40 @@ export default defineConfig(
   {
     files: ['src/**/*.{ts,vue}'],
     languageOptions: { globals: globals.browser },
-    rules: { 'no-restricted-imports': ['error', { patterns: browserImportPatterns }] },
   },
-  {
-    files: ['src/features/**/*.{ts,vue}'],
-    ignores: ['src/**/*.test.ts'],
-    rules: { 'no-restricted-imports': ['error', { patterns: featureImportPatterns }] },
-  },
-  {
-    files: ['src/shared/**/*.{ts,vue}'],
-    ignores: ['src/**/*.test.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            ...featureImportPatterns,
-            {
-              regex: '^@/features/',
-              message: 'Shared modules must be feature-independent.',
-            },
-          ],
-        },
-      ],
-    },
-  },
+  ...browserImportBoundaries('src', browserImportPatterns),
+  ...browserImportBoundaries('src/features', featureImportPatterns, ['src/**/*.test.ts']),
+  ...browserImportBoundaries(
+    'src/shared',
+    [
+      ...featureImportPatterns,
+      {
+        regex: '^@/features/',
+        message: 'Shared modules must be feature-independent.',
+      },
+    ],
+    ['src/**/*.test.ts'],
+  ),
   {
     files: ['src/features/programmes/{api,model}/**/*.ts'],
     ignores: ['src/**/*.test.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            ...featureImportPatterns,
-            {
-              regex: '^@/features/(?!programmes/(?:api|model)/)',
-              message:
-                'Programme data and domain rules may only depend on data/domain or shared modules.',
-            },
-          ],
-        },
-      ],
-    },
+    rules: importBoundaryRules([
+      ...featureImportPatterns,
+      {
+        regex: '^@/features/(?!programmes/(?:api|model)/)',
+        message:
+          'Programme data and domain rules may only depend on data/domain or shared modules.',
+      },
+    ]),
   },
   {
     files: ['server/**/*.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              regex: '^(?:@/|vite(?:/|$)|@vitejs/)|(?:^|/)(?:src|tooling)(?:/|$)',
-              message: 'The production server must not depend on browser or build tooling modules.',
-            },
-          ],
-        },
-      ],
-    },
+    rules: importBoundaryRules([
+      {
+        regex: '^(?:@/|vite(?:/|$)|@vitejs/)|(?:^|/)(?:src|tooling)(?:/|$)',
+        message: 'The production server must not depend on browser or build tooling modules.',
+      },
+    ]),
   },
   {
     files: ['server/**/*.ts', '*.{js,ts}', 'tooling/**/*.{js,ts}'],
@@ -166,13 +191,6 @@ export default defineConfig(
     languageOptions: { parserOptions: { parser: ts.parser } },
     rules: {
       'vue/component-api-style': ['error', ['script-setup']],
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'ImportDeclaration[source.value=/^@tauri-apps/]',
-          message: 'Vue components must consume platform ports rather than native APIs.',
-        },
-      ],
       'vue/block-order': ['error', { order: ['script', 'template', 'style'] }],
     },
   },

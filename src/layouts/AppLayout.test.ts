@@ -32,6 +32,7 @@ let router: ReturnType<typeof createRouter>
 
 beforeEach(async () => {
   localStorage.clear()
+  vi.stubEnv('APP_VERSION', '9.8.7-test')
   vi.mocked(programmeApi.dates).mockResolvedValue([])
   const pinia = createPinia()
   setActivePinia(pinia)
@@ -68,6 +69,11 @@ afterEach(() => {
   useProgrammeCatalogueStore().$dispose()
   useSettingsStore().$dispose()
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+})
+
+it('shows the build version instead of a fixed product version', () => {
+  expect(wrapper.get('.version').text()).toBe('Web · v9.8.7-test')
 })
 
 describe('library return navigation', () => {
