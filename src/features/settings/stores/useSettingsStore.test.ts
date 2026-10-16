@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
@@ -159,5 +159,34 @@ it('preserves a subscription update that arrives during snapshot loading', async
   await ready
   expect(store.theme).toBe('dark')
   expect(store.favourites).toEqual(['3'])
+  store.$dispose()
+})
+
+it('flush waits for edits added while an earlier save is pending', async () => {
+  const store = useSettingsStore()
+  const first = deferred<void>()
+  const second = deferred<void>()
+  let writes = 0
+  await store.hydrate({
+    load: async () => ({
+      value: { theme: 'system', quality: 'standard', favourites: [] },
+      persisted: true,
+    }),
+    subscribe: async () => () => {},
+    save: () => (++writes === 1 ? first.promise : second.promise),
+  })
+  store.theme = 'dark'
+  let flushed = false
+  const flushing = store.flush().then(() => {
+    flushed = true
+  })
+  await nextTick()
+  store.theme = 'light'
+  first.resolve()
+  await vi.waitFor(() => expect(writes).toBe(2))
+  expect(flushed).toBe(false)
+  second.resolve()
+  await flushing
+  expect(writes).toBe(2)
   store.$dispose()
 })

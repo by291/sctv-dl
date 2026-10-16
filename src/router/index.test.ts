@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
-import { router } from '@/router'
+import { createAppRouter } from '@/router'
+
+const router = createAppRouter('web')
 
 function location(path: string) {
   const route = router.resolve(path)
@@ -33,4 +35,11 @@ describe('route scroll restoration', () => {
       }),
     ).toEqual({ top: 240, left: 0 })
   })
+})
+
+it('uses hash URLs for desktop routes so asset protocol reloads stay on the entry document', () => {
+  const desktop = createAppRouter('tauri')
+  expect(desktop.resolve('/programmes/12').href).toBe('#/programmes/12')
+  expect(desktop.resolve('/settings').href).toBe('#/settings')
+  expect(router.resolve('/settings').href).toBe('/settings')
 })

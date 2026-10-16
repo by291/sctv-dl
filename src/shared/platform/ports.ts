@@ -46,5 +46,6 @@ export interface AppPlatform {
   downloads: BrowserDownloadPort | NativeDownloadPort
   settings: SettingsPort
   capabilities: { nativeDownloads: boolean; directorySelection: boolean }
+  prepareExit?(prepare: () => Promise<boolean>): Promise<() => void>
   dispose(): Promise<void>
 }

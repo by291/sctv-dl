@@ -9,8 +9,9 @@ import { viewTransitionActive } from '@/shared/utils/view-transition'
 import { usePlatform } from '@/shared/platform/usePlatform'
 
 const route = useRoute()
+const platform = usePlatform()
 const programmes = useProgrammeCatalogueStore()
-const downloads = usePlatform().downloads
+const downloads = platform.downloads
 const DownloadTasksPanel = defineAsyncComponent(
   () => import('@/features/downloads/components/DownloadTasksPanel.vue'),
 )
@@ -66,7 +67,7 @@ function isActive(path: string): boolean {
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
-        <div class="version">Web · v0.1.0</div>
+        <div class="version">{{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v0.1.0</div>
       </div>
     </aside>
     <div class="workspace">

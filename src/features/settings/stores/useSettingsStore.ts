@@ -116,6 +116,14 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  async function flush(): Promise<void> {
+    let saving: Promise<void>
+    do {
+      saving = pending
+      await saving
+    } while (saving !== pending)
+  }
+
   function preference<K extends keyof Settings>(key: K) {
     return computed({
       get: () => value.value[key],
@@ -141,5 +149,5 @@ export const useSettingsStore = defineStore('settings', () => {
     port = undefined
   })
 
-  return { quality, theme, favourites, persisted, toggleFavourite, hydrate, flush: () => pending }
+  return { quality, theme, favourites, persisted, toggleFavourite, hydrate, flush }
 })
