@@ -12,6 +12,7 @@ Read only the documents relevant to the change:
 - [Upstream API](docs/upstream-api.md): response schemas, IDs, video variants, and proxy contracts.
 - [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
 - [Desktop Development](docs/desktop.md): Tauri scaffold, shared contracts, native commands, and current integration limits.
+- [Desktop Instructions](src-tauri/AGENTS.md): Rust ownership, readability, blocking work, and resource completion rules.
 
 ## Working Conventions
 
@@ -32,6 +33,16 @@ Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.j
 - Validate external input as `unknown` with Zod and infer schema types with `z.infer`. Keep IDs as strings, public functions typed, and type imports separate.
 - The server executes TypeScript directly in Node. Use explicit `.ts` local imports and erasable syntax; avoid enums and parameter properties.
 - Keep `shared/contracts/` platform-neutral. Browser imports use `@shared/`; Node imports use relative `.ts` paths. Compose concrete adapters in `src/platform/`; features must not import that composition layer, and Vue components must not import Tauri APIs.
+
+### Readability and Responsibilities
+
+- Give each module one coherent responsibility and each function one main level of abstraction. Extract a named step when it hides a distinct rule or workflow; split files when concerns change independently, rather than to meet a line-count limit.
+- In simple setup blocks, group component contracts, state, derived values, actions, and lifecycle hooks in that order. For multiple concerns, keep each concern's related state and actions together. Use blank lines at meaningful phase boundaries inside functions, including validation, computation, external calls, and state updates.
+- Name state by its meaning: distinguish connection versions, snapshot revisions, local edits, pending counts, and disposal flags. Name actions after their outcome and predicates after the question they answer. Move repeated business decisions and complex template conditions into named functions or computed values.
+- Comments explain why a rule exists, what makes an operation safe, or who owns cleanup. Document cancellation versus stale-result rejection, subscription/load ordering, settings compatibility, partial failures, and delayed player disposal where those constraints are implemented. Avoid narrating assignments or adding comments to satisfy a quota.
+- Express related states with typed results or discriminated unions instead of parallel flags, non-null assertions, or repeated property probing. Reuse schema-derived contract types; preserve useful local type inference.
+- Keep side effects with their lifecycle owner. Requests, listeners, subscriptions, and player sessions need a visible cleanup path. Handle asynchronous failures at the owning boundary, preserve useful causes, and explain intentional best-effort cleanup when errors are ignored.
+- Organize tests into setup, action, and observable assertions. Cover business boundaries and lifecycle races; do not test source spelling, formatting, or private decomposition.
 
 ### CSS and UI
 
