@@ -1,4 +1,20 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+
+function releaseRevision(): string {
+  const tag = process.env.RELEASE_TAG
+  if (!tag || !/^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag)) {
+    throw new Error('An explicit version tag is required.')
+  }
+
+  const git = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8' }).trim()
+  const revision = git('rev-parse', '--verify', `refs/tags/${tag}^{commit}`)
+  if (revision !== git('rev-parse', 'HEAD')) {
+    throw new Error('The release tag must point to the checked-out source commit.')
+  }
+
+  return revision
+}
 
 const mode = process.argv[2]
 if (mode === 'version') {
@@ -15,6 +31,15 @@ if (mode === 'version') {
   ) {
     throw new Error('The existing release tag must match the package, Tauri, and Cargo versions.')
   }
+
+  releaseRevision()
+} else if (mode === 'revision') {
+  const revision = releaseRevision()
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `commit=${revision}\n`)
+  }
+
+  console.log(revision)
 } else if (mode === 'macos') {
   for (const name of [
     'APPLE_CERTIFICATE',
@@ -34,5 +59,5 @@ if (mode === 'version') {
     JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY } } }),
   )
 } else {
-  throw new Error('Expected version or macos release preparation mode.')
+  throw new Error('Expected version, revision, or macos release preparation mode.')
 }

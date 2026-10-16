@@ -129,9 +129,9 @@ Execute in this order for the initial implementation. Tasks 2–4 establish inte
 
 **Verification:** Existing Web checks pass; `pnpm tauri build --no-bundle` builds the host application; a packaged application loads without the development server. The media gate requires interactive evidence on both platforms. Do not quietly substitute a local browser for either native WebView.
 
-**Checkpoint:** Review the transport result before implementing Task 5. If no bounded streaming approach passes both targets, stop the affected playback work with evidence and revise the proposal before promising support.
+**Checkpoint:** The Rust streaming HTTP transport is selected for implementation. Continue Task 5 and native composition with available macOS evidence; retain both-platform playback/memory checks as release acceptance. Do not advertise an untested platform as verified.
 
-Current investigation: the installed Tauri responder requires a complete response body and exposes no request-stop callback, so the custom-protocol approach cannot meet this design's no-Range and cancellation contract. The Rust HTTP candidate passed local protocol/lifecycle tests and bundled macOS interactions; a live native HEAD/1 KiB Range probe also passed. Windows, complete memory measurement, and final installed-app integration remain open. The disposable harness has been removed.
+Current investigation: the installed Tauri responder requires a complete response body and exposes no request-stop callback, so the custom-protocol approach cannot meet this design's no-Range and cancellation contract. The Rust HTTP candidate passed local protocol/lifecycle tests and bundled macOS interactions; a live native HEAD/1 KiB Range probe also passed. The normal macOS application is now integrated. Windows and complete memory measurement remain open. The disposable harness has been removed.
 
 ### Task 2: Define DTOs and Injectable Platform Ports
 
@@ -194,7 +194,7 @@ Current investigation: the installed Tauri responder requires a complete respons
 - [x] Adapt the shared preview dialog to await `PlaybackPort.open` with loading/error/retry feedback and stale-response guards. Preserve modal focus restoration, cancellation on scope disposal, and no autoplay. Gate PiP/fullscreen controls on actual WebView support.
 - [ ] Run `cargo test --manifest-path src-tauri/Cargo.toml --test media` and `pnpm test src/features/programmes/components/ProgrammePreviewDialog.test.ts src/features/programmes/components/ProgrammeVideoPlayer.test.ts src/features/programmes/api`. Recheck installed Windows/macOS playback and update the evidence document.
 
-**Checkpoint:** Both target transports pass the media gate, and shared preview lifecycle tests pass. After Task 7 activates the complete native platform, repeat installed-application playback as part of Task 9; a working development server URL or a unit-tested transport alone cannot satisfy that final acceptance.
+**Checkpoint:** The selected transport and shared preview lifecycle pass automated checks, and the composed macOS application passes interactive playback. Windows and complete memory measurements remain Task 9 release acceptance; a development server URL or unit tests cannot substitute for installed-target evidence.
 
 Implementation is complete: domain commands/ACL, the playback adapter, shared preview lifecycle, normal native startup, and production CSP are integrated. Remaining checks concern unavailable target platforms and complete process-memory evidence.
 

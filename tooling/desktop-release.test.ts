@@ -1,11 +1,20 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, expect, it } from 'vitest'
 
 const script = resolve('tooling/desktop-release.ts')
 const roots: string[] = []
+const gitEnv = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+}
+
+function gitAt(root: string, ...args: string[]) {
+  return execFileSync('git', args, { cwd: root, env: gitEnv, encoding: 'utf8' }).trim()
+}
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'sctv-release-'))
@@ -14,6 +23,12 @@ function fixture() {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '0.1.0' }))
   writeFileSync(join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ version: '0.1.0' }))
   writeFileSync(join(root, 'src-tauri/Cargo.toml'), '[package]\nversion = "0.1.0"\n')
+
+  gitAt(root, 'init', '--quiet', '--initial-branch=main')
+  gitAt(root, 'config', 'user.name', 'Release fixture')
+  gitAt(root, 'config', 'user.email', 'release@example.invalid')
+  gitAt(root, 'commit', '--quiet', '--allow-empty', '-m', 'Tagged source')
+  gitAt(root, 'tag', 'v0.1.0')
 
   return root
 }
@@ -71,4 +86,22 @@ it('overrides ad-hoc signing only after all macOS release credentials are presen
   expect(JSON.parse(readFileSync(join(root, 'src-tauri/tauri.release.conf.json'), 'utf8'))).toEqual(
     { bundle: { macOS: { signingIdentity: 'fixture-APPLE_SIGNING_IDENTITY' } } },
   )
+})
+
+it('resolves only an existing tag and rejects a shadow branch or mismatched checkout', () => {
+  const root = fixture()
+  const env = { ...gitEnv, RELEASE_TAG: 'v0.1.0', GITHUB_OUTPUT: join(root, 'output') }
+  const git = (...args: string[]) => gitAt(root, ...args)
+  const revision = git('rev-parse', 'HEAD')
+  git('commit', '--quiet', '--allow-empty', '-m', 'Different source')
+  git('branch', 'v0.1.0')
+  const run = () =>
+    spawnSync(process.execPath, [script, 'revision'], { cwd: root, env, encoding: 'utf8' })
+  expect(spawnSync(process.execPath, [script, 'version'], { cwd: root, env }).status).toBe(1)
+  expect(run().status).toBe(1)
+  git('checkout', '--quiet', '--detach', 'refs/tags/v0.1.0')
+  expect(run().status).toBe(0)
+  expect(readFileSync(join(root, 'output'), 'utf8')).toContain(`commit=${revision}\n`)
+  git('tag', '-d', 'v0.1.0')
+  expect(run().status).toBe(1)
 })
