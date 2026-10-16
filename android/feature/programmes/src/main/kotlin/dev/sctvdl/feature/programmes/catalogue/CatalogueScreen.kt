@@ -35,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
+import dev.sctvdl.design.components.PrimaryTopAppBar
 import dev.sctvdl.design.components.SctvBrand
 import dev.sctvdl.design.components.StatePanel
 import dev.sctvdl.feature.programmes.catalogue.components.CatalogueSummaryPlaceholder
@@ -123,7 +123,7 @@ internal fun CatalogueScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
+        PrimaryTopAppBar(
             title = {
                 if (searching) {
                     TextField(
@@ -150,12 +150,6 @@ internal fun CatalogueScreen(
                 } else {
                     SctvBrand()
                 }
-            },
-            expandedHeight = when {
-                searching && largeText -> 88.dp
-                searching || embedded -> 64.dp
-                largeText -> 104.dp
-                else -> 80.dp
             },
             navigationIcon = {
                 if (searching) {

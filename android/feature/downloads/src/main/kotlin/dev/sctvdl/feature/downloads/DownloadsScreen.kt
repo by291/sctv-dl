@@ -17,11 +17,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.sctvdl.design.components.PrimaryTopAppBar
 import dev.sctvdl.design.components.StatePanel
 import dev.sctvdl.domain.download.DownloadTask
 import dev.sctvdl.feature.downloads.components.DownloadCard
@@ -40,7 +40,7 @@ internal fun DownloadsScreen(
     onSystemDownloads: () -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = {
+        PrimaryTopAppBar(title = {
             Text("下载")
         }, actions = {
             IconButton(onClick = onSystemDownloads) { Icon(Icons.Outlined.FolderOpen, "系统下载") }
