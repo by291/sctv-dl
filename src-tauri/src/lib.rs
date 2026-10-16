@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod error;
+pub mod media;
 pub mod programmes;
 pub mod requests;
 pub mod settings;
