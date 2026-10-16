@@ -2,6 +2,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
 import { contentDisposition } from './proxy-policy.ts'
+import { programmeHeaders } from './programme-headers.ts'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProxyTarget } from './proxy-policy.ts'
@@ -19,9 +20,8 @@ export async function streamUpstream(
   const timer = setTimeout(abort, 20_000)
   try {
     const headers: Record<string, string> = media
-      ? { Referer: 'https://scgc.video.play/' }
-      : { Accept: 'application/json' }
-    headers['Accept-Encoding'] = 'identity'
+      ? { Referer: 'https://scgc.video.play/', 'Accept-Encoding': 'identity' }
+      : programmeHeaders(request, response)
     if (media && request.headers.range) {
       headers.Range = request.headers.range
     }

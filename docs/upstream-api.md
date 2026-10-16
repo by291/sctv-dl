@@ -18,6 +18,26 @@ A successful JSON envelope has `rs: 200` and `data`. Other business status value
 
 The date client deduplicates ISO calendar dates, keeps the last upstream record for each date, and sorts newest first. The catalogue currently requests only page 0 with size 100; the proxy fixes those values rather than forwarding arbitrary pagination parameters.
 
+## Android Guest Request Profile
+
+The native programme client and the Web metadata proxy reproduce the anonymous request headers inspected in the **9.6.1.5 APK**. These are compatibility values for upstream requests, separate from this project's product version. Both clients send:
+
+| Header                                        | Value                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `userId`, `Authorization`, `captchaId`        | Empty strings, matching the official guest state                                             |
+| `deviceId`                                    | Persistent random UUID for the installation or browser                                       |
+| `deviceBrand`, `deviceModel`, `systemVersion` | Native Android `Build` values; the Web proxy simulates `google`, `Pixel 8`, and Android `14` |
+| `deviceType`                                  | `android`                                                                                    |
+| `appVersion`                                  | `9.6.1.5`                                                                                    |
+| `User-Agent`                                  | `okhttp/4.12.0`                                                                              |
+| `Accept-Encoding`                             | `gzip`                                                                                       |
+
+Android stores its UUID in the `upstream_client` shared preferences, outside the settings-only backup allowlist. First requests serialize identity creation so concurrent calls retain one persisted value. The interceptor belongs only to the programme API client; covers, media probes, playback, and system downloads do not receive these business headers.
+
+The Web proxy uses an HTTP-only `sctv-dl-device-id` cookie scoped to `/api`, with `SameSite=Lax` and a one-year lifetime. A missing or invalid UUID causes a new one to be issued. Browser cookies must be enabled to retain the identity, and clearing the cookie creates a new simulated installation. The proxy uses only this validated UUID; it does not forward browser cookies, authorization, or device headers upstream. It also retains `Accept: application/json`. These headers apply when using the project's `/api` proxy; a custom `VITE_API_BASE` bypassing that proxy owns its own transport contract.
+
+All three programme requests remain GET requests without a body or additional signature parameters. Host and connection management remain with the HTTP transport. Media keeps its separate Referer and Range contract below.
+
 ## Field Mapping
 
 | Record    | Upstream field         | Application field / meaning              |

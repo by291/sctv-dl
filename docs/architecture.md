@@ -42,6 +42,7 @@ The service streams video with backpressure. It does not save videos or maintain
 | `server/http-app.ts`                   | Production static assets, readiness, caching, and HTTP method handling             |
 | `server/proxy/proxy-middleware.ts`     | Route dispatch, method handling, and invalid-target responses                      |
 | `server/proxy/proxy-policy.ts`         | API allowlist/pagination, media target validation, and attachment filenames        |
+| `server/proxy/programme-headers.ts`    | Android guest request profile and browser-scoped upstream device identity          |
 | `server/proxy/stream-upstream.ts`      | Upstream fetch, headers, timeout, disconnect cancellation, and streaming           |
 | `tooling/upstream-proxy-plugin.ts`     | Vite development and preview adapter for the same proxy middleware                 |
 

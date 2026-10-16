@@ -27,6 +27,84 @@ afterEach(async () => {
 })
 
 describe('proxy transport contracts', () => {
+  it.each([
+    '/app/v1/programs',
+    '/app/v1/programs/1/dates/list',
+    '/app/v1/programs/1/dates/2/contents/list',
+  ])(
+    'uses the Android guest profile for %s without forwarding browser credentials',
+    async (path) => {
+      const upstream = vi.fn().mockResolvedValue(new Response('{"rs":200,"data":[]}'))
+      vi.stubGlobal('fetch', upstream)
+      const response = await httpFetch(`${origin}/api${path}`, {
+        headers: {
+          Cookie: 'other=private; sctv-dl-device-id=dd6694f8-a985-4dd5-8425-d7c6d811793d',
+          Authorization: 'Bearer browser-secret',
+          userId: 'browser-user',
+          deviceModel: 'browser-model',
+        },
+      })
+
+      expect(response.status).toBe(200)
+      const options = upstream.mock.calls[0]![1] as RequestInit
+      const headers = new Headers(options.headers)
+      expect(Object.fromEntries(headers)).toEqual({
+        accept: 'application/json',
+        'accept-encoding': 'gzip',
+        appversion: '9.6.1.5',
+        authorization: '',
+        captchaid: '',
+        devicebrand: 'google',
+        deviceid: 'dd6694f8-a985-4dd5-8425-d7c6d811793d',
+        devicemodel: 'Pixel 8',
+        devicetype: 'android',
+        systemversion: '14',
+        'user-agent': 'okhttp/4.12.0',
+        userid: '',
+      })
+      expect(options.body).toBeUndefined()
+      expect(response.headers.has('set-cookie')).toBe(false)
+    },
+  )
+
+  it('persists a generated device identity across programme requests with a local cookie', async () => {
+    const upstream = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}')))
+    vi.stubGlobal('fetch', upstream)
+    const first = await httpFetch(`${origin}/api/app/v1/programs`)
+    const cookie = first.headers.get('set-cookie')!
+    const firstHeaders = new Headers(upstream.mock.calls[0]![1].headers)
+    const deviceId = firstHeaders.get('deviceId')
+
+    expect(deviceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+    expect(cookie).toContain(`sctv-dl-device-id=${deviceId};`)
+    expect(cookie).toContain('Path=/api;')
+    expect(cookie).toContain('Max-Age=31536000;')
+    expect(cookie).toContain('HttpOnly; SameSite=Lax')
+
+    await httpFetch(`${origin}/api/app/v1/programs/1/dates/list`, {
+      headers: { Cookie: cookie.split(';')[0]! },
+    })
+
+    const secondHeaders = new Headers(upstream.mock.calls[1]![1].headers)
+    expect(secondHeaders.get('deviceId')).toBe(deviceId)
+    expect(secondHeaders.has('cookie')).toBe(false)
+  })
+
+  it('replaces malformed local device cookies instead of forwarding arbitrary header values', async () => {
+    const upstream = vi.fn().mockResolvedValue(new Response('{}'))
+    vi.stubGlobal('fetch', upstream)
+    const response = await httpFetch(`${origin}/api/app/v1/programs`, {
+      headers: { Cookie: 'sctv-dl-device-id=invalid-device' },
+    })
+
+    expect(response.headers.get('set-cookie')).toContain('sctv-dl-device-id=')
+    expect(new Headers(upstream.mock.calls[0]![1].headers).get('deviceId')).not.toBe(
+      'invalid-device',
+    )
+  })
+
   it('returns media headers and an attachment filename for HEAD without a body', async () => {
     const upstream = vi.fn().mockResolvedValue(
       new Response(null, {
@@ -39,12 +117,20 @@ describe('proxy transport contracts', () => {
       download: '1',
       filename: '节目.mp4',
     })
-    const response = await httpFetch(`${origin}/media?${query}`, { method: 'HEAD' })
+    const response = await httpFetch(`${origin}/media?${query}`, {
+      method: 'HEAD',
+      headers: { Cookie: 'sctv-dl-device-id=dd6694f8-a985-4dd5-8425-d7c6d811793d' },
+    })
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-length')).toBe('100')
     expect(response.headers.get('content-disposition')).toContain("filename*=UTF-8''")
     expect(await response.text()).toBe('')
+    expect(response.headers.has('set-cookie')).toBe(false)
+    expect(upstream.mock.calls[0]![1].headers).toEqual({
+      Referer: 'https://scgc.video.play/',
+      'Accept-Encoding': 'identity',
+    })
     expect(upstream).toHaveBeenCalledWith(
       new URL('https://fscgc.scgchc.com/clip.mp4'),
       expect.objectContaining({ method: 'HEAD', redirect: 'manual' }),
