@@ -1,6 +1,6 @@
 # Flutter Mobile Client Design
 
-Status: approved implementation baseline. The user approved the product direction and written specification on 2026-10-16, requesting that the implementation plan be committed before execution. Progress and actual verification belong to the [implementation plan](../plans/2026-10-16-flutter-mobile.md).
+Status: implemented baseline, with device acceptance tracked separately. The user approved the product direction and written specification on 2026-10-16; plan commit `7bff698` preceded implementation. Setup and source ownership belong to the [Flutter README](../../../flutter/README.md), and actual verification belongs to [Flutter Validation](../../flutter-validation.md).
 
 This specification owns the Flutter client's initial product scope and acceptance criteria. Existing contracts remain in [Architecture](../../architecture.md), [Upstream API](../../upstream-api.md), and the [Android Client Design](../../android-client-design.md). The Flutter client is an additional application; the existing Web, Tauri, and Kotlin clients retain their behaviour and storage.
 
@@ -29,7 +29,7 @@ Use one application package with feature directories and explicit repository/pla
 | Navigation                      | `go_router`, retained primary branches, restorable identifier-based routes                                 |
 | Metadata and media preflight    | `dio`, separate clients and cancellation scopes                                                            |
 | Durable relational state        | `drift` and its supported native SQLite integration                                                        |
-| Immutable state and JSON models | `freezed`, `json_serializable`, and `build_runner`                                                         |
+| Immutable state and JSON models | Plain immutable Dart models and explicit unknown-input parsers; `build_runner` for Drift generation        |
 | Player integration              | `better_player_plus`, isolated behind `PlaybackBackend`                                                    |
 | Background transfers            | `background_downloader`, isolated behind `TransferGateway`                                                 |
 | Covers                          | `cached_network_image`, with a configured image transport and bounded image decoding                       |

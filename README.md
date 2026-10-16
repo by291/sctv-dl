@@ -1,12 +1,14 @@
 # sctv-dl
 
-A shared Web/Tauri desktop app and native Android client for browsing and downloading Sichuan TV programmes.
+A shared Web/Tauri desktop app, Kotlin Android client, and Flutter Android/iOS client for browsing and downloading Sichuan TV programmes.
 
-Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Preferences are saved in the browser. Downloads go directly to the browser's download manager.
+Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Web preferences are saved in the browser, and Web downloads go directly to the browser's download manager.
 
 ## Run Locally
 
 For the Kotlin and Jetpack Compose client, open `android/` in Android Studio and follow the [Android README](android/README.md). It connects directly to upstream services and needs no Node deployment. The commands below run the Web app.
+
+For the Flutter Android/iOS client, follow the [Flutter README](flutter/README.md). It includes online/local playback, native background downloads, favourites and viewing history, with its own local data and application ID.
 
 Use Node.js 24.15 or newer and the pnpm version pinned in `package.json`. Run commands from the repository root.
 
@@ -19,7 +21,7 @@ Open [http://127.0.0.1:5180](http://127.0.0.1:5180). Internet access is required
 
 Vite serves the frontend and the API/media proxy in one process. Installation uses pnpm's default shared package store.
 
-Web development excludes `android/` and `src-tauri/` from file watching and discovers dependencies from the root `index.html`. Native build outputs and HTML reports stay outside both scans.
+Web development excludes `android/`, `flutter/` and `src-tauri/` from file watching and discovers dependencies from the root `index.html`. Native build outputs and HTML reports stay outside both scans.
 
 ## Build and Serve
 
@@ -73,6 +75,8 @@ Both configurations take effect after they reach the default branch on GitHub. D
 | [Upstream API](docs/upstream-api.md)                                                | Programme endpoints, video fields, and proxy contracts            |
 | [Android Client Design](docs/android-client-design.md)                              | Native Compose product, architecture, and acceptance criteria     |
 | [Android Client](android/README.md)                                                 | Native setup, modules, downloads, playback, and verification      |
-| [Flutter Mobile Design](docs/superpowers/specs/2026-10-16-flutter-mobile-design.md) | Proposed Android/iOS scope, architecture, and acceptance criteria |
+| [Flutter Client](flutter/README.md)                                                 | Android/iOS setup, ownership, downloads, playback and checks      |
+| [Flutter Mobile Design](docs/superpowers/specs/2026-10-16-flutter-mobile-design.md) | Approved Android/iOS scope, architecture, and acceptance criteria |
+| [Flutter Validation](docs/flutter-validation.md)                                    | Actual runtime/build evidence and remaining device acceptance     |
 
 The [Desktop Development guide](docs/desktop.md) describes the integrated Tauri client, native commands, CI, and platform validation limits. Windows and macOS work is tracked in the [implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md); [media validation](docs/desktop-media-validation.md) records actual evidence and pending platform checks.
