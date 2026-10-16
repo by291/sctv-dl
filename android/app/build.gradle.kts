@@ -6,6 +6,19 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+fun gitOutput(vararg arguments: String): String = providers.exec {
+    workingDir(rootProject.projectDir)
+    commandLine("git", *arguments)
+}.standardOutput.asText.get().trim()
+
+// Commit counts are reproducible version codes only when the complete history is available.
+check(gitOutput("rev-parse", "--is-shallow-repository") == "false") {
+    "Android version codes require full Git history. Run git fetch --unshallow before building."
+}
+val gitCommitCount = gitOutput("rev-list", "--count", "HEAD").toInt()
+val gitShortCommit = gitOutput("rev-parse", "--short=7", "HEAD")
+
 android {
     namespace = "dev.sctvdl.app"
     compileSdk = 37
@@ -13,8 +26,8 @@ android {
         applicationId = "dev.sctvdl.app"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = gitCommitCount
+        versionName = "0.1.1-$gitShortCommit"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {

@@ -30,6 +30,8 @@ On macOS or Linux:
 
 Outputs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release-unsigned.apk`. The debug APK is installable. The optimized release APK uses R8 and resource shrinking and requires your release signing identity before distribution. Signing keys and passwords must remain outside tracked files.
 
+Build from a complete Git checkout with Git available on `PATH`. The displayed version is `0.1.1-<short-commit-id>`, and Android's installation `versionCode` is the number of commits reachable from `HEAD`. New descendant commits increase the code; rebuilding the same commit retains its version. A shallow checkout is rejected to prevent a smaller or repeated version code; run `git fetch --unshallow` first. Android CI fetches the complete history. The settings page reads the installed package version, including its commit suffix. Upstream compatibility headers keep their separate official APK version.
+
 Debug and release use separate application IDs and launcher labels, so both can be installed on the same device. Each installation has its own app data, favourites, settings, and download history.
 
 | Build type | Application ID         | Application name |

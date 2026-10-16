@@ -15,8 +15,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.settings.AppSettings
@@ -33,6 +35,11 @@ internal fun SettingsScreen(
     onQuality: (Quality) -> Unit,
     onWifi: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val versionName = remember(context) {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+    }
+
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("设置") })
         LazyColumn(
@@ -93,7 +100,7 @@ internal fun SettingsScreen(
                 PreferenceGroup("关于") {
                     Text("蜀台回看", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "sctv-dl · 0.1.0",
+                        "sctv-dl · $versionName",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
