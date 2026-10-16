@@ -1,10 +1,10 @@
 mod http;
-mod policy;
+pub(crate) mod policy;
 
 pub use http::{MediaConfig, MediaServer};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Quality {
     Standard,

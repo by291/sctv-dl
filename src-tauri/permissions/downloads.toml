@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "download-api"
+description = "Allows the local main window to manage native programme downloads and select their directory."
+commands.allow = ["start_downloads", "list_downloads", "subscribe_downloads", "unsubscribe_downloads", "cancel_download", "get_download_directory", "choose_download_directory"]

@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Allows core window operations and native programme requests for the local main window",
   "windows": ["main"],
-  "permissions": ["core:default", "programme-api"]
+  "permissions": ["core:default", "programme-api", "download-api"]
 }

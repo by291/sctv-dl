@@ -44,7 +44,7 @@ fn app(state: AppState) -> tauri::App<tauri::test::MockRuntime> {
             commands::list_programme_contents,
             commands::cancel_request,
         ])
-        .build(tauri::generate_context!())
+        .build(tauri::generate_context!(test = true))
         .unwrap()
 }
 

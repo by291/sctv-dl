@@ -5,6 +5,89 @@ use tauri_plugin_store::StoreExt;
 use uuid::Uuid;
 
 #[test]
+fn propagates_identity_save_failures_without_overwriting_the_existing_store() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    let original = br#"{"unrelated":true}"#;
+    std::fs::write(&path, original).unwrap();
+    let app = mock_builder()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let store = app
+        .store_builder(&path)
+        .disable_auto_save()
+        .serialize(|_| Err(std::io::Error::other("injected save failure").into()))
+        .build()
+        .unwrap();
+    assert_eq!(installation_id(&store).unwrap_err().code, "storage");
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn failed_directory_save_rolls_back_memory_and_preserves_persisted_identity() {
+    use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    let app = mock_builder()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let store = app
+        .store_builder(&path)
+        .disable_auto_save()
+        .serialize(|values| {
+            if values.contains_key("downloadDirectory") {
+                Err(std::io::Error::other("injected save failure").into())
+            } else {
+                Ok(serde_json::to_vec(values)?)
+            }
+        })
+        .build()
+        .unwrap();
+    let identity = installation_id(&store).unwrap();
+    let original = std::fs::read(&path).unwrap();
+    assert_eq!(
+        save_download_directory(&store, root.path())
+            .unwrap_err()
+            .code,
+        "storage"
+    );
+    assert!(download_directory(&store).unwrap().is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert_eq!(store.get("installationId").unwrap(), identity);
+}
+
+#[test]
+fn stores_download_directories_privately_and_rejects_missing_locations() {
+    use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
+    let directory = tempfile::tempdir().unwrap();
+    let destination = directory.path().join("downloads");
+    std::fs::create_dir(&destination).unwrap();
+    let app = mock_builder()
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let store = app
+        .store_builder(directory.path().join("desktop.json"))
+        .disable_auto_save()
+        .build()
+        .unwrap();
+    let identity = installation_id(&store).unwrap();
+    assert!(download_directory(&store).unwrap().is_none());
+    save_download_directory(&store, &destination).unwrap();
+    assert_eq!(
+        download_directory(&store).unwrap(),
+        Some(destination.canonicalize().unwrap())
+    );
+    assert_eq!(store.get("installationId").unwrap(), identity);
+    assert!(store.get("preferences").is_none());
+    assert!(save_download_directory(&store, &directory.path().join("missing")).is_err());
+    std::fs::remove_dir(&destination).unwrap();
+    assert_eq!(download_directory(&store).unwrap_err().code, "storage");
+}
+
+#[test]
 fn creates_and_reloads_one_persisted_installation_identity() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("desktop.json");

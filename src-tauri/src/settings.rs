@@ -1,9 +1,104 @@
-use std::io::ErrorKind;
-use tauri::Runtime;
+use std::{
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use tauri::{AppHandle, Runtime};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_store::Store;
 use uuid::Uuid;
 
 use crate::error::{AppError, Result};
+
+pub struct DirectorySettings<R: Runtime> {
+    pub store: Result<Arc<Store<R>>>,
+    selection: tokio::sync::Mutex<()>,
+}
+impl<R: Runtime> DirectorySettings<R> {
+    pub fn new(store: Result<Arc<Store<R>>>) -> Self {
+        Self {
+            store,
+            selection: tokio::sync::Mutex::new(()),
+        }
+    }
+
+    pub async fn choose(
+        &self,
+        app: &AppHandle<R>,
+        only_if_missing: bool,
+    ) -> Result<Option<PathBuf>> {
+        let _selection = self.selection.lock().await;
+        let store = self.store.as_ref().map_err(Clone::clone)?;
+        if only_if_missing && let Some(path) = download_directory(store)? {
+            return Ok(Some(path));
+        }
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .file()
+            .set_title("选择视频下载文件夹")
+            .pick_folder(move |path| {
+                let _ = sender.send(path);
+            });
+        let path = receiver
+            .await
+            .map_err(|_| AppError::new("storage", "无法打开文件夹选择器"))?;
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        let path = path
+            .into_path()
+            .map_err(|_| AppError::new("storage", "请选择本机文件夹"))?;
+        save_download_directory(store, &path)?;
+        download_directory(store)
+    }
+}
+
+pub fn download_directory<R: Runtime>(store: &Store<R>) -> Result<Option<PathBuf>> {
+    let Some(value) = store.get("downloadDirectory") else {
+        return Ok(None);
+    };
+    let path = value
+        .as_str()
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| AppError::new("storage", "保存的下载目录无效，请重新选择"))?;
+    let path = Path::new(path)
+        .canonicalize()
+        .map_err(|_| AppError::new("storage", "下载目录已不可用，请在设置中重新选择"))?;
+    if !path.is_dir() {
+        return Err(AppError::new("storage", "下载位置不是文件夹，请重新选择"));
+    }
+    Ok(Some(path))
+}
+
+pub fn save_download_directory<R: Runtime>(store: &Store<R>, path: &Path) -> Result<()> {
+    let path = path
+        .canonicalize()
+        .map_err(|_| AppError::new("storage", "下载目录已不可用，请重新选择"))?;
+    let text = path
+        .to_str()
+        .ok_or_else(|| AppError::new("storage", "无法保存此目录路径，请选择其他文件夹"))?;
+    // Validate write access without acquiring the manager's long-lived directory lock.
+    tempfile::Builder::new()
+        .prefix(".sctv-dl-directory-check-")
+        .tempfile_in(&path)
+        .and_then(|file| file.close())
+        .map_err(|_| AppError::new("storage", "下载目录无法写入，请选择其他文件夹"))?;
+    let previous = store.get("downloadDirectory");
+    store.set("downloadDirectory", serde_json::json!(text));
+    if store.save().is_err() {
+        if let Some(previous) = previous {
+            store.set("downloadDirectory", previous);
+        } else {
+            store.delete("downloadDirectory");
+        }
+        store.close_resource();
+        return Err(AppError::new(
+            "storage",
+            "无法保存下载目录，请检查应用数据目录",
+        ));
+    }
+    Ok(())
+}
 
 pub fn installation_id<R: Runtime>(store: &Store<R>) -> Result<String> {
     let result = read_installation_id(store);
