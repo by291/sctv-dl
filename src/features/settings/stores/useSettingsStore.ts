@@ -12,36 +12,43 @@ export const useSettingsStore = defineStore('settings', () => {
 
   let port: SettingsPort | undefined
   let unsubscribe: (() => void) | undefined
-  let generation = 0
-  let revision = 0
-  let localRevision = 0
-  let unsaved = 0
-  let applying = false
-  let pending = Promise.resolve()
+
+  // A replacement connection invalidates every pending load, subscription, and queued save.
+  let connectionVersion = 0
+
+  // External snapshots advance the shared revision; only user edits advance the local revision.
+  let snapshotRevision = 0
+  let localEditRevision = 0
+  let applyingSnapshot = false
+
+  let pendingSaveCount = 0
+  let saveQueue = Promise.resolve()
 
   function snapshot(): Settings {
     return structuredClone(toRaw(value.value))
   }
 
-  function save(current: SettingsPort, next: Settings) {
-    const currentGeneration = generation
-    unsaved += 1
-    pending = pending.then(async () => {
+  function queueSave(current: SettingsPort, next: Settings): void {
+    const version = connectionVersion
+    pendingSaveCount += 1
+
+    saveQueue = saveQueue.then(async () => {
       try {
-        if (currentGeneration !== generation) {
+        if (version !== connectionVersion) {
           return
         }
 
         await current.save(next)
-        if (currentGeneration === generation) {
+
+        if (version === connectionVersion) {
           persisted.value = true
         }
       } catch {
-        if (currentGeneration === generation) {
+        if (version === connectionVersion) {
           persisted.value = false
         }
       } finally {
-        unsaved -= 1
+        pendingSaveCount -= 1
       }
     })
   }
@@ -49,45 +56,55 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(
     value,
     () => {
-      if (applying) {
+      if (applyingSnapshot) {
         return
       }
 
-      revision += 1
-      localRevision += 1
+      snapshotRevision += 1
+      localEditRevision += 1
+
       if (port) {
-        save(port, snapshot())
+        queueSave(port, snapshot())
       }
     },
     { deep: true, flush: 'sync' },
   )
 
-  function apply(next: Settings) {
-    applying = true
-    value.value = settingsSchema.parse(next)
-    applying = false
+  function applySnapshot(next: Settings): void {
+    const parsed = settingsSchema.parse(next)
+    applyingSnapshot = true
+
+    try {
+      value.value = parsed
+    } finally {
+      applyingSnapshot = false
+    }
   }
 
   async function hydrate(next: SettingsPort): Promise<void> {
     unsubscribe?.()
     unsubscribe = undefined
-    generation += 1
-    const currentGeneration = generation
-    const initialRevision = revision
-    const initialLocalRevision = localRevision
+    connectionVersion += 1
+    const version = connectionVersion
+    const initialSnapshotRevision = snapshotRevision
+    const initialLocalEditRevision = localEditRevision
     port = undefined
+
     try {
+      // Subscribe first so changes during the initial load cannot be lost to its older snapshot.
       const dispose = await next.subscribe((incoming) => {
+        // Save notifications must not replace edits that are still waiting in our queue.
         if (
-          currentGeneration === generation &&
-          !unsaved &&
-          (port || localRevision === initialLocalRevision)
+          version === connectionVersion &&
+          pendingSaveCount === 0 &&
+          (port || localEditRevision === initialLocalEditRevision)
         ) {
-          revision += 1
-          apply(incoming)
+          snapshotRevision += 1
+          applySnapshot(incoming)
         }
       })
-      if (currentGeneration !== generation) {
+
+      if (version !== connectionVersion) {
         dispose()
 
         return
@@ -95,21 +112,24 @@ export const useSettingsStore = defineStore('settings', () => {
 
       unsubscribe = dispose
       const loaded = await next.load()
-      if (currentGeneration !== generation) {
+
+      if (version !== connectionVersion) {
         return
       }
 
       persisted.value = loaded.persisted
-      if (revision === initialRevision) {
-        apply(loaded.value)
+
+      if (snapshotRevision === initialSnapshotRevision) {
+        applySnapshot(loaded.value)
       }
 
       port = next
-      if (localRevision !== initialLocalRevision) {
-        save(next, snapshot())
+
+      if (localEditRevision !== initialLocalEditRevision) {
+        queueSave(next, snapshot())
       }
     } catch {
-      if (currentGeneration === generation) {
+      if (version === connectionVersion) {
         persisted.value = false
         port = next
       }
@@ -117,11 +137,13 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function flush(): Promise<void> {
+    // Edits made during a save append work, so await the queue until its tail stops changing.
     let saving: Promise<void>
+
     do {
-      saving = pending
+      saving = saveQueue
       await saving
-    } while (saving !== pending)
+    } while (saving !== saveQueue)
   }
 
   function preference<K extends keyof Settings>(key: K) {
@@ -137,14 +159,14 @@ export const useSettingsStore = defineStore('settings', () => {
   const theme = preference('theme')
   const favourites = preference('favourites')
 
-  function toggleFavourite(id: string) {
+  function toggleFavourite(id: string): void {
     favourites.value = favourites.value.includes(id)
       ? favourites.value.filter((value) => value !== id)
       : [...favourites.value, id]
   }
 
   onScopeDispose(() => {
-    generation += 1
+    connectionVersion += 1
     unsubscribe?.()
     port = undefined
   })

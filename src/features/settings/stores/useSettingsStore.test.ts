@@ -190,3 +190,76 @@ it('flush waits for edits added while an earlier save is pending', async () => {
   expect(writes).toBe(2)
   store.$dispose()
 })
+
+it('releases an older connection when its subscription arrives after replacement', async () => {
+  const store = useSettingsStore()
+  const subscription = deferred<() => void>()
+  const dispose = vi.fn()
+  let notify: (value: Settings) => void = () => {}
+
+  let oldLoads = 0
+
+  const oldConnection = store.hydrate({
+    subscribe: (listener) => {
+      notify = listener
+
+      return subscription.promise
+    },
+    load: async () => {
+      oldLoads += 1
+
+      return {
+        value: { theme: 'light', quality: 'standard', favourites: [] },
+        persisted: true,
+      }
+    },
+    save: async () => {},
+  })
+  await store.hydrate({
+    subscribe: async () => () => {},
+    load: async () => ({
+      value: { theme: 'dark', quality: 'smooth', favourites: ['2'] },
+      persisted: true,
+    }),
+    save: async () => {},
+  })
+
+  subscription.resolve(dispose)
+  await oldConnection
+  notify({ theme: 'light', quality: 'standard', favourites: ['1'] })
+
+  expect(dispose).toHaveBeenCalledOnce()
+  expect(oldLoads).toBe(0)
+  expect(store.theme).toBe('dark')
+  expect(store.favourites).toEqual(['2'])
+  store.$dispose()
+})
+
+it('releases a subscription that arrives after disposal without loading settings', async () => {
+  const store = useSettingsStore()
+  const subscription = deferred<() => void>()
+  const dispose = vi.fn()
+  let loads = 0
+
+  const ready = store.hydrate({
+    subscribe: () => subscription.promise,
+    load: async () => {
+      loads += 1
+
+      return {
+        value: { theme: 'dark', quality: 'smooth', favourites: ['1'] },
+        persisted: true,
+      }
+    },
+    save: async () => {},
+  })
+  store.$dispose()
+
+  subscription.resolve(dispose)
+  await ready
+
+  expect(dispose).toHaveBeenCalledOnce()
+  expect(loads).toBe(0)
+  expect(store.theme).toBe('system')
+  expect(store.favourites).toEqual([])
+})

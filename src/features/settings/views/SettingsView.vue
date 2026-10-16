@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 
 import { NButton, NRadioGroup, NRadioButton } from 'naive-ui'
 import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
 import { usePlatform } from '@/shared/platform/usePlatform'
-import { errorMessage } from '@/shared/utils/errors'
-
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
+import { useDownloadDirectory } from '@/features/settings/composables/useDownloadDirectory'
 
 const themeOptions = [
   { label: '跟随系统', value: 'system' },
@@ -16,73 +15,41 @@ const themeOptions = [
   { label: '深色', value: 'dark' },
 ]
 
-const downloads = usePlatform().downloads
-const nativeDownloads = downloads.kind === 'native' ? downloads : undefined
-const directory = ref<string | null>(null)
-const directoryError = ref('')
-const directoryBusy = ref(false)
-let disposed = false
-let directoryRevision = 0
-
-async function loadDirectory() {
-  if (!nativeDownloads) {
-    return
-  }
-
-  const current = ++directoryRevision
-  try {
-    const path = await nativeDownloads.getDirectory()
-    if (!disposed && current === directoryRevision) {
-      directory.value = path
-      directoryError.value = ''
-    }
-  } catch (cause) {
-    if (!disposed && current === directoryRevision) {
-      directoryError.value = errorMessage(cause)
-    }
-  }
-}
-
-async function chooseDirectory() {
-  if (!nativeDownloads || directoryBusy.value) {
-    return
-  }
-
-  directoryBusy.value = true
-  const current = ++directoryRevision
-  try {
-    const path = await nativeDownloads.chooseDirectory()
-    if (!disposed && current === directoryRevision && path !== null) {
-      directory.value = path
-      directoryError.value = ''
-    } else if (!disposed && current === directoryRevision) {
-      await loadDirectory()
-    }
-  } catch (cause) {
-    if (!disposed && current === directoryRevision) {
-      directoryError.value = errorMessage(cause)
-    }
-  } finally {
-    if (!disposed) {
-      directoryBusy.value = false
-    }
-  }
-}
-
-onBeforeUnmount(() => {
-  disposed = true
-})
-
 const settings = useSettingsStore()
 const programmes = useProgrammeCatalogueStore()
+const {
+  directory,
+  error: directoryError,
+  busy: directoryBusy,
+  canChooseDirectory,
+  chooseDirectory,
+} = useDownloadDirectory(usePlatform().downloads)
+
 const lastUpdated = computed(
   () =>
     programmes.updatedAt?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) ||
     '尚未检查',
 )
+const directoryDescription = computed(
+  () =>
+    directory.value ||
+    (directoryError.value ? '请选择可用的下载文件夹。' : '尚未选择，首次下载时会询问。'),
+)
+const connectionLabel = computed(() => {
+  if (programmes.error) {
+    return '连接暂时不可用'
+  }
+
+  return programmes.updatedAt ? '已连接四川观察节目服务' : '正在检查连接'
+})
+const connectionDescription = computed(
+  () =>
+    programmes.error ||
+    `已读取 ${programmes.programmes.length} 个栏目 · 最近检查 ${lastUpdated.value}`,
+)
+
 onMounted(() => {
   void programmes.load()
-  void loadDirectory()
 })
 </script>
 
@@ -126,13 +93,10 @@ onMounted(() => {
           <div class="setting-description">
             <h3 class="setting-label">保存位置</h3>
             <p
-              v-if="nativeDownloads"
+              v-if="canChooseDirectory"
               class="setting-help download-directory"
             >
-              {{
-                directory ||
-                (directoryError ? '请选择可用的下载文件夹。' : '尚未选择，首次下载时会询问。')
-              }}
+              {{ directoryDescription }}
             </p>
             <p
               v-else
@@ -149,7 +113,7 @@ onMounted(() => {
             </p>
           </div>
           <NButton
-            v-if="nativeDownloads"
+            v-if="canChooseDirectory"
             secondary
             :loading="directoryBusy"
             @click="chooseDirectory"
@@ -201,19 +165,10 @@ onMounted(() => {
                 class="status-dot connection-status"
                 :class="{ offline: programmes.error }"
               />
-              {{
-                programmes.error
-                  ? '连接暂时不可用'
-                  : programmes.updatedAt
-                    ? '已连接四川观察节目服务'
-                    : '正在检查连接'
-              }}
+              {{ connectionLabel }}
             </h3>
             <p class="setting-help">
-              {{
-                programmes.error ||
-                `已读取 ${programmes.programmes.length} 个栏目 · 最近检查 ${lastUpdated}`
-              }}
+              {{ connectionDescription }}
             </p>
           </div>
           <NButton
