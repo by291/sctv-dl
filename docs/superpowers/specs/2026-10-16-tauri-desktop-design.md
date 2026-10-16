@@ -1,6 +1,6 @@
 # Shared Web and Tauri Desktop Design
 
-Status: proposal for implementation planning; no desktop implementation has started.
+Status: initial implementation authorized and in progress. Shared contracts and Web/Node adaptation are implemented; the macOS native shell builds and launches. Native business services and the two-platform media gate remain pending. See the [implementation plan](../plans/2026-10-16-tauri-desktop.md) for phase status and validation limits.
 
 ## Intent and Acceptance Boundary
 
@@ -8,7 +8,7 @@ Add Windows and macOS applications using Tauri 2 while retaining the existing We
 
 The frontend owns rendering, user interaction, selection, filtering, sorting for display, and transient view state. Node owns Web upstream integration; Rust owns desktop upstream integration, native persistence, media access, and file transfers. The frontend validates application DTOs but does not implement the upstream guest profile, parse upstream envelopes, control file writes, or transport video bytes through JavaScript.
 
-Planning assumptions to review before execution:
+First-release scope and acceptance assumptions:
 
 - Proposed first-release matrix: Windows 10/11 x64; macOS 13 or newer on Apple Silicon and Intel. This is a product target, not a statement of Tauri's minimum requirements. Test the lowest supported OS versions before claiming support.
 - Preserve all current browsing, archive, favourites, themes, quality selection, batch selection, and preview behaviour.
