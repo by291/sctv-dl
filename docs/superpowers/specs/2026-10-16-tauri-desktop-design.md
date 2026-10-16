@@ -1,6 +1,6 @@
 # Shared Web and Tauri Desktop Design
 
-Status: implementation authorized and in progress. Shared contracts, Web/Node adaptation, native metadata services, and the metadata adapter are implemented. The macOS shell builds and launches. A Rust media-only HTTP candidate passes protocol/lifecycle tests and bundled macOS playback checks; the current custom-protocol interface cannot meet the streaming/cancellation contract. Windows, complete memory acceptance, normal native startup composition, and playback UI integration remain pending. See the [implementation plan](../plans/2026-10-16-tauri-desktop.md) for phase status and validation limits.
+Status: implementation authorized and in progress. Shared contracts, Web/Node adaptation, native metadata services, the metadata adapter, and native download services/task presentation are implemented and tested. A disposable macOS download probe checked directory cancellation, progress, cancellation/retry, and exact saved bytes. The macOS shell builds and launches. A Rust media-only HTTP candidate passes protocol/lifecycle tests and bundled macOS playback checks; the current custom-protocol interface cannot meet the streaming/cancellation contract. Windows, complete memory acceptance, normal native startup composition, and playback UI integration remain pending. See the [implementation plan](../plans/2026-10-16-tauri-desktop.md) for phase status and validation limits.
 
 ## Intent and Acceptance Boundary
 
