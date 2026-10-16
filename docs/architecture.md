@@ -13,13 +13,13 @@ flowchart LR
     Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com"]
 ```
 
-The service streams video with backpressure. It does not save videos or maintain download jobs. A Tauri scaffold under `src-tauri/` bundles the same frontend; native metadata commands and their adapter exist, while regular native startup composition is still in progress. See [Desktop Development](desktop.md) for the current boundary.
+The service streams video with backpressure. It does not save videos or maintain download jobs. The Tauri client under `src-tauri/` bundles the same frontend and selects native adapters at startup. Rust owns its metadata, opaque playback sessions and streaming media listener, file downloads, and persistence. Desktop routing uses hash history; Web retains ordinary history routes. See [Desktop Development](desktop.md) for the current boundary.
 
 ## Module Ownership
 
 | Module                                 | Responsibility                                                                     |
 | -------------------------------------- | ---------------------------------------------------------------------------------- |
-| `src/main.ts`                          | Browser entry: install Pinia and the router, then mount the app                    |
+| `src/main.ts`                          | Shared entry: select platform, hydrate settings, install Pinia/router, and mount   |
 | `src/App.vue`                          | Root Naive UI providers                                                            |
 | `src/layouts/`                         | Application navigation shell and cached route presentation                         |
 | `src/router/`                          | Route composition, lazy page imports, and scroll behaviour                         |
@@ -96,7 +96,7 @@ Individual rows and the batch action share `ProgrammeDownloadButton`. Clicking o
 
 `server/programmes/download-file.ts` resolves the actual quality and sanitizes filenames. The browser submits programme/date/content IDs to `/client-api/v1/downloads/prepare`; the backend fetches matching records and derives the broadcast date. The Web download adapter processes prepared files independently. `handOffDownload` performs a HEAD request through the media proxy and validates video content type and attachment headers before clicking a temporary download link.
 
-`useProgrammeDownloads` tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. The composable returns the selected platform's typed start result; the archive view presents browser handoffs or native queue acceptance, fallbacks, and per-file failures without navigation. Native preparation failures are also retained in the shared download task store. Native services, the Channel adapter, and a lazy shell-level task drawer are implemented, while current startup still composes Web adapters. See [Desktop Development](desktop.md) for native queue/file ownership and remaining integration work.
+`useProgrammeDownloads` tracks only IDs undergoing preparation. This prevents duplicate clicks during preflight, while allowing later retries. Files are processed independently; a failed preflight does not stop the rest of a batch. The composable returns the selected platform's typed start result; the archive view presents browser handoffs or native queue acceptance, fallbacks, and per-file failures without navigation. Native preparation failures are also retained in the shared download task store. The native platform composes Rust services, the Channel adapter, and a lazy shell-level task drawer. See [Desktop Development](desktop.md) for native queue/file ownership and platform acceptance.
 
 A handoff means the browser was asked to save a file. The browser owns transfer progress, destination, pause, cancellation, resume, and completion. There is no persistent queue or download history, and the legacy `sctv-dl:downloads` key is not read. Video is never fully buffered into a page Blob.
 
@@ -104,7 +104,7 @@ A handoff means the browser was asked to save a file. The browser owns transfer 
 
 The shared settings store owns reactive preferences and consumes an injected settings port. Startup hydrates that port before mounting the regular UI. Subscription updates and delayed loads cannot overwrite newer local edits; asynchronous saves are serialized, and failed writes retain usable in-memory values with a platform-neutral warning. Store disposal removes subscriptions.
 
-The Web adapter retains VueUse persistence, the existing `sctv-dl:settings` key, and browser-tab synchronization. Zod supplies defaults for invalid fields; damaged JSON falls back to defaults. The native adapter uses validated domain commands backed by Rust and the official Store plugin. Native identity and directory remain outside the shared DTO. See [Desktop Development](desktop.md) for composition and exit integration limits.
+The Web adapter retains VueUse persistence, the existing `sctv-dl:settings` key, and browser-tab synchronization. Zod supplies defaults for invalid fields; damaged JSON falls back to defaults. The native adapter uses validated domain commands backed by Rust and the official Store plugin. Native identity and directory remain outside the shared DTO. See [Desktop Development](desktop.md) for composition and coordinated exit.
 
 Theme defaults to following the system, while valid saved choices are retained. Saved quality controls the initial preview variant; each download chooses its own quality.
 

@@ -1,6 +1,6 @@
 # Desktop Development
 
-The repository contains a Tauri 2 shell, shared contracts/Web adapters, native programme services, a Rust media transport candidate, and native download services with a task panel. The normal application still starts with Web adapters; native preference/exit foundations are implemented. Full native composition, playback integration, and frontend save acknowledgement before exit remain later integration work. It is not a complete desktop client.
+One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application has been checked with bundled assets and Node stopped. Windows, Intel/minimum macOS, and public signed distribution still need their own acceptance evidence.
 
 ## Commands and Prerequisites
 
@@ -13,7 +13,7 @@ pnpm desktop:dev
 pnpm desktop:build
 ```
 
-Development starts Vite on port 5180. At this stage it still uses the Web business adapters and Node middleware. Production bundles `dist/` into the application using Tauri's default asset protocol. A packaged shell can display the interface without Node, but its regular pages do not select the native adapter yet. The native command bridge has been checked separately with bundled assets and Node stopped; full startup selection remains Task 7.
+Development starts Vite on port 5180 for frontend assets and HMR. Inside Tauri, business requests use native commands even during development. Production bundles `dist/` with Tauri's default asset protocol and needs no Node process. The browser uses history routes; desktop uses hash routes so navigation and reloads retain the bundled entry document.
 
 To build only a local macOS application bundle:
 
@@ -23,7 +23,7 @@ pnpm desktop:build --bundles app
 
 The output is under `src-tauri/target/release/bundle/`. macOS builds use an ad-hoc signature for local validation; they are not notarized public releases. The proposed macOS minimum is 13.0. Windows configuration selects the NSIS installer. Windows builds and runtime behaviour remain unverified in this batch.
 
-Rust checks can be run independently:
+Run the portable combined check with `pnpm desktop:check`, or run Rust checks independently:
 
 ```sh
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
@@ -31,15 +31,15 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
-Native tests cover programme normalization/HTTP, cancellation, command permissions, installation-identity/directory persistence, media streaming/lifecycle, and downloads. HTTP tests use disposable local Axum stubs. Axum and Hyper are runtime dependencies for the media-only HTTP candidate described below; no media listener starts in the regular application yet. Native build products and generated schemas are ignored. Application icons are generated from `public/favicon.svg` with `pnpm tauri icon public/favicon.svg`; keep only the desktop icon outputs when regenerating them.
+Native tests cover programme normalization/HTTP, cancellation, command permissions, installation-identity/directory persistence, media streaming/lifecycle, and downloads. HTTP tests use disposable local Axum stubs. Axum and Hyper implement the media-only HTTP transport described below; normal native startup binds its private loopback listener. Native build products and generated schemas are ignored. Application icons are generated from `public/favicon.svg` with `pnpm tauri icon public/favicon.svg`; keep only the desktop icon outputs when regenerating them.
 
 ## Current Integration Boundary
 
 - `shared/contracts/` contains application DTO schemas and inferred types shared by browser and Node. `shared/fixtures/` contains normalization examples consumed by both Node and Rust tests.
 - `src/shared/platform/` defines injectable programme, playback, download, and settings ports. Components consume ports; native API imports in Vue components are rejected by ESLint.
-- `src/platform/web-platform.ts` composes the current Web adapters. The native programme adapter exists in `programme-api.tauri.ts`, but environment selection remains Task 7 so regular startup cannot mix native metadata with unfinished Web playback/download behaviour.
+- `src/platform/create-platform.ts` calls the official `isTauri()` detector once and dynamically imports the complete Web or native factory. Native initialization errors use the recoverable startup screen; startup never silently substitutes Web business services.
 - Node exposes normalized `/client-api/v1` routes alongside the preserved `/api` and `/media` proxies. See [Upstream API](upstream-api.md) for contracts and [Deployment](deployment.md) for configuration migration.
-- Browser downloads still use HEAD preflight and browser handoff. Native task progress, file saving, and directory selection are implemented behind the native download port. Regular startup selection remains Task 7; native close/menu confirmation is implemented in Rust.
+- Browser downloads still use HEAD preflight and browser handoff. Native task progress, file saving, and directory selection are implemented behind the native download port. The native shell provides the task drawer and native close/menu confirmation.
 
 ## Native Programme Commands
 
@@ -51,13 +51,17 @@ Before exposing services, startup loads a private `desktop.json` using the [offi
 
 Cancellation drops pending native HTTP/body futures. Cancellation that precedes registration is retained for at most 60 seconds, with a maximum of 1,024 unique markers. Registration consumes its marker; dropping or completing a request releases its active entry. No production command accepts a test origin or timeout override.
 
-## Native Media Transport Candidate
+## Native Playback and Media Transport
 
 `src-tauri/src/media/` implements a Rust-owned, media-only HTTP service. It binds `127.0.0.1` on an OS-assigned port. Rust registers validated sources under unpredictable session tokens; HTTP callers cannot supply an upstream URL. Default production policy allows only HTTPS MP4 files on `fscgc.scgchc.com`, with no credentials or nondefault port. Redirects are rejected. Media requests insert only the media Referer and forward Range/If-Range; guest headers, cookies, and authorization are not forwarded.
 
 The service handles GET, HEAD, and OPTIONS, validates Host and any supplied Origin, and preserves media response headers including 206/416 ranges. Headers have a 20-second deadline; upstream reads have a 30-second idle deadline with no whole-video timeout. A capacity-one channel applies backpressure. Its producer owns the upstream response independently of downstream body polling, so session cancellation releases upstream work even when the player stops reading. Shutdown cancels sessions and terminates all owned HTTP connections, including stalled clients.
 
-The current Tauri custom-protocol API accepts a complete response body rather than a cancellable response stream, so this is the fallback candidate from the design. A disposable macOS bundled probe passed playback, seeking, source switching, and close/reopen checks. Windows WebView2, complete process-memory measurement, and final transport acceptance remain pending. Playback commands, domain-source resolution, the Tauri playback adapter, production CSP changes, and shared player integration have not been added. Frontend assets continue to use Tauri's normal bundled-asset protocol.
+`open_playback(request, requestId)` accepts programme/date/content IDs and quality. Rust resolves the selected date/content, validates available sources, applies quality fallback, and returns an opaque session URL per variant. `close_playback(sessionId)` is idempotent. The local-main-window `playback-api` capability grants these commands; callers cannot register arbitrary upstream URLs.
+
+The shared preview opens sessions through `PlaybackPort`, shows loading/error/retry states, and cancels superseded work. A session arriving after cancellation or malformed IPC validation is closed. Closing pauses immediately and releases the player/session after the modal leave animation; reopening cannot be cleared by an old callback. Artplayer's quality switch retains playback time. PiP checks both the standard and WebKit APIs; fullscreen checks the active WebView's support.
+
+The current custom-protocol response API requires complete response bodies, so the implementation selects streaming loopback HTTP. This implementation decision is separate from release acceptance: Windows WebView2 and complete process-memory measurements remain unverified. CSP permits loopback URLs only for media; metadata and player controls remain IPC. Frontend assets use the normal Tauri protocol, without the Localhost plugin.
 
 ## Native Downloads
 
@@ -71,18 +75,24 @@ Each destination directory has a small `.sctv-dl.lock` ownership marker, retaine
 
 The TypeScript adapter validates command/channel payloads. The shared download store subscribes before requesting its snapshot and merges monotonic revisions, preserving terminal events that arrive during hydration. Its desktop-only task drawer remains in the application shell across page navigation, shows received bytes/unknown totals, and offers cancel/retry. Retry uses the content reference and actual quality. Preparation failures remain visible in the drawer. The drawer loads lazily, so Web startup does not load its UI chunk.
 
-Task history is limited to the current process; no restart resume is implemented. Application exit stops admission and awaits blocking directory preparation, transfer cancellation, and file cleanup before releasing directory locks. Rust coordinates close/menu confirmation and pending native operations as described below. Complete native platform composition remains Task 7. Installed Windows behaviour is still unverified; the macOS probe and automated evidence are recorded below.
+Task history is limited to the current process; no restart resume is implemented. Application exit stops admission and awaits blocking directory preparation, transfer cancellation, and file cleanup before releasing directory locks. Rust coordinates close/menu confirmation and pending native operations as described below. Installed Windows behaviour is still unverified; the macOS probe and automated evidence are recorded below.
 
 ## Preferences and Exit Integration
 
 `load_settings()` and `save_settings(value)` expose only quality, theme, and favourite string IDs to the local main window under `settings-api`. Rust normalizes the same defaults as the shared schema, limits save payloads to 16 KiB, and preserves private identity/directory values. Native read failures return usable defaults with `persisted: false`; write failures propagate and roll back Store memory. A shared mutex serializes preference and directory writes. The Store plugin's direct filesystem write is not claimed to be atomic after a partial OS write.
 
-The native settings adapter validates snapshots. The shared settings store subscribes before load, preserves newer edits and subscription updates, serializes saves, ignores older save echoes while writes are pending, and detaches on disposal. Normal Web startup now hydrates its existing Web port before mounting; an unexpected startup failure offers retry. The directory UI is native-only and retains browser-managed copy for Web. Its operation revisions reject stale directory responses, and picker cancellation rechecks the saved location so an unresolved error stays visible.
+The native settings adapter validates snapshots. The shared settings store subscribes before load, preserves newer edits and subscription updates, serializes saves, ignores older save echoes while writes are pending, and detaches on disposal. Both platforms hydrate their selected settings port before mounting; an unexpected startup failure offers retry. The directory UI is native-only and retains browser-managed copy for Web. Its operation revisions reject stale directory responses, and picker cancellation rechecks the saved location so an unresolved error stays visible.
 
-The Rust exit controller rejects new mutating commands while closing, waits for in-flight preparation, pickers, and native saves, then checks queued/running downloads. Repeated close requests share the same attempt. Rejecting confirmation reopens admission; accepting cancels and awaits downloads before exiting. Blocking preference writes retain their operation guard even if the IPC future is dropped. Main-window close and the Quit menu/shortcut use this controller.
+The native exit controller first stops new download/picker/playback preparation, then requests a frontend acknowledgement through a Tauri Channel. The settings store drains its serialized save queue, including edits added while a save is pending. Rust permits those saves during preparation, then freezes admission and waits for existing native operations before taking the final task snapshot. A failed acknowledgement or a five-second timeout asks before discarding unsaved settings. Active downloads also require confirmation. Rejecting reopens admission; accepting cancels and awaits file cleanup before exiting. Repeated requests share one attempt. Blocking writes retain their operation guard even if an IPC future is dropped.
 
-Menus retain Tauri's standard application/edit/window structure and ordinary decorations. The predefined Quit item is replaced through the official menu API because on macOS it invokes `terminate:` without the cancellable `ExitRequested` event. The replacement keeps the platform-provided label and Cmd/Ctrl-Q shortcut. Confirmation is parented to the main window; an unparented Dialog message uses a separate system notification on macOS. System Dock Quit remains an [upstream lifecycle limitation](https://github.com/tauri-apps/tauri/issues/12978) and is not claimed to provide this confirmation. Force/process termination is covered only by recognized-leftover recovery.
+Menus retain Tauri's standard application/edit/window structure and ordinary decorations. The predefined Quit item is replaced through the official menu API because macOS otherwise invokes `terminate:` without cancellable `ExitRequested`. The replacement retains the platform label and shortcut. A small macOS-only bridge through `objc2` and AppKit adds the missing `applicationShouldTerminate:` delegate method and forwards Dock/system Quit to the same controller. It preserves the existing TAO delegate and refuses to replace an existing method. Unit coverage checks installation; interactive Dock verification was unavailable because the UI automation server timed out inspecting Dock. Main-window close and menu/shortcut confirmation passed installed-app checks. Confirmation is parented to the main window. Force/process termination relies on recognized-leftover recovery.
 
-Task 7 remains partial: the complete native factory/environment selection depends on the unfinished playback adapter and media gate. No mixed native/Web playback factory or placeholder playback port is exposed. Frontend acknowledgement that all queued preference saves reached Rust before native exit also remains part of that final composition. The isolated native probe explicitly waited for preference saves before its restart checks. These foundations do not establish complete desktop startup or all-path exit acceptance.
+## CI and Distribution
 
-The [implementation plan](superpowers/plans/2026-10-16-tauri-desktop.md) tracks phase status. [Media validation](desktop-media-validation.md) records what was actually checked and what remains open.
+[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025`, Apple Silicon on `macos-15`, and Intel on `macos-15-intel`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs. These workflows were prepared locally; no remote CI run is claimed.
+
+[Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. A default run stays draft. No workflow was dispatched or release published in this implementation session.
+
+Windows secrets are `WINDOWS_CERTIFICATE` (base64 PFX) and `WINDOWS_CERTIFICATE_PASSWORD`. A temporary PFX is imported into the runner's user certificate store, its thumbprint configures Tauri's native signer, and the PFX/certificate/configuration are removed afterward. macOS requires `APPLE_CERTIFICATE` (base64 P12), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`; Tauri handles certificate import and notarization. Missing credentials fail instead of falling back to unsigned public packages. Public distribution still requires operator review of installed-app evidence and signing/notarization results.
+
+Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ support remains a target until tested on those systems. See [validation evidence](desktop-media-validation.md) for the actual host, checks, and remaining limits.

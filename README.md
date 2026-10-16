@@ -1,6 +1,6 @@
 # sctv-dl
 
-A Web app and native Android client for browsing and downloading Sichuan TV programmes.
+A shared Web/Tauri desktop app and native Android client for browsing and downloading Sichuan TV programmes.
 
 Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Preferences are saved in the browser. Downloads go directly to the browser's download manager.
 
@@ -35,19 +35,20 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Production uses one Node se
 
 Commands and dependency versions are defined in `package.json`. Run commands from the repository root.
 
-| Command                             | Purpose                                                    |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `pnpm dev`                          | Frontend and proxies at port 5180                          |
-| `pnpm typecheck`                    | Browser and Node TypeScript checks                         |
-| `pnpm test`                         | Vitest suite                                               |
-| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and CSS rules                          |
-| `pnpm format` / `pnpm format:check` | Format or check source and documentation                   |
-| `pnpm check`                        | Type checking, tests, lint, and formatting                 |
-| `pnpm build`                        | Type checking and production frontend build                |
-| `pnpm preview`                      | Built app and local proxies at port 4173                   |
-| `pnpm start`                        | Production Node service; requires `dist/`                  |
-| `pnpm desktop:dev`                  | Tauri development shell; native integration is in progress |
-| `pnpm desktop:build`                | Build the host platform's desktop package                  |
+| Command                             | Purpose                                         |
+| ----------------------------------- | ----------------------------------------------- |
+| `pnpm dev`                          | Frontend and proxies at port 5180               |
+| `pnpm typecheck`                    | Browser and Node TypeScript checks              |
+| `pnpm test`                         | Vitest suite                                    |
+| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and CSS rules               |
+| `pnpm format` / `pnpm format:check` | Format or check source and documentation        |
+| `pnpm check`                        | Type checking, tests, lint, and formatting      |
+| `pnpm build`                        | Type checking and production frontend build     |
+| `pnpm preview`                      | Built app and local proxies at port 4173        |
+| `pnpm start`                        | Production Node service; requires `dist/`       |
+| `pnpm desktop:dev`                  | Run the desktop client with frontend hot reload |
+| `pnpm desktop:check`                | Check Rust formatting, Clippy, and native tests |
+| `pnpm desktop:build`                | Build the host platform's desktop package       |
 
 The development and preview ports are strict. If 5180 is occupied, choose a free port explicitly, for example `pnpm dev --port 5181`. Restart Vite after configuration changes. Preview is for local build verification.
 
@@ -73,4 +74,4 @@ Both configurations take effect after they reach the default branch on GitHub. D
 | [Android Client Design](docs/android-client-design.md) | Native Compose product, architecture, and acceptance criteria |
 | [Android Client](android/README.md)                    | Native setup, modules, downloads, playback, and verification  |
 
-The [Desktop Development guide](docs/desktop.md) describes the current Tauri scaffold and its limitations. Windows and macOS work is tracked in the [implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md); [media validation](docs/desktop-media-validation.md) records actual evidence and pending platform checks.
+The [Desktop Development guide](docs/desktop.md) describes the integrated Tauri client, native commands, CI, and platform validation limits. Windows and macOS work is tracked in the [implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md); [media validation](docs/desktop-media-validation.md) records actual evidence and pending platform checks.
