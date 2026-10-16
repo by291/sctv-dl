@@ -102,7 +102,9 @@ A handoff means the browser was asked to save a file. The browser owns transfer 
 
 ## Settings
 
-VueUse persistence uses the existing `sctv-dl:settings` key and synchronizes browser tabs. Zod supplies defaults for invalid fields; damaged JSON falls back to defaults. Unavailable storage is surfaced without preventing use of the app.
+The shared settings store owns reactive preferences and consumes an injected settings port. Startup hydrates that port before mounting the regular UI. Subscription updates and delayed loads cannot overwrite newer local edits; asynchronous saves are serialized, and failed writes retain usable in-memory values with a platform-neutral warning. Store disposal removes subscriptions.
+
+The Web adapter retains VueUse persistence, the existing `sctv-dl:settings` key, and browser-tab synchronization. Zod supplies defaults for invalid fields; damaged JSON falls back to defaults. The native adapter uses validated domain commands backed by Rust and the official Store plugin. Native identity and directory remain outside the shared DTO. See [Desktop Development](desktop.md) for composition and exit integration limits.
 
 Theme defaults to following the system, while valid saved choices are retained. Saved quality controls the initial preview variant; each download chooses its own quality.
 
