@@ -6,7 +6,9 @@ const lint = new ESLint()
 async function importMessages(filePath, source) {
   const [result] = await lint.lintText(source, { filePath })
 
-  return result.messages.filter((message) => message.ruleId === 'no-restricted-imports')
+  return result.messages.filter((message) =>
+    ['no-restricted-imports', 'no-restricted-syntax'].includes(message.ruleId),
+  )
 }
 
 describe('module dependency boundaries', () => {
@@ -30,6 +32,10 @@ describe('module dependency boundaries', () => {
     ['server/fixture.ts', '../src/shared/media/video-quality.ts'],
     ['server/fixture.ts', '../tooling/upstream-proxy-plugin.ts'],
     ['server/fixture.ts', 'vite'],
+    ['shared/contracts/fixture.ts', '../../src/main.ts'],
+    ['shared/contracts/fixture.ts', '../../server/main.ts'],
+    ['src/features/programmes/api/fixture.ts', '@/platform/web-platform'],
+    ['src/features/programmes/components/Fixture.vue', '@tauri-apps/api/core'],
   ])('rejects %s importing %s', async (filePath, target) => {
     const source = filePath.endsWith('.vue')
       ? `<script setup lang="ts">\nimport '${target}'\n</script>\n<template><div /></template>`
@@ -51,6 +57,7 @@ describe('module dependency boundaries', () => {
     ['src/shared/media/fixture.test.ts', '@/features/programmes/model/download-file'],
     ['server/fixture.ts', './proxy/proxy-policy.ts'],
     ['tooling/fixture.ts', '../server/proxy/proxy-middleware.ts'],
+    ['shared/contracts/fixture.ts', 'zod'],
   ])('allows %s importing %s', async (filePath, target) => {
     expect(await importMessages(filePath, `import '${target}'`)).toEqual([])
   })

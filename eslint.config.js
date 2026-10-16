@@ -17,13 +17,29 @@ const browserImportPatterns = [
 const featureImportPatterns = [
   ...browserImportPatterns,
   {
-    regex: '^@/(?:App(?:\\.|$)|main(?:\\.|$)|layouts/|router(?:/|$)|theme/)',
+    regex: '^@/(?:App(?:\\.|$)|main(?:\\.|$)|layouts/|router(?:/|$)|theme/|platform/)',
     message: 'Business and shared modules must not depend on application composition.',
   },
 ]
 
 export default defineConfig(
   { ignores: ['dist/**', 'node_modules/**', '.cache/**', '.superpowers/**', 'android/**'] },
+  {
+    files: ['shared/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/|(?:^|/)(?:src|server)(?:/|$)',
+              message: 'Shared contracts must not depend on browser or server implementations.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,vue}'],
     extends: [
@@ -140,6 +156,13 @@ export default defineConfig(
     languageOptions: { parserOptions: { parser: ts.parser } },
     rules: {
       'vue/component-api-style': ['error', ['script-setup']],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportDeclaration[source.value=/^@tauri-apps/]',
+          message: 'Vue components must consume platform ports rather than native APIs.',
+        },
+      ],
       'vue/block-order': ['error', { order: ['script', 'template', 'style'] }],
     },
   },

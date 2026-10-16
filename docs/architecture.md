@@ -58,6 +58,8 @@ Use `@/` for internal browser imports; Vite, Vitest, and the browser TypeScript 
 
 Name modules after their responsibility, such as `programme-api.ts`, `content-presentation.ts`, `download-file.ts`, and `settings-schema.ts`. Vue components use PascalCase; views describe the page (`ProgrammeLibraryView`, `ProgrammeArchiveView`), and composable/store filenames match their `useXxx` exports. Tests remain beside their owners. `useProgrammeCoverNavigation.test.ts` is beside the composable even though it mounts the layout and pages to exercise real navigation. Test fixtures may import application composition and consuming modules; browser/server separation still applies to tests.
 
+Browser imports of the root contracts use `@shared/`, configured in Vite, Vitest, and TypeScript. Direct Node imports of those contracts remain relative with `.ts` extensions. Shared contracts cannot import `src/` or `server/`; feature modules cannot import `src/platform/`; Vue components cannot import native Tauri APIs.
+
 The directory choices are informed by these actual Vue applications, adjusted to this app's three pages rather than copied wholesale:
 
 | Reference                                                                                                                  | Observed organization                                              | Choice here                                                                                  |

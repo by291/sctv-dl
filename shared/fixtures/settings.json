@@ -1,0 +1,13 @@
+[
+  {
+    "raw": {
+      "theme": "invalid",
+      "favourites": ["1", 2, "1", "bad"]
+    },
+    "expected": {
+      "quality": "standard",
+      "theme": "system",
+      "favourites": ["1"]
+    }
+  }
+]

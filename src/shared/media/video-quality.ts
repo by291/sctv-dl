@@ -1,5 +1,3 @@
-import { z } from 'zod'
+export { qualitySchema } from '@shared/contracts/programmes'
 
-export const qualitySchema = z.enum(['standard', 'smooth'])
-
-export type Quality = z.infer<typeof qualitySchema>
+export type { Quality } from '@shared/contracts/programmes'

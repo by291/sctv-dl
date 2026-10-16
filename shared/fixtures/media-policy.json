@@ -1,0 +1,30 @@
+[
+  {
+    "url": "https://fscgc.scgchc.com/a.mp4",
+    "allowed": true
+  },
+  {
+    "url": "https://fscgc.scgchc.com:443/a.mp4",
+    "allowed": true
+  },
+  {
+    "url": "http://fscgc.scgchc.com/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://fscgc.scgchc.com:444/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://evil.example/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://user@fscgc.scgchc.com/a.mp4",
+    "allowed": false
+  },
+  {
+    "url": "https://fscgc.scgchc.com/a.html",
+    "allowed": false
+  }
+]

@@ -30,6 +30,7 @@ Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.j
 - Use `@/` for internal browser imports. Keep programme API/model modules independent of consuming features and production server modules independent of `tooling/`. Within features, place pages in `views/`, business components in `components/`, and logic in its responsibility directory. Omit unused directories; keep tests beside their owners. See Architecture for the ownership map.
 - Validate external input as `unknown` with Zod and infer schema types with `z.infer`. Keep IDs as strings, public functions typed, and type imports separate.
 - The server executes TypeScript directly in Node. Use explicit `.ts` local imports and erasable syntax; avoid enums and parameter properties.
+- Keep `shared/contracts/` platform-neutral. Browser imports use `@shared/`; Node imports use relative `.ts` paths. Compose concrete adapters in `src/platform/`; features must not import that composition layer, and Vue components must not import Tauri APIs.
 
 ### CSS and UI
 

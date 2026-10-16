@@ -1,0 +1,42 @@
+[
+  {
+    "name": "large string ID and distinct variants",
+    "raw": [
+      {
+        "id": "9007199254740992",
+        "title": "News",
+        "video": "/full.mp4",
+        "videoStandard": "/smooth.mp4"
+      }
+    ],
+    "expected": [
+      {
+        "id": "9007199254740992",
+        "title": "News",
+        "cover": null,
+        "video": "https://fscgc.scgchc.com/full.mp4",
+        "smoothVideo": "https://fscgc.scgchc.com/smooth.mp4",
+        "publishedAt": null
+      }
+    ]
+  },
+  {
+    "name": "omitted optional fields",
+    "raw": [
+      {
+        "id": 1,
+        "title": "Clip"
+      }
+    ],
+    "expected": [
+      {
+        "id": "1",
+        "title": "Clip",
+        "cover": null,
+        "video": null,
+        "smoothVideo": null,
+        "publishedAt": null
+      }
+    ]
+  }
+]
