@@ -4,7 +4,7 @@ This record distinguishes the native shell, Web media compatibility, native tran
 
 ## Environment
 
-Validated on 2026-10-16 with macOS 27.0.1, arm64, Rust/Cargo 1.98.0, Node 26.11.1, pnpm 12.9.1, Tauri CLI 2.12.3, and Tauri core 2.12.4. Xcode was available. The proposed macOS 13 minimum, Intel architecture, Windows compilation, and Windows WebView2 runtime were not tested.
+Validated on 2026-10-16 with macOS 27.0.1, arm64, Rust/Cargo 1.98.0, Node 26.11.1, pnpm 12.9.1, Tauri CLI 2.12.3, and Tauri core 2.12.4. Xcode was available. The proposed macOS 13 minimum, Windows compilation, and Windows WebView2 runtime were not tested.
 
 ## Native Shell
 
@@ -90,7 +90,7 @@ No complete episode was downloaded. This checks the candidate's real upstream ac
 
 ## Transport Acceptance Boundary
 
-The custom-protocol interface has been ruled out; media-only HTTP is selected and integrated. Windows WebView2 and complete memory evidence remain release acceptance requirements. The revised [design](superpowers/specs/2026-10-16-tauri-desktop-design.md) separates that acceptance from completing application integration. Repeat native seeking, source switching, cleanup, and memory checks on Windows and the final installed application. The proposed minimum OS versions, Intel macOS, and Windows compilation/runtime remain unverified.
+The custom-protocol interface has been ruled out; media-only HTTP is selected and integrated. Windows WebView2 and complete memory evidence remain release acceptance requirements. The revised [design](superpowers/specs/2026-10-16-tauri-desktop-design.md) separates that acceptance from completing application integration. Repeat native seeking, source switching, cleanup, and memory checks on Windows and the final installed application. The proposed minimum OS versions and Windows compilation/runtime remain unverified.
 
 ## Native Download Phase
 
@@ -102,7 +102,7 @@ A disposable macOS release bundle used the real commands, Channel adapter, task 
 
 The same drawer was checked through a disposable browser fixture at 1280 × 900 in light theme and 390 × 844 in dark theme, including known/unknown totals, failure feedback, completed state, loading, empty list, connection error/reconnect affordance, keyboard Escape, and trigger-focus restoration. This browser fixture validates presentation; the separate native bundle validates the Rust/IPC/file path. The temporary browser tab, viewport override, server, native app, source harness, and fixtures were cleaned up, and the normal application entry point restored.
 
-Windows interactive downloads, minimum macOS/Intel coverage, settings restart tests, and final complete-application acceptance remain pending. Native file policy tests on macOS are not a substitute for Windows runtime checks.
+Windows interactive downloads, minimum macOS coverage, settings restart tests, and final complete-application acceptance remain pending. Native file policy tests on macOS are not a substitute for Windows runtime checks.
 
 ## Settings and Exit Foundation
 
@@ -112,7 +112,7 @@ A disposable macOS release bundle used real settings/download commands, producti
 
 The actual Web app retained theme/quality through reload and returned the live 40-programme catalogue. Settings presentation was checked at 1280 × 900 and 390 × 844, in light/dark themes, with long directory paths, persistence/directory errors, recovery, and keyboard traversal. Deferred-response component regressions verify that initial directory success/failure cannot overwrite a newer choice, and that cancellation retains an unresolved error. The shared store tests cover late hydration, serialized writes, older save notifications, subscription updates during load, write-failure warnings, and listener disposal.
 
-This is an isolated settings/exit probe, not full installed-client acceptance. At this earlier probe, Windows, Intel/minimum macOS, native playback, and complete startup were unverified. No full live episode was downloaded in that probe. Temporary processes, browser overrides, probe sources, fixtures, and isolated Store were removed; the normal entry point and application bundle were restored.
+This is an isolated settings/exit probe, not full installed-client acceptance. At this earlier probe, Windows, minimum macOS, native playback, and complete startup were unverified. No full live episode was downloaded in that probe. Temporary processes, browser overrides, probe sources, fixtures, and isolated Store were removed; the normal entry point and application bundle were restored.
 
 ## Integrated Desktop Application — 2026-10-16
 
@@ -125,4 +125,4 @@ The normal release application (15.61 MiB, ad-hoc signed) was launched on macOS 
 - The macOS termination bridge compiles and its missing-method/duplicate-install regression passes. Interactive Dock inspection timed out in UI automation, so Dock acceptance remains unverified. Window close and Cmd-Q are independently verified.
 - The shared Web app retained browser-managed directory text and no native task actions. Desktop and 390x844 layouts, preview opening/Escape, light/dark/system selection, and normal Web routing were checked. The narrow page had equal viewport/document width (390 px). The final native window was resized to approximately 392 by 542 logical pixels with usable navigation, task action, and library layout, then restored and closed.
 
-The complete Rust suite passes 67 tests, including four unit tests, with strict Clippy and formatting. Shared checks pass 247 tests in 45 files after review, including release-version, source-tag identity, and required-credential guards. A disposable Git fixture reproduces a same-named branch shadowing the release tag; the guard rejects a mismatched checkout or missing tag and resolves only the tag commit. CI workflows are prepared for Windows x64 and native arm64/x64 macOS runners; both pass official Actionlint validation but were not dispatched. Test-origin browser preferences/viewport and native preference/directory keys were restored, the temporary Web server was stopped, and the final normal app smoke-test instance was closed. Local build/test evidence does not establish Windows, Intel/minimum macOS, MSRV 1.90, complete WebContent/process-memory attribution, signing/notarization, or public release acceptance.
+The complete Rust suite passes 67 tests, including four unit tests, with strict Clippy and formatting. Shared checks pass 247 tests in 45 files after review, including release-version, source-tag identity, and required-credential guards. A disposable Git fixture reproduces a same-named branch shadowing the release tag; the guard rejects a mismatched checkout or missing tag and resolves only the tag commit. CI workflows are prepared for Windows x64 and native arm64 macOS runners; both pass official Actionlint validation but were not dispatched. Test-origin browser preferences/viewport and native preference/directory keys were restored, the temporary Web server was stopped, and the final normal app smoke-test instance was closed. Local build/test evidence does not establish Windows, minimum macOS, MSRV 1.90, complete WebContent/process-memory attribution, signing/notarization, or public release acceptance.

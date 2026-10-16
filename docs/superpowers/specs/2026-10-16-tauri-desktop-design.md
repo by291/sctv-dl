@@ -1,6 +1,6 @@
 # Shared Web and Tauri Desktop Design
 
-Status: the shared Web/Tauri application is implemented. Complete native startup, Rust playback sessions and streaming transport, native downloads/task presentation, preferences, and coordinated exit are integrated. Automated checks and a normal macOS arm64 application exercise playback, seeking/source switching, saved files, settings restart, and window/menu confirmation without Node. Native CI and signed release workflows are prepared. Windows, Intel/minimum macOS, complete process-memory measurement, Dock interaction, MSRV, and signing/notarization/remote CI remain unverified acceptance dimensions. See the [implementation plan](../plans/2026-10-16-tauri-desktop.md) and [validation evidence](../../desktop-media-validation.md) for the current scope.
+Status: the shared Web/Tauri application is implemented. Complete native startup, Rust playback sessions and streaming transport, native downloads/task presentation, preferences, and coordinated exit are integrated. Automated checks and a normal macOS arm64 application exercise playback, seeking/source switching, saved files, settings restart, and window/menu confirmation without Node. Native CI and signed release workflows are prepared. Windows, minimum macOS, complete process-memory measurement, Dock interaction, MSRV, and signing/notarization/remote CI remain unverified acceptance dimensions. See the [implementation plan](../plans/2026-10-16-tauri-desktop.md) and [validation evidence](../../desktop-media-validation.md) for the current scope.
 
 ## Intent and Acceptance Boundary
 
@@ -10,7 +10,7 @@ The frontend owns rendering, user interaction, selection, filtering, sorting for
 
 First-release scope and acceptance assumptions:
 
-- Proposed first-release matrix: Windows 10/11 x64; macOS 13 or newer on Apple Silicon and Intel. This is a product target, not a statement of Tauri's minimum requirements. Test the lowest supported OS versions before claiming support.
+- Proposed first-release matrix: Windows 10/11 x64; macOS 13 or newer on Apple Silicon (arm64) only. This is a product target, not a statement of Tauri's minimum requirements. Test the lowest supported OS versions before claiming support.
 - Preserve all current browsing, archive, favourites, themes, quality selection, batch selection, and preview behaviour.
 - Add native downloads with a selected directory, genuine progress, cancellation, and manual retry. Keep tasks alive when navigating between pages.
 - Keep download tasks in memory for the current application session. Closing the application cancels unfinished work after explicit confirmation; a cancelled or interrupted transfer can be restarted from zero.
@@ -128,7 +128,7 @@ Artplayer remains the UI player. Metadata and control messages use commands; MP4
 
 The asynchronous custom-protocol API was investigated against its official Range example. Its complete-body response contract cannot provide the required cancellable no-Range stream. The implementation therefore selects a media-only Rust HTTP endpoint with Tokio and Axum. Bind only `127.0.0.1` on port `0`, authorize opaque per-session URLs, validate origins where present, reject unsupported hosts and redirects, and stream with backpressure. Keep frontend assets on Tauri's default bundled-asset protocol; do not introduce the Localhost asset plugin. No player control or metadata service uses the media endpoint.
 
-Implementation selection and platform acceptance are separate gates. Continue integrating the selected transport and complete native startup using available macOS evidence. Release acceptance still requires both target WebViews to pass initial playback, forward/backward seek, quality switching, lifecycle cleanup, and bounded-memory checks. Record unavailable Windows/Intel/minimum-OS/full-process measurements explicitly; they do not require leaving the native factory or playback adapter unimplemented.
+Implementation selection and platform acceptance are separate gates. Continue integrating the selected transport and complete native startup using available macOS evidence. Release acceptance still requires both target WebViews to pass initial playback, forward/backward seek, quality switching, lifecycle cleanup, and bounded-memory checks. Record unavailable Windows/minimum-OS/full-process measurements explicitly; they do not require leaving the native factory or playback adapter unimplemented.
 
 Opening a preview resolves its content reference and available variants in the backend. Switching source within an open session retains player position. Closing pauses immediately, keeps the player through the leave animation, and then releases the session. Reopening during that animation cannot be cleared by an old callback. If an aborted open resolves late, close the returned session immediately.
 
@@ -162,7 +162,7 @@ Use normal native window decorations and standard menus, including macOS applica
 
 Keep `pnpm dev`, `pnpm check`, `pnpm build`, `pnpm preview`, and `pnpm start` valid for Web. Add explicit desktop scripts and Cargo checks. Pin resolved application dependencies in the pnpm and Cargo lockfiles; record the tested Rust toolchain and compatible MSRV during scaffolding. Ignore native build output and signing materials; commit generated application icons and source configuration.
 
-Build Windows x64, macOS arm64, and macOS x64 artifacts in native CI jobs. Use NSIS `.exe` for the initial Windows installer and `.app`/`.dmg` for macOS. A successful cross-compile or CI artifact build does not prove interactive playback. Test release-mode installed applications on both operating systems, including Intel and Apple Silicon coverage before claiming both architectures.
+Build Windows x64 and macOS arm64 artifacts in native CI jobs. Use NSIS `.exe` for the initial Windows installer and `.app`/`.dmg` for macOS. A successful cross-compile or CI artifact build does not prove interactive playback. Test release-mode installed applications on both operating systems, with Apple Silicon coverage for macOS.
 
 Separate validation artifacts from public releases. Public distribution requires the appropriate signing setup; macOS distribution also needs its notarization workflow. Credentials live in CI secrets. The plan may prepare a manually triggered release workflow, but running a publication or uploading a release requires a user request. Do not equate missing credentials with missing application implementation, or claim a signed/public release from an unsigned local build.
 

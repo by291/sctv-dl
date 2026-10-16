@@ -14,15 +14,15 @@
 
 Implementation is on `feat/tauri-foundation`. Planning, contracts, Web services, native metadata, downloads, and preferences were committed in responsibility-based groups. Native playback, complete startup composition, hash routing, and queued-save acknowledgement are now implemented; this batch also prepares native CI and manual signed releases.
 
-| Task | Implementation                                                         | Acceptance evidence                                                                                     |
-| ---- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 1    | Streaming Rust HTTP selected after custom-protocol investigation       | macOS probe passed; Windows and complete memory measurement remain open                                 |
-| 2–4  | Complete                                                               | Shared/Web/native metadata checks and macOS bundled checks passed                                       |
-| 5    | Complete playback commands, adapter, CSP, shared preview/player        | Production macOS bundle played/seeks/switched quality; Windows pending                                  |
-| 6    | Complete native queue, files, directory commands, adapter, task drawer | Fixture tests plus normal macOS real-file completion and exit cleanup                                   |
-| 7    | Complete native composition, preferences, hydration, exit handshake    | macOS restart and close/menu accept/reject passed; Dock interaction and Windows pending                 |
-| 8    | Shared routing/UI integrated                                           | Web desktop/narrow and themes checked; full target OS matrix pending                                    |
-| 9    | Native CI and manual signed-release workflows prepared                 | Local arm64 app built; remote CI, Intel/Windows runtime, signing/notarization/publication not performed |
+| Task | Implementation                                                         | Acceptance evidence                                                                               |
+| ---- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1    | Streaming Rust HTTP selected after custom-protocol investigation       | macOS probe passed; Windows and complete memory measurement remain open                           |
+| 2–4  | Complete                                                               | Shared/Web/native metadata checks and macOS bundled checks passed                                 |
+| 5    | Complete playback commands, adapter, CSP, shared preview/player        | Production macOS bundle played/seeks/switched quality; Windows pending                            |
+| 6    | Complete native queue, files, directory commands, adapter, task drawer | Fixture tests plus normal macOS real-file completion and exit cleanup                             |
+| 7    | Complete native composition, preferences, hydration, exit handshake    | macOS restart and close/menu accept/reject passed; Dock interaction and Windows pending           |
+| 8    | Shared routing/UI integrated                                           | Web desktop/narrow and themes checked; full target OS matrix pending                              |
+| 9    | Native CI and manual signed-release workflows prepared                 | Local arm64 app built; remote CI, Windows runtime, signing/notarization/publication not performed |
 
 Ruling: select the tested Rust streaming transport and complete the application without waiting for unavailable Windows hardware. Keep target validation as explicit release work. This supersedes earlier rules that left production playback and native composition behind the two-platform gate. A Windows finding may require an implementation adjustment; it does not justify an incomplete native startup path.
 
@@ -30,7 +30,7 @@ The normal packaged app selects Rust services and works without Node. The browse
 
 ## Global Constraints
 
-- Proposed first-release matrix: Windows 10/11 x64; macOS 13 or newer on Apple Silicon and Intel. This is a product target, not a statement of Tauri's minimum requirements. Test the lowest supported OS versions before claiming support.
+- Proposed first-release matrix: Windows 10/11 x64; macOS 13 or newer on Apple Silicon (arm64) only. This is a product target, not a statement of Tauri's minimum requirements. Test the lowest supported OS versions before claiming support.
 - Node.js remains `>=24.15.0`; pnpm remains `12.9.1` unless an independently justified dependency change is requested.
 - Use Tauri 2 and existing Vue, Pinia, Naive UI, VueUse, Zod, and Artplayer. Prefer official Tauri Dialog and Store plugins, accessed from Rust for desktop operations.
 - Use Rust `reqwest` and Tokio for native HTTP, cancellation, and asynchronous file writes. Do not add a generic plugin system, custom IPC framework, monorepo package manager, or a Node sidecar.
@@ -232,7 +232,7 @@ Implementation: reuse Tokio bounded admission, two execution permits, cancellati
 
 Current evidence: native preferences/private fields/save failures and command ACL pass Rust tests. Web startup hydrates before mount; native settings UI and adapter exist behind their port. A bundled macOS probe verified flushed preferences/directory/UUID after restart, an empty task list, active-download rejection/acceptance via Cmd-Q and titlebar close, and cleanup after accepted exit. Standard menus use a coordinated custom Quit item because the predefined macOS item bypasses ExitRequested. Directory-response review regressions pass.
 
-Native factory/environment selection and queued-save acknowledgement are complete. A macOS AppKit termination bridge joins the coordinated exit path; interactive Dock verification timed out. Normal macOS picker/restart/window/menu acceptance passed. Windows, Intel/minimum macOS, and remaining full target matrix checks stay unverified.
+Native factory/environment selection and queued-save acknowledgement are complete. A macOS AppKit termination bridge joins the coordinated exit path; interactive Dock verification timed out. Normal macOS picker/restart/window/menu acceptance passed. Windows, minimum macOS, and remaining full target matrix checks stay unverified.
 
 **Checkpoint:** Incomplete. Both target applications must retain preferences, select valid directories, and coordinate confirmed exit before this task is complete.
 
@@ -254,13 +254,13 @@ Native factory/environment selection and queued-save acknowledgement are complet
 
 **Files:** Create `.github/workflows/desktop.yml`, `.github/workflows/desktop-release.yml`, and `docs/desktop.md`; update `package.json`, README, `AGENTS.md`, architecture, upstream API, deployment, and media evidence documents. Extend dependency-update configuration to cover Cargo if supported by the repository's existing tooling.
 
-**Interfaces:** Produce scripts `desktop:check` for Cargo formatting/Clippy/tests and `desktop:build` for Tauri packaging. Produce Windows x64 NSIS installers and separate macOS arm64/x64 application/DMG artifacts. The normal Web CI remains intact.
+**Interfaces:** Produce scripts `desktop:check` for Cargo formatting/Clippy/tests and `desktop:build` for Tauri packaging. Produce Windows x64 NSIS installers and macOS arm64 application/DMG artifacts. The normal Web CI remains intact.
 
 - [x] Add `desktop:check` running `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings`, and `cargo test --manifest-path src-tauri/Cargo.toml --locked` using a portable script runner or package scripts. Do not embed machine-specific paths.
-- [x] Add native CI jobs for Windows x64, macOS arm64, and macOS x64. Select runner images with the actual required architecture at implementation time; record `rustc --version`, `node --version`, and `pnpm --version`. Use pnpm's shared cache and Rust build caching, frozen lockfiles, SHA-pinned actions, bounded job timeouts, and read-only repository permissions for validation jobs.
+- [x] Add native CI jobs for Windows x64 and macOS arm64. Select runner images with the actual required architecture at implementation time; record `rustc --version`, `node --version`, and `pnpm --version`. Use pnpm's shared cache and Rust build caching, frozen lockfiles, SHA-pinned actions, bounded job timeouts, and read-only repository permissions for validation jobs.
 - [ ] Build host applications and installable artifacts in CI. Upload validation artifacts without creating public releases. Run Rust fixture/stub tests, shared frontend checks, and appropriate packaging smoke checks. Treat a build as build evidence only.
 - [x] Add a manual release workflow with explicit version/tag and publication intent. Configure Windows signing and macOS signing/notarization through CI secrets and temporary credential files; do not print secret values. Require signing/notarization credentials for public distribution rather than silently publishing unsigned packages. Use existing official Tauri distribution tooling.
-- [ ] Install release-mode packages and execute the acceptance matrix below. Verify fresh install, normal relaunch, paths with spaces/Chinese characters, existing saved preferences, source switching/seeking, directory selection, real-file completion, cancellation/retry, exit confirmation, and launch without Node. Cover both macOS architectures before advertising them as verified.
+- [ ] Install release-mode packages and execute the acceptance matrix below. Verify fresh install, normal relaunch, paths with spaces/Chinese characters, existing saved preferences, source switching/seeking, directory selection, real-file completion, cancellation/retry, exit confirmation, and launch without Node. Validate Apple Silicon macOS before advertising it as verified.
 - [ ] Document current support, setup commands, file locations, native download semantics, pending features, signing requirements, and every unavailable check. Update the durable owning docs and README's documentation map. Keep `/api` raw-proxy and `/client-api/v1` normalized contracts clearly distinguished.
 - [ ] Review `git diff --check`, the complete diff, generated artifacts, ignored files, and unintended Android changes. Run the integrated checks below only after relevant changes are final. Once implemented and documented, extract durable constraints and remove the obsolete plan/design checklist in accordance with repository convention.
 
@@ -268,14 +268,14 @@ Native factory/environment selection and queued-save acknowledgement are complet
 
 ## Acceptance Matrix
 
-| Area                                    | Web                                               | Windows x64                                | macOS arm64 / x64                                 |
+| Area                                    | Web                                               | Windows x64                                | macOS arm64                                       |
 | --------------------------------------- | ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- |
-| Catalogue, archive, filters, favourites | Browser regressions                               | Installed app                              | Installed app on each architecture                |
+| Catalogue, archive, filters, favourites | Browser regressions                               | Installed app                              | Installed Apple Silicon app                       |
 | Data validation and cancellation        | Node/adapter/stale-response tests                 | Rust/adapter tests and rapid navigation    | Same plus WKWebView runtime                       |
 | Playback, seek, quality, close/reopen   | Existing proxy/browser                            | WebView2 and selected Rust transport       | WKWebView and selected Rust transport             |
-| Download                                | HEAD and browser handoff                          | Actual file, queue, progress, cancel/retry | Same on each architecture                         |
-| Storage                                 | Existing key, defaults, cross-tab, denied storage | Native restart/corruption/write failures   | Same on each architecture                         |
-| Routing and startup                     | Deep links and server fallback                    | Bundled hash routes, no Node               | Same on each architecture                         |
+| Download                                | HEAD and browser handoff                          | Actual file, queue, progress, cancel/retry | Same on Apple Silicon                             |
+| Storage                                 | Existing key, defaults, cross-tab, denied storage | Native restart/corruption/write failures   | Same on Apple Silicon                             |
+| Routing and startup                     | Deep links and server fallback                    | Bundled hash routes, no Node               | Same on Apple Silicon                             |
 | UI and accessibility                    | Desktop/narrow, both themes, keyboard             | Resize, scaling, menus, focus              | Resize, scaling, application/edit menus, focus    |
 | Distribution                            | Production Node remains deployable                | Install/uninstall and signing status       | DMG/install/relaunch, signing/notarization status |
 

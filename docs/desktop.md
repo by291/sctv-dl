@@ -1,6 +1,8 @@
 # Desktop Development
 
-One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application has been checked with bundled assets and Node stopped. Windows, Intel/minimum macOS, and public signed distribution still need their own acceptance evidence.
+One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application has been checked with bundled assets and Node stopped. Windows, minimum macOS, and public signed distribution still need their own acceptance evidence.
+
+Desktop targets are Windows x64 and macOS arm64 (Apple Silicon). Intel Macs are outside the supported build and release matrix.
 
 ## Commands and Prerequisites
 
@@ -89,10 +91,10 @@ Menus retain Tauri's standard application/edit/window structure and ordinary dec
 
 ## CI and Distribution
 
-[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025`, Apple Silicon on `macos-15`, and Intel on `macos-15-intel`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs. These workflows were prepared locally; no remote CI run is claimed.
+[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025` and Apple Silicon on `macos-15`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs. These workflows were prepared locally; no remote CI run is claimed.
 
 [Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. A source job resolves the fully qualified tag once, checks its commit against HEAD, and pins every platform build to that SHA. A same-named branch cannot substitute for the tag; the tag is rechecked before building and public promotion. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. A default run stays draft. No workflow was dispatched or release published in this implementation session.
 
 Windows secrets are `WINDOWS_CERTIFICATE` (base64 PFX) and `WINDOWS_CERTIFICATE_PASSWORD`. A temporary PFX is imported into the runner's user certificate store, its thumbprint configures Tauri's native signer, and the PFX/certificate/configuration are removed afterward. macOS requires `APPLE_CERTIFICATE` (base64 P12), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`; Tauri handles certificate import and notarization. Missing credentials fail instead of falling back to unsigned public packages. Public distribution still requires operator review of installed-app evidence and signing/notarization results.
 
-Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ support remains a target until tested on those systems. See [validation evidence](desktop-media-validation.md) for the actual host, checks, and remaining limits.
+Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ on Apple Silicon support remains a target until tested on those systems. See [validation evidence](desktop-media-validation.md) for the actual host, checks, and remaining limits.

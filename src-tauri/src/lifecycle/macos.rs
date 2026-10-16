@@ -36,7 +36,7 @@ fn add_termination_method(class: &AnyClass) -> tauri::Result<()> {
     }
     // SAFETY: AppKit invokes this delegate method on the main thread. The callback
     // exactly matches its ABI: NSUInteger return, receiver, selector, NSApplication.
-    // Both supported macOS architectures are 64-bit. Add only a missing method;
+    // Apple Silicon uses a 64-bit NSUInteger. Add only a missing method;
     // preserve TAO's delegate, its ivars, and every existing implementation.
     let added = unsafe {
         let implementation: Imp = std::mem::transmute::<
