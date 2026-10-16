@@ -16,7 +16,7 @@ retrofit = "3.0.0"
 okhttp = "5.5.0"
 coil = "3.6.3"
 media3 = "1.11.1"
-spotless = "8.10.3"
+spotless = "8.10.4"
 benchmark = "1.5.0"
 shimmer = "1.5.0"
 
