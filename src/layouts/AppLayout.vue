@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { Tv, Library, Settings2 } from '@lucide/vue'
 
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { viewTransitionActive } from '@/shared/utils/view-transition'
+import { usePlatform } from '@/shared/platform/usePlatform'
 
 const route = useRoute()
 const programmes = useProgrammeCatalogueStore()
+const downloads = usePlatform().downloads
+const DownloadTasksPanel = defineAsyncComponent(
+  () => import('@/features/downloads/components/DownloadTasksPanel.vue'),
+)
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
@@ -78,6 +83,10 @@ function isActive(path: string): boolean {
           {{ connectionLabel }}
         </div>
       </header>
+      <DownloadTasksPanel
+        v-if="downloads.kind === 'native'"
+        :downloads="downloads"
+      />
       <main
         id="main-content"
         class="main-content"
