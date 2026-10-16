@@ -1,0 +1,128 @@
+name: Flutter
+
+on:
+  push:
+    branches: [main]
+    paths:
+      [
+        'flutter/**',
+        'shared/fixtures/**',
+        '.github/workflows/flutter.yml',
+        '.github/dependabot.yml',
+      ]
+  pull_request:
+    branches: [main]
+    paths:
+      [
+        'flutter/**',
+        'shared/fixtures/**',
+        '.github/workflows/flutter.yml',
+        '.github/dependabot.yml',
+      ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: flutter
+
+jobs:
+  android:
+    name: Dart checks and Android release compilation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Install Android SDK components
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;28.2.13676358'
+      - name: Set up pinned Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Record toolchains
+        run: |
+          flutter --version
+          dart --version
+          java -version
+      - name: Install locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Verify generated sources
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib
+          test -z "$(git status --porcelain -- lib)"
+      - name: Check application Dart formatting
+        run: |
+          dart format --output=none --set-exit-if-changed lib test test_driver
+          if [ -d integration_test ]; then
+            dart format --output=none --set-exit-if-changed integration_test
+          fi
+      - name: Analyze and test
+        run: |
+          flutter analyze --fatal-infos
+          flutter test
+      - name: Verify native player HTTP policy
+        run: ./android/gradlew -p android :better_player_plus:testDebugUnitTest :better_player_plus:assembleDebugAndroidTest :app:assembleDebugAndroidTest --no-daemon
+      - name: Compile Android release APK and App Bundle
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Preserve Android validation artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flutter-android-validation
+          path: |
+            flutter/build/app/outputs/flutter-apk/app-release.apk
+            flutter/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    name: Unsigned iOS release compilation
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up pinned Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Record toolchains
+        run: |
+          flutter --version
+          xcodebuild -version
+      - name: Install locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Verify generated sources
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib
+          test -z "$(git status --porcelain -- lib)"
+      - name: Compile unsigned iOS release
+        run: flutter build ios --release --no-codesign
+      - name: Archive unsigned validation app
+        run: ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app build/ios/iphoneos/Runner-unsigned.zip
+      - name: Preserve unsigned iOS validation artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flutter-ios-unsigned-validation
+          path: flutter/build/ios/iphoneos/Runner-unsigned.zip
+          if-no-files-found: error
+          retention-days: 14
