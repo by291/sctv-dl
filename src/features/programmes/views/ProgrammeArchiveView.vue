@@ -309,26 +309,29 @@ onMounted(() => {
   color: var(--muted);
 }
 .detail-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: clamp(280px, 28cqw, 320px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 24px;
   margin-bottom: 28px;
 }
 .detail-cover {
   view-transition-name: programme-cover;
-  aspect-ratio: 16 / 10;
-  width: 184px;
-  flex-shrink: 0;
+  aspect-ratio: 16 / 9;
+  width: 100%;
   overflow: hidden;
   border-radius: 9px;
   border: 1px solid var(--line);
 }
 .detail-copy {
   min-width: 0;
-  flex: 1;
+}
+.detail-favourite {
+  min-height: 44px;
 }
 .detail-title {
-  font-size: 28px;
+  font-size: clamp(26px, 2.6cqw, 32px);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .detail-meta {
@@ -406,35 +409,47 @@ onMounted(() => {
     color: var(--accent);
   }
 }
-@media (width < 1020px) {
+@container workspace (width < 940px) {
   .detail-heading {
+    grid-template-columns: min(340px, 50%) minmax(0, 1fr);
     gap: 18px;
   }
   .detail-cover {
-    width: 130px;
+    grid-row: 1 / span 2;
+  }
+  .detail-copy {
+    align-self: end;
   }
   .detail-favourite {
-    align-self: flex-start;
+    grid-column: 2;
+    align-self: start;
+    justify-self: start;
+  }
+}
+@container workspace (width < 520px) {
+  .detail-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .detail-cover {
+    grid-row: auto;
+    max-width: 420px;
+  }
+  .detail-copy {
+    align-self: auto;
+  }
+  .detail-title {
+    font-size: 24px;
+  }
+  .detail-favourite {
+    grid-column: 1;
   }
 }
 @media (width < 760px) {
   .back-link {
     min-height: 44px;
     margin-bottom: 8px;
-  }
-  .detail-heading {
-    display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
-    gap: 10px 12px;
-    margin-bottom: 20px;
-  }
-  .detail-cover {
-    align-self: start;
-    width: 88px;
-  }
-  .detail-title {
-    margin-top: 0;
-    font-size: 22px;
   }
   .detail-meta {
     gap: 4px;
@@ -444,11 +459,6 @@ onMounted(() => {
   }
   .detail-date-summary {
     white-space: normal;
-  }
-  .detail-favourite {
-    grid-column: 2;
-    justify-self: start;
-    min-height: 44px;
   }
   .content-toolbar {
     gap: 4px 12px;

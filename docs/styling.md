@@ -15,7 +15,7 @@ Keep feature styles with their owning components. Shared selectors such as `.pag
 
 ## Readable Declarations
 
-Use native properties with explicit `px` or `rem` units. The root font size is currently `16px`. A `rem` scales with that root size; a `px` is a fixed CSS length. The migrated layouts use explicit pixel measurements to preserve their current dimensions. Unitless `line-height` is a multiplier, and numeric `font-weight` is a weight rather than a length.
+Use native properties with explicit `px` or `rem` units. The root font size is currently `16px`. A `rem` scales with that root size; a `px` is a fixed CSS length. Use `clamp()` for fluid sizing with explicit bounds. Unitless `line-height` is a multiplier, and numeric `font-weight` is a weight rather than a length. The shared font stack uses system fonts on macOS and Windows without requiring a downloaded font.
 
 For example, the brand's base style in [AppLayout.vue](../src/layouts/AppLayout.vue) is:
 
@@ -36,7 +36,9 @@ Keep related responsive adjustments in the same scoped stylesheet. Conditions su
 
 Mobile layouts support widths down to `320px`. Below `760px`, use one compact navigation bar, retain the connection warning when the service fails, and keep page titles in the content. The programme spotlight is compact, recent dates scroll horizontally, and content entries and settings controls use consistent vertical layouts. Keep native mobile action targets at least `44px` tall. Preview cards reduce padding and clamp long visible titles to two lines while retaining the full accessible text. Player controls use named container queries based on the available video width, so modal padding and screen size cannot select incompatible control layouts.
 
-The shell's `.main-content` owns the shared page width and horizontal padding. Settings panels and the programme library fill that same content area; constrain explanatory text locally instead of narrowing an entire page.
+The shell's `.main-content` owns the shared page width, fluid horizontal padding, and named `workspace` inline-size container. Settings panels and the programme library fill that same content area; constrain explanatory text locally instead of narrowing an entire page. Keep page titles in the content instead of repeating them in a shell title bar. Connection status lives in the sidebar footer, with a separate failure warning below mobile navigation.
+
+Programme layouts respond to the available content width after subtracting the sidebar and page padding. The library grid fits columns with a `220px` minimum, retains unused tracks when filtering, and keeps two compact columns on mobile. The spotlight, overview, filters, and detail heading use the `workspace` container to change composition. Programme covers use a consistent `16 / 9` ratio. Detail artwork has greater prominence than library thumbnails: a bounded desktop cover becomes a larger cover above the title in narrow content areas. Preserve the spotlight's lightly tilted frame and the existing cover-navigation transition.
 
 Programme cards, the spotlight, and content entries clamp visible titles to two lines with an ellipsis; cover placeholders use one line. Keep complete titles in the DOM and native title attributes. Content titles open a Naive UI popover on click or keyboard activation, including entries without playable video; Escape dismisses it. Programme detail headings wrap in full. Truncation must not alter source data, accessible action labels, or download filenames.
 

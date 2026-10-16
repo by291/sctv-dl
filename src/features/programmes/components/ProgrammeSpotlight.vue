@@ -94,7 +94,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
 .featured-card {
   position: relative;
   display: flex;
-  min-height: 240px;
+  min-height: 224px;
   overflow: clip;
   border-radius: 12px;
   background: var(--hero);
@@ -105,7 +105,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   z-index: 2;
   min-width: 0;
   flex: 1;
-  padding: 29px 28px;
+  padding: 24px 28px;
 }
 .feature-label {
   display: flex;
@@ -156,8 +156,8 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   position: relative;
   z-index: 2;
   margin-right: 24px;
-  width: 42%;
-  max-width: 280px;
+  width: 34%;
+  max-width: 264px;
   flex-shrink: 0;
   rotate: -5deg;
   align-self: center;
@@ -167,7 +167,8 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   box-shadow: 0 16px 26px #5e433524;
 }
 .featured-image {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
+  height: auto;
   animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 .feature-orbit {
@@ -193,7 +194,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
     box-shadow: 0 8px 25px #0000000c;
   }
 }
-@media (width < 1250px) {
+@container workspace (width < 960px) {
   .featured-copy {
     padding-left: 24px;
   }
@@ -202,13 +203,12 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   }
   .featured-visual {
     margin-right: 20px;
-    width: 38%;
   }
 }
-@media (width < 760px) {
+@container workspace (width < 600px) {
   .featured-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px;
+    grid-template-columns: minmax(0, 1fr) clamp(96px, 24cqw, 144px);
     min-height: 0;
     gap: 4px 16px;
     padding: 16px;
@@ -243,8 +243,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
     grid-column: 2;
     grid-row: 1 / span 2;
     margin: 0;
-    width: 96px;
-    rotate: none;
+    width: 100%;
     border-width: 2px;
   }
 }

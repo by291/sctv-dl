@@ -76,6 +76,24 @@ it('shows the build version instead of a fixed product version', () => {
   expect(wrapper.get('.version').text()).toBe('Web · v9.8.7-test')
 })
 
+it('keeps connection announcements available across navigation and recovery', async () => {
+  const catalogue = useProgrammeCatalogueStore()
+  expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')
+
+  catalogue.error = 'The programme service is unavailable.'
+  await router.push('/settings')
+  await flushPromises()
+
+  expect(wrapper.get('[role="status"]').text()).toBe('连接暂时不可用')
+  expect(wrapper.get('[role="alert"]').text()).toBe('连接暂时不可用')
+
+  catalogue.error = ''
+  await wrapper.vm.$nextTick()
+
+  expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')
+  expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+})
+
 describe('library return navigation', () => {
   it.each(['link', 'history', 'settings'])(
     'restores the same library instance via %s',

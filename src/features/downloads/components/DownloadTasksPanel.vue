@@ -179,7 +179,10 @@ onBeforeUnmount(() => {
 .download-panel {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 40px 0;
+  width: 100%;
+  max-width: 1460px;
+  margin-inline: auto;
+  padding: 16px var(--page-gutter) 0;
 }
 .download-description {
   margin: 0 0 20px;

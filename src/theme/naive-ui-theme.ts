@@ -8,7 +8,8 @@ export const themeOverrides: GlobalThemeOverrides = {
     primaryColorHover: '#e5685b',
     primaryColorPressed: '#be3f34',
     borderRadius: '8px',
-    fontFamily: 'Inter, "Segoe UI", "Microsoft YaHei", sans-serif',
+    fontFamily:
+      'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
     fontSize: '16px',
     fontSizeSmall: '14px',
     fontSizeMedium: '16px',

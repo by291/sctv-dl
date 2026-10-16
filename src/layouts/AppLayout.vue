@@ -68,25 +68,34 @@ function isActive(path: string): boolean {
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">
+        <div
+          class="connection"
+          role="status"
+        >
+          <span
+            class="status-dot"
+            :class="{ offline: programmes.error }"
+            aria-hidden="true"
+          />
+          {{ connectionLabel }}
+        </div>
         <div class="version">
           {{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v{{ appVersion }}
         </div>
       </div>
     </aside>
     <div class="workspace">
-      <header
-        class="topbar"
-        :class="{ offline: programmes.error }"
+      <div
+        v-if="programmes.error"
+        class="mobile-connection-warning"
+        role="alert"
       >
-        <span class="page-location">{{ route.meta.title }}</span>
-        <div class="connection">
-          <span
-            class="status-dot"
-            :class="{ offline: programmes.error }"
-          />
-          {{ connectionLabel }}
-        </div>
-      </header>
+        <span
+          class="status-dot offline"
+          aria-hidden="true"
+        />
+        {{ connectionLabel }}
+      </div>
       <DownloadTasksPanel
         v-if="downloads.kind === 'native'"
         :downloads="downloads"
@@ -191,14 +200,15 @@ function isActive(path: string): boolean {
 }
 .sidebar-bottom {
   margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
 }
 .version {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid var(--line);
-  padding: 18px 14px 0;
-  font-size: 14px;
+  padding: 10px 14px 0;
+  font-size: 13px;
   color: var(--muted);
 }
 .workspace {
@@ -207,33 +217,24 @@ function isActive(path: string): boolean {
   flex: 1;
   flex-direction: column;
 }
-.topbar {
-  display: flex;
-  height: 70px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  padding: 0 40px;
-}
-.page-location {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text);
-}
 .connection {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 14px;
+  padding-inline: 14px;
+  font-size: 12px;
   color: var(--muted);
 }
+.mobile-connection-warning {
+  display: none;
+}
 .main-content {
+  container: workspace / inline-size;
   width: 100%;
   max-width: 1460px;
   flex: 1;
   margin: 0 auto;
-  padding: 38px 40px 40px;
+  padding: clamp(24px, 2.6vw, 38px) var(--page-gutter) 40px;
 }
 @media (hover: hover) {
   .nav-link:hover {
@@ -248,12 +249,6 @@ function isActive(path: string): boolean {
     width: 216px;
     padding-inline: 15px;
   }
-  .topbar {
-    padding-inline: 30px;
-  }
-  .main-content {
-    padding: 30px;
-  }
 }
 @media (width < 1020px) {
   .sidebar {
@@ -263,9 +258,6 @@ function isActive(path: string): boolean {
   .brand {
     gap: 8px;
     font-size: 21px;
-  }
-  .main-content {
-    padding: 28px 24px;
   }
 }
 @media (width < 760px) {
@@ -310,17 +302,15 @@ function isActive(path: string): boolean {
     padding: 8px;
     font-size: 14px;
   }
-  .topbar {
-    display: none;
-  }
-  .topbar.offline {
+  .mobile-connection-warning {
     display: flex;
-    height: auto;
+    align-items: center;
+    gap: 8px;
     min-height: 40px;
     padding: 8px 16px;
-  }
-  .page-location {
-    display: none;
+    background: var(--subtle);
+    color: var(--muted);
+    font-size: 13px;
   }
   .main-content {
     padding: 20px 16px 28px;
