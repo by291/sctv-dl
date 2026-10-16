@@ -8,7 +8,10 @@ use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::error::{AppError, Result};
+use crate::error::{AppError, ErrorCode, Result};
+
+const EARLY_CANCELLATION_TTL: Duration = Duration::from_secs(60);
+const MAX_EARLY_CANCELLATIONS: usize = 1024;
 
 #[derive(Default)]
 struct Requests {
@@ -19,7 +22,7 @@ struct Requests {
 impl Requests {
     fn prune(&mut self) {
         self.early
-            .retain(|(_, created)| created.elapsed() < Duration::from_secs(60));
+            .retain(|(_, created)| created.elapsed() < EARLY_CANCELLATION_TTL);
     }
 }
 
@@ -28,6 +31,7 @@ pub struct RequestRegistry {
     requests: Mutex<Requests>,
 }
 
+/// Owns the active registration until its future completes or is dropped.
 pub struct RequestGuard {
     registry: Arc<RequestRegistry>,
     id: Uuid,
@@ -38,7 +42,7 @@ fn request_id(value: &str) -> Result<Uuid> {
     Uuid::parse_str(value)
         .ok()
         .filter(|id| id.get_version_num() == 4 && id.get_variant() == uuid::Variant::RFC4122)
-        .ok_or_else(|| AppError::new("invalid-input", "请求标识无效"))
+        .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "请求标识无效"))
 }
 
 impl RequestRegistry {
@@ -46,9 +50,11 @@ impl RequestRegistry {
         let id = request_id(value)?;
         let mut requests = self.requests.lock().unwrap();
         requests.prune();
+
         if requests.active.contains_key(&id) {
-            return Err(AppError::new("invalid-input", "请求标识已被使用"));
+            return Err(AppError::new(ErrorCode::InvalidInput, "请求标识已被使用"));
         }
+
         let cancellation = CancellationToken::new();
         if let Some(index) = requests
             .early
@@ -58,6 +64,7 @@ impl RequestRegistry {
             requests.early.remove(index);
             cancellation.cancel();
         }
+
         requests.active.insert(id, cancellation.clone());
         Ok(RequestGuard {
             registry: self.clone(),
@@ -70,13 +77,14 @@ impl RequestRegistry {
         let id = request_id(value)?;
         let mut requests = self.requests.lock().unwrap();
         requests.prune();
+
         if let Some(cancellation) = requests.active.get(&id) {
             cancellation.cancel();
         } else {
             // Native commands may arrive out of order; retain only bounded, expiring cancellations.
             requests.early.retain(|(request, _)| *request != id);
             requests.early.push_back((id, Instant::now()));
-            while requests.early.len() > 1024 {
+            while requests.early.len() > MAX_EARLY_CANCELLATIONS {
                 requests.early.pop_front();
             }
         }
@@ -88,7 +96,7 @@ impl RequestGuard {
     pub async fn run<T>(self, operation: impl Future<Output = Result<T>>) -> Result<T> {
         tokio::select! {
             biased;
-            _ = self.cancellation.cancelled() => Err(AppError::new("cancelled", "请求已取消")),
+            _ = self.cancellation.cancelled() => Err(AppError::new(ErrorCode::Cancelled, "请求已取消")),
             result = operation => result,
         }
     }

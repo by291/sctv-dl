@@ -1,35 +1,23 @@
+mod support;
+
+use support::{Stub, serve};
+
 use axum::{
     Json, Router,
     body::Body,
     http::{HeaderMap, Request, Response},
 };
+use sctv_dl_desktop_lib::error::ErrorCode;
 use sctv_dl_desktop_lib::programmes::{Deadlines, ProgrammeService};
 use sctv_dl_desktop_lib::requests::RequestRegistry;
 use serde_json::{Value, json};
 use std::{
+    error::Error,
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{net::TcpListener, task::JoinHandle};
 use uuid::Uuid;
 
-struct Stub {
-    origin: String,
-    task: JoinHandle<()>,
-}
-impl Drop for Stub {
-    fn drop(&mut self) {
-        self.task.abort();
-    }
-}
-async fn serve(router: Router) -> Stub {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let origin = format!("http://{}", listener.local_addr().unwrap());
-    let task = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
-    });
-    Stub { origin, task }
-}
 async fn json_stub(value: Value) -> Stub {
     serve(Router::new().fallback(move || {
         let value = value.clone();
@@ -37,6 +25,7 @@ async fn json_stub(value: Value) -> Stub {
     }))
     .await
 }
+
 fn service(stub: &Stub) -> ProgrammeService {
     ProgrammeService::new(
         &stub.origin,
@@ -45,6 +34,7 @@ fn service(stub: &Stub) -> ProgrammeService {
     )
     .unwrap()
 }
+
 fn envelope(data: Value) -> Value {
     json!({"rs": 200, "data": data})
 }
@@ -76,7 +66,7 @@ async fn preserves_large_string_ids_and_rejects_unsafe_numeric_ids() {
         let stub = json_stub(envelope(json!({"records": [{"id": raw}]}))).await;
         assert_eq!(
             service(&stub).programmes().await.unwrap_err().code,
-            "upstream"
+            ErrorCode::Upstream
         );
     }
     let stub = json_stub(envelope(
@@ -95,20 +85,24 @@ async fn preserves_large_string_ids_and_rejects_unsafe_numeric_ids() {
 #[tokio::test]
 async fn deduplicates_dates_retaining_the_last_record_and_validates_calendar_dates() {
     let stub = json_stub(envelope(json!([
-        {"id": 1, "date": "2026-10-14"}, {"id": 2, "date": "2026-10-15"}, {"id": 3, "date": "2026-10-14"}
-    ]))).await;
+        { "id": 1, "date": "2026-10-14" },
+        { "id": 2, "date": "2026-10-15" },
+        { "id": 3, "date": "2026-10-14" }
+    ])))
+    .await;
     let dates = service(&stub).dates("1").await.unwrap();
     assert_eq!(
         serde_json::to_value(dates).unwrap(),
         json!([
-            {"id": "2", "date": "2026-10-15"}, {"id": "3", "date": "2026-10-14"}
+            { "id": "2", "date": "2026-10-15" },
+            { "id": "3", "date": "2026-10-14" }
         ])
     );
     for date in ["2025-02-29", "2026-04-31", "2026-1-01"] {
         let invalid = json_stub(envelope(json!([{"id": 1, "date": date}]))).await;
         assert_eq!(
             service(&invalid).dates("1").await.unwrap_err().code,
-            "upstream"
+            ErrorCode::Upstream
         );
     }
 }
@@ -119,14 +113,14 @@ async fn rejects_invalid_references_before_network_and_preserves_business_errors
     let client = service(&stub);
     assert_eq!(
         client.dates("../1").await.unwrap_err().code,
-        "invalid-input"
+        ErrorCode::InvalidInput
     );
     assert_eq!(
         client.contents("1", "").await.unwrap_err().code,
-        "invalid-input"
+        ErrorCode::InvalidInput
     );
     let error = client.programmes().await.unwrap_err();
-    assert_eq!(error.code, "upstream");
+    assert_eq!(error.code, ErrorCode::Upstream);
     assert_eq!(error.message, "Maintenance");
 }
 
@@ -148,9 +142,23 @@ async fn rejects_redirects_non_json_and_malformed_envelopes() {
         .await;
         assert_eq!(
             service(&stub).programmes().await.unwrap_err().code,
-            "upstream"
+            ErrorCode::Upstream
         );
     }
+}
+
+#[tokio::test]
+async fn retains_a_url_redacted_cause_for_failed_metadata_connections() {
+    let service =
+        ProgrammeService::new("http://127.0.0.1:1", "guest".into(), Deadlines::default()).unwrap();
+
+    let error = service.programmes().await.unwrap_err();
+
+    assert_eq!(error.code, ErrorCode::Upstream);
+    let cause = error
+        .source()
+        .expect("the native owner lost the transport cause");
+    assert!(!cause.to_string().contains("http://"));
 }
 
 #[tokio::test]
@@ -232,7 +240,10 @@ async fn times_out_headers_and_idle_bodies_but_allows_progressing_bodies() {
     .await;
     let client =
         ProgrammeService::new(&stub.origin, Uuid::new_v4().to_string(), deadlines).unwrap();
-    assert_eq!(client.programmes().await.unwrap_err().code, "timeout");
+    assert_eq!(
+        client.programmes().await.unwrap_err().code,
+        ErrorCode::Timeout
+    );
     for delay in [Duration::from_millis(30), Duration::from_millis(200)] {
         let stub = serve(Router::new().fallback(move || async move {
             let chunks = vec!["{\"rs\":200,", "\"data\":{", "\"records\":", "[]}}"];
@@ -251,7 +262,7 @@ async fn times_out_headers_and_idle_bodies_but_allows_progressing_bodies() {
         if delay.as_millis() == 30 {
             assert!(result.unwrap().is_empty());
         } else {
-            assert_eq!(result.unwrap_err().code, "timeout");
+            assert_eq!(result.unwrap_err().code, ErrorCode::Timeout);
         }
     }
 }
@@ -286,7 +297,7 @@ async fn cancels_pending_headers_and_body_reads_and_releases_registry_entries() 
             .unwrap()
             .unwrap()
             .unwrap_err();
-        assert_eq!(error.code, "cancelled");
+        assert_eq!(error.code, ErrorCode::Cancelled);
         assert!(
             registry
                 .register(&id)

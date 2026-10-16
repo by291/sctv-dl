@@ -1,7 +1,7 @@
 use axum::{Json, Router, http::Uri};
 use sctv_dl_desktop_lib::{
     commands,
-    error::AppError,
+    error::{AppError, ErrorCode},
     programmes::{Deadlines, ProgrammeService},
     state::AppState,
 };
@@ -48,14 +48,26 @@ fn app(state: AppState) -> tauri::App<tauri::test::MockRuntime> {
         .unwrap()
 }
 
+async fn programme_response(uri: Uri) -> Json<Value> {
+    let data = if uri.query().is_some() {
+        json!({ "records": [{ "id": 1, "name": "News" }] })
+    } else if uri.path().contains("contents") {
+        json!([{ "id": 3, "title": "Clip" }])
+    } else {
+        json!([{ "id": 2, "date": "2026-10-15" }])
+    };
+
+    Json(json!({ "rs": 200, "data": data }))
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn routes_native_commands_to_services_and_enforces_main_window_local_permissions() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
-        axum::serve(listener, Router::new().fallback(|uri: Uri| async move {
-            Json(json!({"rs":200, "data": if uri.query().is_some() { json!({"records":[{"id":1,"name":"News"}]}) } else if uri.path().contains("contents") { json!([{"id":3,"title":"Clip"}]) } else { json!([{"id":2,"date":"2026-10-15"}]) }}))
-        })).await.unwrap();
+        axum::serve(listener, Router::new().fallback(programme_response))
+            .await
+            .unwrap();
     });
     let app = app(AppState::new(Ok(ProgrammeService::new(
         &origin,
@@ -74,6 +86,7 @@ async fn routes_native_commands_to_services_and_enforces_main_window_local_permi
     } else {
         "tauri://localhost"
     };
+
     for (command, args, expected) in [
         (
             "list_programmes",
@@ -88,12 +101,20 @@ async fn routes_native_commands_to_services_and_enforces_main_window_local_permi
         (
             "list_programme_contents",
             json!({"programmeId":"1","dateId":"2"}),
-            json!([{"id":"3","title":"Clip","cover":null,"video":null,"smoothVideo":null,"publishedAt":null}]),
+            json!([{
+                "id": "3",
+                "title": "Clip",
+                "cover": null,
+                "video": null,
+                "smoothVideo": null,
+                "publishedAt": null
+            }]),
         ),
         ("cancel_request", json!({}), Value::Null),
     ] {
         let mut args = args;
         args["requestId"] = json!(Uuid::new_v4().to_string());
+
         assert_eq!(
             invoke(&main, command, args.clone(), local).unwrap(),
             expected
@@ -101,6 +122,7 @@ async fn routes_native_commands_to_services_and_enforces_main_window_local_permi
         assert!(invoke(&secondary, command, args.clone(), local).is_err());
         assert!(invoke(&main, command, args, "https://external.invalid").is_err());
     }
+
     let denied_store = invoke(
         &main,
         "plugin:store|load",
@@ -123,7 +145,7 @@ async fn routes_native_commands_to_services_and_enforces_main_window_local_permi
 #[test]
 fn surfaces_identity_storage_failure_without_starting_upstream_work() {
     let app = app(AppState::new(Err(AppError::new(
-        "storage",
+        ErrorCode::Storage,
         "Storage unavailable",
     ))));
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())

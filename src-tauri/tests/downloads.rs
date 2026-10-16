@@ -222,6 +222,7 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
         .map(|task| task.revision)
         .collect();
     assert!(revisions.iter().all(|revision| *revision > 0));
+    assert!(revisions.windows(2).all(|pair| pair[1] > pair[0]));
     manager.shutdown().await;
 }
 
@@ -660,6 +661,35 @@ fn releases_cancelled_reservations_and_only_recovers_recognized_leftovers() {
         std::fs::read(root.path().join(".sctv-dl-unrelated.part")).unwrap(),
         b"keep"
     );
+}
+
+#[test]
+fn preserves_unrecognized_recovery_records_and_their_temporary_files() {
+    let fixtures = [
+        (
+            "11111111-1111-4111-8111-111111111111",
+            r#"{"sctvDlDownload":2,"id":"11111111-1111-4111-8111-111111111111"}"#,
+        ),
+        (
+            "11111111-1111-4111-8111-111111111111",
+            r#"{"sctvDlDownload":1,"id":"22222222-2222-4222-8222-222222222222"}"#,
+        ),
+        ("11111111-1111-4111-8111-111111111111", "{interrupted"),
+        ("not-a-uuid", r#"{"sctvDlDownload":1,"id":"not-a-uuid"}"#),
+    ];
+
+    for (id, record) in fixtures {
+        let root = tempfile::tempdir().unwrap();
+        let temporary = root.path().join(format!(".sctv-dl-{id}.part"));
+        let journal = root.path().join(format!(".sctv-dl-{id}.json"));
+        std::fs::write(&temporary, b"unrecognized bytes").unwrap();
+        std::fs::write(&journal, record).unwrap();
+
+        let _directory = DownloadDirectory::open(root.path()).unwrap();
+
+        assert_eq!(std::fs::read(&temporary).unwrap(), b"unrecognized bytes");
+        assert_eq!(std::fs::read_to_string(&journal).unwrap(), record);
+    }
 }
 
 #[test]

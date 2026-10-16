@@ -13,6 +13,7 @@ function nativeError(value: unknown): Error {
   return new Error('无法调用桌面服务，请重启应用后重试')
 }
 
+// onLate releases resources returned after cancellation or in an invalid response.
 export async function invokeAbortable<T>(
   command: string,
   args: Record<string, unknown>,

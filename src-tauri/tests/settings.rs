@@ -1,4 +1,4 @@
-use sctv_dl_desktop_lib::settings::installation_id;
+use sctv_dl_desktop_lib::{error::ErrorCode, settings::installation_id};
 use serde_json::{Value, json};
 use tauri::test::{mock_builder, mock_context, noop_assets};
 use tauri_plugin_store::StoreExt;
@@ -20,7 +20,10 @@ fn propagates_identity_save_failures_without_overwriting_the_existing_store() {
         .serialize(|_| Err(std::io::Error::other("injected save failure").into()))
         .build()
         .unwrap();
-    assert_eq!(installation_id(&store).unwrap_err().code, "storage");
+    assert_eq!(
+        installation_id(&store).unwrap_err().code,
+        ErrorCode::Storage
+    );
     assert_eq!(std::fs::read(&path).unwrap(), original);
 }
 
@@ -51,7 +54,7 @@ fn failed_directory_save_rolls_back_memory_and_preserves_persisted_identity() {
         save_download_directory(&store, root.path())
             .unwrap_err()
             .code,
-        "storage"
+        ErrorCode::Storage
     );
     assert!(download_directory(&store).unwrap().is_none());
     assert_eq!(std::fs::read(&path).unwrap(), original);
@@ -84,7 +87,10 @@ fn stores_download_directories_privately_and_rejects_missing_locations() {
     assert!(store.get("preferences").is_none());
     assert!(save_download_directory(&store, &directory.path().join("missing")).is_err());
     std::fs::remove_dir(&destination).unwrap();
-    assert_eq!(download_directory(&store).unwrap_err().code, "storage");
+    assert_eq!(
+        download_directory(&store).unwrap_err().code,
+        ErrorCode::Storage
+    );
 }
 
 #[test]
@@ -156,7 +162,10 @@ fn surfaces_storage_read_errors_instead_of_using_an_ephemeral_identity() {
         .disable_auto_save()
         .build()
         .unwrap();
-    assert_eq!(installation_id(&corrupt).unwrap_err().code, "storage");
+    assert_eq!(
+        installation_id(&corrupt).unwrap_err().code,
+        ErrorCode::Storage
+    );
     assert_eq!(std::fs::read(&corrupt_path).unwrap(), b"not-json");
     let blocking_file = directory.path().join("file");
     std::fs::write(&blocking_file, b"occupied").unwrap();
@@ -165,7 +174,10 @@ fn surfaces_storage_read_errors_instead_of_using_an_ephemeral_identity() {
         .disable_auto_save()
         .build()
         .unwrap();
-    assert_eq!(installation_id(&unwritable).unwrap_err().code, "storage");
+    assert_eq!(
+        installation_id(&unwritable).unwrap_err().code,
+        ErrorCode::Storage
+    );
 }
 
 #[test]
@@ -182,7 +194,10 @@ fn preserves_corrupt_storage_after_the_application_exits() {
         .disable_auto_save()
         .build()
         .unwrap();
-    assert_eq!(installation_id(&store).unwrap_err().code, "storage");
+    assert_eq!(
+        installation_id(&store).unwrap_err().code,
+        ErrorCode::Storage
+    );
     let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
@@ -244,7 +259,7 @@ fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_value
         settings::{load_preferences, save_preferences},
     };
     let snapshot = serde_json::to_value(load_preferences::<tauri::test::MockRuntime>(Err(
-        AppError::new("storage", "denied"),
+        AppError::new(ErrorCode::Storage, "denied"),
     )))
     .unwrap();
     assert_eq!(
@@ -273,7 +288,7 @@ fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_value
         save_preferences(&store, json!({"theme":"light"}))
             .unwrap_err()
             .code,
-        "storage"
+        ErrorCode::Storage
     );
     assert_eq!(std::fs::read(&path).unwrap(), original);
     assert_eq!(store.get("preferences").unwrap(), json!({"theme":"dark"}));

@@ -61,17 +61,25 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
     } else {
         "tauri://localhost"
     };
-    let body = json!({"value":{"theme":"dark","quality":"smooth","favourites":["1"]}});
+    let body = json!({
+        "value": { "theme": "dark", "quality": "smooth", "favourites": ["1"] }
+    });
+
     invoke(&main, "save_settings", body.clone(), origin).unwrap();
     let snapshot = invoke(&main, "load_settings", json!({}), origin).unwrap();
     assert_eq!(
         snapshot,
-        json!({"value":{"theme":"dark","quality":"smooth","favourites":["1"]},"persisted":true})
+        json!({
+            "value": { "theme": "dark", "quality": "smooth", "favourites": ["1"] },
+            "persisted": true
+        })
     );
+
     for command in ["load_settings", "save_settings"] {
         assert!(invoke(&secondary, command, body.clone(), origin).is_err());
         assert!(invoke(&main, command, body.clone(), "https://external.invalid").is_err());
     }
+
     let closing = controller.begin().unwrap();
     // Queued frontend saves still reach Rust during exit preparation.
     invoke(&main, "save_settings", body.clone(), origin).unwrap();

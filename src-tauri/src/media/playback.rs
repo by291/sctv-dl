@@ -1,9 +1,9 @@
 use std::sync::Mutex;
 
-use super::{MediaConfig, MediaServer, MediaSource, PlaybackSession, Quality};
+use super::{MediaConfig, MediaServer, PlaybackSession, Quality};
 use crate::{
-    error::{AppError, Result},
-    programmes::{ProgrammeService, validate_id},
+    error::{AppError, ErrorCode, Result},
+    programmes::{ProgrammeService, playback_selection, validate_id},
 };
 
 #[derive(serde::Deserialize)]
@@ -35,46 +35,26 @@ impl PlaybackService {
             validate_id(id)?;
         }
         if self.server.lock().unwrap().is_none() {
-            return Err(AppError::new("cancelled", "视频服务已关闭"));
+            return Err(service_closed());
         }
-        let dates = programmes.dates(&request.programme_id).await?;
-        if !dates.iter().any(|date| date.id == request.date_id) {
-            return Err(AppError::new("not-found", "播出日期已不可用，请刷新后重试"));
-        }
-        let contents = programmes
-            .contents(&request.programme_id, &request.date_id)
+
+        let broadcast = programmes
+            .broadcast(&request.programme_id, &request.date_id)
             .await?;
-        let content = contents
+        let content = broadcast
+            .contents
             .iter()
             .find(|content| content.id == request.content_id)
-            .ok_or_else(|| AppError::new("not-found", "节目内容已不可用，请刷新后重试"))?;
-        let mut sources = Vec::new();
-        if let Some(url) = &content.video {
-            sources.push(MediaSource {
-                quality: Quality::Standard,
-                url: url.clone(),
-            });
-        }
-        if let Some(url) = &content.smooth_video
-            && !sources.iter().any(|source| &source.url == url)
-        {
-            sources.push(MediaSource {
-                quality: Quality::Smooth,
-                url: url.clone(),
-            });
-        }
-        let selected = sources
-            .iter()
-            .find(|source| source.quality == request.quality)
-            .or_else(|| sources.first())
-            .ok_or_else(|| AppError::new("not-found", "这条内容没有可播放的视频"))?
-            .quality;
-        self.server
-            .lock()
-            .unwrap()
+            .ok_or_else(|| AppError::new(ErrorCode::NotFound, "节目内容已不可用，请刷新后重试"))?;
+        let selection = playback_selection(content, request.quality)
+            .ok_or_else(|| AppError::new(ErrorCode::NotFound, "这条内容没有可播放的视频"))?;
+
+        // Preparation does not hold the server lock; shutdown may have taken ownership meanwhile.
+        let server = self.server.lock().unwrap();
+        server
             .as_ref()
-            .ok_or_else(|| AppError::new("cancelled", "视频服务已关闭"))?
-            .open(sources, selected)
+            .ok_or_else(service_closed)?
+            .open(selection.sources, selection.selected_quality)
     }
 
     pub fn close(&self, id: &str) {
@@ -83,10 +63,15 @@ impl PlaybackService {
         }
     }
 
+    /// Prevents new sessions and awaits every connection and upstream producer.
     pub async fn shutdown(&self) {
-        let server = self.server.lock().unwrap().take();
+        let server = { self.server.lock().unwrap().take() };
         if let Some(server) = server {
             server.shutdown().await;
         }
     }
+}
+
+fn service_closed() -> AppError {
+    AppError::new(ErrorCode::Cancelled, "视频服务已关闭")
 }

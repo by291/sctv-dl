@@ -1,4 +1,7 @@
-use sctv_dl_desktop_lib::requests::RequestRegistry;
+use sctv_dl_desktop_lib::{
+    error::{AppError, ErrorCode},
+    requests::RequestRegistry,
+};
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
@@ -16,7 +19,7 @@ async fn early_cancellation_expires_and_consumed_markers_do_not_poison_reuse() {
             Ok(())
         })
         .await;
-    assert_eq!(result.unwrap_err().code, "cancelled");
+    assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
     assert!(!executed);
     registry
         .register(&id)
@@ -55,7 +58,7 @@ async fn early_cancellation_is_bounded_to_the_newest_1024_unique_requests() {
             .await
             .unwrap_err()
             .code,
-        "cancelled"
+        ErrorCode::Cancelled
     );
     assert_eq!(
         registry
@@ -65,7 +68,7 @@ async fn early_cancellation_is_bounded_to_the_newest_1024_unique_requests() {
             .await
             .unwrap_err()
             .code,
-        "cancelled"
+        ErrorCode::Cancelled
     );
 }
 
@@ -86,11 +89,7 @@ async fn validates_request_ids_rejects_duplicates_and_cleans_up_on_drop_or_failu
     registry
         .register(&id)
         .unwrap()
-        .run(async {
-            Err::<(), _>(sctv_dl_desktop_lib::error::AppError::new(
-                "upstream", "Failure",
-            ))
-        })
+        .run(async { Err::<(), _>(AppError::new(ErrorCode::Upstream, "Failure")) })
         .await
         .unwrap_err();
     registry

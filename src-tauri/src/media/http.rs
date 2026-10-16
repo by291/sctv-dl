@@ -1,27 +1,21 @@
-use axum::{
-    Router,
-    body::Body,
-    extract::{Path, State},
-    http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode},
-    routing::any,
-};
-use reqwest::{Client, Url};
 use std::{
     collections::HashMap,
-    io,
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use axum::{Router, routing::any};
+use reqwest::{Client, Url};
 use tokio::{
     net::TcpListener,
     task::{JoinHandle, JoinSet},
 };
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use uuid::Uuid;
 
-use super::{MediaSource, PlaybackSession, PlaybackSource, Quality, policy};
-use crate::error::{AppError, Result};
+use super::{MediaSource, PlaybackSession, PlaybackSource, Quality, handler, policy};
+use crate::error::{AppError, ErrorCode, Result};
 
 pub struct MediaConfig {
     pub upstream_origin: String,
@@ -36,6 +30,7 @@ impl Default for MediaConfig {
         if cfg!(debug_assertions) {
             webview_origins.push("http://127.0.0.1:5180".into());
         }
+
         Self {
             upstream_origin: "https://fscgc.scgchc.com/".into(),
             webview_origins,
@@ -45,16 +40,18 @@ impl Default for MediaConfig {
     }
 }
 
-struct Session {
-    sources: Vec<MediaSource>,
-    cancellation: CancellationToken,
+pub(super) struct Session {
+    pub sources: Vec<MediaSource>,
+    pub cancellation: CancellationToken,
 }
-struct Inner {
-    config: MediaConfig,
-    origin: Url,
-    client: Client,
-    address: SocketAddr,
-    sessions: Mutex<HashMap<String, Arc<Session>>>,
+
+pub(super) struct Inner {
+    pub config: MediaConfig,
+    pub origin: Url,
+    pub client: Client,
+    pub address: SocketAddr,
+    pub sessions: Mutex<HashMap<String, Arc<Session>>>,
+    pub producers: TaskTracker,
 }
 
 pub struct MediaServer {
@@ -66,54 +63,46 @@ pub struct MediaServer {
 impl MediaServer {
     // Production callers use the default fixed CDN configuration; no command accepts this configuration.
     pub async fn bind(config: MediaConfig) -> Result<Self> {
-        let origin = Url::parse(&config.upstream_origin)
-            .map_err(|_| AppError::new("invalid-input", "视频服务地址无效"))?;
+        let origin = Url::parse(&config.upstream_origin).map_err(|error| {
+            AppError::with_source(ErrorCode::InvalidInput, "视频服务地址无效", error)
+        })?;
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .gzip(false)
             .read_timeout(config.idle_timeout)
             .build()
-            .map_err(|_| AppError::new("upstream", "无法初始化视频服务"))?;
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .map_err(|_| AppError::new("upstream", "无法启动本机视频服务"))?;
-        let address = listener
-            .local_addr()
-            .map_err(|_| AppError::new("upstream", "无法读取本机视频服务端口"))?;
+            .map_err(|error| {
+                AppError::with_source(
+                    ErrorCode::Upstream,
+                    "无法初始化视频服务",
+                    error.without_url(),
+                )
+                .reported("initialize media HTTP client")
+            })?;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|error| {
+            AppError::with_source(ErrorCode::Upstream, "无法启动本机视频服务", error)
+                .reported("bind media listener")
+        })?;
+        let address = listener.local_addr().map_err(|error| {
+            AppError::with_source(ErrorCode::Upstream, "无法读取本机视频服务端口", error)
+                .reported("read media listener address")
+        })?;
+
         let inner = Arc::new(Inner {
             config,
             origin,
             client,
             address,
             sessions: Mutex::new(HashMap::new()),
+            producers: TaskTracker::new(),
         });
         let router = Router::new()
-            .route("/media/{id}/{quality}", any(handle))
+            .route("/media/{id}/{quality}", any(handler::handle))
             .with_state(inner.clone());
         let shutdown = CancellationToken::new();
-        let stop = shutdown.clone();
-        let task = tokio::spawn(async move {
-            // Own every connection so shutdown also terminates clients that never read.
-            let mut connections = JoinSet::new();
-            loop {
-                tokio::select! {
-                    biased;
-                    _ = stop.cancelled() => break,
-                    _ = connections.join_next(), if !connections.is_empty() => {},
-                    accepted = listener.accept() => {
-                        let Ok((stream, _)) = accepted else { break; };
-                        let service = hyper_util::service::TowerToHyperService::new(router.clone());
-                        connections.spawn(async move {
-                            let _ = hyper::server::conn::http1::Builder::new()
-                                .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
-                                .await;
-                        });
-                    }
-                }
-            }
-            connections.abort_all();
-            while connections.join_next().await.is_some() {}
-        });
+        let task = tokio::spawn(serve_connections(listener, router, shutdown.clone()));
+
         Ok(Self {
             inner,
             shutdown,
@@ -133,11 +122,12 @@ impl MediaServer {
                 .any(|source| source.quality == selected_quality)
             || (sources.len() == 2 && sources[0].quality == sources[1].quality)
         {
-            return Err(AppError::new("invalid-input", "视频来源无效"));
+            return Err(AppError::new(ErrorCode::InvalidInput, "视频来源无效"));
         }
         for source in &sources {
             policy::target(&source.url, &self.inner.origin)?;
         }
+
         let id = Uuid::new_v4().to_string();
         let output = sources
             .iter()
@@ -157,6 +147,7 @@ impl MediaServer {
                 cancellation: CancellationToken::new(),
             }),
         );
+
         Ok(PlaybackSession {
             id,
             selected_quality,
@@ -165,214 +156,154 @@ impl MediaServer {
     }
 
     pub fn close(&self, id: &str) {
-        if let Some(session) = self.inner.sessions.lock().unwrap().remove(id) {
+        let session = { self.inner.sessions.lock().unwrap().remove(id) };
+        if let Some(session) = session {
             session.cancellation.cancel();
         }
     }
 
     fn stop(&self) {
         self.shutdown.cancel();
-        for (_, session) in self.inner.sessions.lock().unwrap().drain() {
+        let sessions = {
+            self.inner
+                .sessions
+                .lock()
+                .unwrap()
+                .drain()
+                .map(|(_, session)| session)
+                .collect::<Vec<_>>()
+        };
+        for session in sessions {
             session.cancellation.cancel();
         }
     }
 
+    /// Stops admission, cancels sessions, and returns after all owned HTTP work has ended.
     pub async fn shutdown(mut self) {
         self.stop();
-        if let Some(task) = self.task.take() {
-            let _ = task.await;
+        if let Some(task) = self.task.take()
+            && let Err(error) = task.await
+        {
+            AppError::with_source(ErrorCode::Upstream, "视频服务异常终止", error)
+                .reported("stop media listener");
         }
+
+        // Connections can no longer register producers; wait until their responses are dropped.
+        self.inner.producers.close();
+        self.inner.producers.wait().await;
     }
 }
 
 impl Drop for MediaServer {
     fn drop(&mut self) {
+        // Explicit shutdown awaits ownership; Drop can only request best-effort cancellation.
         self.stop();
     }
 }
 
-fn response(
-    status: StatusCode,
-    headers: HeaderMap,
-    body: Body,
-    origin: Option<&HeaderValue>,
-) -> Response<Body> {
-    let mut response = Response::new(body);
-    *response.status_mut() = status;
-    *response.headers_mut() = headers;
-    let headers = response.headers_mut();
-    headers.insert("cache-control", HeaderValue::from_static("no-store"));
-    headers.insert(
-        "x-content-type-options",
-        HeaderValue::from_static("nosniff"),
-    );
-    if let Some(origin) = origin {
-        headers.insert("access-control-allow-origin", origin.clone());
-        headers.insert("vary", HeaderValue::from_static("Origin"));
-        headers.insert(
-            "access-control-expose-headers",
-            HeaderValue::from_static("Content-Length, Content-Range, Accept-Ranges"),
-        );
+async fn serve_connections(listener: TcpListener, router: Router, stop: CancellationToken) {
+    // Own every connection so shutdown also terminates clients that never read.
+    let mut connections = JoinSet::new();
+    loop {
+        tokio::select! {
+            biased;
+            _ = stop.cancelled() => break,
+            completed = connections.join_next(), if !connections.is_empty() => {
+                if let Some(Err(error)) = completed {
+                    AppError::with_source(ErrorCode::Upstream, "视频连接异常终止", error)
+                        .reported("serve media connection");
+                }
+            },
+            accepted = listener.accept() => {
+                let (stream, _) = match accepted {
+                    Ok(connection) => connection,
+                    Err(error) => {
+                        AppError::with_source(ErrorCode::Upstream, "本机视频服务连接失败", error)
+                            .reported("accept media connection");
+                        break;
+                    }
+                };
+                let service = hyper_util::service::TowerToHyperService::new(router.clone());
+                connections.spawn(async move {
+                    // Malformed requests and disconnected clients end only their own connection.
+                    let _ = hyper::server::conn::http1::Builder::new()
+                        .serve_connection(hyper_util::rt::TokioIo::new(stream), service)
+                        .await;
+                });
+            }
+        }
     }
-    response
+
+    connections.abort_all();
+    while connections.join_next().await.is_some() {}
 }
 
-async fn handle(
-    State(inner): State<Arc<Inner>>,
-    Path((id, quality)): Path<(String, String)>,
-    request: Request<Body>,
-) -> Response<Body> {
-    let headers = request.headers();
-    let origin = headers.get("origin");
-    if headers.get("host").and_then(|host| host.to_str().ok())
-        != Some(inner.address.to_string().as_str())
-        || origin.is_some_and(|value| {
-            !inner
-                .config
-                .webview_origins
-                .iter()
-                .any(|allowed| value.as_bytes() == allowed.as_bytes())
-        })
-    {
-        return response(StatusCode::FORBIDDEN, HeaderMap::new(), Body::empty(), None);
-    }
-    let empty = |status| response(status, HeaderMap::new(), Body::empty(), origin);
-    if ![Method::GET, Method::HEAD, Method::OPTIONS].contains(request.method()) {
-        return empty(StatusCode::METHOD_NOT_ALLOWED);
-    }
-    let session = { inner.sessions.lock().unwrap().get(&id).cloned() };
-    let Some(session) = session else {
-        return empty(StatusCode::NOT_FOUND);
+#[cfg(test)]
+mod tests {
+    use std::{
+        io,
+        pin::Pin,
+        sync::atomic::{AtomicBool, Ordering},
+        task::{Context, Poll},
     };
-    let Some(source) = session
-        .sources
-        .iter()
-        .find(|source| source.quality.as_str() == quality)
-    else {
-        return empty(StatusCode::NOT_FOUND);
-    };
-    if request.method() == Method::OPTIONS {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "access-control-allow-methods",
-            HeaderValue::from_static("GET, HEAD, OPTIONS"),
+
+    use axum::body::{Bytes, HttpBody};
+    use hyper::body::Frame;
+
+    use super::*;
+
+    struct OwnedUpstreamBody(Arc<AtomicBool>);
+
+    impl HttpBody for OwnedUpstreamBody {
+        type Data = Bytes;
+        type Error = io::Error;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+        ) -> Poll<Option<std::result::Result<Frame<Bytes>, io::Error>>> {
+            Poll::Pending
+        }
+    }
+
+    impl Drop for OwnedUpstreamBody {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn shutdown_drains_owned_producers_before_returning() {
+        let mut server = MediaServer::bind(MediaConfig::default()).await.unwrap();
+        let session = server
+            .open(
+                vec![MediaSource {
+                    quality: Quality::Standard,
+                    url: "https://fscgc.scgchc.com/clip.mp4".into(),
+                }],
+                Quality::Standard,
+            )
+            .unwrap();
+        let cancellation = server.inner.sessions.lock().unwrap()[&session.id]
+            .cancellation
+            .clone();
+        let upstream_alive = Arc::new(AtomicBool::new(true));
+        let upstream = reqwest::Response::from(axum::http::Response::new(reqwest::Body::wrap(
+            OwnedUpstreamBody(upstream_alive.clone()),
+        )));
+        let _downstream =
+            crate::media::stream::body(upstream, cancellation, &server.inner.producers);
+
+        // Listener completion alone does not release a separately owned producer response.
+        server.shutdown.cancel();
+        server.task.take().unwrap().await.unwrap();
+        assert!(upstream_alive.load(Ordering::SeqCst));
+
+        server.shutdown().await;
+
+        assert!(
+            !upstream_alive.load(Ordering::SeqCst),
+            "shutdown returned before its upstream producer released the response"
         );
-        headers.insert(
-            "access-control-allow-headers",
-            HeaderValue::from_static("Range, If-Range"),
-        );
-        return response(StatusCode::NO_CONTENT, headers, Body::empty(), origin);
     }
-    let mut upstream = inner
-        .client
-        .request(request.method().clone(), &source.url)
-        .header("Referer", "https://scgc.video.play/")
-        .header("Accept-Encoding", "identity");
-    for name in ["range", "if-range"] {
-        if let Some(value) = headers.get(name) {
-            upstream = upstream.header(name, value);
-        }
-    }
-    let upstream = tokio::select! {
-        biased;
-        _ = session.cancellation.cancelled() => return empty(StatusCode::GONE),
-        result = tokio::time::timeout(inner.config.header_timeout, upstream.send()) => match result {
-            Ok(Ok(response)) => response,
-            Ok(Err(error)) if error.is_timeout() => return empty(StatusCode::GATEWAY_TIMEOUT),
-            Err(_) => return empty(StatusCode::GATEWAY_TIMEOUT),
-            _ => return empty(StatusCode::BAD_GATEWAY),
-        }
-    };
-    let status = upstream.status();
-    if status.is_redirection() {
-        return empty(StatusCode::BAD_GATEWAY);
-    }
-    let mut copied = HeaderMap::new();
-    if !status.is_success() {
-        if status == StatusCode::RANGE_NOT_SATISFIABLE
-            && let Some(value) = upstream.headers().get("content-range")
-        {
-            copied.insert("content-range", value.clone());
-        }
-        return response(status, copied, Body::empty(), origin);
-    }
-    let content_type = upstream
-        .headers()
-        .get("content-type")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("")
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim();
-    if !content_type.eq_ignore_ascii_case("video/mp4")
-        && !content_type.eq_ignore_ascii_case("application/octet-stream")
-    {
-        return empty(StatusCode::BAD_GATEWAY);
-    }
-    if upstream
-        .headers()
-        .get("content-encoding")
-        .is_some_and(|value| value != "identity")
-    {
-        return empty(StatusCode::BAD_GATEWAY);
-    }
-    for name in [
-        "content-type",
-        "content-length",
-        "content-range",
-        "accept-ranges",
-        "etag",
-        "last-modified",
-    ] {
-        if let Some(value) = upstream.headers().get(name) {
-            copied.insert(name, value.clone());
-        }
-    }
-    if request.method() == Method::HEAD {
-        return response(status, copied, Body::empty(), origin);
-    }
-    let cancellation = session.cancellation.clone();
-    let producer_cancellation = cancellation.clone();
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
-    tokio::spawn(async move {
-        // This owner observes cancellation even while Hyper has stopped polling the body.
-        let mut upstream = upstream;
-        loop {
-            let item = tokio::select! {
-                biased;
-                _ = producer_cancellation.cancelled() => break,
-                _ = sender.closed() => break,
-                item = upstream.chunk() => match item {
-                    Ok(Some(chunk)) => Ok(chunk),
-                    Ok(None) => break,
-                    Err(error) => Err(io::Error::other(error)),
-                },
-            };
-            let failed = item.is_err();
-            tokio::select! {
-                biased;
-                _ = producer_cancellation.cancelled() => break,
-                result = sender.send(item) => if result.is_err() { break; },
-            }
-            if failed {
-                break;
-            }
-        }
-    });
-    let stream = futures_util::stream::try_unfold(
-        (receiver, cancellation),
-        |(mut receiver, cancellation)| async move {
-            let chunk = tokio::select! {
-                biased;
-                _ = cancellation.cancelled() => return Err(io::Error::new(io::ErrorKind::Interrupted, "playback session closed")),
-                item = receiver.recv() => match item {
-                    Some(chunk) => Some(chunk?),
-                    None => None,
-                },
-            };
-            Ok(chunk.map(|chunk| (chunk, (receiver, cancellation))))
-        },
-    );
-    response(status, copied, Body::from_stream(stream), origin)
 }

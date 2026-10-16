@@ -1,3 +1,4 @@
+mod application;
 pub mod commands;
 pub mod downloads;
 pub mod error;
@@ -33,7 +34,14 @@ pub fn run() {
                 .store_builder("desktop.json")
                 .disable_auto_save()
                 .build()
-                .map_err(|_| error::AppError::new("storage", "无法打开桌面应用数据"));
+                .map_err(|cause| {
+                    error::AppError::with_source(
+                        error::ErrorCode::Storage,
+                        "无法打开桌面应用数据",
+                        cause,
+                    )
+                    .reported("open desktop data")
+                });
             let identity = store
                 .as_ref()
                 .map_err(Clone::clone)

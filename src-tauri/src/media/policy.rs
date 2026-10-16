@@ -1,5 +1,6 @@
-use crate::error::{AppError, Result};
 use reqwest::Url;
+
+use crate::error::{AppError, ErrorCode, Result};
 
 pub fn target(raw: &str, origin: &Url) -> Result<Url> {
     let url = Url::parse(raw).map_err(|_| invalid())?;
@@ -12,9 +13,10 @@ pub fn target(raw: &str, origin: &Url) -> Result<Url> {
     {
         return Err(invalid());
     }
+
     Ok(url)
 }
 
 fn invalid() -> AppError {
-    AppError::new("invalid-input", "仅支持已验证的视频 CDN MP4 地址")
+    AppError::new(ErrorCode::InvalidInput, "仅支持已验证的视频 CDN MP4 地址")
 }

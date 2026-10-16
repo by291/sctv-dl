@@ -1,32 +1,14 @@
+mod handler;
 mod http;
 mod playback;
-pub use playback::{PlaybackRequest, PlaybackService};
 pub(crate) mod policy;
+mod stream;
 
+use serde::Serialize;
+
+pub use crate::programmes::{MediaSource, Quality};
 pub use http::{MediaConfig, MediaServer};
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Quality {
-    Standard,
-    Smooth,
-}
-
-impl Quality {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Standard => "standard",
-            Self::Smooth => "smooth",
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct MediaSource {
-    pub quality: Quality,
-    pub url: String,
-}
+pub use playback::{PlaybackRequest, PlaybackService};
 
 #[derive(Serialize)]
 pub struct PlaybackSource {
