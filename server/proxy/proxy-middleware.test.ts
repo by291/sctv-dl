@@ -22,11 +22,67 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   server.closeAllConnections()
   await new Promise<void>((resolve) => server.close(() => resolve()))
 })
 
 describe('proxy transport contracts', () => {
+  it('logs a connection failure once while retaining the proxy error response', async () => {
+    const cause = new Error('Connection diagnostic')
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', async () => {
+      throw cause
+    })
+
+    const response = await httpFetch(`${origin}/media?url=https://fscgc.scgchc.com/clip.mp4`)
+
+    expect(response.status).toBe(502)
+    expect(await response.text()).not.toContain('Connection diagnostic')
+    expect(errors).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('GET /media'), cause)
+  })
+
+  it.each([404, 503])(
+    'retains upstream HTTP %s while diagnosing only server failures',
+    async (status) => {
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.stubGlobal('fetch', async () => new Response(null, { status }))
+
+      const response = await httpFetch(`${origin}/media?url=https://fscgc.scgchc.com/clip.mp4`)
+
+      expect(response.status).toBe(status)
+      if (status === 503) {
+        expect(errors).toHaveBeenCalledExactlyOnceWith(
+          expect.stringContaining('GET /media'),
+          expect.any(Error),
+        )
+      } else {
+        expect(errors).not.toHaveBeenCalled()
+      }
+    },
+  )
+
+  it('diagnoses an upstream stream failure after headers have already been sent', async () => {
+    const cause = new Error('Upstream stream interrupted')
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let fail!: () => void
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('first'))
+        fail = () => controller.error(cause)
+      },
+    })
+    vi.stubGlobal('fetch', async () => new Response(body))
+    const response = await httpFetch(`${origin}/media?url=https://fscgc.scgchc.com/clip.mp4`)
+    const reader = response.body!.getReader()
+    await reader.read()
+
+    fail()
+
+    await expect(reader.read()).rejects.toThrow()
+    expect(errors).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('GET /media'), cause)
+  })
+
   it.each([
     '/app/v1/programs',
     '/app/v1/programs/1/dates/list',
@@ -183,6 +239,7 @@ describe('proxy transport contracts', () => {
   })
 
   it('aborts an upstream request when the downstream client disconnects', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     let upstreamSignal: AbortSignal | undefined
     vi.stubGlobal('fetch', (_target: URL, options: RequestInit) => {
       upstreamSignal = options.signal as AbortSignal
@@ -201,5 +258,6 @@ describe('proxy transport contracts', () => {
     controller.abort()
     await response
     await vi.waitFor(() => expect(upstreamSignal!.aborted).toBe(true))
+    expect(errors).not.toHaveBeenCalled()
   })
 })

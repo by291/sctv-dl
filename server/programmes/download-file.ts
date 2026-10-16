@@ -1,21 +1,13 @@
 import { resolveVideo } from './video-variants.ts'
 
-import type { ProgrammeContent } from '../../shared/contracts/programmes.ts'
-import type { Quality } from '../../shared/contracts/programmes.ts'
-
-export interface DownloadFile {
-  contentId: string
-  title: string
-  url: string
-  filename: string
-  quality: Quality
-}
+import type { ProgrammeContent, Quality } from '../../shared/contracts/programmes.ts'
+import type { PreparedDownload } from '../../shared/contracts/downloads.ts'
 
 export function makeDownloadFile(
   content: ProgrammeContent,
   date: string,
   requested: Quality,
-): DownloadFile {
+): PreparedDownload {
   const variant = resolveVideo(content, requested)
 
   if (!variant) {

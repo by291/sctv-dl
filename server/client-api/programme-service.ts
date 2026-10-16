@@ -5,25 +5,30 @@ import { getVideoVariants, resolveVideo } from '../programmes/video-variants.ts'
 import { validateMediaTarget } from '../proxy/proxy-policy.ts'
 
 import type { ProgrammeApi } from '../programmes/programme-client.ts'
-import type { ContentRef } from '../../shared/contracts/programmes.ts'
+import type { ContentRef, ProgrammeContent } from '../../shared/contracts/programmes.ts'
 import type { PlaybackRequest, PlaybackSession } from '../../shared/contracts/media.ts'
 import type { DownloadRequest, PreparedDownloads } from '../../shared/contracts/downloads.ts'
 
-export class ClientApiError extends Error {
-  readonly status: number
-
-  constructor(message: string, status = 400) {
-    super(message)
-    this.status = status
-  }
+export class ProgrammeUnavailableError extends Error {
+  readonly code = 'not-found'
 }
 
-export function createProgrammeService(client: ProgrammeApi, signal: AbortSignal) {
-  async function broadcast(reference: Pick<ContentRef, 'programmeId' | 'dateId'>) {
+export interface ProgrammeService {
+  playback(request: PlaybackRequest): Promise<PlaybackSession>
+  downloads(request: DownloadRequest): Promise<PreparedDownloads>
+}
+
+export function createProgrammeService(
+  client: ProgrammeApi,
+  signal: AbortSignal,
+): ProgrammeService {
+  async function loadBroadcast(
+    reference: Pick<ContentRef, 'programmeId' | 'dateId'>,
+  ): Promise<{ date: string; contents: ProgrammeContent[] }> {
     const dates = await client.dates(reference.programmeId, signal)
     const date = dates.find((item) => item.id === reference.dateId)
     if (!date) {
-      throw new ClientApiError('播出日期已不可用，请刷新后重试', 404)
+      throw new ProgrammeUnavailableError('播出日期已不可用，请刷新后重试')
     }
 
     const contents = await client.contents(reference.programmeId, reference.dateId, signal)
@@ -33,23 +38,26 @@ export function createProgrammeService(client: ProgrammeApi, signal: AbortSignal
 
   return {
     async playback(request: PlaybackRequest): Promise<PlaybackSession> {
-      const { contents } = await broadcast(request)
+      const { contents } = await loadBroadcast(request)
       const content = contents.find((item) => item.id === request.contentId)
       const selected = content && resolveVideo(content, request.quality)
-      if (!content || !selected) {
-        throw new ClientApiError('这条内容没有可播放的视频', 404)
+      const variants = content ? getVideoVariants(content) : []
+      // Resolve against original variants before URL normalization; duplicate URLs retain one quality.
+      const selectedVariant = variants.find((variant) => variant.url === selected?.url)
+      if (!selectedVariant) {
+        throw new ProgrammeUnavailableError('这条内容没有可播放的视频')
       }
 
-      const sources = getVideoVariants(content).map((variant) => ({
+      const sources = variants.map((variant) => ({
         ...variant,
         url: validateMediaTarget(variant.url).href,
       }))
-      const selectedQuality = sources.find((source) => source.url === selected.url)!.quality
 
-      return { id: randomUUID(), selectedQuality, sources }
+      return { id: randomUUID(), selectedQuality: selectedVariant.quality, sources }
     },
+
     async downloads(request: DownloadRequest): Promise<PreparedDownloads> {
-      const { date, contents } = await broadcast(request)
+      const { date, contents } = await loadBroadcast(request)
       const result: PreparedDownloads = { files: [], failures: [], usedFallback: false }
 
       for (const contentId of request.contentIds) {
@@ -61,6 +69,7 @@ export function createProgrammeService(client: ProgrammeApi, signal: AbortSignal
 
           const file = makeDownloadFile(content, date, request.quality)
           validateMediaTarget(file.url)
+
           result.files.push(file)
           result.usedFallback ||= file.quality !== request.quality
         } catch (cause) {

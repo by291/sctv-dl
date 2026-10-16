@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
+import { reportHttpFailure } from '../http-diagnostics.ts'
 import { contentDisposition } from './proxy-policy.ts'
 import { programmeHeaders } from './programme-headers.ts'
 
@@ -17,6 +18,7 @@ export async function streamUpstream(
   const abort = () => controller.abort()
   request.once('aborted', abort)
   response.once('close', abort)
+
   const timer = setTimeout(abort, 20_000)
   try {
     const headers: Record<string, string> = media
@@ -37,6 +39,7 @@ export async function streamUpstream(
       signal: controller.signal,
     })
     clearTimeout(timer)
+
     if (upstream.status >= 300 && upstream.status < 400) {
       await upstream.body?.cancel()
       throw new Error('视频服务返回不支持的重定向')
@@ -44,6 +47,14 @@ export async function streamUpstream(
 
     if (!upstream.ok) {
       await upstream.body?.cancel()
+      if (upstream.status >= 500) {
+        reportHttpFailure(
+          request.method,
+          media ? '/media' : '/api',
+          new Error(`Upstream returned HTTP ${upstream.status}`),
+        )
+      }
+
       response
         .writeHead(upstream.status, { 'Content-Type': 'text/plain; charset=utf-8' })
         .end(`上游服务错误：${upstream.status}`)
@@ -85,14 +96,21 @@ export async function streamUpstream(
       return
     }
 
-    await pipeline(
-      Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]),
-      response,
-    )
-  } catch {
+    const source = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0])
+    source.once('error', (cause) => {
+      // pipeline destroys the response on source errors, so capture them before close aborts it.
+      if (!controller.signal.aborted) {
+        reportHttpFailure(request.method, media ? '/media' : '/api', cause)
+      }
+    })
+
+    await pipeline(source, response)
+  } catch (cause) {
     if (response.destroyed) {
       return
     }
+
+    reportHttpFailure(request.method, media ? '/media' : '/api', cause)
 
     if (response.headersSent) {
       response.destroy()

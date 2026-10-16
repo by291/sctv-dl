@@ -56,6 +56,8 @@ Static hosting such as GitHub Pages alone cannot supply the Referer required by 
 
 Startup fails when `dist/index.html` is missing or the port is invalid. SIGINT and SIGTERM stop accepting new requests and give active transfers up to 30 seconds before closing connections.
 
+Client API and proxy boundaries report server failures to stderr with the request method, route pathname, and original error cause. Caller query values are omitted from the diagnostic label. Invalid input, missing records, and client disconnects do not produce failure diagnostics.
+
 For deployment verification, check `/healthz`, open a programme route directly, load programme metadata, and test media with HEAD or a small Range request. A complete episode download is unnecessary.
 
 | Symptom                               | Check                                                               |

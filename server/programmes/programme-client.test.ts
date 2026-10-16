@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { createProgrammeApi } from './programme-client.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createProgrammeApi, UpstreamTimeoutError } from './programme-client.ts'
 import { mediaUrl, imageUrl } from './upstream-urls.ts'
 
 const reply = (data: unknown, rs = 200) =>
@@ -7,7 +7,71 @@ const reply = (data: unknown, rs = 200) =>
     headers: { 'content-type': 'application/json' },
   })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('programme API', () => {
+  it('limits response headers while preserving the timeout cause', async () => {
+    vi.useFakeTimers()
+    const client = createProgrammeApi('/api', async (_url, options) => {
+      const signal = options!.signal!
+
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    const result = client.programmes()
+    let settled = false
+    const failure = result.catch((cause: unknown) => {
+      settled = true
+
+      return cause
+    })
+
+    await vi.advanceTimersByTimeAsync(19_999)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await failure).toBeInstanceOf(UpstreamTimeoutError)
+    expect(await failure).toMatchObject({ cause: expect.objectContaining({ name: 'AbortError' }) })
+  })
+
+  it('allows a response body to finish after the header deadline has elapsed', async () => {
+    vi.useFakeTimers()
+    let finish!: () => void
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        finish = () => {
+          controller.enqueue(new TextEncoder().encode('{"rs":200,"data":{"records":[]}}'))
+          controller.close()
+        }
+      },
+    })
+    const client = createProgrammeApi('/api', async () => new Response(body))
+    const result = client.programmes()
+
+    await vi.advanceTimersByTimeAsync(21_000)
+    finish()
+
+    await expect(result).resolves.toEqual([])
+  })
+
+  it('preserves the original connection error for server diagnostics', async () => {
+    const cause = new Error('Connection refused')
+    const client = createProgrammeApi('/api', async () => {
+      throw cause
+    })
+
+    await expect(client.programmes()).rejects.toMatchObject({ cause })
+  })
+
+  it('preserves the invalid response cause for server diagnostics', async () => {
+    const client = createProgrammeApi('/api', async () => new Response('not JSON'))
+
+    await expect(client.programmes()).rejects.toMatchObject({ cause: expect.any(SyntaxError) })
+  })
+
   it('retains large string IDs and expands relative video URLs', async () => {
     const fetcher = vi.fn().mockResolvedValue(
       reply([

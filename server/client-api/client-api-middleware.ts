@@ -1,79 +1,39 @@
-import { z } from 'zod'
-
-import { downloadRequestSchema } from '../../shared/contracts/downloads.ts'
-import { playbackRequestSchema } from '../../shared/contracts/media.ts'
-import {
-  createProgrammeApi,
-  UpstreamError,
-  UpstreamTimeoutError,
-} from '../programmes/programme-client.ts'
+import { reportHttpFailure } from '../http-diagnostics.ts'
+import { createProgrammeApi } from '../programmes/programme-client.ts'
 import { programmeHeaders } from '../proxy/programme-headers.ts'
-import { ClientApiError, createProgrammeService } from './programme-service.ts'
+import { parseClientRoute } from './client-route.ts'
+import { describeClientApiError } from './http-errors.ts'
+import { createProgrammeService } from './programme-service.ts'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ProgrammeApi } from '../programmes/programme-client.ts'
+import type { ClientRoute } from './client-route.ts'
 
-async function readJson(request: IncomingMessage, signal: AbortSignal): Promise<unknown> {
-  if (!/^application\/json(?:;|$)/i.test(request.headers['content-type'] || '')) {
-    throw new ClientApiError('请求必须使用 JSON')
-  }
-
-  const raw = await new Promise<string>((resolve, reject) => {
-    let length = 0
-    const chunks: Buffer[] = []
-    const abort = () => {
-      cleanup()
-      reject(new ClientApiError('请求已取消', 504))
-    }
-
-    const data = (chunk: Buffer) => {
-      length += chunk.length
-      if (length <= 16_384) {
-        chunks.push(chunk)
-      }
-    }
-
-    const error = (cause: Error) => {
-      cleanup()
-      reject(cause)
-    }
-
-    const end = () => {
-      cleanup()
-      if (length > 16_384) {
-        reject(new ClientApiError('请求内容过大'))
-      } else {
-        resolve(Buffer.concat(chunks).toString('utf8'))
-      }
-    }
-
-    const cleanup = () => {
-      clearTimeout(bodyTimer)
-      request.off('data', data)
-      request.off('end', end)
-      request.off('error', error)
-      signal.removeEventListener('abort', abort)
-    }
-
-    const bodyTimer = setTimeout(() => {
-      cleanup()
-      request.resume()
-      reject(new ClientApiError('请求内容接收超时', 504))
-    }, 20_000)
-    request.on('data', data).once('end', end).once('error', error)
-    signal.addEventListener('abort', abort, { once: true })
-    if (signal.aborted) {
-      abort()
-    }
-  })
-
-  try {
-    return JSON.parse(raw) as unknown
-  } catch {
-    throw new ClientApiError('请求不是有效 JSON')
+function executeRoute(
+  route: ClientRoute,
+  client: ProgrammeApi,
+  signal: AbortSignal,
+): Promise<unknown> {
+  switch (route.kind) {
+    case 'catalogue':
+      return client.programmes(signal)
+    case 'dates':
+      return client.dates(route.programmeId, signal)
+    case 'contents':
+      return client.contents(route.programmeId, route.dateId, signal)
+    case 'playback':
+      return createProgrammeService(client, signal).playback(route.input)
+    case 'downloads':
+      return createProgrammeService(client, signal).downloads(route.input)
   }
 }
 
-function reply(request: IncomingMessage, response: ServerResponse, status: number, value: unknown) {
+function reply(
+  request: IncomingMessage,
+  response: ServerResponse,
+  status: number,
+  value: unknown,
+): void {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -86,16 +46,16 @@ export function clientApiMiddleware(
   response: ServerResponse,
   next: () => void,
 ): void {
-  let path: string
+  let pathname: string
   try {
-    path = new URL(request.url || '/', 'http://localhost').pathname
+    pathname = new URL(request.url || '/', 'http://localhost').pathname
   } catch {
     reply(request, response, 400, { error: { code: 'invalid-input', message: '请求地址无效' } })
 
     return
   }
 
-  if (path !== '/client-api' && !path.startsWith('/client-api/')) {
+  if (pathname !== '/client-api' && !pathname.startsWith('/client-api/')) {
     next()
 
     return
@@ -107,50 +67,11 @@ export function clientApiMiddleware(
   response.once('close', abort)
 
   void (async () => {
-    const catalogue = path === '/client-api/v1/programmes'
-    const dates = path.match(/^\/client-api\/v1\/programmes\/([^/]+)\/dates$/)
-    const contents = path.match(/^\/client-api\/v1\/programmes\/([^/]+)\/dates\/([^/]+)\/contents$/)
-    const preparation =
-      path === '/client-api/v1/playback/prepare' || path === '/client-api/v1/downloads/prepare'
-    if (!catalogue && !dates && !contents && !preparation) {
-      throw new ClientApiError('不支持的客户端接口', 404)
-    }
-
-    const methods = preparation ? ['POST'] : ['GET', 'HEAD']
-    if (!methods.includes(request.method || '')) {
-      response.setHeader('Allow', methods.join(', '))
-      throw new ClientApiError('不支持的请求方法', 405)
-    }
-
-    if (
-      (dates && !/^\d+$/.test(dates[1]!)) ||
-      (contents && (!/^\d+$/.test(contents[1]!) || !/^\d+$/.test(contents[2]!)))
-    ) {
-      throw new ClientApiError('接口 ID 无效')
-    }
-
-    const body = preparation ? await readJson(request, controller.signal) : undefined
-    // Validate before any upstream request or caller-controlled target is resolved.
-    const parsed = preparation
-      ? path.endsWith('/downloads/prepare')
-        ? downloadRequestSchema.parse(body)
-        : playbackRequestSchema.parse(body)
-      : null
+    // Validate the route and body before creating an identity or making upstream requests.
+    const route = await parseClientRoute(pathname, request, controller.signal)
     const headers = programmeHeaders(request, response, '/client-api')
     const client = createProgrammeApi('https://gw.scgchc.com', fetch, headers)
-    const service = createProgrammeService(client, controller.signal)
-    let data: unknown
-    if (catalogue) {
-      data = await client.programmes(controller.signal)
-    } else if (contents) {
-      data = await client.contents(contents[1]!, contents[2]!, controller.signal)
-    } else if (dates) {
-      data = await client.dates(dates[1]!, controller.signal)
-    } else if (parsed && 'contentIds' in parsed) {
-      data = await service.downloads(parsed)
-    } else if (parsed) {
-      data = await service.playback(parsed)
-    }
+    const data = await executeRoute(route, client, controller.signal)
 
     reply(request, response, 200, { data })
   })()
@@ -159,33 +80,16 @@ export function clientApiMiddleware(
         return
       }
 
-      const status =
-        controller.signal.aborted || cause instanceof UpstreamTimeoutError
-          ? 504
-          : cause instanceof ClientApiError
-            ? cause.status
-            : cause instanceof z.ZodError
-              ? 400
-              : cause instanceof UpstreamError
-                ? 502
-                : 500
-      const code =
-        status === 504
-          ? 'timeout'
-          : status === 404
-            ? 'not-found'
-            : status < 500
-              ? 'invalid-input'
-              : 'upstream'
-      const message =
-        status === 504
-          ? '节目服务请求超时，请稍后重试'
-          : cause instanceof z.ZodError
-            ? '请求参数无效'
-            : cause instanceof Error && status !== 500
-              ? cause.message
-              : '节目服务暂不可用'
-      reply(request, response, status, { error: { code, message } })
+      const failure = describeClientApiError(cause, controller.signal)
+      if (failure.status >= 500 && !controller.signal.aborted) {
+        reportHttpFailure(request.method, pathname, cause)
+      }
+
+      if (failure.allow) {
+        response.setHeader('Allow', failure.allow)
+      }
+
+      reply(request, response, failure.status, { error: failure.error })
     })
     .finally(() => {
       request.off('aborted', abort)
