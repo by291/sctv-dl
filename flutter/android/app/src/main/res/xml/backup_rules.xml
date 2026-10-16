@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Only user preferences, favourites and history are recoverable on a new installation. -->
+    <include domain="file" path="user.sqlite" />
+    <include domain="file" path="user.sqlite-wal" />
+    <include domain="file" path="user.sqlite-shm" />
+</full-backup-content>
