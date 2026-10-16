@@ -36,7 +36,7 @@ onMounted(() => {
         typeof video.webkitSetPresentationMode === 'function')
 
     // The dialog keys this component by session so each preview owns one instance.
-    player = new Artplayer({
+    const instance = new Artplayer({
       container: container.value,
       url: props.url,
       poster: props.poster || '',
@@ -62,8 +62,21 @@ onMounted(() => {
       hotkey: true,
       moreVideoAttr: { controls: false, preload: 'metadata' },
     })
-    player.on('video:error', () => emit('error'))
-    player.on('video:loadedmetadata', () => emit('ready'))
+    player = instance
+
+    instance.on('video:error', () => emit('error'))
+    instance.on('video:loadedmetadata', () => {
+      // WebKit can defer canplay until a metadata-only preview is explicitly played.
+      if (instance.video.paused && !instance.video.seeking) {
+        instance.loading.show = false
+        instance.mask.show = true
+      }
+
+      emit('ready')
+    })
+    instance.on('video:playing', () => {
+      instance.loading.show = false
+    })
   } catch {
     emit('error')
   }
