@@ -21,7 +21,7 @@ export default defineConfig({
   server: {
     port: 5180,
     strictPort: true,
-    watch: { ignored: ['**/android/**', '**/src-tauri/**'] },
+    watch: { ignored: ['**/android/**', '**/src-tauri/**', '**/flutter/**'] },
   },
   preview: { port: 4173, strictPort: true },
 })

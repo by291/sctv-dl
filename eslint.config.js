@@ -87,6 +87,7 @@ export default defineConfig(
       '.cache/**',
       '.superpowers/**',
       'android/**',
+      'flutter/**',
       'src-tauri/target/**',
       'src-tauri/gen/**',
     ],

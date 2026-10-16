@@ -9,3 +9,7 @@ src-tauri/gen
 # Native sources use Spotless; Gradle owns generated products.
 android/**
 !android/*.md
+
+# Flutter owns Dart/native formatting and vendored plugin sources.
+flutter/**
+!flutter/*.md

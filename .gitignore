@@ -30,3 +30,20 @@ android/local.properties
 android/*.jks
 android/*.keystore
 android/captures/
+
+# Flutter tooling and generated native build products
+flutter/.dart_tool/
+flutter/.flutter-plugins-dependencies
+flutter/build/
+flutter/android/.gradle/
+flutter/android/local.properties
+flutter/android/key.properties
+flutter/android/**/build/
+flutter/ios/Pods/
+flutter/ios/.symlinks/
+flutter/ios/Flutter/ephemeral/
+flutter/ios/Flutter/Generated.xcconfig
+flutter/ios/Flutter/flutter_export_environment.sh
+flutter/ios/Flutter/.last_build_id
+flutter/**/DerivedData/
+flutter/**/.DS_Store
