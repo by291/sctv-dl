@@ -174,24 +174,91 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
           ),
         );
       }
+      final rows = _groupHistory(items, DateTime.now());
+      final rowIndices = {
+        for (var index = 0; index < rows.length; index++)
+          rows[index].entry.selection.ref.key: index,
+      };
       return ListView.separated(
         controller: _scroll,
         restorationId: 'viewing-history',
         padding: const EdgeInsets.all(16),
-        itemCount: items.length,
+        itemCount: rows.length,
+        findItemIndexCallback: (key) =>
+            key is ValueKey<String> ? rowIndices[key.value] : null,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final entry = items[index];
-          return HistoryCard(
+          final row = rows[index];
+          final entry = row.entry;
+          return Column(
             key: ValueKey(entry.selection.ref.key),
-            entry: entry,
-            onOpen: () => widget.onOpen(entry),
-            onRemove: _removingHistory.contains(entry.selection.ref.key)
-                ? null
-                : () => unawaited(_removeHistory(entry)),
+            children: [
+              if (row.heading case final heading?)
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(4, index == 0 ? 0 : 8, 4, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            heading,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              HistoryCard(
+                entry: entry,
+                onOpen: () => widget.onOpen(entry),
+                onRemove: _removingHistory.contains(entry.selection.ref.key)
+                    ? null
+                    : () => unawaited(_removeHistory(entry)),
+              ),
+            ],
           );
         },
       );
     },
   );
+}
+
+List<({String? heading, ViewingEntry entry})> _groupHistory(
+  List<ViewingEntry> entries,
+  DateTime now,
+) {
+  final today = DateUtils.dateOnly(now.toLocal());
+  // Calendar arithmetic keeps yesterday correct across daylight-saving changes.
+  final yesterday = DateTime(today.year, today.month, today.day - 1);
+  final groups = <String, List<ViewingEntry>>{'今天': [], '昨天': [], '更早': []};
+  final sorted = [...entries]
+    ..sort((a, b) {
+      final time = b.viewedAt.compareTo(a.viewedAt);
+      return time == 0
+          ? a.selection.ref.key.compareTo(b.selection.ref.key)
+          : time;
+    });
+  for (final entry in sorted) {
+    final day = entry.viewedAt.toLocal();
+    final label = DateUtils.isSameDay(day, today)
+        ? '今天'
+        : DateUtils.isSameDay(day, yesterday)
+        ? '昨天'
+        : '更早';
+    groups[label]!.add(entry);
+  }
+  return [
+    for (final group in groups.entries)
+      for (var index = 0; index < group.value.length; index++)
+        (heading: index == 0 ? group.key : null, entry: group.value[index]),
+  ];
 }

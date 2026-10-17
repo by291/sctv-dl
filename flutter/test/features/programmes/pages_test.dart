@@ -149,7 +149,9 @@ void main() {
             .value,
         .2,
       );
-      await tester.tap(find.byTooltip('移除观看记录'));
+      await tester.tap(find.byTooltip('更多操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('移除观看记录'));
       await tester.pumpAndSettle();
       expect(find.byType(SnackBar), findsOneWidget);
       expect(tester.takeException(), isNull);

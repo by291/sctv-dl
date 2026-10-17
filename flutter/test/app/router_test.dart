@@ -938,6 +938,21 @@ void main() {
           .controller!
           .offset;
       expect(offset, greaterThan(0));
+      await tester.tap(
+        find.textContaining('News episode ').hitTestable().first,
+      );
+      // The capturing backend intentionally leaves source preparation pending.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(harness.backend.inputs, isNotEmpty);
+      harness.router.pop();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<ListView>(find.byType(ListView)).controller!.offset,
+        closeTo(offset, 1),
+      );
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(harness.router.state.uri.path, '/');
