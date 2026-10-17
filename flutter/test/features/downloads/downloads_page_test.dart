@@ -19,8 +19,12 @@ void main() {
     broadcast: BroadcastDate(id: '2', date: '2026-10-16'),
     content: ProgrammeContent(id: '3', title: '四川新闻 20261016'),
   );
-  DownloadTask task(DownloadState state, {bool resume = false}) => DownloadTask(
-    id: '1',
+  DownloadTask task(
+    DownloadState state, {
+    bool resume = false,
+    String id = '1',
+  }) => DownloadTask(
+    id: id,
     attemptId: 'a1',
     selection: selection,
     requestedQuality: VideoQuality.standard,
@@ -35,6 +39,81 @@ void main() {
         ? 'documents:Downloads/video.mp4'
         : null,
   );
+
+  testWidgets('filter selection removes only visible records and keeps files', (
+    tester,
+  ) async {
+    final repository = PageRepository([
+      task(DownloadState.completed, id: 'done'),
+      task(DownloadState.missing, id: 'gone'),
+      task(DownloadState.running, id: 'running').copyWith(totalBytes: 1000),
+    ]);
+    await tester.pumpWidget(
+      host(
+        home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('download-filter-removed')));
+    await tester.pumpAndSettle();
+    expect(find.byType(Card), findsOneWidget);
+    await tester.tap(find.byTooltip('批量管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选当前列表'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CoverImage), findsOneWidget);
+    await tester.tap(find.byTooltip('批量操作'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('删除视频文件'), findsNothing);
+    await tester.tap(find.text('移除记录 · 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '移除记录'));
+    await tester.pumpAndSettle();
+    expect(repository.removed, ['gone']);
+    expect(repository.deleted, isEmpty);
+    expect(repository.tasks.map((task) => task.id), ['done', 'running']);
+    expect(find.text('没有符合筛选的任务'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await repository.close();
+  });
+
+  testWidgets('batch deletion requires confirmation and preserves records', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = PageRepository([task(DownloadState.completed)]);
+    await tester.pumpWidget(
+      host(
+        theme: ThemeData.dark(),
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('批量管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选当前列表'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('批量操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除视频文件 · 1'));
+    await tester.pumpAndSettle();
+    expect(repository.deleted, isEmpty);
+    await tester.tap(find.widgetWithText(FilledButton, '删除文件'));
+    await tester.pumpAndSettle();
+    expect(repository.deleted, ['1']);
+    expect(repository.removed, isEmpty);
+    expect(repository.tasks.single.state, DownloadState.missing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await repository.close();
+  });
 
   testWidgets('deleted files have their own group and no failure alert', (
     tester,
@@ -52,6 +131,48 @@ void main() {
     expect(find.text('未完成 · 1'), findsNothing);
     expect(find.text('文件已删除'), findsNothing);
     expect(find.text('重新下载'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await repository.close();
+  });
+
+  testWidgets('filter changes clear selection and restore each list position', (
+    tester,
+  ) async {
+    final repository = PageRepository([
+      for (var i = 0; i < 20; i++) task(DownloadState.completed, id: '$i'),
+      task(DownloadState.missing, id: 'gone'),
+    ]);
+    await tester.pumpWidget(
+      host(
+        home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final list = find.byType(ListView);
+    await tester.drag(list, const Offset(0, -600));
+    await tester.pumpAndSettle();
+    ScrollPosition position() => tester
+        .state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)),
+        )
+        .position;
+    final offset = position().pixels;
+    expect(offset, greaterThan(0));
+    await tester.tap(find.byTooltip('批量管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选当前列表'));
+    await tester.pumpAndSettle();
+    final removed = find.byKey(const ValueKey('download-filter-removed'));
+    await tester.ensureVisible(removed);
+    await tester.tap(removed);
+    await tester.pumpAndSettle();
+    expect(find.text('已选择 0 项'), findsOneWidget);
+    expect(find.byType(Card), findsOneWidget);
+    final all = find.byKey(const ValueKey('download-filter-all'));
+    await tester.ensureVisible(all);
+    await tester.tap(all);
+    await tester.pumpAndSettle();
+    expect(position().pixels, offset);
     await tester.pumpWidget(const SizedBox());
     await repository.close();
   });
@@ -258,6 +379,26 @@ class PageRepository implements DownloadRepository {
   final List<DownloadTask> tasks;
   final changes = StreamController<List<DownloadTask>>.broadcast();
   String? published;
+  final removed = <String>[];
+  final deleted = <String>[];
+  @override
+  Future<void> remove(String id) async {
+    removed.add(id);
+    tasks.removeWhere((task) => task.id == id);
+    changes.add(List.of(tasks));
+  }
+
+  @override
+  Future<void> deleteFile(String id) async {
+    deleted.add(id);
+    final index = tasks.indexWhere((task) => task.id == id);
+    tasks[index] = tasks[index].copyWith(
+      state: DownloadState.missing,
+      fileLocation: null,
+    );
+    changes.add(List.of(tasks));
+  }
+
   @override
   Future<List<DownloadTask>> loadTasks() async => tasks;
   @override

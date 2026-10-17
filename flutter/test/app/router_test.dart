@@ -52,6 +52,24 @@ DownloadTask localTask() => DownloadTask(
 );
 
 void main() {
+  testWidgets('back leaves download selection before leaving its tab', (
+    tester,
+  ) async {
+    final harness = RouteHarness();
+    harness.downloads.tasks = [localTask()];
+    await harness.mount(tester, '/downloads');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('批量管理'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(DownloadsPage), findsOneWidget);
+    expect(find.byTooltip('批量管理'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(LibraryPage), findsOneWidget);
+  });
+
   for (final player in [false, true]) {
     testWidgets('download chooser uses the active route player=$player', (
       tester,

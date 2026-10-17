@@ -369,11 +369,36 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 500));
       await capture('downloads-fixture-${brightness.name}');
-      await tester.scrollUntilVisible(find.text('播放'), 200);
+      await tester.scrollUntilVisible(
+        find.text('播放'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       await capture('downloads-completed-${brightness.name}');
-      await tester.scrollUntilVisible(find.text('已移除 · 1'), 200);
+      await tester.scrollUntilVisible(
+        find.text('已移除 · 1'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       await capture('downloads-removed-${brightness.name}');
       expect(find.text('文件已删除'), findsNothing);
+      final completedFilter = find.byKey(
+        const ValueKey('download-filter-completed'),
+      );
+      await tester.ensureVisible(completedFilter);
+      await tester.tap(completedFilter);
+      await tester.pump(const Duration(milliseconds: 300));
+      await capture('downloads-filter-${brightness.name}');
+      await tester.tap(find.byTooltip('批量管理'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('全选当前列表'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await capture('downloads-selection-${brightness.name}');
+      await tester.tap(find.byTooltip('批量操作'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await capture('downloads-actions-${brightness.name}');
+      await tester.binding.handlePopRoute();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull);
     }
     await tester.pumpWidget(const SizedBox.shrink());
