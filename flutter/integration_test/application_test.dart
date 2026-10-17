@@ -177,6 +177,14 @@ void main() {
     expect(archive.controller.dates, isNotEmpty);
     expect(archive.controller.contents, isNotEmpty);
     await capture('archive');
+    await tester.tap(find.byTooltip('批量下载'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await capture('archive-selection');
+    await tester.tap(find.text('全选'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await capture('archive-selected');
+    await tester.tap(find.byTooltip('退出批量选择'));
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('更多日期'));
     await tester.pump(const Duration(milliseconds: 400));
     await capture('dates');
@@ -258,6 +266,9 @@ void main() {
     await tester.tap(find.byType(ProgrammeCard));
     await waitFor(() => find.byType(ArchivePage).evaluate().isNotEmpty);
     await capture('archive-dark');
+    await tester.tap(find.byTooltip('批量下载'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await capture('archive-selection-dark');
     expect(tester.takeException(), isNull);
 
     // Presentation-only fixtures exercise populated download cards without
