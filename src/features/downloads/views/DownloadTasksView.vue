@@ -1,61 +1,198 @@
 <script setup lang="ts">
-import { NAlert, NButton, NProgress, NSpin } from 'naive-ui'
-import { FileVideo } from '@lucide/vue'
+import { computed, nextTick, onDeactivated, ref, shallowRef } from 'vue'
+import { NAlert, NButton, NCheckbox, NModal } from 'naive-ui'
 
 import { useDownloadTasksStore } from '@/features/downloads/stores/useDownloadTasksStore'
+import {
+  availableDownloadActions,
+  isActiveDownload,
+} from '@/features/downloads/model/download-actions'
+import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
+import DownloadTaskCard from '@/features/downloads/components/DownloadTaskCard.vue'
+import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePreviewDialog.vue'
 import StatePanel from '@/shared/components/StatePanel.vue'
 import { usePlatform } from '@/shared/platform/usePlatform'
+import { usePageScroll } from '@/shared/navigation/page-scroll'
 
-import type { DownloadTask } from '@shared/contracts/downloads'
+import type { DownloadTask, DownloadActionRequest } from '@shared/contracts/downloads'
+import type { ProgrammeContent } from '@shared/contracts/programmes'
+import type { PreviewInput } from '@/features/programmes/model/playback-state'
+import type { BatchResult, DownloadTarget } from '@/features/downloads/stores/useDownloadTasksStore'
+
+type Filter = 'all' | 'active' | 'unfinished' | 'completed' | 'missing'
+const { pageScrollPosition, scrollPageTo } = usePageScroll()
 
 const downloads = usePlatform().downloads
 const tasks = useDownloadTasksStore()
+const settings = useSettingsStore()
+const filter = ref<Filter>('all')
+const selection = ref<string[]>([])
+const batchBusy = ref(false)
+const batchFeedback = shallowRef<BatchResult | null>(null)
+const offsets = new Map<Filter, number>()
+const content = ref<ProgrammeContent | null>(null)
+const input = shallowRef<PreviewInput | null>(null)
+const confirmation = shallowRef<{
+  action: DownloadActionRequest['action']
+  targets: DownloadTarget[]
+  description: string
+} | null>(null)
+const filterOptions: { label: string; value: Filter }[] = [
+  { label: '全部任务', value: 'all' },
+  { label: '进行中', value: 'active' },
+  { label: '未完成', value: 'unfinished' },
+  { label: '已完成', value: 'completed' },
+  { label: '文件丢失', value: 'missing' },
+]
+const batchOptions: { label: string; value: DownloadActionRequest['action'] }[] = [
+  { label: '暂停', value: 'pause' },
+  { label: '继续下载', value: 'resume' },
+  { label: '重新下载', value: 'restart' },
+  { label: '取消下载', value: 'cancel' },
+  { label: '移除记录', value: 'remove' },
+  { label: '删除文件', value: 'deleteFile' },
+]
 
-const labels: Record<DownloadTask['state'], string> = {
-  queued: '等待下载',
-  running: '正在下载',
-  completed: '已保存',
-  failed: '下载失败',
-  cancelled: '已取消',
+function matchesFilter(task: DownloadTask, value: Filter): boolean {
+  switch (value) {
+    case 'active':
+      return isActiveDownload(task)
+    case 'unfinished':
+      return !['completed', 'cancelled', 'missing'].includes(task.state)
+    case 'completed':
+      return task.state === 'completed'
+    case 'missing':
+      return task.state === 'missing'
+    default:
+      return true
+  }
 }
-const progressColors: Record<DownloadTask['state'], string> = {
-  queued: 'var(--muted)',
-  running: 'var(--accent)',
-  completed: 'var(--green)',
-  failed: 'var(--accent)',
-  cancelled: 'var(--muted)',
+
+const filterTabs = computed(() =>
+  filterOptions.map((option) => ({
+    ...option,
+    count: tasks.tasks.filter((task) => matchesFilter(task, option.value)).length,
+  })),
+)
+const filtered = computed(() => tasks.tasks.filter((task) => matchesFilter(task, filter.value)))
+const selectedTasks = computed(() =>
+  filtered.value.filter((task) => selection.value.includes(task.id)),
+)
+const batchActions = computed(() =>
+  batchOptions.filter((option) =>
+    selectedTasks.value.some((task) => availableDownloadActions(task).includes(option.value)),
+  ),
+)
+const allSelected = computed(
+  () => filtered.value.length > 0 && selectedTasks.value.length === filtered.value.length,
+)
+
+async function changeFilter(value: Filter): Promise<void> {
+  if (filter.value === value) {
+    return
+  }
+
+  offsets.set(filter.value, pageScrollPosition().top)
+  filter.value = value
+  selection.value = []
+  batchFeedback.value = null
+  await nextTick()
+  scrollPageTo({ top: offsets.get(value) ?? 0 })
 }
 
-function bytes(value: number): string {
-  if (value < 1024) {
-    return `${value} B`
-  }
-
-  if (value < 1024 * 1024) {
-    return `${(value / 1024).toFixed(1)} KiB`
-  }
-
-  if (value < 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} MiB`
-  }
-
-  return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GiB`
+function select(id: string, checked: boolean): void {
+  batchFeedback.value = null
+  selection.value = checked
+    ? [...new Set([...selection.value, id])]
+    : selection.value.filter((value) => value !== id)
 }
 
-function progress(task: DownloadTask): number {
-  if (task.state === 'completed') {
-    return 100
+function batch(action: DownloadActionRequest['action']): void {
+  if (batchBusy.value) {
+    return
   }
 
-  return Math.min(99, Math.floor((task.receivedBytes / (task.totalBytes || 1)) * 100))
+  const targets = selectedTasks.value.map((task) => ({
+    taskId: task.id,
+    attemptId: task.attemptId,
+  }))
+  if (!targets.length) {
+    return
+  }
+
+  const effects = {
+    remove: '只移除任务记录，已下载文件会保留。',
+    deleteFile: '删除已下载文件并停止相关本地播放，任务记录会保留。',
+    cancel: '取消任务并删除未完成片段。',
+    restart: '删除未完成片段并从头下载。',
+  }
+  if (
+    action === 'remove' ||
+    action === 'deleteFile' ||
+    action === 'cancel' ||
+    action === 'restart'
+  ) {
+    confirmation.value = {
+      action,
+      targets,
+      description: `处理所选 ${targets.length} 个任务：${effects[action]} 不适用或已变化的任务会跳过。`,
+    }
+  } else {
+    void runBatchAction(action, targets)
+  }
 }
 
-function progressStatus(task: DownloadTask): 'success' | 'error' | 'default' {
-  if (task.state === 'completed') {
-    return 'success'
+async function runBatchAction(
+  action: DownloadActionRequest['action'],
+  targets: DownloadTarget[],
+): Promise<void> {
+  batchBusy.value = true
+  batchFeedback.value = null
+  try {
+    batchFeedback.value = await tasks.runBatch(action, targets)
+  } finally {
+    batchBusy.value = false
   }
+}
 
-  return task.state === 'failed' ? 'error' : 'default'
+async function confirmBatch(): Promise<void> {
+  const pending = confirmation.value
+  confirmation.value = null
+  if (pending) {
+    await runBatchAction(pending.action, pending.targets)
+  }
+}
+
+function play(task: DownloadTask): void {
+  content.value = {
+    id: task.content.contentId,
+    title: task.metadata.title,
+    cover: task.metadata.cover,
+    video: null,
+    smoothVideo: null,
+    publishedAt: null,
+  }
+  input.value = {
+    kind: 'download',
+    taskId: task.id,
+    metadata: task.metadata,
+    content: content.value,
+  }
+}
+
+function selectAllVisible(checked: boolean): void {
+  batchFeedback.value = null
+  selection.value = checked ? filtered.value.map((task) => task.id) : []
+}
+
+function showConfirmation(show: boolean): void {
+  if (!show) {
+    confirmation.value = null
+  }
+}
+
+function failureTitle(taskId: string): string {
+  return tasks.tasks.find((task) => task.id === taskId)?.metadata.title ?? taskId
 }
 
 function reconnect(): void {
@@ -63,27 +200,24 @@ function reconnect(): void {
     void tasks.attach(downloads)
   }
 }
+
+onDeactivated(() => {
+  content.value = null
+  confirmation.value = null
+})
 </script>
 
 <template>
   <div class="downloads-view">
     <section class="page-heading">
-      <div>
-        <h1>下载任务</h1>
-      </div>
-      <span
-        v-if="tasks.tasks.length"
-        class="download-total"
-      >
-        共 {{ tasks.tasks.length }} 个任务
-      </span>
+      <h1>下载任务</h1>
+      <span class="download-total">共 {{ tasks.tasks.length }} 个任务</span>
     </section>
-
     <NAlert
       v-if="tasks.error"
       type="error"
       class="download-notice"
-      title="下载服务暂不可用"
+      title="下载操作未完成"
     >
       <div class="download-service-error">
         <span>{{ tasks.error }}</span>
@@ -103,111 +237,246 @@ function reconnect(): void {
     >
       内容 {{ failure.contentId }}：{{ failure.message }}
     </NAlert>
-
+    <div
+      class="download-tabs"
+      role="group"
+      aria-label="筛选下载任务"
+    >
+      <button
+        v-for="tab in filterTabs"
+        :key="tab.value"
+        type="button"
+        class="download-filter"
+        :aria-pressed="filter === tab.value"
+        @click="changeFilter(tab.value)"
+      >
+        {{ tab.label }}
+        <span class="filter-count">{{ tab.count }}</span>
+      </button>
+    </div>
     <StatePanel
       v-if="tasks.loading && !tasks.tasks.length"
       loading
     />
     <StatePanel
-      v-else-if="!tasks.tasks.length && !tasks.error"
+      v-else-if="!filtered.length && !tasks.error"
       class="download-empty"
-      title="暂无下载任务"
+      :title="tasks.tasks.length ? '当前筛选下没有任务' : '暂无下载任务'"
       description="在节目详情中选择内容并下载，任务会显示在这里。"
     />
-    <NSpin
-      v-if="tasks.loading && tasks.tasks.length"
-      class="download-loading"
-      size="small"
-      aria-label="正在读取下载任务"
-    />
-
-    <ul
-      v-if="tasks.tasks.length"
-      class="download-list"
-      aria-label="下载任务列表"
+    <section
+      v-if="filtered.length"
+      class="download-list-panel"
+      aria-label="下载任务"
     >
-      <li
-        v-for="task in tasks.tasks"
-        :key="task.id"
-        class="download-task"
-      >
-        <div
-          class="download-file-icon"
-          aria-hidden="true"
+      <div class="download-list-header">
+        <NCheckbox
+          aria-label="全选"
+          :checked="allSelected"
+          :indeterminate="selectedTasks.length > 0 && !allSelected"
+          @update:checked="selectAllVisible"
         >
-          <FileVideo
-            :size="24"
-            :stroke-width="1.6"
-          />
-        </div>
-        <div class="download-body">
-          <div class="download-heading">
-            <h2 class="download-filename">{{ task.filename }}</h2>
-            <span class="pill">{{ task.quality === 'standard' ? '标准' : '流畅' }}</span>
-          </div>
-          <div class="download-state">
-            <span :class="`download-state-${task.state}`">{{ labels[task.state] }}</span>
-            <span class="download-size">
-              {{ bytes(task.receivedBytes) }}
-              <template v-if="task.totalBytes !== null">/ {{ bytes(task.totalBytes) }}</template>
-              <template v-else>· 总大小未知</template>
-            </span>
-          </div>
-          <NProgress
-            v-if="task.totalBytes !== null && task.totalBytes > 0"
-            type="line"
-            :percentage="progress(task)"
-            :show-indicator="false"
-            :status="progressStatus(task)"
-            :color="progressColors[task.state]"
-          />
-          <p
-            v-if="task.error"
-            class="download-error"
-            role="alert"
-          >
-            {{ task.error }}
-          </p>
-        </div>
-        <div class="download-actions">
+          {{ selectedTasks.length ? `已选 ${selectedTasks.length} 项` : '全选' }}
+        </NCheckbox>
+        <div
+          v-if="selectedTasks.length"
+          class="batch-actions"
+          role="group"
+          aria-label="批量管理任务"
+        >
           <NButton
-            v-if="task.state === 'queued' || task.state === 'running'"
-            :loading="tasks.pendingActions.includes(task.id)"
-            :aria-label="`取消下载${task.filename}`"
-            @click="tasks.cancel(task.id)"
-          >
-            取消
-          </NButton>
-          <NButton
-            v-if="task.state === 'failed' || task.state === 'cancelled'"
+            v-for="action in batchActions"
+            :key="action.value"
             secondary
-            :loading="tasks.pendingActions.includes(task.id)"
-            :aria-label="`重试下载${task.filename}`"
-            @click="tasks.retry(task.id)"
+            size="small"
+            :type="action.value === 'deleteFile' ? 'error' : 'default'"
+            :disabled="batchBusy"
+            :aria-label="`批量${action.label}`"
+            @click="batch(action.value)"
           >
-            重试
+            {{ action.label }}
           </NButton>
+          <span
+            v-if="!batchActions.length"
+            class="download-list-count"
+          >
+            当前所选任务暂无可用操作
+          </span>
         </div>
-      </li>
-    </ul>
+        <span
+          v-else
+          class="download-list-count"
+        >
+          {{ filtered.length }} 个任务
+        </span>
+      </div>
+      <ul
+        class="download-list"
+        aria-label="下载任务列表"
+      >
+        <DownloadTaskCard
+          v-for="task in filtered"
+          :key="task.id"
+          :task="task"
+          :selected="selection.includes(task.id)"
+          :busy="tasks.pendingActions.includes(task.id)"
+          @select="select(task.id, $event)"
+          @action="tasks.act(task.id, $event)"
+          @play="play(task)"
+        />
+      </ul>
+    </section>
+    <div
+      v-if="batchFeedback"
+      class="batch-feedback"
+      role="status"
+    >
+      <p>
+        已处理 {{ batchFeedback.applied }} 个，跳过 {{ batchFeedback.skipped }} 个，失败
+        {{ batchFeedback.failures.length }} 个。
+      </p>
+      <ul
+        v-if="batchFeedback.failures.length"
+        class="batch-failures"
+      >
+        <li
+          v-for="failure in batchFeedback.failures"
+          :key="failure.taskId"
+        >
+          {{ failureTitle(failure.taskId) }}：{{ failure.message }}
+        </li>
+      </ul>
+      <NButton
+        size="small"
+        quaternary
+        @click="batchFeedback = null"
+      >
+        关闭
+      </NButton>
+    </div>
+    <ProgrammePreviewDialog
+      v-if="input"
+      v-model="content"
+      :input="input"
+      :reference="input.metadata.content"
+      :quality="settings.quality"
+    />
+    <NModal
+      :show="!!confirmation"
+      preset="dialog"
+      title="确认批量操作"
+      positive-text="确认"
+      negative-text="取消"
+      @positive-click="confirmBatch"
+      @negative-click="confirmation = null"
+      @update:show="showConfirmation"
+    >
+      {{ confirmation?.description }}
+    </NModal>
   </div>
 </template>
 
 <style scoped>
 .download-total {
-  flex-shrink: 0;
   color: var(--muted);
   font-size: 14px;
 }
-.download-notice,
-.download-loading {
+.download-notice {
   margin-bottom: 20px;
+}
+.download-tabs {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  padding: 4px 4px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.download-filter {
+  flex-shrink: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+.download-filter[aria-pressed='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.download-filter:hover {
+  color: var(--text);
+}
+.download-filter:focus-visible {
+  outline-offset: -3px !important;
+}
+.filter-count {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.download-list-count {
+  color: var(--muted);
+  font-size: 13px;
 }
 .download-service-error {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
+  justify-content: space-between;
+  overflow-wrap: anywhere;
+}
+.download-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 68px;
+  gap: 16px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.download-list-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: clip;
+  background: var(--panel);
+}
+/* Keep the header height stable; narrow screens scroll actions horizontally. */
+.download-list-header > :first-child {
+  flex-shrink: 0;
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px;
+  margin-left: auto;
+}
+.batch-actions :deep(.n-button) {
+  flex-shrink: 0;
+}
+.batch-feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.batch-failures {
+  width: 100%;
+  max-height: 100px;
+  overflow-y: auto;
+  padding-left: 20px;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 .download-empty {
@@ -217,111 +486,28 @@ function reconnect(): void {
 }
 .download-list {
   display: grid;
-  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.download-task {
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 20px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 24px;
-  background: var(--panel);
-}
-.download-file-icon {
-  display: grid;
-  align-self: start;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--subtle);
-  color: var(--muted);
-}
-.download-body {
-  min-width: 0;
-}
-.download-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-.download-filename {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 16px;
-  line-height: 1.6;
-  font-weight: 600;
-}
-.download-state {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 16px;
-  margin-block: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.download-size {
-  font-variant-numeric: tabular-nums;
-}
-.download-state-running,
-.download-state-failed,
-.download-error {
-  color: var(--accent);
-}
-.download-state-completed {
-  color: var(--green);
-}
-.download-error {
-  margin-top: 8px;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
-}
-.download-actions {
-  display: flex;
-  gap: 8px;
-}
-.download-actions:empty {
-  display: none;
-}
-@container workspace (width < 720px) {
-  .download-task {
-    grid-template-columns: 36px minmax(0, 1fr);
-    align-items: start;
-    gap: 12px;
-    padding: 20px;
-  }
-  .download-file-icon {
-    width: 36px;
-    height: 36px;
-  }
-  .download-heading {
-    flex-wrap: wrap;
-    gap: 4px 8px;
-  }
-  .download-actions {
-    grid-column: 2;
-    justify-content: flex-end;
+@media (width < 1100px) {
+  .download-list-header {
+    padding-inline: 20px;
   }
 }
 @media (width < 760px) {
   .page-heading {
     flex-wrap: wrap;
   }
-  .download-task {
-    padding: 16px;
+  .download-list-header {
+    padding-inline: 16px;
   }
-  .download-service-error {
-    flex-wrap: wrap;
+  .download-list-header {
+    gap: 8px;
   }
-  .download-actions :deep(.n-button),
+  .batch-actions :deep(.n-button) {
+    min-height: 44px;
+  }
   .download-service-error :deep(.n-button) {
     min-height: 44px;
   }

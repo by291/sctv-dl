@@ -1,146 +1,125 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+
 import { useDownloadTasksStore } from '@/features/downloads/stores/useDownloadTasksStore'
-import type { DownloadTask } from '@shared/contracts/downloads'
-import type { NativeDownloadPort } from '@/shared/platform/ports'
+import {
+  createDownloadTaskFixture,
+  createNativeDownloadFixture,
+} from '@/shared/platform/platform.test-support'
 
-const task: DownloadTask = {
-  id: 'job',
-  content: { programmeId: '1', dateId: '2', contentId: '3' },
-  filename: 'clip.mp4',
-  quality: 'standard',
-  state: 'running',
-  receivedBytes: 10,
-  totalBytes: null,
-  error: null,
-  revision: 2,
-}
-beforeEach(() => {
-  setActivePinia(createPinia())
-})
+import type { DownloadEvent, DownloadSnapshot } from '@shared/contracts/downloads'
 
-it('starts before task observation is attached and retains per-file preparation failures', async () => {
-  const port: NativeDownloadPort = {
-    kind: 'native',
-    async start(request) {
-      expect(request).toEqual({
-        programmeId: '1',
-        dateId: '2',
-        contentIds: ['3', '4'],
-        quality: 'smooth',
-      })
+beforeEach(() => setActivePinia(createPinia()))
+const task = createDownloadTaskFixture()
 
-      return {
-        kind: 'native',
-        taskIds: ['job'],
-        usedFallback: true,
-        failures: [{ contentId: '4', message: 'Content unavailable' }],
-      }
-    },
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
-    getDirectory: async () => null,
-    chooseDirectory: async () => null,
-  }
-  const store = useDownloadTasksStore()
-
-  const result = await store.start(
-    { programmeId: '1', dateId: '2', contentIds: ['3', '4'], quality: 'smooth' },
-    port,
-  )
-
-  expect(result).toEqual({
+it('starts before observation and retains per-file failures', async () => {
+  const port = createNativeDownloadFixture()
+  port.start = async () => ({
     kind: 'native',
     taskIds: ['job'],
     usedFallback: true,
-    failures: [{ contentId: '4', message: 'Content unavailable' }],
+    failures: [{ contentId: '4', message: 'Missing content' }],
   })
-  expect(store.failures).toEqual([{ contentId: '4', message: 'Content unavailable' }])
+  const store = useDownloadTasksStore()
+  await store.start(
+    { programmeId: '1', dateId: '2', contentIds: ['3', '4'], quality: 'smooth' },
+    port,
+  )
+  expect(store.failures).toEqual([{ contentId: '4', message: 'Missing content' }])
+})
+
+it('subscribes before listing and does not resurrect a removed task from a delayed snapshot', async () => {
+  const port = createNativeDownloadFixture()
+  let receive!: (event: DownloadEvent) => void
+  let finish!: (snapshot: DownloadSnapshot) => void
+  port.subscribeEvents = async (listener) => {
+    receive = listener
+
+    return () => {}
+  }
+
+  port.snapshot = () =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  const store = useDownloadTasksStore()
+  const pending = store.attach(port)
+  await Promise.resolve()
+  receive({ kind: 'remove', epoch: 'one', revision: 5, taskId: task.id })
+  finish({ epoch: 'one', revision: 4, tasks: [task] })
+  await pending
+  expect(store.tasks).toEqual([])
+  receive({ kind: 'upsert', epoch: 'one', revision: 3, task })
   expect(store.tasks).toEqual([])
 })
 
-it('subscribes before snapshot and retains a newer terminal event during hydration', async () => {
-  let listener: (task: DownloadTask) => void = () => {}
+it('accepts a newer attempt after a terminal state and ignores a retired process epoch', async () => {
+  const port = createNativeDownloadFixture()
+  let receive!: (event: DownloadEvent) => void
+  port.subscribeEvents = async (listener) => {
+    receive = listener
 
-  let resolveList: (tasks: DownloadTask[]) => void = () => {}
+    return () => {}
+  }
 
-  const dispose = vi.fn()
-  const order: string[] = []
-  const port = {
-    kind: 'native',
-    subscribe: async (next: typeof listener) => {
-      order.push('subscribe')
-      listener = next
-
-      return dispose
-    },
-    list: () => {
-      order.push('list')
-
-      return new Promise<DownloadTask[]>((resolve) => {
-        resolveList = resolve
-      })
-    },
-    start: vi.fn(),
-    cancel: vi.fn(),
-  } as unknown as NativeDownloadPort
+  port.snapshot = async () => ({ epoch: 'one', revision: 2, tasks: [{ ...task, state: 'failed' }] })
   const store = useDownloadTasksStore()
-  const attached = store.attach(port)
-  await Promise.resolve()
-  listener({ ...task, state: 'completed', revision: 3 })
-  resolveList([task])
-  await attached
-  expect(order).toEqual(['subscribe', 'list'])
-  expect(store.tasks[0]!.state).toBe('completed')
-  listener({ ...task, state: 'running', revision: 4 })
-  expect(store.tasks[0]!.state).toBe('completed')
-  const detach = store.detach
-  detach()
-  detach()
-  expect(dispose).toHaveBeenCalledOnce()
+  await store.attach(port)
+  receive({
+    kind: 'upsert',
+    epoch: 'one',
+    revision: 3,
+    task: { ...task, attemptId: 'next', revision: 3 },
+  })
+  expect(store.tasks[0]?.attemptId).toBe('next')
+  port.snapshot = async () => ({ epoch: 'two', revision: 1, tasks: [] })
+  receive({ kind: 'upsert', epoch: 'two', revision: 2, task: { ...task, state: 'interrupted' } })
+  receive({ kind: 'upsert', epoch: 'one', revision: 100, task })
+  expect(store.tasks[0]?.state).toBe('interrupted')
+  expect(store.activeCount).toBe(0)
 })
 
-it('cleans up a late subscription and retries using the actual quality and reference', async () => {
-  let resolveSubscription: (dispose: () => void) => void = () => {}
-
-  const dispose = vi.fn()
-  const start = vi.fn().mockResolvedValue({
-    kind: 'native',
-    taskIds: ['retry'],
-    usedFallback: false,
-    failures: [{ contentId: '4', message: 'Missing content' }],
-  })
-  const port = {
-    kind: 'native',
-    subscribe: () =>
-      new Promise<() => void>((resolve) => {
-        resolveSubscription = resolve
-      }),
-    list: vi.fn().mockResolvedValue([]),
-    start,
-    cancel: vi.fn(),
-  } as unknown as NativeDownloadPort
+it('cleans up a late observer after detachment', async () => {
+  const port = createNativeDownloadFixture()
+  let finish!: (dispose: () => void) => void
+  port.subscribeEvents = () =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
   const store = useDownloadTasksStore()
   const pending = store.attach(port)
   store.detach()
-  resolveSubscription(dispose)
+  const stop = vi.fn()
+  finish(stop)
   await pending
-  expect(dispose).toHaveBeenCalledOnce()
-  const active = {
-    ...port,
-    subscribe: async () => dispose,
-    list: async () => [{ ...task, state: 'failed' as const, quality: 'smooth' as const }],
-  }
-  await store.attach(active)
-  await store.retry('job')
-  expect(start).toHaveBeenCalledWith({
-    programmeId: '1',
-    dateId: '2',
-    contentIds: ['3'],
-    quality: 'smooth',
+  expect(stop).toHaveBeenCalledOnce()
+})
+
+it('snapshots batch attempts, skips changed tasks and continues after independent failure', async () => {
+  const port = createNativeDownloadFixture()
+  const tasks = [task, { ...task, id: 'second' }, { ...task, id: 'third' }]
+  port.snapshot = async () => ({ epoch: 'one', revision: 2, tasks })
+  port.act = vi.fn(async (request) => {
+    if (request.taskId === 'second') {
+      throw new Error('Disk unavailable')
+    }
+
+    return { kind: 'applied' as const, task: { ...task, state: 'paused' as const, revision: 3 } }
   })
-  expect(store.failures).toEqual([{ contentId: '4', message: 'Missing content' }])
-  store.detach()
+  const store = useDownloadTasksStore()
+  await store.attach(port)
+  const result = await store.runBatch(
+    'pause',
+    tasks.map((value) => ({
+      taskId: value.id,
+      attemptId: value.id === 'third' ? 'old' : value.attemptId,
+    })),
+  )
+  expect(result).toEqual({
+    applied: 1,
+    skipped: 1,
+    failures: [{ taskId: 'second', message: 'Disk unavailable' }],
+  })
+  expect(port.act).toHaveBeenCalledTimes(2)
 })

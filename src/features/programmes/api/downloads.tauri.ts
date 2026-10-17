@@ -5,8 +5,15 @@ import { applicationErrorSchema } from '@shared/contracts/errors'
 import {
   downloadRequestSchema,
   downloadTaskSchema,
+  downloadSnapshotSchema,
+  downloadEventSchema,
+  downloadActionRequestSchema,
+  downloadActionResultSchema,
   fileFailureSchema,
 } from '@shared/contracts/downloads'
+
+import { playbackSessionSchema } from '@shared/contracts/media'
+import { invokeAbortable } from '@/shared/platform/invoke-abortable.tauri'
 
 import type { NativeDownloadPort } from '@/shared/platform/ports'
 
@@ -44,6 +51,52 @@ async function request<T>(
 export function createTauriDownloads(): NativeDownloadPort {
   return {
     kind: 'native',
+    snapshot: () => request('get_download_snapshot', {}, downloadSnapshotSchema),
+    act: (input) =>
+      request(
+        'act_on_download',
+        { request: downloadActionRequestSchema.parse(input) },
+        downloadActionResultSchema,
+      ),
+    openPlayback: (taskId, signal) =>
+      invokeAbortable(
+        'open_local_playback',
+        { taskId: z.string().min(1).parse(taskId) },
+        playbackSessionSchema,
+        signal,
+        (raw) => {
+          if (raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string') {
+            void invoke('close_playback', { sessionId: raw.id }).catch(() => {})
+          }
+        },
+      ),
+    async subscribeEvents(listener) {
+      let active = true
+      const onEvent = new Channel<unknown>()
+      onEvent.onmessage = (raw) => {
+        const event = downloadEventSchema.safeParse(raw)
+        if (active && event.success) {
+          listener(event.data)
+        }
+      }
+
+      let subscriptionId: string
+      try {
+        subscriptionId = await request('subscribe_download_events', { onEvent }, z.string().min(1))
+      } catch (cause) {
+        active = false
+        throw cause
+      }
+
+      return () => {
+        if (!active) {
+          return
+        }
+
+        active = false
+        void invoke('unsubscribe_download_events', { subscriptionId }).catch(() => {})
+      }
+    },
     start: (input) =>
       request('start_downloads', { request: downloadRequestSchema.parse(input) }, startSchema),
     list: () => request('list_downloads', {}, z.array(downloadTaskSchema)),
