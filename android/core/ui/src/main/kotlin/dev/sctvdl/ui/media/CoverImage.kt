@@ -13,13 +13,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil3.SingletonImageLoader
 import coil3.compose.SubcomposeAsyncImage
 
 @Composable
 fun CoverImage(url: String?, modifier: Modifier = Modifier) {
     SubcomposeAsyncImage(
         model = url,
+        imageLoader = LocalCoverImageLoader.current ?: SingletonImageLoader.get(LocalContext.current),
         contentDescription = null,
         modifier = modifier,
         contentScale = ContentScale.Crop,

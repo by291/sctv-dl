@@ -10,5 +10,15 @@ fun SettingsRoute() {
     val model: SettingsViewModel = hiltViewModel()
     val settings by model.uiState.collectAsStateWithLifecycle()
 
-    SettingsScreen(settings, model::setTheme, model::setDynamicColour, model::setQuality, model::setWifiOnly)
+    val maintenance by model.maintenance.collectAsStateWithLifecycle()
+    SettingsScreen(
+        settings,
+        model::setTheme,
+        model::setDynamicColour,
+        model::setQuality,
+        model::setWifiOnly,
+        maintenance,
+        model::clearCache,
+        model::clearHistory
+    )
 }

@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,16 @@ internal class CachedProgrammeRepository(
     private val states = ConcurrentHashMap<String, MutableStateFlow<RefreshState>>()
     private val versions = ConcurrentHashMap<String, AtomicLong>()
     private val writeLock = Mutex()
+    private val cacheEpoch = AtomicLong()
+
+    override suspend fun clearCache() = withContext(dispatcher) {
+        writeLock.withLock {
+            // Old responses and old error paths must not repopulate or dirty the cleared generation.
+            cacheEpoch.incrementAndGet()
+            store.clear()
+            states.values.forEach { it.value = RefreshState() }
+        }
+    }
 
     override fun observeProgrammes() = observe("programmes", parser::programmes)
 
@@ -92,8 +103,10 @@ internal class CachedProgrammeRepository(
     private suspend fun <T> refresh(key: String, fetch: suspend () -> String, parse: (String) -> T) =
         withContext(dispatcher) {
             val version = versions.getOrPut(key) { AtomicLong() }
-            val ticket = version.incrementAndGet()
-            state(key).value = RefreshState(active = true)
+            val (ticket, epoch) = writeLock.withLock {
+                state(key).value = RefreshState(active = true)
+                version.incrementAndGet() to cacheEpoch.get()
+            }
 
             try {
                 val raw = fetch()
@@ -103,7 +116,11 @@ internal class CachedProgrammeRepository(
 
                 // Cancellation alone cannot reject a late response from an older refresh of the same key.
                 writeLock.withLock {
-                    if (ticket == version.get()) store.put(StoredSnapshot(key, raw, clock.millis()))
+                    if (ticket == version.get() &&
+                        epoch == cacheEpoch.get()
+                    ) {
+                        store.put(StoredSnapshot(key, raw, clock.millis()))
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -119,9 +136,23 @@ internal class CachedProgrammeRepository(
                     else -> AppError(ErrorKind.Storage, "暂时无法保存节目数据")
                 }
 
-                if (ticket == version.get()) state(key).value = RefreshState(error = mapped)
+                writeLock.withLock {
+                    if (ticket == version.get() &&
+                        epoch == cacheEpoch.get()
+                    ) {
+                        state(key).value = RefreshState(error = mapped)
+                    }
+                }
             } finally {
-                if (ticket == version.get()) state(key).update { it.copy(active = false) }
+                withContext(NonCancellable) {
+                    writeLock.withLock {
+                        if (ticket == version.get() &&
+                            epoch == cacheEpoch.get()
+                        ) {
+                            state(key).update { it.copy(active = false) }
+                        }
+                    }
+                }
             }
         }
 }

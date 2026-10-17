@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal interface ProgrammeSnapshotDao {
+    @Query("DELETE FROM snapshots")
+    suspend fun clear()
+
     @Query("SELECT * FROM snapshots WHERE `key` = :key")
     fun observe(key: String): Flow<SnapshotEntity?>
 

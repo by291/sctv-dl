@@ -30,6 +30,10 @@ class CachedProgrammeRepositoryTest {
     private class Store : SnapshotStore {
         private val values = mutableMapOf<String, MutableStateFlow<StoredSnapshot?>>()
 
+        override suspend fun clear() {
+            values.values.forEach { it.value = null }
+        }
+
         override fun observe(key: String) = values.getOrPut(key) { MutableStateFlow(null) }
 
         override suspend fun put(snapshot: StoredSnapshot) {
@@ -56,6 +60,28 @@ class CachedProgrammeRepositoryTest {
     }
 
     private val clock = Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC)
+
+    @Test fun clearingRejectsARefreshAlreadyInFlight() = runTest {
+        val source = Source()
+        val store = Store()
+        val repo =
+            CachedProgrammeRepository(
+                source,
+                store,
+                ProgrammeResponseParser(),
+                clock,
+                StandardTestDispatcher(testScheduler)
+            )
+        val request = launch { repo.refreshContents("1", "1") }
+        runCurrent()
+        repo.clearCache()
+        source.slow.complete(Unit)
+        request.join()
+        assertNull(store.observe("contents:1:1").value)
+        assertFalse(repo.observeContents("1", "1").first().isRefreshing)
+        repo.refreshContents("1", "1")
+        assertEquals("1", repo.observeContents("1", "1").first().data?.single()?.id)
+    }
 
     @Test fun successfulEmptySnapshotSurvivesRepositoryRecreation() = runTest {
         val store = Store()
