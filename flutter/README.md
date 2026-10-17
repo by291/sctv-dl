@@ -43,6 +43,14 @@ User preferences, favourites and the latest 500 viewing entries belong to a user
 
 Metadata requests use a persisted installation UUID and the Android-compatible guest profile. Android supplies native device build values; iOS uses the explicitly documented compatibility profile. Covers, player requests and transfers use separate transports and receive no metadata identity headers. Media requests use the allowed HTTPS MP4 CDNs, the required Referer and `sctv-dl/<installed-version>` User-Agent.
 
+## Presentation
+
+The Flutter client uses neutral surfaces with its own soft blue accents, pale blue action surfaces and light blue launcher icon, distinct from the Kotlin Android client's vermilion palette. The default light and dark themes use coordinated blue roles; the optional system dynamic-colour preference still follows the device wallpaper. Programme cards place the independent favourite action over 16:9 artwork and reserve the full lower row for the title. Exploration uses a lightly tilted framed cover and a distinct primary action. The archive keeps its cover and title side by side on compact phones, switching to a text-first header at large text sizes.
+
+Recent broadcast shortcuts display month/day and weekday. The full date chooser remains beside the section heading; choosing an older date keeps its shortcut visible, including after window or text-size changes, without moving the archive vertically. The player uses a dark control palette with readable foregrounds and explicit selected-option marks. Theme changes retain the existing navigation, selection and playback lifetimes.
+
+Downloads keep a stable page header across loading, empty and failure states, and group tasks into active, unfinished and completed sections. Task cards distinguish status, metadata, byte progress and available actions without inventing sizes or transfer speeds. Settings use aligned groups and scrollable selection sheets above the root navigation. History cards show accepted artwork, exact resume positions and known-duration progress; filtering has its own recoverable empty state, and failed removal leaves playback available.
+
 ## Player dependency repair and licenses
 
 [packages/better_player_plus](packages/better_player_plus) is the portable source copy of `better_player_plus` **2.0.0** originally fetched from [pub.dev](https://pub.dev/packages/better_player_plus/versions/2.0.0). The app selects it through the path override in `pubspec.yaml`. Preserve its [upstream license](packages/better_player_plus/LICENSE) and [patch provenance](packages/better_player_plus/LOCAL_PATCHES.md).
@@ -93,6 +101,6 @@ flutter drive --driver=test_driver/integration_test.dart \
   --dart-define=LIVE_APPLICATION_SMOKE=true
 ```
 
-This journey writes screenshots into ignored `build/qa/` and creates no live download. Controlled transfer/player commands and their evidence are in the validation record. Use disposable devices and keep foreground fixtures distinct from suspension, OS reclamation and user force-quit.
+This journey writes screenshots into ignored `build/qa/` and creates no live download. Its final `downloads-fixture-*` and `downloads-completed-*` screenshots use presentation-only task data; they establish card layout rather than native transfer or file availability. Controlled transfer/player commands and their evidence are in the validation record. Use disposable devices and keep foreground fixtures distinct from suspension, OS reclamation and user force-quit.
 
 The launcher uses an application-owned geometric TV/play mark. On macOS, regenerate its native bitmap sizes with `swift tool/generate_icons.swift`; Android adaptive/monochrome vectors live in the native resource directory.
