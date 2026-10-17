@@ -75,6 +75,20 @@ void main() {
       await session.dispose();
     },
   );
+  test('play after completion restarts at zero before resuming', () async {
+    final session = await BetterPlayerBackend(userAgent: 'test')
+        .open(const PlaybackInput(title: 'Title', sources: [first]));
+    await session.seek(const Duration(seconds: 100));
+    native.events.add(
+      VideoEvent(key: null, eventType: VideoEventType.completed),
+    );
+    expect(session.value.ended, isTrue);
+    await session.play();
+    expect(session.value.position, Duration.zero);
+    expect(session.value.playing, isTrue);
+    await session.dispose();
+  });
+
   test('seeking a completed paused video to zero never autoplays', () async {
     final session = await BetterPlayerBackend(userAgent: 'test')
         .open(const PlaybackInput(title: 'Title', sources: [first]));

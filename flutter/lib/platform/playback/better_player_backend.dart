@@ -143,7 +143,8 @@ class _BetterSession implements PlaybackSession {
   Future<void> play() async {
     if (!_disposed) {
       _playIntent = true;
-      await controller.play();
+      if (value.ended) await controller.seekTo(Duration.zero);
+      if (!_disposed && _playIntent) await controller.play();
       _publish();
     }
   }
