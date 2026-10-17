@@ -142,15 +142,36 @@ class _LibraryPageState extends State<LibraryPage>
                       children: [
                         if (MediaQuery.textScalerOf(context).scale(1) <
                             1.5) ...[
-                          Icon(
-                            Icons.live_tv_rounded,
-                            color: Theme.of(context).iconTheme.color,
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).iconTheme.color,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.live_tv,
+                              size: 24,
+                              color: Theme.of(context).colorScheme.surface,
+                            ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                         ],
-                        const Flexible(
-                          child: Text(
-                            'sctv-dl',
+                        Flexible(
+                          child: Text.rich(
+                            TextSpan(
+                              text: 'sctv',
+                              children: [
+                                TextSpan(
+                                  text: '-dl',
+                                  style: TextStyle(
+                                    color: Theme.of(context).iconTheme.color,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -341,7 +362,7 @@ class _LibraryPageState extends State<LibraryPage>
                                   16 +
                               (MediaQuery.textScalerOf(context).scale(16) *
                                       1.5 *
-                                      2 +
+                                      ProgrammeCard.titleMaxLines(context) +
                                   20),
                         ),
                         itemBuilder: (context, index) => ProgrammeCard(
@@ -515,10 +536,14 @@ class ProgrammeCard extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onFavourite;
 
+  static int titleMaxLines(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 2 : 1;
+
   @override
   Widget build(BuildContext context) {
     final colours = Theme.of(context).colorScheme;
     return Card(
+      margin: EdgeInsets.zero,
       child: InkWell(
         onTap: onOpen,
         child: Column(
@@ -532,23 +557,29 @@ class ProgrammeCard extends StatelessWidget {
                   radius: 16,
                 ),
                 Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton.filledTonal(
-                    tooltip: favourite
-                        ? '取消收藏 ${programme.name}'
-                        : '收藏 ${programme.name}',
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                      backgroundColor: colours.surface.withValues(alpha: .94),
-                      foregroundColor: favourite
-                          ? colours.primary
-                          : colours.onSurfaceVariant,
+                  top: 8,
+                  right: 8,
+                  child: ClipOval(
+                    child: IconButton.filledTonal(
+                      tooltip: favourite
+                          ? '取消收藏 ${programme.name}'
+                          : '收藏 ${programme.name}',
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(32, 32),
+                        fixedSize: const Size(32, 32),
+                        padding: const EdgeInsets.all(6),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.standard,
+                        backgroundColor: colours.surface.withValues(alpha: .94),
+                        foregroundColor: favourite
+                            ? colours.primary
+                            : colours.onSurfaceVariant,
+                      ),
+                      isSelected: favourite,
+                      onPressed: onFavourite,
+                      icon: const Icon(Icons.favorite_border, size: 20),
+                      selectedIcon: const Icon(Icons.favorite, size: 20),
                     ),
-                    isSelected: favourite,
-                    onPressed: onFavourite,
-                    icon: const Icon(Icons.favorite_border, size: 22),
-                    selectedIcon: const Icon(Icons.favorite, size: 22),
                   ),
                 ),
               ],
@@ -557,7 +588,7 @@ class ProgrammeCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Text(
                 programme.name,
-                maxLines: 2,
+                maxLines: titleMaxLines(context),
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium
                     ?.copyWith(height: 1.5),

@@ -335,18 +335,27 @@ void main() {
 
         final favourite = find.byTooltip('收藏 ${longProgramme.name}');
         await tester.ensureVisible(favourite);
+        // The surrounding artwork, including the circle's square corners,
+        // opens the programme instead of toggling its favourite state.
+        await tester.tapAt(tester.getCenter(favourite) + const Offset(20, 0));
+        await tester.pumpAndSettle();
+        expect(controller.favourites, isEmpty);
+        expect(opened, 1);
+        await tester.tapAt(tester.getCenter(favourite) + const Offset(14, 14));
+        await tester.pumpAndSettle();
+        expect(controller.favourites, isEmpty);
+        expect(opened, 2);
         await tester.tap(favourite);
         await tester.pumpAndSettle();
-
         expect(controller.favourites, contains('1'));
-        expect(opened, 0);
+        expect(opened, 2);
         final title = find.descendant(
           of: find.byType(ProgrammeCard),
           matching: find.text(longProgramme.name),
         );
         await tester.ensureVisible(title);
         await tester.tap(title);
-        expect(opened, 1);
+        expect(opened, 3);
         expect(tester.takeException(), isNull);
       },
     );
