@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
@@ -253,6 +254,13 @@ class _LibraryPageState extends State<LibraryPage>
         final columns = largeText
             ? (constraints.maxWidth / 360).floor().clamp(1, 4)
             : (constraints.maxWidth / 180).floor().clamp(2, 6);
+        final cardWidth =
+            (constraints.maxWidth - 32 - 12 * (columns - 1)) / columns;
+        final titleHeight = ProgrammeCard.titleHeight(
+          context,
+          controller.programmes.map((programme) => programme.name),
+          cardWidth - 24,
+        );
         return CustomScrollView(
           controller: _scroll,
           restorationId: 'catalogue-all',
@@ -355,15 +363,7 @@ class _LibraryPageState extends State<LibraryPage>
                           crossAxisCount: columns,
                           mainAxisSpacing: 12,
                           crossAxisSpacing: 12,
-                          mainAxisExtent:
-                              (constraints.maxWidth - 32 - 12 * (columns - 1)) /
-                                  columns *
-                                  9 /
-                                  16 +
-                              (MediaQuery.textScalerOf(context).scale(16) *
-                                      1.5 *
-                                      ProgrammeCard.titleMaxLines(context) +
-                                  20),
+                          mainAxisExtent: cardWidth * 9 / 16 + titleHeight + 20,
                         ),
                         itemBuilder: (context, index) => ProgrammeCard(
                           programme: items[index],
@@ -539,6 +539,36 @@ class ProgrammeCard extends StatelessWidget {
   static int titleMaxLines(BuildContext context) =>
       MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 2 : 1;
 
+  static TextStyle _titleStyle(BuildContext context) =>
+      Theme.of(context).textTheme.titleMedium!.copyWith(height: 1.5);
+
+  static double titleHeight(
+    BuildContext context,
+    Iterable<String> titles,
+    double width,
+  ) {
+    final style = _titleStyle(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    final lines = titleMaxLines(context);
+    var height = scaler.scale(style.fontSize!) * style.height! * lines;
+    final painter = TextPainter(
+      textDirection: Directionality.of(context),
+      textScaler: scaler,
+      locale: Localizations.maybeLocaleOf(context),
+      maxLines: lines,
+      ellipsis: '…',
+    );
+    // CJK fallback fonts can exceed fontSize * height. Measure the same text
+    // layout as the card, across the full catalogue so filtering keeps row sizes.
+    for (final title in titles) {
+      painter.text = TextSpan(text: title, style: style);
+      painter.layout(maxWidth: width);
+      height = math.max(height, painter.height);
+    }
+    painter.dispose();
+    return height.ceilToDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colours = Theme.of(context).colorScheme;
@@ -590,8 +620,7 @@ class ProgrammeCard extends StatelessWidget {
                 programme.name,
                 maxLines: titleMaxLines(context),
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(height: 1.5),
+                style: _titleStyle(context),
               ),
             ),
           ],

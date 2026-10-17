@@ -45,7 +45,7 @@ Metadata requests use a persisted installation UUID and the Android-compatible g
 
 ## Presentation
 
-The Flutter client uses neutral surfaces with its own soft blue accents, pale blue action surfaces and light blue launcher icon, distinct from the Kotlin Android client's vermilion palette. The default light and dark themes use coordinated blue roles; the optional system dynamic-colour preference still follows the device wallpaper. Programme cards place the independent favourite action over 16:9 artwork and reserve the full lower row for the title. Exploration uses a lightly tilted framed cover and a distinct primary action. The archive keeps its cover and title side by side on compact phones, switching to a text-first header at large text sizes.
+The Flutter client uses neutral surfaces with its own soft blue accents, pale blue action surfaces and light blue launcher icon, distinct from the Kotlin Android client's vermilion palette. The default light and dark themes use coordinated blue roles; the optional system dynamic-colour preference still follows the device wallpaper. Programme cards place the independent favourite action over 16:9 artwork and reserve the full lower row for the title. Grid height measures actual title layout with the current font, locale and text scaling, including CJK fallback metrics; it uses the full catalogue so filtering does not resize rows. Exploration uses a lightly tilted framed cover and a distinct primary action. The archive keeps its cover and title side by side on compact phones, switching to a text-first header at large text sizes.
 
 Primary navigation contains Programme Library, Downloads and Settings. A heart icon beside the sort action filters only the catalogue list. Toggling it retains the exploration card, current search and ordering in the same scroll view; an empty result is shown beneath the toolbar without replacing the page. The toolbar history action opens a separate page above the navigation shell, retaining its search and scroll position across visits and passing the exact saved entry to playback.
 
@@ -124,6 +124,15 @@ flutter drive --driver=test_driver/integration_test.dart \
 ```
 
 This exercises native paused playback, seeking, speed, replay, fullscreen rotation and exact surface restoration, and captures light/dark screenshots. The optional `VERIFY_ANDROID_PIP=true` define also enters native PiP and waits for the host to restore the same Activity after the `PLAYER_PARITY_PIP_READY` log marker. On the owned Android runtime, use `adb -s <disposable-device-id> shell am start -n dev.sctvdl.flutter/.MainActivity` for that restore. Keep fixture files and outputs outside tracked source.
+
+For native catalogue typography checks, including CJK fallback fonts, scrolling, both themes and 100%/130%/200% text scaling:
+
+```sh
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/catalogue_layout_test.dart -d <disposable-device-id>
+```
+
+This uses presentation-only catalogue fixtures with placeholder artwork and writes screenshots under `build/qa/catalogue-*`. Widget tests separately cover narrow/wide layouts and custom title sizes.
 
 For warmed shared-cover rendering measurements, separate from OS input delivery:
 

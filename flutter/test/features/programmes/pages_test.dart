@@ -38,9 +38,10 @@ Widget host(
   Widget child, {
   double scale = 1,
   Brightness brightness = Brightness.light,
+  ThemeData? theme,
 }) => ProviderScope(
   child: MaterialApp(
-    theme: buildAppTheme(brightness),
+    theme: theme ?? buildAppTheme(brightness),
     restorationScopeId: 'test-app',
     builder: (context, widget) => MediaQuery(
       data: MediaQuery.of(context)
@@ -53,6 +54,58 @@ Widget host(
 
 void main() {
   const programme = Programme(id: '1', name: '四川新闻');
+  for (final layout in [(320.0, 1.0), (390.0, 1.3), (840.0, 2.0)]) {
+    testWidgets('catalogue fits actual title metrics at $layout', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(layout.$1, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final user = FakeUserRepository();
+      final controller = LibraryController(
+        repository: FakeProgrammeRepository()
+          ..catalogue = snapshot(const [
+            Programme(id: '1', name: '问您所“？”'),
+            Programme(id: '2', name: '四川新闻联播与精彩节目回看'),
+          ], 'titles'),
+        user: user,
+        initialFavourites: {},
+      );
+      addTearDown(controller.dispose);
+      addTearDown(user.close);
+      final theme = buildAppTheme(Brightness.light);
+      await tester.pumpWidget(
+        host(
+          LibraryPage(
+            controller: controller,
+            onOpenProgramme: (_) {},
+            onShowHistory: () {},
+          ),
+          scale: layout.$2,
+          theme: theme.copyWith(
+            textTheme: theme.textTheme.copyWith(
+              titleMedium: theme.textTheme.titleMedium!.copyWith(fontSize: 18),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final item in controller.programmes) {
+        final card = find.byWidgetPredicate(
+          (widget) => widget is ProgrammeCard && widget.programme.id == item.id,
+        );
+        await tester.ensureVisible(card);
+        final title = find.descendant(of: card, matching: find.text(item.name));
+        expect(
+          tester.getRect(title).bottom,
+          lessThanOrEqualTo(tester.getRect(card).bottom - 9),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'history search can recover and removal failures keep playback available',
     (tester) async {
