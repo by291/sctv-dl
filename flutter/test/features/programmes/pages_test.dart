@@ -430,6 +430,12 @@ void main() {
               date: '2026-10-${day.toString().padLeft(2, '0')}',
             ),
         ], 'dates');
+      for (var day = 16; day >= 9; day--) {
+        repository.contents['$day'] = snapshot([
+          for (var index = 1; index <= 20; index++)
+            ProgrammeContent(id: '$index', title: '新闻片段 $index'),
+        ], 'contents');
+      }
       final user = FakeUserRepository();
       addTearDown(user.close);
       final library = LibraryController(
@@ -457,9 +463,16 @@ void main() {
 
       final more = find.text('更多日期').hitTestable();
       expect(more, findsOneWidget);
+      final list = find.byType(CustomScrollView);
+      final scroll = tester.widget<CustomScrollView>(list).controller!;
+      scroll.jumpTo(60);
+      await tester.pumpAndSettle();
+      final viewport = tester.getRect(list);
       await tester.tap(more);
       await tester.pumpAndSettle();
-      final older = find.text('2026-10-09');
+      expect(find.text('2026年10月'), findsOneWidget);
+      expect(find.text('8 个播出日'), findsOneWidget);
+      final older = find.text('10月9日');
       await tester.scrollUntilVisible(
         older,
         200,
@@ -470,6 +483,15 @@ void main() {
 
       expect(archive.selectedDate?.id, '9');
       expect(find.text('选择播出日期'), findsNothing);
+      expect(scroll.offset, 60);
+      expect(tester.getRect(list), viewport);
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+      expect(find.text('10月9日').hitTestable(), findsOneWidget);
+      Navigator.of(tester.element(find.text('选择播出日期'))).pop();
+      await tester.pumpAndSettle();
+      expect(scroll.offset, 60);
+      expect(tester.getRect(list), viewport);
       final selected = find.byWidgetPredicate(
         (widget) => widget is ChoiceChip && widget.selected,
       );

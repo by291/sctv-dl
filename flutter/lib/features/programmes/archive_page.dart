@@ -10,6 +10,7 @@ import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
 import 'archive_controller.dart';
 import 'components/broadcast_dates.dart';
+import 'components/broadcast_date_sheet.dart';
 import 'library_controller.dart';
 
 class ArchivePage extends StatefulWidget {
@@ -129,51 +130,16 @@ class _ArchivePageState extends State<ArchivePage>
     final picked = await showModalBottomSheet<BroadcastDate>(
       context: context,
       showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       useSafeArea: true,
       isScrollControlled: true,
-      builder: (context) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * .75,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                '选择播出日期',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-            ),
-            for (final month
-                in controller.dates
-                    .map((date) => date.date.substring(0, 7))
-                    .toSet()) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
-                child: Text(
-                  '$month · ${controller.dates.where((date) => date.date.startsWith(month)).length} 期',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Card(
-                child: Column(
-                  children: [
-                    for (final date in controller.dates.where(
-                      (date) => date.date.startsWith(month),
-                    ))
-                      ListTile(
-                        title: Text(date.date),
-                        selected: date.id == controller.selectedDate?.id,
-                        trailing: date.id == controller.selectedDate?.id
-                            ? const Icon(Icons.check_circle)
-                            : null,
-                        onTap: () => Navigator.pop(context, date),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
+      builder: (context) => BroadcastDateSheet(
+        dates: controller.dates,
+        selectedId: controller.selectedDate?.id,
+        onSelected: (date) => Navigator.pop(context, date),
       ),
     );
     if (picked != null && mounted) await _selectDate(picked);
