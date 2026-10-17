@@ -38,6 +38,7 @@ Run from `flutter/`, with a disposable device selected explicitly:
 
 ```sh
 flutter test integration_test/downloads_test.dart -d <device-id>
+flutter test integration_test/download_notice_test.dart -d <device-id>
 flutter test integration_test/playback_test.dart -d <device-id> \
   --dart-define=PLAYBACK_FIXTURE_BASE64=<base64-of-a-small-H264-mp4>
 flutter drive --driver=test_driver/integration_test.dart \
@@ -119,6 +120,8 @@ The download-card refinement pairs 16:9 content/programme artwork with title and
 The download-management update adds state filters with independent scroll positions and batch selection limited to the visible filter. Dart regressions cover native capability gating, stale attempts/states, partial failure continuation, separate file deletion/record removal, confirmation boundaries, retained covers, filter selection reset and back exiting selection before leaving the tab. The production journey passed on the owned API 37 AVD `codex_flutter_download_management` (`emulator-5590`); light/dark filter, selection and action-menu screenshots were inspected under ignored `build/qa/android-downloads-*`. Batch screenshots use presentation fixtures, so this is not a new native multi-download or file-deletion result. The owned emulator and AVD were removed; iOS runtime was not repeated.
 
 The player/download-shortcut cover regression failed for both catalogue and exploration entry points before the retained-branch Hero lifetime fix. In the same API 37 production journey, replacing the library/archive/player stack with downloads and returning restored the actual artwork and original card bounds. The native shortcut probe replaces the stack directly without starting a real transfer; widget tests exercise the actual quality chooser and snackbar action. Fatal-info analysis, all 213 Dart tests and the release APK build (74.0 MB) passed for the combined download-management and cover fixes.
+
+Download notices are now owned by their archive/player route and explicitly expire despite having an action. A captured router removes reliance on a disposed source context; the shortcut removes its notice before navigation. The returning-to-another-tab and timeout cases failed before the fix. The initial eight focused native regressions passed on the owned API 37 AVD `codex_flutter_download_notice` (`emulator-5590`), covering return, shortcut, timeout and manual close from both download entry points. These tests use real Flutter navigation/rendering/timers with stubbed download/playback boundaries; no live media transfer is performed. Playback-history error feedback remains covered after moving archive actions under the route messenger. Fatal-info analysis, all 221 Dart tests and the release APK build passed. The owned emulator and AVD were removed. The optional close affordance was subsequently removed; automatic expiration and route cleanup remain. The final version passed fatal-info analysis, all 219 Dart tests and the release APK build (74.0 MB).
 
 ## Remaining Acceptance and Distribution
 

@@ -52,7 +52,68 @@ DownloadTask localTask() => DownloadTask(
   fileLocation: 'documents:Downloads/news.mp4',
 );
 
+void registerDownloadNoticeTests() {
+  for (final player in [false, true]) {
+    for (final exit in ['back', 'shortcut', 'timeout']) {
+      testWidgets('download notice is dismissed after $exit player=$player', (
+        tester,
+      ) async {
+        final harness = RouteHarness();
+        await harness.mount(tester, '/');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(ProgrammeCard));
+        await tester.pumpAndSettle();
+        if (player) {
+          tester
+              .widget<ArchivePage>(find.byType(ArchivePage))
+              .onPlay(selection);
+        } else {
+          await tester.tap(find.byTooltip('批量下载'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(content.title));
+        }
+        Future<void> settle() async {
+          for (var i = 0; i < 5; i++) {
+            await tester.pump();
+          }
+          await tester.pump(const Duration(seconds: 1));
+        }
+
+        await settle();
+        await tester.tap(find.text(player ? '下载节目' : '下载所选 1 项'));
+        await settle();
+        await tester.tap(find.widgetWithText(ListTile, '流畅'));
+        await settle();
+        expect(find.text('已加入 1 项'), findsOneWidget);
+        switch (exit) {
+          case 'back':
+            if (player) {
+              harness.router.pop();
+              await settle();
+            }
+            harness.router.pop();
+            await settle();
+            await tester.tap(find.text('下载').last);
+          case 'shortcut':
+            await tester.tap(find.text('查看下载'));
+          case 'timeout':
+            await tester.pump(const Duration(seconds: 6));
+        }
+        await settle();
+        expect(find.text('已加入 1 项'), findsNothing);
+        expect(find.text('查看下载'), findsNothing);
+        if (exit == 'back' || exit == 'shortcut') {
+          expect(find.byType(DownloadsPage), findsOneWidget);
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+}
+
 void main() {
+  registerDownloadNoticeTests();
+
   testWidgets('back leaves download selection before leaving its tab', (
     tester,
   ) async {

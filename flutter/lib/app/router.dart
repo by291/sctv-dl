@@ -34,6 +34,7 @@ GoRouter createAppRouter(AppServices services) {
     BuildContext context,
     List<ProgrammeSelection> selections,
   ) async {
+    final router = GoRouter.of(context);
     final preferences = ProviderScope.containerOf(
       context,
       listen: false,
@@ -46,12 +47,18 @@ GoRouter createAppRouter(AppServices services) {
       wifiPolicyLabel: Platform.isIOS ? '禁用蜂窝网络' : '仅使用 Wi-Fi',
     );
     if (result != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.removeCurrentSnackBar();
+      messenger.showSnackBar(
         SnackBar(
+          persist: false,
           content: Text(downloadResultLabel(result)),
           action: SnackBarAction(
             label: '查看下载',
-            onPressed: () => context.go('/downloads'),
+            onPressed: () {
+              messenger.removeCurrentSnackBar();
+              router.go('/downloads');
+            },
           ),
         ),
       );
@@ -207,14 +214,18 @@ GoRouter createAppRouter(AppServices services) {
           return ArchiveTransitionPage<void>(
             key: state.pageKey,
             restorationId: state.pageKey.value,
-            child: _ArchiveRoute(
-              key: ValueKey('archive-${state.pathParameters['id']}'),
-              services: services,
-              programmeId: state.pathParameters['id']!,
-              acceptedProgramme: accepted,
-              coverTag: coverTag,
-              onPlay: (selection) => unawaited(play(context, selection)),
-              onDownload: download,
+            // Route-owned notices disappear with their source page instead of
+            // migrating into retained tabs with callbacks to a disposed context.
+            child: ScaffoldMessenger(
+              child: _ArchiveRoute(
+                key: ValueKey('archive-${state.pathParameters['id']}'),
+                services: services,
+                programmeId: state.pathParameters['id']!,
+                acceptedProgramme: accepted,
+                coverTag: coverTag,
+                onPlay: play,
+                onDownload: download,
+              ),
             ),
           );
         },
@@ -224,21 +235,23 @@ GoRouter createAppRouter(AppServices services) {
         pageBuilder: (context, state) => ArchiveTransitionPage<void>(
           key: state.pageKey,
           restorationId: state.pageKey.value,
-          child: _PlaybackRoute(
-            key: ValueKey('player-${state.uri}'),
-            services: services,
-            target: _OnlinePlaybackTarget(
-              ContentRef(
-                programmeId: state.pathParameters['programme']!,
-                dateId: state.pathParameters['date']!,
-                contentId: state.pathParameters['content']!,
+          child: ScaffoldMessenger(
+            child: _PlaybackRoute(
+              key: ValueKey('player-${state.uri}'),
+              services: services,
+              target: _OnlinePlaybackTarget(
+                ContentRef(
+                  programmeId: state.pathParameters['programme']!,
+                  dateId: state.pathParameters['date']!,
+                  contentId: state.pathParameters['content']!,
+                ),
               ),
+              acceptedInput: state.extra is PlaybackInput
+                  ? state.extra as PlaybackInput
+                  : null,
+              onDownload: (pageContext, selection) =>
+                  download(pageContext, [selection]),
             ),
-            acceptedInput: state.extra is PlaybackInput
-                ? state.extra as PlaybackInput
-                : null,
-            onDownload: (pageContext, selection) =>
-                download(pageContext, [selection]),
           ),
         ),
       ),
@@ -466,7 +479,7 @@ class _ArchiveRoute extends StatefulWidget {
   final String programmeId;
   final Programme? acceptedProgramme;
   final String? coverTag;
-  final void Function(ProgrammeSelection) onPlay;
+  final Future<void> Function(BuildContext, ProgrammeSelection) onPlay;
   // Modal actions need the mounted page context below the route's Navigator.
   final Future<void> Function(BuildContext, List<ProgrammeSelection>)
   onDownload;
@@ -520,7 +533,7 @@ class _ArchiveRouteState extends State<_ArchiveRoute> {
         coverTag: widget.coverTag,
         controller: controller!,
         library: widget.services.library,
-        onPlay: widget.onPlay,
+        onPlay: (selection) => unawaited(widget.onPlay(context, selection)),
         onDownload: (items) => widget.onDownload(context, items),
         onOpenProgramme: (item) =>
             context.replace('/programme/${item.id}', extra: item),
