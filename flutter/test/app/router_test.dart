@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sctv_dl_mobile/app/providers.dart';
 import 'package:sctv_dl_mobile/app/router.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
+import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
@@ -69,6 +70,56 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(LibraryPage), findsOneWidget);
   });
+
+  for (final featured in [false, true]) {
+    testWidgets(
+      'download shortcut restores the library cover featured=$featured',
+      (tester) async {
+        final harness = RouteHarness();
+        await harness.mount(tester, '/');
+        await tester.pumpAndSettle();
+        final scroll = tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!;
+        scroll.jumpTo(35);
+        await tester.pump();
+        final tag = '${featured ? 'exploration' : 'catalogue'}-1';
+        final hero = find.byWidgetPredicate(
+          (widget) => widget is Hero && widget.tag == tag,
+        );
+        final cover = find.descendant(
+          of: hero,
+          matching: find.byType(CoverImage),
+        );
+        final bounds = tester.getRect(cover);
+        await tester.tap(
+          featured ? find.text('查看节目') : find.byType(ProgrammeCard),
+        );
+        await tester.pumpAndSettle();
+        tester.widget<ArchivePage>(find.byType(ArchivePage)).onPlay(selection);
+        Future<void> settle() async {
+          for (var i = 0; i < 5; i++) {
+            await tester.pump();
+          }
+          await tester.pump(const Duration(seconds: 1));
+        }
+
+        await settle();
+        await tester.tap(find.text('下载节目'));
+        await settle();
+        await tester.tap(find.widgetWithText(ListTile, '流畅'));
+        await settle();
+        await tester.tap(find.text('查看下载'));
+        await settle();
+        await tester.tap(find.text('节目库'));
+        await tester.pumpAndSettle();
+        expect(cover, findsOneWidget);
+        expect(tester.getRect(cover), bounds);
+        expect(scroll.offset, 35);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final player in [false, true]) {
     testWidgets('download chooser uses the active route player=$player', (

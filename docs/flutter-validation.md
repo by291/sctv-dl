@@ -118,6 +118,8 @@ The download-card refinement pairs 16:9 content/programme artwork with title and
 
 The download-management update adds state filters with independent scroll positions and batch selection limited to the visible filter. Dart regressions cover native capability gating, stale attempts/states, partial failure continuation, separate file deletion/record removal, confirmation boundaries, retained covers, filter selection reset and back exiting selection before leaving the tab. The production journey passed on the owned API 37 AVD `codex_flutter_download_management` (`emulator-5590`); light/dark filter, selection and action-menu screenshots were inspected under ignored `build/qa/android-downloads-*`. Batch screenshots use presentation fixtures, so this is not a new native multi-download or file-deletion result. The owned emulator and AVD were removed; iOS runtime was not repeated.
 
+The player/download-shortcut cover regression failed for both catalogue and exploration entry points before the retained-branch Hero lifetime fix. In the same API 37 production journey, replacing the library/archive/player stack with downloads and returning restored the actual artwork and original card bounds. The native shortcut probe replaces the stack directly without starting a real transfer; widget tests exercise the actual quality chooser and snackbar action. Fatal-info analysis, all 213 Dart tests and the release APK build (74.0 MB) passed for the combined download-management and cover fixes.
+
 ## Remaining Acceptance and Distribution
 
 - Android 10/API 29 and iOS 15 are configured support floors, but minimum-version and physical-device journeys remain unverified.

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../design/state_panel.dart';
 import '../design/archive_transition.dart';
 import '../design/content_transition.dart';
+import '../design/shared_cover.dart';
 import '../domain/downloads/file_gateway.dart';
 import '../domain/downloads/download_task.dart';
 import '../domain/playback/playback_backend.dart';
@@ -120,7 +121,13 @@ GoRouter createAppRouter(AppServices services) {
             RetainedFadeStack(
               index: shell.currentIndex,
               travelDistance: 20,
-              children: children,
+              children: [
+                for (var i = 0; i < children.length; i++)
+                  SharedCoverScope(
+                    active: i == shell.currentIndex,
+                    child: children[i],
+                  ),
+              ],
             ),
         restorationScopeId: 'primary-shell',
         builder: (context, state, shell) =>

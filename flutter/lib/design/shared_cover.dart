@@ -3,6 +3,22 @@ import 'package:flutter/material.dart';
 import 'archive_transition.dart';
 import 'cover_image.dart';
 
+/// Retained navigation branches must release parked Hero placeholders when
+/// another branch replaces the route stack without a return flight.
+class SharedCoverScope extends InheritedWidget {
+  const SharedCoverScope({
+    super.key,
+    required this.active,
+    required super.child,
+  });
+
+  final bool active;
+
+  @override
+  bool updateShouldNotify(SharedCoverScope oldWidget) =>
+      active != oldWidget.active;
+}
+
 /// The source tag distinguishes an exploration cover from the same grid item.
 class SharedCover extends StatelessWidget {
   const SharedCover({
@@ -28,7 +44,14 @@ class SharedCover extends StatelessWidget {
       radius: radius,
       frameInset: frameInset,
     );
-    if (tag == null || MediaQuery.disableAnimationsOf(context)) return frame;
+    final active =
+        context
+            .dependOnInheritedWidgetOfExactType<SharedCoverScope>()
+            ?.active ??
+        true;
+    if (tag == null || !active || MediaQuery.disableAnimationsOf(context)) {
+      return frame;
+    }
     final curve = Theme.of(context).platform == TargetPlatform.android
         ? ArchiveMotionCurve(Navigator.of(context, rootNavigator: true))
         : Curves.fastOutSlowIn;

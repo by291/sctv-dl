@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
+import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
@@ -279,6 +281,35 @@ void main() {
     await capture('archive-return-transition', settle: false);
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.getRect(find.byType(ProgrammeCard)), libraryBounds);
+    // Exercise the shortcut's stack replacement without creating a real
+    // download. The exact chooser/snackbar callback has widget coverage.
+    await tester.tap(find.byType(ProgrammeCard));
+    await waitFor(() => find.byType(ArchivePage).evaluate().isNotEmpty);
+    await tester.pump(const Duration(milliseconds: 500));
+    tester
+        .widget<ArchivePage>(find.byType(ArchivePage))
+        .onPlay(
+          ProgrammeSelection(
+            programme: programme,
+            broadcast: archive.controller.selectedDate!,
+            content: playable,
+          ),
+        );
+    await waitFor(() => find.byType(PlayerPage).evaluate().isNotEmpty);
+    await tester.pump(const Duration(milliseconds: 500));
+    GoRouter.of(tester.element(find.byType(PlayerPage))).go('/downloads');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('节目库').last);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      find.descendant(
+        of: find.byType(ProgrammeCard),
+        matching: find.byType(CoverImage),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getRect(find.byType(ProgrammeCard)), libraryBounds);
+    await capture('download-shortcut-cover-return');
     await tester.tap(find.text('下载').last);
     await tester.pump(const Duration(milliseconds: 60));
     await capture('navigation-transition', settle: false);
