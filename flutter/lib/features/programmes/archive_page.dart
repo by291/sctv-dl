@@ -500,7 +500,7 @@ class _ArchivePageState extends State<ArchivePage>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (fullEpisode && !controller.selectionMode)
+        if (fullEpisode)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
@@ -533,43 +533,16 @@ class _ArchivePageState extends State<ArchivePage>
           ),
       ],
     );
-    final content = controller.selectionMode || largeText
-        ? Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                if (controller.selectionMode)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: ExcludeSemantics(
-                      child: Icon(
-                        selected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: playable
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).disabledColor,
-                      ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Icon(
-                      playable
-                          ? Icons.play_circle_outline
-                          : Icons.videocam_off_outlined,
-                    ),
-                  ),
-                Expanded(child: details),
-              ],
-            ),
-          )
-        : fullEpisode
+    final content = fullEpisode || largeText
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _playArtwork(item.cover, playable, fullEpisode: true),
+              _playArtwork(
+                item.cover,
+                playable,
+                fullEpisode: true,
+                selected: selected,
+              ),
               Padding(padding: const EdgeInsets.all(16), child: details),
             ],
           )
@@ -582,7 +555,11 @@ class _ArchivePageState extends State<ArchivePage>
                   width: 104,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: _playArtwork(item.cover, playable),
+                    child: _playArtwork(
+                      item.cover,
+                      playable,
+                      selected: selected,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -620,29 +597,37 @@ class _ArchivePageState extends State<ArchivePage>
     );
   }
 
-  Widget _playArtwork(String? url, bool playable, {bool fullEpisode = false}) =>
-      Stack(
-        children: [
-          CoverImage(url: url, aspectRatio: fullEpisode ? 16 / 9 : 4 / 3),
-          if (playable)
-            Positioned(
-              right: fullEpisode ? 12 : 6,
-              bottom: fullEpisode ? 12 : 6,
-              child: Container(
-                width: fullEpisode ? 40 : 28,
-                height: fullEpisode ? 40 : 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Theme.of(context).colorScheme.surface
-                      .withValues(alpha: .94),
-                ),
-                child: Icon(
-                  Icons.play_arrow_rounded,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: fullEpisode ? 24 : 18,
-                ),
-              ),
+  Widget _playArtwork(
+    String? url,
+    bool playable, {
+    bool fullEpisode = false,
+    required bool selected,
+  }) => Stack(
+    children: [
+      CoverImage(url: url, aspectRatio: fullEpisode ? 16 / 9 : 4 / 3),
+      if (playable || controller.selectionMode)
+        Positioned(
+          right: fullEpisode ? 12 : 6,
+          bottom: fullEpisode ? 12 : 6,
+          child: Container(
+            width: fullEpisode ? 40 : 28,
+            height: fullEpisode ? 40 : 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.surface
+                  .withValues(alpha: .94),
             ),
-        ],
-      );
+            child: Icon(
+              controller.selectionMode
+                  ? (selected ? Icons.check_box : Icons.check_box_outline_blank)
+                  : Icons.play_arrow_rounded,
+              color: playable
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).disabledColor,
+              size: fullEpisode ? 24 : 18,
+            ),
+          ),
+        ),
+    ],
+  );
 }

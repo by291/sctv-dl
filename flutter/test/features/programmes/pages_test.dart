@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
+import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/domain/playback/history_repository.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_controller.dart';
@@ -476,6 +477,85 @@ void main() {
       '不存在',
     );
   });
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('batch selection retains artwork at text scale $scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const episode = ProgrammeContent(
+        id: '3',
+        title: '四川新闻（2026.10.16）',
+        video: 'https://fscgc.scgchc.com/a.mp4',
+      );
+      const clip = ProgrammeContent(
+        id: '4',
+        title: '新闻片段',
+        video: 'https://fscgc.scgchc.com/b.mp4',
+      );
+      final repository = FakeProgrammeRepository()
+        ..dates = snapshot([
+          const BroadcastDate(id: '2', date: '2026-10-16'),
+        ], 'dates')
+        ..contents['2'] = snapshot([episode, clip], 'contents');
+      final user = FakeUserRepository();
+      final library = LibraryController(
+        repository: repository,
+        user: user,
+        initialFavourites: {},
+      );
+      final archive = ArchiveController(
+        repository: repository,
+        programme: programme,
+      );
+      addTearDown(user.close);
+      addTearDown(library.dispose);
+      var played = false;
+      await tester.pumpWidget(
+        host(
+          ArchivePage(
+            controller: archive,
+            library: library,
+            onPlay: (_) => played = true,
+            onDownload: (_) async {},
+            onOpenProgramme: (_) {},
+          ),
+          scale: scale,
+        ),
+      );
+      await tester.pumpAndSettle();
+      Finder card(ProgrammeContent item) =>
+          find.ancestor(of: find.text(item.title), matching: find.byType(Card));
+      Finder cover(ProgrammeContent item) =>
+          find.descendant(of: card(item), matching: find.byType(CoverImage));
+      final sizes = <String, Size>{};
+      for (final item in [episode, clip]) {
+        await tester.ensureVisible(find.text(item.title));
+        expect(cover(item), findsOneWidget);
+        sizes[item.id] = tester.getSize(cover(item));
+      }
+      archive.enterSelection();
+      await tester.pumpAndSettle();
+      for (final item in [episode, clip]) {
+        await tester.ensureVisible(find.text(item.title));
+        expect(cover(item), findsOneWidget);
+        expect(tester.getSize(cover(item)), sizes[item.id]);
+        await tester.tap(cover(item));
+        await tester.pump();
+        expect(archive.selectedIds, contains(item.id));
+      }
+      expect(played, isFalse);
+      archive.exitSelection();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text(clip.title));
+      await tester.tap(cover(clip));
+      expect(played, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
     'archive batch back exits selection and large text keeps all content reachable',
