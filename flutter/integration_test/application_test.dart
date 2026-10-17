@@ -90,6 +90,15 @@ void main() {
     await waitFor(() => services.library.hasSnapshot);
     expect(services.library.programmes, isNotEmpty);
     await capture('library');
+    expect(find.byType(TabBar), findsNothing);
+    final explorationBounds = tester.getRect(find.text('栏目探索'));
+    await tester.tap(find.byTooltip('只看收藏'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('还没有收藏'), findsOneWidget);
+    await capture('favourites-empty');
+    expect(tester.getRect(find.text('栏目探索')), explorationBounds);
+    await tester.tap(find.byTooltip('显示全部栏目'));
+    await tester.pump(const Duration(milliseconds: 300));
     final programme = services.library.programmes.firstWhere(
       (item) => item.name.contains('四川新闻'),
       orElse: () => services.library.programmes.first,
@@ -157,10 +166,10 @@ void main() {
     await tester.tap(find.byTooltip('关闭搜索'));
     await tester.pump(const Duration(milliseconds: 300));
     await capture('library-dark');
-    await tester.tap(find.text('最近观看'));
+    await tester.tap(find.byTooltip('观看历史'));
     await tester.pump(const Duration(milliseconds: 500));
     await capture('history-dark');
-    await tester.tap(find.text('全部栏目'));
+    await tester.tap(find.byType(BackButton));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byTooltip('搜索栏目'));
     await tester.pump();
