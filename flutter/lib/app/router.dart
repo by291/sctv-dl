@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../design/state_panel.dart';
+import '../design/archive_transition.dart';
+import '../design/content_transition.dart';
 import '../domain/downloads/file_gateway.dart';
 import '../domain/downloads/download_task.dart';
 import '../domain/playback/playback_backend.dart';
@@ -94,8 +96,18 @@ GoRouter createAppRouter(AppServices services) {
     );
   }
 
-  Future<void> openProgramme(BuildContext context, Programme programme) async {
-    await context.push('/programme/${programme.id}', extra: programme);
+  Future<void> openProgramme(
+    BuildContext context,
+    Programme programme, {
+    bool featured = false,
+  }) async {
+    await context.push(
+      '/programme/${programme.id}',
+      extra: (
+        programme: programme,
+        coverTag: '${featured ? 'exploration' : 'catalogue'}-${programme.id}',
+      ),
+    );
     if (context.mounted) unawaited(services.library.refresh());
   }
 
@@ -103,7 +115,13 @@ GoRouter createAppRouter(AppServices services) {
     restorationScopeId: 'sctv-routes',
     initialLocation: '/',
     routes: [
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
+        navigatorContainerBuilder: (context, shell, children) =>
+            RetainedFadeStack(
+              index: shell.currentIndex,
+              travelDistance: 20,
+              children: children,
+            ),
         restorationScopeId: 'primary-shell',
         builder: (context, state, shell) =>
             _NavigationShell(shell: shell, services: services),
@@ -117,6 +135,9 @@ GoRouter createAppRouter(AppServices services) {
                   controller: services.library,
                   onOpenProgramme: (programme) =>
                       unawaited(openProgramme(context, programme)),
+                  onOpenExploration: (programme) => unawaited(
+                    openProgramme(context, programme, featured: true),
+                  ),
                   onShowHistory: () => context.push('/history'),
                 ),
               ),
@@ -164,16 +185,32 @@ GoRouter createAppRouter(AppServices services) {
       ),
       GoRoute(
         path: '/programme/:id',
-        builder: (context, state) => _ArchiveRoute(
-          key: ValueKey('archive-${state.pathParameters['id']}'),
-          services: services,
-          programmeId: state.pathParameters['id']!,
-          acceptedProgramme: state.extra is Programme
-              ? state.extra as Programme
-              : null,
-          onPlay: (selection) => unawaited(play(context, selection)),
-          onDownload: (items) => download(context, items),
-        ),
+        pageBuilder: (context, state) {
+          final input = state.extra;
+          final accepted = switch (input) {
+            (programme: final Programme programme, coverTag: String _) =>
+              programme,
+            Programme programme => programme,
+            _ => null,
+          };
+          final coverTag = switch (input) {
+            (programme: Programme _, coverTag: final String tag) => tag,
+            _ => null,
+          };
+          return ArchiveTransitionPage<void>(
+            key: state.pageKey,
+            restorationId: state.pageKey.value,
+            child: _ArchiveRoute(
+              key: ValueKey('archive-${state.pathParameters['id']}'),
+              services: services,
+              programmeId: state.pathParameters['id']!,
+              acceptedProgramme: accepted,
+              coverTag: coverTag,
+              onPlay: (selection) => unawaited(play(context, selection)),
+              onDownload: (items) => download(context, items),
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/play/:programme/:date/:content',
@@ -407,10 +444,12 @@ class _ArchiveRoute extends StatefulWidget {
     required this.onPlay,
     required this.onDownload,
     this.acceptedProgramme,
+    this.coverTag,
   });
   final AppServices services;
   final String programmeId;
   final Programme? acceptedProgramme;
+  final String? coverTag;
   final void Function(ProgrammeSelection) onPlay;
   final Future<void> Function(List<ProgrammeSelection>) onDownload;
   @override
@@ -440,6 +479,7 @@ class _ArchiveRouteState extends State<_ArchiveRoute> {
   @override
   Widget build(BuildContext context) => FutureBuilder<Programme>(
     future: programme,
+    initialData: widget.acceptedProgramme,
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return _routeError(
@@ -459,6 +499,7 @@ class _ArchiveRouteState extends State<_ArchiveRoute> {
         programme: snapshot.data!,
       );
       return ArchivePage(
+        coverTag: widget.coverTag,
         controller: controller!,
         library: widget.services.library,
         onPlay: widget.onPlay,

@@ -144,6 +144,162 @@ void main() {
     },
   );
 
+  testWidgets(
+    'filter transition keeps outgoing cards until the empty state appears',
+    (tester) async {
+      final user = FakeUserRepository();
+      final controller = LibraryController(
+        repository: FakeProgrammeRepository()
+          ..catalogue = snapshot([programme], 'one'),
+        user: user,
+        initialFavourites: {},
+      );
+      addTearDown(user.close);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        host(
+          LibraryPage(
+            controller: controller,
+            onOpenProgramme: (_) {},
+            onShowHistory: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .controller!;
+      scroll.jumpTo(60);
+      await tester.pump();
+      final top = tester.getRect(find.text('栏目探索'));
+      await tester.tap(find.byTooltip('只看收藏'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.byType(ProgrammeCard), findsOneWidget);
+      expect(find.text('还没有收藏'), findsOneWidget);
+      expect(tester.getRect(find.text('栏目探索')), top);
+      expect(scroll.offset, 60);
+      await tester.pumpAndSettle();
+      expect(find.byType(ProgrammeCard), findsNothing);
+      expect(tester.getRect(find.text('栏目探索')), top);
+      expect(scroll.offset, 60);
+    },
+  );
+
+  testWidgets(
+    'shuffling long titles keeps exploration actions at the same position',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final user = FakeUserRepository();
+      final controller = LibraryController(
+        repository: FakeProgrammeRepository()
+          ..catalogue = snapshot([
+            programme,
+            const Programme(id: '2', name: '四川新闻联播与精彩节目回看特别报道'),
+          ], 'one'),
+        user: user,
+        initialFavourites: {},
+      )..featuredId = '1';
+      addTearDown(user.close);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        host(
+          LibraryPage(
+            controller: controller,
+            onOpenProgramme: (_) {},
+            onShowHistory: () {},
+          ),
+          scale: 2,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final button = tester.getRect(find.text('换一个'));
+      await tester.tap(find.text('换一个'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.getRect(find.text('换一个')), button);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.text('换一个')), button);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('catalogue transitions retain lazy grid construction', (
+    tester,
+  ) async {
+    final user = FakeUserRepository();
+    final controller = LibraryController(
+      repository: FakeProgrammeRepository()
+        ..catalogue = snapshot([
+          for (var i = 0; i < 1000; i++) Programme(id: '$i', name: '栏目 $i'),
+        ], 'many'),
+      user: user,
+      initialFavourites: {},
+    );
+    addTearDown(user.close);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      host(
+        LibraryPage(
+          controller: controller,
+          onOpenProgramme: (_) {},
+          onShowHistory: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(ProgrammeCard).evaluate().length, lessThan(100));
+    expect(find.byType(ProgrammeCard), findsWidgets);
+    await tester.tap(find.byTooltip('只看收藏'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.byType(ProgrammeCard).evaluate().length, lessThan(100));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProgrammeCard), findsNothing);
+  });
+
+  testWidgets('rapid search toggles retain a single input and keyboard focus', (
+    tester,
+  ) async {
+    final user = FakeUserRepository();
+    final controller = LibraryController(
+      repository: FakeProgrammeRepository()
+        ..catalogue = snapshot([programme], 'one'),
+      user: user,
+      initialFavourites: {},
+    );
+    addTearDown(user.close);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      host(
+        LibraryPage(
+          controller: controller,
+          onOpenProgramme: (_) {},
+          onShowHistory: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.byTooltip('搜索栏目'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byType(TextField, skipOffstage: false), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭搜索'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+    }
+    await tester.tap(find.byTooltip('搜索栏目'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '四川');
+    expect(controller.query, '四川');
+    expect(tester.testTextInput.isVisible, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final layout in [(320.0, 1.0), (320.0, 2.0), (840.0, 1.0)]) {
     testWidgets(
       'favourite stays independent of opening a programme at layout $layout',

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../design/cover_image.dart';
+import '../../design/shared_cover.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
@@ -19,10 +20,12 @@ class ArchivePage extends StatefulWidget {
     required this.onDownload,
     required this.onOpenProgramme,
     this.initialDateId,
+    this.coverTag,
   });
   final ArchiveController controller;
   final LibraryController library;
   final String? initialDateId;
+  final String? coverTag;
   final void Function(ProgrammeSelection) onPlay;
   final Future<void> Function(List<ProgrammeSelection>) onDownload;
   final void Function(Programme) onOpenProgramme;
@@ -271,15 +274,6 @@ class _ArchivePageState extends State<ArchivePage>
   );
 
   Widget _archive() {
-    if (controller.loadingDates) return const PageSkeleton();
-    if (controller.dates.isEmpty && controller.error != null) {
-      return StatePanel(
-        title: '暂时无法加载回看',
-        message: controller.error!,
-        icon: Icons.cloud_off_outlined,
-        onAction: () => unawaited(controller.refresh()),
-      );
-    }
     final selected = controller.selectedDate;
     return CustomScrollView(
       controller: _scroll,
@@ -292,132 +286,148 @@ class _ArchivePageState extends State<ArchivePage>
               child: _header(),
             ),
           ),
-        if (controller.error case final error?)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            sliver: SliverToBoxAdapter(
-              child: CachedErrorBanner(
-                message: error,
-                onRetry: () => unawaited(controller.refresh()),
-              ),
-            ),
-          ),
-        SliverToBoxAdapter(
-          child: controller.selectionMode
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Wrap(
-                    spacing: 4,
-                    children: [
-                      TextButton(
-                        onPressed: _action(controller.selectAll),
-                        child: const Text('全选'),
-                      ),
-                      TextButton(
-                        onPressed: _action(controller.selectFullEpisodes),
-                        child: const Text('仅完整节目'),
-                      ),
-                    ],
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: BroadcastDates(
-                    dates: controller.dates,
-                    selected: selected,
-                    onSelected: (date) => unawaited(_selectDate(date)),
-                    onMore: _chooseDate,
-                  ),
-                ),
-        ),
-        if (selected != null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    selected.date,
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (controller.loadingContents &&
-            !controller.hasSnapshot &&
-            selected != null)
-          SliverToBoxAdapter(
-            child: SizedBox(height: 340, child: const PageSkeleton(count: 2)),
-          )
-        else if (controller.contents.isEmpty)
+        if (controller.loadingDates)
+          const SliverFillRemaining(child: PageSkeleton())
+        else if (controller.dates.isEmpty && controller.error != null)
           SliverFillRemaining(
             hasScrollBody: false,
             child: StatePanel(
-              title: '暂无节目内容',
-              message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
-              onAction: controller.error == null
-                  ? null
-                  : () => unawaited(controller.refresh()),
+              title: '暂时无法加载回看',
+              message: controller.error!,
+              icon: Icons.cloud_off_outlined,
+              onAction: () => unawaited(controller.refresh()),
             ),
           )
         else ...[
-          for (final item in controller.fullEpisodes)
+          if (controller.error case final error?)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               sliver: SliverToBoxAdapter(
-                child: _contentCard(item, fullEpisode: true),
+                child: CachedErrorBanner(
+                  message: error,
+                  onRetry: () => unawaited(controller.refresh()),
+                ),
               ),
             ),
-          if (controller.clips.isNotEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '节目片段',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+          SliverToBoxAdapter(
+            child: controller.selectionMode
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton(
+                          onPressed: _action(controller.selectAll),
+                          child: const Text('全选'),
+                        ),
+                        TextButton(
+                          onPressed: _action(controller.selectFullEpisodes),
+                          child: const Text('仅完整节目'),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: controller.ascending
-                          ? '当前按时间升序，切换为降序'
-                          : '当前按时间降序，切换为升序',
-                      onPressed: controller.selectionMode
-                          ? null
-                          : _action(controller.toggleSort),
-                      icon: Transform.flip(
-                        flipY: controller.ascending,
-                        child: const Icon(Icons.sort),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: BroadcastDates(
+                      dates: controller.dates,
+                      selected: selected,
+                      onSelected: (date) => unawaited(_selectDate(date)),
+                      onMore: _chooseDate,
+                    ),
+                  ),
+          ),
+          if (selected != null)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selected.date,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList.separated(
-              itemCount: controller.clips.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, index) =>
-                  _contentCard(controller.clips[index], fullEpisode: false),
+          if (controller.loadingContents &&
+              !controller.hasSnapshot &&
+              selected != null)
+            SliverToBoxAdapter(
+              child: SizedBox(height: 340, child: const PageSkeleton(count: 2)),
+            )
+          else if (controller.contents.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: StatePanel(
+                title: '暂无节目内容',
+                message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
+                onAction: controller.error == null
+                    ? null
+                    : () => unawaited(controller.refresh()),
+              ),
+            )
+          else ...[
+            for (final item in controller.fullEpisodes)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                sliver: SliverToBoxAdapter(
+                  child: _contentCard(item, fullEpisode: true),
+                ),
+              ),
+            if (controller.clips.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '节目片段',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: controller.ascending
+                            ? '当前按时间升序，切换为降序'
+                            : '当前按时间降序，切换为升序',
+                        onPressed: controller.selectionMode
+                            ? null
+                            : _action(controller.toggleSort),
+                        icon: Transform.flip(
+                          flipY: controller.ascending,
+                          child: const Icon(Icons.sort),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList.separated(
+                itemCount: controller.clips.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (_, index) =>
+                    _contentCard(controller.clips[index], fullEpisode: false),
+              ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-          ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 24 + MediaQuery.paddingOf(context).bottom,
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -453,9 +463,16 @@ class _ArchivePageState extends State<ArchivePage>
     return LayoutBuilder(
       builder: (context, constraints) {
         if (MediaQuery.textScalerOf(context).scale(1) >= 1.5) return details;
-        final cover = ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: CoverImage(url: programme.cover),
+        final cover = ListenableBuilder(
+          listenable: _scroll,
+          builder: (context, _) => SharedCover(
+            // A clipped/offscreen cover must not reappear above the app bar
+            // when returning from a scrolled archive.
+            tag: !_scroll.hasClients || _scroll.offset <= 8
+                ? widget.coverTag
+                : null,
+            url: programme.cover,
+          ),
         );
         final compact = constraints.maxWidth < 348;
         final gap = compact ? 12.0 : 16.0;

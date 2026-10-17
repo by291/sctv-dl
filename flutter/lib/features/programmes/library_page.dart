@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sliver_tools/sliver_tools.dart';
 
-import '../../design/cover_image.dart';
+import '../../design/shared_cover.dart';
+import '../../design/content_transition.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import 'library_controller.dart';
@@ -14,9 +16,11 @@ class LibraryPage extends StatefulWidget {
     required this.onOpenProgramme,
     required this.onShowHistory,
     this.active = true,
+    this.onOpenExploration,
   });
   final LibraryController controller;
   final void Function(Programme) onOpenProgramme;
+  final void Function(Programme)? onOpenExploration;
   final VoidCallback onShowHistory;
   final bool active;
 
@@ -123,40 +127,57 @@ class _LibraryPageState extends State<LibraryPage>
             toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5
                 ? 88
                 : 64,
-            title: searching
-                ? TextField(
-                    controller: _search,
-                    focusNode: _focus,
-                    decoration: const InputDecoration(
-                      hintText: '搜索栏目',
-                      border: InputBorder.none,
-                    ),
-                    textInputAction: TextInputAction.search,
-                    onChanged: (value) {
-                      _restoredQuery.value = value;
-                      controller.setQuery(value);
-                    },
-                    onSubmitted: (_) => _focus.unfocus(),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (MediaQuery.textScalerOf(context).scale(1) < 1.5) ...[
-                        Icon(
-                          Icons.live_tv_rounded,
-                          color: Theme.of(context).iconTheme.color,
+            title: SizedBox(
+              height: MediaQuery.textScalerOf(context).scale(1) >= 1.5
+                  ? 72
+                  : 48,
+              child: RetainedFadeStack(
+                index: searching ? 1 : 0,
+                milliseconds: 120,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (MediaQuery.textScalerOf(context).scale(1) <
+                            1.5) ...[
+                          Icon(
+                            Icons.live_tv_rounded,
+                            color: Theme.of(context).iconTheme.color,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        const Flexible(
+                          child: Text(
+                            'sctv-dl',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        const SizedBox(width: 10),
                       ],
-                      const Flexible(
-                        child: Text(
-                          'sctv-dl',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextField(
+                      controller: _search,
+                      focusNode: _focus,
+                      decoration: const InputDecoration(
+                        hintText: '搜索栏目',
+                        border: InputBorder.none,
+                      ),
+                      textInputAction: TextInputAction.search,
+                      onChanged: (value) {
+                        _restoredQuery.value = value;
+                        controller.setQuery(value);
+                      },
+                      onSubmitted: (_) => _focus.unfocus(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             actions: [
               IconButton(
                 tooltip: '观看历史',
@@ -179,7 +200,9 @@ class _LibraryPageState extends State<LibraryPage>
                   setState(() {
                     _restoredSearch.value = true;
                   });
-                  _focus.requestFocus();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && _restoredSearch.value) _focus.requestFocus();
+                  });
                 },
               ),
             ],
@@ -250,16 +273,28 @@ class _LibraryPageState extends State<LibraryPage>
                         IconButton(
                           tooltip: _favouritesOnly ? '显示全部栏目' : '只看收藏',
                           isSelected: _favouritesOnly,
-                          icon: const Icon(Icons.favorite_border_rounded),
-                          selectedIcon: const Icon(Icons.favorite_rounded),
-                          style: IconButton.styleFrom(
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .primary,
-                            backgroundColor: _favouritesOnly
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Colors.transparent,
+                          icon: AnimatedSwitcher(
+                            duration: motionDuration(context, 120),
+                            child: Icon(
+                              _favouritesOnly
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              key: ValueKey(_favouritesOnly),
+                            ),
                           ),
+                          style:
+                              IconButton.styleFrom(
+                                foregroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primary,
+                                backgroundColor: _favouritesOnly
+                                    ? Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                    : Colors.transparent,
+                              ).copyWith(
+                                animationDuration: motionDuration(context, 120),
+                              ),
                           onPressed: () => setState(() {
                             _restoredFilter.value = _favouritesOnly ? 0 : 1;
                           }),
@@ -278,34 +313,52 @@ class _LibraryPageState extends State<LibraryPage>
                 ),
               ),
             ),
-            if (items.isEmpty)
-              SliverToBoxAdapter(child: _emptyCatalogue())
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                sliver: SliverGrid.builder(
-                  itemCount: items.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    mainAxisExtent:
-                        (constraints.maxWidth - 32 - 12 * (columns - 1)) /
-                            columns *
-                            9 /
-                            16 +
-                        (MediaQuery.textScalerOf(context).scale(16) * 1.5 * 2 +
-                            20),
+            ContentTransition.sliver(
+              background: Theme.of(context).scaffoldBackgroundColor,
+              child: SliverStack(
+                key: ValueKey(_favouritesOnly),
+                children: [
+                  // Keep the toolbar's partially scrolled position valid when
+                  // filtering to a short or empty list, without eager grid layout.
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: constraints.maxHeight),
                   ),
-                  itemBuilder: (context, index) => ProgrammeCard(
-                    programme: items[index],
-                    favourite: controller.favourites.contains(items[index].id),
-                    onOpen: () => widget.onOpenProgramme(items[index]),
-                    onFavourite: () =>
-                        unawaited(controller.toggleFavourite(items[index].id)),
-                  ),
-                ),
+                  if (items.isEmpty)
+                    SliverToBoxAdapter(child: _emptyCatalogue())
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      sliver: SliverGrid.builder(
+                        itemCount: items.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          mainAxisExtent:
+                              (constraints.maxWidth - 32 - 12 * (columns - 1)) /
+                                  columns *
+                                  9 /
+                                  16 +
+                              (MediaQuery.textScalerOf(context).scale(16) *
+                                      1.5 *
+                                      2 +
+                                  20),
+                        ),
+                        itemBuilder: (context, index) => ProgrammeCard(
+                          programme: items[index],
+                          favourite: controller.favourites.contains(
+                            items[index].id,
+                          ),
+                          onOpen: () => widget.onOpenProgramme(items[index]),
+                          onFavourite: () => unawaited(
+                            controller.toggleFavourite(items[index].id),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         );
       },
@@ -315,8 +368,12 @@ class _LibraryPageState extends State<LibraryPage>
   Widget _exploration(Programme programme) {
     final colours = Theme.of(context).colorScheme;
     final typography = Theme.of(context).textTheme;
+    final cardColour = Color.alphaBlend(
+      colours.primaryContainer.withValues(alpha: .35),
+      Theme.of(context).scaffoldBackgroundColor,
+    );
     return Card(
-      color: colours.primaryContainer.withValues(alpha: .35),
+      color: cardColour,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -327,67 +384,67 @@ class _LibraryPageState extends State<LibraryPage>
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '栏目探索',
-                            style: typography.labelLarge?.copyWith(
-                              color: colours.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            programme.name,
-                            maxLines: largeText ? 4 : 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: typography.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (wide) ...[
-                            const SizedBox(height: 8),
+                ContentTransition(
+                  background: cardColour,
+                  milliseconds: 160,
+                  child: Row(
+                    key: ValueKey(programme.id),
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              '发现一个栏目，回看整期节目或精彩片段。',
-                              style: typography.bodyMedium?.copyWith(
-                                color: colours.onSurfaceVariant,
+                              '栏目探索',
+                              style: typography.labelLarge?.copyWith(
+                                color: colours.primary,
                               ),
                             ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              height:
+                                  MediaQuery.textScalerOf(context)
+                                      .scale(typography.titleLarge!.fontSize!) *
+                                  1.3 *
+                                  (largeText ? 4 : 2),
+                              child: Text(
+                                programme.name,
+                                maxLines: largeText ? 4 : 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: typography.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                            if (wide) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '发现一个栏目，回看整期节目或精彩片段。',
+                                style: typography.bodyMedium?.copyWith(
+                                  color: colours.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    if (!largeText) ...[
-                      const SizedBox(width: 16),
-                      Transform.rotate(
-                        angle: -.0872665,
-                        child: Container(
+                      if (!largeText) ...[
+                        const SizedBox(width: 16),
+                        SizedBox(
                           width: wide
                               ? 240
                               : (constraints.maxWidth * .46).clamp(112, 160),
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: colours.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colours.shadow.withValues(alpha: .12),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CoverImage(url: programme.cover),
+                          child: SharedCover(
+                            tag: 'exploration-${programme.id}',
+                            url: programme.cover,
+                            rotation: -.0872665,
+                            frameInset: 4,
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
@@ -399,7 +456,10 @@ class _LibraryPageState extends State<LibraryPage>
                         backgroundColor: colours.primaryContainer,
                         foregroundColor: colours.onPrimaryContainer,
                       ),
-                      onPressed: () => widget.onOpenProgramme(programme),
+                      onPressed: () =>
+                          (widget.onOpenExploration ?? widget.onOpenProgramme)(
+                            programme,
+                          ),
                       iconAlignment: IconAlignment.end,
                       icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                       label: const Text('查看节目'),
@@ -466,7 +526,11 @@ class ProgrammeCard extends StatelessWidget {
           children: [
             Stack(
               children: [
-                CoverImage(url: programme.cover),
+                SharedCover(
+                  tag: 'catalogue-${programme.id}',
+                  url: programme.cover,
+                  radius: 16,
+                ),
                 Positioned(
                   top: 4,
                   right: 4,

@@ -30,6 +30,8 @@ class CoverImage extends ConsumerWidget {
             ? fallback
             : CachedNetworkImage(
                 imageUrl: url!,
+                fadeInDuration: Duration.zero,
+                fadeOutDuration: Duration.zero,
                 cacheManager: ref.watch(coverCacheProvider),
                 fit: BoxFit.cover,
                 memCacheWidth: 900,
