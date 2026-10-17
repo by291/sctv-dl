@@ -24,6 +24,7 @@ import '../features/programmes/library_page.dart';
 import '../features/programmes/history_page.dart';
 import '../features/settings/settings_page.dart';
 import '../platform/playback/better_player_backend.dart';
+import '../platform/playback/native_player_environment.dart';
 import 'providers.dart';
 import 'services.dart';
 
@@ -742,6 +743,8 @@ class _PlaybackRouteState extends ConsumerState<_PlaybackRoute> {
       final prepared = snapshot.data!;
       return PlayerPage(
         input: prepared,
+        environment: NativePlayerEnvironment(),
+        systemVolume: Platform.isIOS ? const NativeSystemVolume() : null,
         backend: widget.services.playback,
         surfaceBuilder: (session) => PlaybackSurface(session: session),
         history: widget.services.history,

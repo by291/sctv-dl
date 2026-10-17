@@ -225,20 +225,20 @@ void main() {
       await mount(tester, session);
       final surface = find.byKey(const ValueKey('video'));
       await tester.tapAt(tester.getCenter(surface));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.byTooltip('播放'), findsOneWidget);
       session.emit(playing: true);
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       await tester.tapAt(tester.getCenter(surface));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.byTooltip('暂停'), findsNothing);
       await tester.tapAt(tester.getCenter(surface));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.byTooltip('暂停'), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 3501));
       expect(find.byTooltip('暂停'), findsNothing);
       session.emit(buffering: true, playing: true);
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.byTooltip('暂停'), findsOneWidget);
     },
   );

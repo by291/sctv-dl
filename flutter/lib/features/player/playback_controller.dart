@@ -6,7 +6,15 @@ import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 
-enum PlayerControlHold { interaction, accessibility, focus, seek, menu }
+enum PlayerControlHold {
+  interaction,
+  accessibility,
+  focus,
+  seek,
+  menu,
+  gesture,
+  systemVolume,
+}
 
 /// Owns one pinned playback route. A committed route exit releases its session
 /// after the transition; an active PiP session retains ownership until it stops.
@@ -32,6 +40,7 @@ class PlaybackController extends ChangeNotifier {
   bool _released = false;
   bool _disposed = false;
   bool _pipRequested = false;
+  bool _retainedForPip = false;
   bool _backgrounded = false;
   bool _exiting = false;
   int _generation = 0;
@@ -42,6 +51,90 @@ class PlaybackController extends ChangeNotifier {
   Duration _lastSavedPosition = Duration.zero;
   PlaybackSnapshot? _lastUsable;
   bool _streamFailed = false;
+
+  int gestureEpoch = 0;
+  double selectedSpeed = 1;
+  Duration? seekPreview;
+  Duration? _seekOrigin;
+  bool temporarySpeed = false;
+  Future<void> _speedChanges = Future.value();
+  int _pendingSpeedChanges = 0;
+  Object? _speedFailure;
+
+  void previewSeek(double fraction) {
+    final duration = value.duration;
+    if (_released || duration == null || duration <= Duration.zero) return;
+    _seekOrigin ??= value.position;
+    final sensitivity = duration.inMilliseconds.clamp(0, 120000);
+    seekPreview = Duration(
+      milliseconds: (_seekOrigin!.inMilliseconds + fraction * sensitivity)
+          .round()
+          .clamp(0, duration.inMilliseconds),
+    );
+    holdControls(true, reason: PlayerControlHold.seek);
+  }
+
+  Future<void> finishSeek({required bool commit}) async {
+    final target = seekPreview;
+    seekPreview = null;
+    _seekOrigin = null;
+    // Retire this preview before awaiting a native seek; the next preview owns
+    // its own hold even when this write is still pending.
+    if (target != null) holdControls(false, reason: PlayerControlHold.seek);
+    if (commit && target != null) await seek(target);
+  }
+
+  Future<void> _queueSpeed(double speed) {
+    final owned = session;
+    _pendingSpeedChanges++;
+    return _speedChanges = _speedChanges.then((_) async {
+      try {
+        if (owned == null || owned != session) return;
+        await owned.setSpeed(speed);
+        if (owned == session) _speedFailure = null;
+      } catch (error) {
+        if (owned == session) _speedFailure = error;
+        if (!_released && owned == session) {
+          message = '播放速度调整失败：$error';
+          _notify();
+        }
+      } finally {
+        _pendingSpeedChanges--;
+      }
+    });
+  }
+
+  Future<void> beginTemporarySpeed() async {
+    if (_released || !value.playing || temporarySpeed) return;
+    temporarySpeed = true;
+    holdControls(true, reason: PlayerControlHold.gesture);
+    await _queueSpeed(2);
+  }
+
+  Future<void> endTemporarySpeed() async {
+    if (!temporarySpeed) return;
+    temporarySpeed = false;
+    holdControls(false, reason: PlayerControlHold.gesture);
+    await _queueSpeed(selectedSpeed);
+  }
+
+  Future<void> cancelGestures() async {
+    gestureEpoch++;
+    _controlHolds.remove(PlayerControlHold.gesture);
+    await finishSeek(commit: false);
+    await endTemporarySpeed();
+    // Releasing the pointer ends temporary ownership before the native restore
+    // settles. Transitions must also drain writes already queued by that release.
+    while (_pendingSpeedChanges > 0) {
+      await _speedChanges;
+    }
+  }
+
+  void _requireRestoredSpeed() {
+    if (_speedFailure != null) {
+      throw StateError('Playback speed could not be restored: $_speedFailure');
+    }
+  }
 
   bool get canRetry =>
       !loading && (session == null || value.error != null || _streamFailed);
@@ -60,10 +153,12 @@ class PlaybackController extends ChangeNotifier {
     _notify();
     try {
       final opened = await backend.open(opening);
+      Object? openingSpeedFailure;
       if (speed != 1) {
         try {
           await opened.setSpeed(speed);
         } catch (error) {
+          openingSpeedFailure = error;
           message = '播放速度恢复失败：$error';
         }
       }
@@ -72,6 +167,8 @@ class PlaybackController extends ChangeNotifier {
         return;
       }
       session = opened;
+      selectedSpeed = speed;
+      _speedFailure = openingSpeedFailure;
       _streamFailed = false;
       _subscription = opened.changes.listen(
         _accept,
@@ -100,6 +197,8 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> retry() async {
     if (_released || loading) return;
+    loading = true;
+    await cancelGestures();
     final resume = _lastUsable;
     final source = resume?.source;
     final sources = source == null
@@ -143,10 +242,32 @@ class PlaybackController extends ChangeNotifier {
 
   void _accept(PlaybackSnapshot snapshot) {
     final wasPlaying = value.playing;
-    if (snapshot.initialized && snapshot.error == null) _lastUsable = snapshot;
+    if (!temporarySpeed && _pendingSpeedChanges == 0 && _speedFailure == null) {
+      selectedSpeed = snapshot.speed;
+    }
+    if (snapshot.initialized && snapshot.error == null) {
+      // Resume checkpoints retain position and intent but never temporary speed.
+      _lastUsable = PlaybackSnapshot(
+        initialized: snapshot.initialized,
+        firstFrameRendered: snapshot.firstFrameRendered,
+        playing: snapshot.playing,
+        buffering: snapshot.buffering,
+        position: snapshot.position,
+        duration: snapshot.duration,
+        speed: selectedSpeed,
+        source: snapshot.source,
+        supportsPip: snapshot.supportsPip,
+        inPip: snapshot.inPip,
+        ended: snapshot.ended,
+      );
+    }
+    if (snapshot.inPip && !value.inPip) unawaited(cancelGestures());
     value = snapshot;
+    if (temporarySpeed && !snapshot.playing) unawaited(endTemporarySpeed());
     if (_released) {
-      if (!snapshot.inPip) unawaited(_disposeSession());
+      // Release owns cleanup until its pending native writes and history settle.
+      // Only a session explicitly retained afterwards may dispose on a PiP exit.
+      if (_retainedForPip && !snapshot.inPip) unawaited(_disposeSession());
       return;
     }
     if (wasPlaying && !snapshot.playing || snapshot.ended) _saveHistory();
@@ -175,8 +296,11 @@ class PlaybackController extends ChangeNotifier {
     _saveHistory();
   });
 
-  Future<void> setSpeed(double speed) =>
-      _action(() async => session?.setSpeed(speed));
+  Future<void> setSpeed(double speed) async {
+    selectedSpeed = speed;
+    await _queueSpeed(temporarySpeed ? 2 : speed);
+    showControls();
+  }
 
   Future<void> selectSource(VideoSource source) async {
     if (switchingSource || session == null || value.source?.url == source.url) {
@@ -185,6 +309,9 @@ class PlaybackController extends ChangeNotifier {
     switchingSource = true;
     showControls();
     try {
+      await cancelGestures();
+      if (_released) return;
+      _requireRestoredSpeed();
       await session!.selectSource(source);
       message = null;
     } catch (error) {
@@ -197,6 +324,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> enterPictureInPicture() => _action(() async {
+    await cancelGestures();
+    if (_released) return;
+    _requireRestoredSpeed();
     _pipRequested = true;
     try {
       await session?.enterPictureInPicture();
@@ -215,6 +345,7 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> background() async {
     _backgrounded = true;
+    await cancelGestures();
     if (!value.inPip && !_pipRequested) {
       await _action(() async => session?.pause());
     }
@@ -226,12 +357,20 @@ class PlaybackController extends ChangeNotifier {
     bool hold, {
     PlayerControlHold reason = PlayerControlHold.interaction,
   }) {
-    if (hold) {
-      _controlHolds.add(reason);
-    } else {
-      _controlHolds.remove(reason);
-    }
+    // A losing gesture or a removed touch-focused control may release a hold
+    // it never owned. Such releases must not undo a surface hide operation.
+    final changed = hold
+        ? _controlHolds.add(reason)
+        : _controlHolds.remove(reason);
+    if (!changed) return;
     showControls();
+  }
+
+  /// Detaching a held control only releases ownership. Its disposal may happen
+  /// while the widget tree is locked, so visibility notifications stay with the
+  /// already scheduled hide timer rather than rebuilding the disposing tree.
+  void detachControlHold(PlayerControlHold reason) {
+    if (_controlHolds.remove(reason)) _updateVisibility();
   }
 
   void toggleControls() {
@@ -313,6 +452,7 @@ class PlaybackController extends ChangeNotifier {
   /// Called only after navigation commits, never from a speculative back gesture.
   Future<void> commitExit() async {
     _exiting = true;
+    await cancelGestures();
     if (!value.inPip) await session?.pause();
     _saveHistory();
     await flushHistory();
@@ -321,14 +461,22 @@ class PlaybackController extends ChangeNotifier {
   Future<void> release() async {
     if (_released) return;
     _released = true;
+    if (seekPreview != null || temporarySpeed || _pendingSpeedChanges > 0) {
+      await cancelGestures();
+    }
     ++_generation;
     _hideTimer?.cancel();
     _saveHistory();
     await flushHistory();
-    if (!value.inPip) await _disposeSession();
+    if (value.inPip) {
+      _retainedForPip = true;
+    } else {
+      await _disposeSession();
+    }
   }
 
   Future<void> _disposeSession() async {
+    _retainedForPip = false;
     final owned = session;
     session = null;
     await _subscription?.cancel();

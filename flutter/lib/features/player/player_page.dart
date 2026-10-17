@@ -10,6 +10,8 @@ import '../../domain/programmes/programme.dart';
 import 'playback_controller.dart';
 import 'playback_cover.dart';
 import 'player_controls.dart';
+import 'player_gestures.dart';
+import '../../domain/playback/player_environment.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -19,7 +21,11 @@ class PlayerPage extends StatefulWidget {
     required this.surfaceBuilder,
     required this.history,
     this.onDownload,
+    this.environment,
+    this.systemVolume,
   });
+  final PlayerEnvironment? environment;
+  final Widget? systemVolume;
   final PlaybackInput input;
   final PlaybackBackend backend;
   final Widget Function(PlaybackSession) surfaceBuilder;
@@ -35,9 +41,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   bool fullscreen = false;
   bool downloading = false;
   bool accessibleNavigation = false;
+  bool controlsFocused = false;
   final detailsScroll = ScrollController();
   Future<void> _windowChanges = Future.value();
   final surfaceKey = GlobalKey();
+  final surfacePointers = <int>{};
 
   @override
   void initState() {
@@ -48,7 +56,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       backend: widget.backend,
       history: widget.history,
     );
+    FocusManager.instance.addHighlightModeListener(_highlightChanged);
     unawaited(controller.initialize());
+  }
+
+  void _highlightChanged(FocusHighlightMode mode) => _updateFocusHold();
+
+  void _updateFocusHold() {
+    controller.holdControls(
+      controlsFocused &&
+          FocusManager.instance.highlightMode == FocusHighlightMode.traditional,
+      reason: PlayerControlHold.focus,
+    );
   }
 
   @override
@@ -71,6 +90,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleFullscreen() async {
+    await controller.cancelGestures();
+    if (!mounted) return;
     setState(() => fullscreen = !fullscreen);
     controller.showControls();
     await _setFullscreenWindow(fullscreen);
@@ -112,6 +133,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    FocusManager.instance.removeHighlightModeListener(_highlightChanged);
     if (fullscreen) {
       unawaited(_setFullscreenWindow(false));
     }
@@ -257,17 +279,27 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           controller.showControls();
           return KeyEventResult.ignored;
         },
-        onFocusChange: (focused) =>
-            controller.holdControls(focused, reason: PlayerControlHold.focus),
+        onFocusChange: (focused) {
+          controlsFocused = focused;
+          _updateFocusHold();
+        },
         child: MouseRegion(
           onHover: (_) => controller.showControls(),
           child: Semantics(
             label: value.inPip ? null : '显示播放控件',
             onTap: value.inPip ? null : controller.showControls,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              excludeFromSemantics: true,
-              onTap: value.inPip ? null : controller.toggleControls,
+            child: Listener(
+              onPointerDown: (event) {
+                surfacePointers.add(event.pointer);
+                // Observe every video descendant without entering its gesture
+                // arena, including native controls and the transport slider.
+                if (surfacePointers.length > 1) {
+                  unawaited(controller.cancelGestures());
+                  controller.showControls();
+                }
+              },
+              onPointerUp: (event) => surfacePointers.remove(event.pointer),
+              onPointerCancel: (event) => surfacePointers.remove(event.pointer),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -279,6 +311,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       shared: !fullscreen,
                     ),
                   if (!value.inPip) ...[
+                    PlayerGestures(
+                      controller: controller,
+                      fullscreen: fullscreen,
+                      environment: widget.environment,
+                    ),
+                    if (fullscreen &&
+                        controller.controlsVisible &&
+                        widget.systemVolume != null)
+                      Positioned(
+                        top: 4,
+                        left: 24,
+                        child: _SystemVolumeInteraction(
+                          controller: controller,
+                          child: widget.systemVolume!,
+                        ),
+                      ),
                     if (controller.loading ||
                         value.buffering ||
                         controller.switchingSource)
@@ -310,4 +358,55 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final remainder = (seconds % 60).toString().padLeft(2, '0');
     return '$minutes:$remainder';
   }
+}
+
+/// Keeps the public native volume view alive for the complete interaction.
+class _SystemVolumeInteraction extends StatefulWidget {
+  const _SystemVolumeInteraction({
+    required this.controller,
+    required this.child,
+  });
+  final PlaybackController controller;
+  final Widget child;
+  @override
+  State<_SystemVolumeInteraction> createState() =>
+      _SystemVolumeInteractionState();
+}
+
+class _SystemVolumeInteractionState extends State<_SystemVolumeInteraction> {
+  final pointers = <int>{};
+  bool focused = false;
+  void updateHold() => widget.controller.holdControls(
+    pointers.isNotEmpty || focused,
+    reason: PlayerControlHold.systemVolume,
+  );
+  @override
+  void dispose() {
+    widget.controller.detachControlHold(PlayerControlHold.systemVolume);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    onFocusChange: (value) {
+      focused = value;
+      updateHold();
+    },
+    child: Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) {
+        pointers.add(event.pointer);
+        updateHold();
+      },
+      onPointerUp: (event) {
+        pointers.remove(event.pointer);
+        updateHold();
+      },
+      onPointerCancel: (event) {
+        pointers.remove(event.pointer);
+        updateHold();
+      },
+      child: widget.child,
+    ),
+  );
 }

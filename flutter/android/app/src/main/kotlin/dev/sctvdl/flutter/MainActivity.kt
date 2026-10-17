@@ -10,6 +10,7 @@ import java.util.concurrent.Executors
 import java.io.File
 
 class MainActivity : FlutterActivity() {
+    private var playerEnvironment: PlayerEnvironment? = null
     private val filesExecutor = Executors.newSingleThreadExecutor()
 
     override fun onNewIntent(intent: Intent) {
@@ -20,6 +21,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        playerEnvironment = PlayerEnvironment(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dev.sctvdl.flutter/files")
             .setMethodCallHandler { call, result ->
                 if (call.method == "consumeNotificationIntent") {
@@ -100,6 +102,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        playerEnvironment?.restore()
         filesExecutor.shutdown()
         super.onDestroy()
     }
