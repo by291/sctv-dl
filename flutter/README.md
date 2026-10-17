@@ -92,12 +92,14 @@ dart format --output=none --set-exit-if-changed lib test test_driver
 flutter analyze --fatal-infos
 flutter test
 ./android/gradlew -p android :better_player_plus:testDebugUnitTest --no-daemon
-flutter build apk --release
+flutter build apk --release --split-per-abi
 flutter build appbundle --release
 flutter build ios --release --no-codesign
 ```
 
 When `integration_test/` is present, also run `dart format --output=none --set-exit-if-changed integration_test`. The formatter scopes deliberately exclude the vendored player's upstream Dart. After generation, inspect the diff and commit generated application sources with the source change. The old `build_runner --delete-conflicting-outputs` option is no longer needed by the resolved generator version.
+
+Release APKs are split into `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`, `app-arm64-v8a-release.apk`, and `app-x86_64-release.apk`. Choose the APK matching the device architecture; modern ARM phones generally use `arm64-v8a`. Omit `--split-per-abi` when a universal APK is needed. The AAB remains a single upload artifact for store-managed device delivery. iOS builds are unchanged and do not use Android ABI splitting.
 
 Dart tests use [shared JSON fixtures](../shared/fixtures), disposable SQLite databases and controlled HTTP services. Player/download tests with fake native boundaries verify application decisions; they do not establish native decode, background execution or OS file behavior. Use disposable emulators/simulators and real controlled media/transfer fixtures for runtime acceptance. Record each integration command, device ID, OS version and observed lifecycle mode with its result.
 
