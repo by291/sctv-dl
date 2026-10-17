@@ -212,6 +212,7 @@ class DataSource {
     this.imageUrl,
     this.notificationChannelName,
     this.overriddenDuration,
+    this.initialPosition = Duration.zero,
     this.licenseUrl,
     this.certificateUrl,
     this.drmHeaders,
@@ -289,6 +290,9 @@ class DataSource {
   final String? notificationChannelName;
 
   final Duration? overriddenDuration;
+
+  /// Native source preparation starts here, before rendering any video frame.
+  final Duration initialPosition;
 
   final String? licenseUrl;
 
@@ -434,6 +438,9 @@ class VideoEvent {
 enum VideoEventType {
   /// The video has been initialized.
   initialized,
+
+  /// Native output has rendered the first frame for the current source.
+  firstFrameRendered,
 
   /// The playback has ended.
   completed,

@@ -57,6 +57,7 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
           'imageUrl': dataSource.imageUrl,
           'notificationChannelName': dataSource.notificationChannelName,
           'overriddenDuration': dataSource.overriddenDuration?.inMilliseconds,
+          'initialPosition': dataSource.initialPosition.inMilliseconds,
           'activityName': dataSource.activityName,
         };
       case DataSourceType.network:
@@ -75,6 +76,7 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
           'imageUrl': dataSource.imageUrl,
           'notificationChannelName': dataSource.notificationChannelName,
           'overriddenDuration': dataSource.overriddenDuration?.inMilliseconds,
+          'initialPosition': dataSource.initialPosition.inMilliseconds,
           'licenseUrl': dataSource.licenseUrl,
           'certificateUrl': dataSource.certificateUrl,
           'drmHeaders': dataSource.drmHeaders,
@@ -95,6 +97,7 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
           'imageUrl': dataSource.imageUrl,
           'notificationChannelName': dataSource.notificationChannelName,
           'overriddenDuration': dataSource.overriddenDuration?.inMilliseconds,
+          'initialPosition': dataSource.initialPosition.inMilliseconds,
           'activityName': dataSource.activityName,
           'clearKey': dataSource.clearKey,
         };
@@ -220,6 +223,8 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
         final String? eventType = map['event'] as String?;
         final String? key = map['key'] as String?;
         switch (eventType) {
+          case 'firstFrameRendered':
+            return VideoEvent(eventType: VideoEventType.firstFrameRendered, key: key);
           case 'initialized':
             double width = 0;
             double height = 0;

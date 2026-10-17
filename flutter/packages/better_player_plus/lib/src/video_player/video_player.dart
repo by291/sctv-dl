@@ -30,6 +30,7 @@ class VideoPlayerValue {
     this.isPlaying = false,
     this.isLooping = false,
     this.isBuffering = false,
+    this.firstFrameRendered = false,
     this.volume = 1.0,
     this.speed = 1.0,
     this.errorDescription,
@@ -70,6 +71,9 @@ class VideoPlayerValue {
 
   /// True if the video is currently buffering.
   final bool isBuffering;
+
+  /// True only after native output has rendered a frame for this source.
+  final bool firstFrameRendered;
 
   /// The current volume of the playback.
   final double volume;
@@ -127,6 +131,7 @@ class VideoPlayerValue {
     bool? isPlaying,
     bool? isLooping,
     bool? isBuffering,
+    bool? firstFrameRendered,
     double? volume,
     String? errorDescription,
     double? speed,
@@ -142,6 +147,7 @@ class VideoPlayerValue {
     isPlaying: isPlaying ?? this.isPlaying,
     isLooping: isLooping ?? this.isLooping,
     isBuffering: isBuffering ?? this.isBuffering,
+    firstFrameRendered: firstFrameRendered ?? this.firstFrameRendered,
     volume: volume ?? this.volume,
     speed: speed ?? this.speed,
     errorDescription: errorDescription ?? this.errorDescription,
@@ -234,6 +240,8 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
           if (initializing != null && !initializing.isCompleted)
             initializing.complete(null);
           _applyPlayPause();
+        case VideoEventType.firstFrameRendered:
+          value = value.copyWith(firstFrameRendered: true);
         case VideoEventType.completed:
           value = value.copyWith(isPlaying: false, position: value.duration);
           _timer?.cancel();
@@ -294,6 +302,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     String? imageUrl,
     String? notificationChannelName,
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     String? activityName,
   }) => _setDataSource(
     DataSource(
@@ -306,6 +315,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       imageUrl: imageUrl,
       notificationChannelName: notificationChannelName,
       overriddenDuration: overriddenDuration,
+      initialPosition: initialPosition,
       activityName: activityName,
     ),
   );
@@ -332,6 +342,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     String? imageUrl,
     String? notificationChannelName,
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     String? licenseUrl,
     String? certificateUrl,
     Map<String, String>? drmHeaders,
@@ -354,6 +365,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       imageUrl: imageUrl,
       notificationChannelName: notificationChannelName,
       overriddenDuration: overriddenDuration,
+      initialPosition: initialPosition,
       licenseUrl: licenseUrl,
       certificateUrl: certificateUrl,
       drmHeaders: drmHeaders,
@@ -375,6 +387,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     String? imageUrl,
     String? notificationChannelName,
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     String? activityName,
     String? clearKey,
   }) => _setDataSource(
@@ -389,6 +402,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       imageUrl: imageUrl,
       notificationChannelName: notificationChannelName,
       overriddenDuration: overriddenDuration,
+      initialPosition: initialPosition,
       activityName: activityName,
       clearKey: clearKey,
     ),
@@ -403,6 +417,7 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       duration: null,
       isLooping: value.isLooping,
       volume: value.volume,
+      position: dataSourceDescription.initialPosition,
     );
 
     if (!_creatingCompleter.isCompleted) {

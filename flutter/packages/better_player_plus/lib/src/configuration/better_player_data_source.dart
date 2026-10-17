@@ -25,6 +25,7 @@ class BetterPlayerDataSource {
     this.cacheConfiguration,
     this.notificationConfiguration = const BetterPlayerNotificationConfiguration(showNotification: false),
     this.overriddenDuration,
+    this.initialPosition = Duration.zero,
     this.videoFormat,
     this.videoExtension,
     this.drmConfiguration,
@@ -52,6 +53,7 @@ class BetterPlayerDataSource {
       showNotification: false,
     ),
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     BetterPlayerVideoFormat? videoFormat,
     BetterPlayerDrmConfiguration? drmConfiguration,
     Widget? placeholder,
@@ -69,6 +71,7 @@ class BetterPlayerDataSource {
     cacheConfiguration: cacheConfiguration,
     notificationConfiguration: notificationConfiguration,
     overriddenDuration: overriddenDuration,
+    initialPosition: initialPosition,
     videoFormat: videoFormat,
     drmConfiguration: drmConfiguration,
     placeholder: placeholder,
@@ -86,6 +89,7 @@ class BetterPlayerDataSource {
     BetterPlayerCacheConfiguration? cacheConfiguration,
     BetterPlayerNotificationConfiguration? notificationConfiguration,
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     Widget? placeholder,
   }) => BetterPlayerDataSource(
     BetterPlayerDataSourceType.file,
@@ -98,6 +102,7 @@ class BetterPlayerDataSource {
     notificationConfiguration:
         notificationConfiguration ?? const BetterPlayerNotificationConfiguration(showNotification: false),
     overriddenDuration: overriddenDuration,
+    initialPosition: initialPosition,
     placeholder: placeholder,
   );
 
@@ -113,6 +118,7 @@ class BetterPlayerDataSource {
     BetterPlayerCacheConfiguration? cacheConfiguration,
     BetterPlayerNotificationConfiguration? notificationConfiguration,
     Duration? overriddenDuration,
+    Duration initialPosition = Duration.zero,
     Widget? placeholder,
   }) => BetterPlayerDataSource(
     BetterPlayerDataSourceType.memory,
@@ -127,6 +133,7 @@ class BetterPlayerDataSource {
     notificationConfiguration:
         notificationConfiguration ?? const BetterPlayerNotificationConfiguration(showNotification: false),
     overriddenDuration: overriddenDuration,
+    initialPosition: initialPosition,
     placeholder: placeholder,
   );
 
@@ -176,6 +183,9 @@ class BetterPlayerDataSource {
   ///Duration which will be returned instead of original duration
   final Duration? overriddenDuration;
 
+  /// Position prepared before native output may reveal its first frame.
+  final Duration initialPosition;
+
   ///Video format hint when data source url has not valid extension.
   final BetterPlayerVideoFormat? videoFormat;
 
@@ -211,6 +221,7 @@ class BetterPlayerDataSource {
       showNotification: false,
     ),
     Duration? overriddenDuration,
+    Duration? initialPosition,
     BetterPlayerVideoFormat? videoFormat,
     String? videoExtension,
     BetterPlayerDrmConfiguration? drmConfiguration,
@@ -230,6 +241,7 @@ class BetterPlayerDataSource {
     cacheConfiguration: cacheConfiguration ?? this.cacheConfiguration,
     notificationConfiguration: notificationConfiguration ?? this.notificationConfiguration,
     overriddenDuration: overriddenDuration ?? this.overriddenDuration,
+    initialPosition: initialPosition ?? this.initialPosition,
     videoFormat: videoFormat ?? this.videoFormat,
     videoExtension: videoExtension ?? this.videoExtension,
     drmConfiguration: drmConfiguration ?? this.drmConfiguration,

@@ -25,12 +25,56 @@ void main() {
   });
   setUp(() {
     native.sources.clear();
+    native.seeks.clear();
     native.bufferingConfigurations.clear();
     native.createCalls = 0;
     native.disposeCalls = 0;
     native.reject = null;
   });
   tearDownAll(() => native.events.close());
+  test(
+    'cover readiness waits for native frame output and resets with the source',
+    () async {
+      final session = await BetterPlayerBackend(userAgent: 'test')
+          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      expect(session.value.initialized, isTrue);
+      expect(session.value.firstFrameRendered, isFalse);
+      native.events.add(
+        VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
+      );
+      expect(session.value.firstFrameRendered, isTrue);
+      await session.selectSource(second);
+      expect(session.value.firstFrameRendered, isFalse);
+      native.events.add(
+        VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
+      );
+      expect(session.value.firstFrameRendered, isTrue);
+      await session.dispose();
+    },
+  );
+  test('resume prepares the target frame without a second seek', () async {
+    final session = await BetterPlayerBackend(userAgent: 'test').open(
+      const PlaybackInput(
+        title: 'Resume',
+        sources: [first, second],
+        initialPosition: Duration(seconds: 42),
+      ),
+    );
+    expect(native.sources.single.initialPosition, const Duration(seconds: 42));
+    expect(native.seeks, isEmpty);
+    expect(session.value.position, const Duration(seconds: 42));
+    expect(session.value.firstFrameRendered, isFalse);
+    native.events.add(
+      VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
+    );
+    expect(session.value.firstFrameRendered, isTrue);
+    await session.selectSource(second);
+    expect(native.sources.last.initialPosition, const Duration(seconds: 42));
+    expect(native.seeks, isEmpty);
+    expect(session.value.firstFrameRendered, isFalse);
+    await session.dispose();
+  });
+
   test('limits native prefetch time for large programme videos', () async {
     final session = await BetterPlayerBackend(userAgent: 'sctv-dl/test')
         .open(const PlaybackInput(title: 'Title', sources: [first]));
@@ -136,6 +180,7 @@ void main() {
 class NativePlayerFixture extends VideoPlayerPlatform {
   final events = StreamController<VideoEvent>.broadcast(sync: true);
   final sources = <DataSource>[];
+  final seeks = <Duration>[];
   final bufferingConfigurations = <BetterPlayerBufferingConfiguration>[];
   String? reject;
   Future<void>? setupDelay;
@@ -201,6 +246,7 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   @override
   Future<void> seekTo(int? textureId, Duration? value) async {
     position = value ?? Duration.zero;
+    seeks.add(position);
   }
 
   @override

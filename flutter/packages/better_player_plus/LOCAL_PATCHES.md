@@ -37,6 +37,17 @@ Application-specific repairs:
   Both platforms pause on audio interruption/route loss without automatic resume.
   The audio-mixing setter returns its native future so session setup can await
   exclusive audio ownership and report failure.
+- Native first-frame readiness is separate from metadata initialization. Android
+  forwards Media3 `onRenderedFirstFrame`; iOS observes the active AVPlayerLayer's
+  `isReadyForDisplay` and releases the observation on disposal. The Dart value
+  preserves readiness through pause/buffering and resets it for a new source.
+  The application keeps its poster until native output and route entry are ready.
+- Source preparation accepts an initial position, including quality changes.
+  Android passes it to Media3 before preparing the source, so the first rendered
+  frame belongs to the resume point. iOS keeps the AVPlayerLayer disconnected
+  until the exact initial seek finishes, then waits for display readiness.
+  Superseded seeks and disposed/replaced items cannot reveal stale output.
+  Ordinary seeking and predictive-back cancellation do not reset readiness.
 - Video controller disposal shares one completion future so delayed route
   cleanup can await native resource release without releasing it twice.
 - Seeking from an ended paused position preserves play intent. Disposal also
