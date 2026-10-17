@@ -5,22 +5,22 @@ ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
   final scheme =
       dynamicScheme ??
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFF78B7E5),
+        seedColor: const Color(0xFF6BAAD9),
         brightness: brightness,
       ).copyWith(
-        primary: dark ? const Color(0xFFB7D9F3) : const Color(0xFF39769F),
+        primary: dark ? const Color(0xFFA8CEEC) : const Color(0xFF326C96),
         onPrimary: dark ? const Color(0xFF15374E) : Colors.white,
         primaryContainer: dark
-            ? const Color(0xFF254A65)
-            : const Color(0xFFDDEFFC),
+            ? const Color(0xFF22455F)
+            : const Color(0xFFD3E9FA),
         onPrimaryContainer: dark
-            ? const Color(0xFFDDEFFC)
-            : const Color(0xFF224D6B),
+            ? const Color(0xFFD3E9FA)
+            : const Color(0xFF1E4866),
         secondary: dark ? const Color(0xFFA9AEB8) : const Color(0xFF667080),
         onSecondary: dark ? const Color(0xFF242A33) : Colors.white,
         secondaryContainer: dark
-            ? const Color(0xFF2D4455)
-            : const Color(0xFFE7F2FA),
+            ? const Color(0xFF293F50)
+            : const Color(0xFFDDECF7),
         onSecondaryContainer: dark
             ? const Color(0xFFE7E9EE)
             : const Color(0xFF242A33),
@@ -47,7 +47,7 @@ ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
       );
   final iconColour =
       dynamicScheme?.primary ??
-      (dark ? const Color(0xFFB7D9F3) : const Color(0xFF5A93BC));
+      (dark ? const Color(0xFFA8CEEC) : const Color(0xFF4C87B3));
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
