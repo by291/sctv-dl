@@ -15,6 +15,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    var downloads = 0;
     final session = fixtures.FakeSession();
     await tester.pumpWidget(
       MaterialApp(
@@ -29,7 +30,9 @@ void main() {
           backend: fixtures.FakeBackend(session),
           history: fixtures.MemoryHistory(),
           surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
-          onDownload: () async {},
+          onDownload: () async {
+            downloads++;
+          },
         ),
       ),
     );
@@ -39,6 +42,11 @@ void main() {
     expect(find.byTooltip('视频画质'), findsOneWidget);
     final elapsed = tester.renderObject<RenderParagraph>(find.text('00:00'));
     expect(elapsed.text.style!.color, Colors.white);
+    final download = find.widgetWithText(FilledButton, '下载节目');
+    await tester.ensureVisible(download);
+    await tester.tap(download);
+    await tester.pumpAndSettle();
+    expect(downloads, 1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();

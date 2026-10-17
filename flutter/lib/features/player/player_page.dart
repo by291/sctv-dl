@@ -182,10 +182,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
-        if (controller.value.source case final source?) ...[
+        if (_qualityFallbackNotice case final String notice) ...[
           const SizedBox(height: 12),
-          Text('当前画质：${source.quality.label}'),
-          if (_qualityFallbackNotice case final String notice) Text(notice),
+          Text(notice),
         ],
         if (widget.input.initialPosition > Duration.zero) ...[
           const SizedBox(height: 12),
@@ -199,11 +198,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           const Padding(padding: EdgeInsets.only(top: 12), child: Text('本地视频')),
         if (widget.onDownload != null &&
             widget.input.localLocation == null) ...[
-          const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            onPressed: downloading ? null : _download,
-            icon: const Icon(Icons.download_outlined),
-            label: Text(downloading ? '正在创建下载…' : '下载当前节目'),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: downloading ? null : _download,
+              icon: const Icon(Icons.download_outlined, size: 20),
+              label: Text(downloading ? '正在创建下载…' : '下载节目'),
+            ),
           ),
         ],
         if (controller.message case final String message)
