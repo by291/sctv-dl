@@ -26,9 +26,7 @@ The following design decisions are included in the approved baseline:
 | Compose with every feature split into API, implementation, domain, and data modules | Strong isolation for a large team                             | Adds considerable build and abstraction overhead for the current product | Defer until scale requires it |
 | WebView or a hybrid wrapper                                                         | Reuses existing pages                                         | Does not meet the requested native Compose product experience            | Excluded by the brief         |
 
-For downloads, choose `android.app.DownloadManager` for the first release. It transfers ordinary MP4 files into public Downloads and owns background execution, network recovery, and system notifications. The client adds a persistent task index and an accurate management UI. Media3 remains the playback engine.
-
-Media3's separate download manager is a credible alternative when app-private offline media, explicit pause/resume, and cache management become requirements. It would also need file export and foreground-service lifecycle design. A custom transfer engine would need additional resumability and background-execution work. Neither is necessary for the agreed first-release scope.
+New downloads use Media3's native progressive downloader, persisted private cache/index, constrained JobScheduler recovery and explicit foreground-service execution. The application owns attempt identity, network permission, publication and user actions. Version-1 DownloadManager tasks retain their platform ownership and capabilities. No custom MP4 transfer loop is introduced.
 
 ## Product Structure
 
@@ -82,7 +80,7 @@ Use a dedicated playback destination with a 16:9 video surface, programme and br
 
 Below the video, show the complete content title, programme name, and broadcast date. A primary `下载节目` button follows this context and opens the existing quality sheet. Align the title and button within the same content column, capped at 720 dp in wide windows, and keep them reachable by scrolling in short windows or at large text scales. Dismissal creates no task. Downloads remain available if video playback fails while valid variants are present. Local playback has no download action. Fullscreen and picture-in-picture hide the surrounding information and download entry.
 
-Controls overlay the video. Use Media3 Compose Material3 for play/pause and elapsed/total time. Use Media3 Compose progress state with a native Material3 slider, retaining its vertical thumb and joining the track directly to it. Place the aligned timeline above a lower row containing playback, speed, actual available quality variants, and fullscreen; explicit PiP sits at the upper right without a filled button background. Speed and quality choices open upward from their controls in a vertical translucent neutral menu with theme accent text for the current option. Reserve space for every speed label at the current text scale so changing speed does not move the menu anchor. Constrain its height to the video and scroll overflowing options; outside taps and Back dismiss it without changing the selection. Keep controls visible while paused, buffering, in error, focused, seeking, or choosing a menu item. Hide playing controls after 3.5 seconds of inactivity, respecting the system accessibility timeout; tapping the video reveals them again. Unknown duration remains `--:--`. Short and large-text windows reserve enough video height to keep these controls reachable. Start paused. Read the saved quality preference for initial selection. A quality change retains the player instance, position, and prior playing state. If source replacement fails, present a retry action and preserve the intended position.
+Controls overlay the video. Route play/pause and seek through the controller and use a native Material3 slider. Place play, elapsed time, seek, duration, speed, actual quality and fullscreen in one compact bottom row with stable tabular, hour-aware time widths and 48 dp touch targets. Allow horizontal scrolling when large text or a narrow window needs it; explicit PiP sits at the upper right without a filled button background. Speed and quality choices open upward from their controls in a vertical translucent neutral menu with theme accent text for the current option. Reserve space for every speed label at the current text scale so changing speed does not move the menu anchor. Constrain its height to the video and scroll overflowing options; outside taps and Back dismiss it without changing the selection. Keep controls visible while paused, buffering, in error, focused, seeking, or choosing a menu item. Hide playing controls after 3.5 seconds of inactivity, respecting the system accessibility timeout; tapping the video reveals them again. Unknown duration remains `--:--`. Short and large-text windows reserve enough video height to keep these controls reachable. Start paused. Read the saved quality preference for initial selection. A quality change commits after readiness and retains the player instance, position and speed. A failed switch rolls back once to the last usable source; a later pause or external transport command wins over the captured intent. Failed restoration retains explicit retry context. Ended playback restarts on the first play press.
 
 Offer Picture-in-Picture as an explicit action where supported. Ordinary backgrounding pauses playback; Picture-in-Picture continues it. Audio focus loss and becoming noisy follow Media3 behaviour. Back exits fullscreen before leaving playback.
 
@@ -92,28 +90,23 @@ Opening a completed download reads its content URI locally and works without net
 
 ### Download Management
 
-Use `进行中` and `已完成` sections. Failed or interrupted tasks remain visible in the first section with a specific reason and a retry action. An empty download page explains how to download a programme.
+Provide `全部`, `下载中`, `未完成`, `已完成`, and `文件已移除` filters with independent saved positions. Paused and finalizing tasks remain active. Failed/cancelled tasks are unfinished; missing public files have their own neutral state. Selection stores attempt IDs and clears on filter change. Every batch member is revalidated independently; consent dismissal and per-item failures do not discard successful work.
 
-| State     | Display                                                  | Available actions                        |
-| --------- | -------------------------------------------------------- | ---------------------------------------- |
-| Preparing | Validating media and resolving the actual quality        | Cancel preparation                       |
-| Pending   | Waiting for the Android download service                 | Cancel                                   |
-| Running   | Actual bytes downloaded, total and percentage when known | Cancel                                   |
-| Waiting   | Actual system reason, such as waiting for Wi-Fi or retry | Cancel; open relevant system settings    |
-| Failed    | Specific HTTP, storage, or resume error                  | Retry; remove record                     |
-| Completed | Actual filename, size when known, and location           | Play locally; open; share; remove record |
-| Cancelled | Explicit cancellation result                             | Retry; remove record                     |
-| Missing   | Previously completed file is no longer accessible        | Re-download; remove record               |
+Managed transfers offer pause/resume, cancel, and retry as their durable state permits. Legacy system tasks never offer unsupported pause controls. Retain actual artwork, full titles, programme/date context and actual quality. Show actual received bytes and known total progress; never fabricate duration, speed, completion or ETA. A failed publication offers `重试保存` using the complete private cache. Public-file deletion retains a missing-file record, while record removal preserves public files and cleans private resources. Destructive actions are explicitly confirmed.
 
-Unknown content length uses an indeterminate indicator and actual received bytes. Do not fabricate percentage, speed, completion, or estimated remaining time. No manual pause/resume controls are shown because the platform API does not expose them. System-managed waiting and recovery are displayed truthfully.
+Wi-Fi-only is captured at creation and accepts metered Wi-Fi, excludes Ethernet, and waits under VPN. Unrestricted work respects the active VPN. Existing jobs do not change policy when the preference changes. Foreground and scheduled execution have bounded lifetimes; closing a lease cancels ongoing streaming calls. A visible page alone cannot restart transfers.
 
-`Remove record` removes application history and leaves a completed MP4 in Downloads. `Cancel` stops an active system download and may remove its partial file. Clearly label these different actions. Completed files remain accessible through the system file manager after application removal.
+### Viewing History and Storage
 
-The default network policy permits ordinary connected networks. Offer `仅 Wi-Fi 下载` as a saved preference applied to new tasks; each queued task shows its effective network policy. Changing the preference does not silently cancel and recreate existing jobs. A quality preference controls initial playback, while each download still chooses its own quality.
+History stores accepted metadata and exact programme/date/content identity, shared by online and newly downloaded copies. Legacy local videos use task-scoped identity. Keep the newest 500 records with deterministic timestamp ties. Save advancing progress at five-second intervals and flush pause, completed seek, background, completion and route exit. Completed playback, or 95% of a known duration, opens from zero; incomplete content resumes paused. Keep a cover until the correct first frame and show retryable persistence errors without blocking playback.
+
+History is a secondary library destination with search, local-day groups, resume/replay, and individual removal. Back closes search first. FIFO writes plus per-key session/deletion generations prevent obsolete snapshots from resurrecting deleted history. Favourites, history and the transactional import marker live in the separate user database and are eligible for backup with settings. Restored import markers remain authoritative; runtime tasks, caches and public-file references are excluded.
+
+Cache cleanup retires metadata and image generations so in-flight old requests cannot refill the new cache. It only clears programme/date/content snapshots and Coil caches. History clearing is a separate confirmation and preserves downloads. Each cleanup result reports its own failure.
 
 ### Settings
 
-Use a primary settings page with separate surface groups for appearance, playback, downloads, and app information. Provide `跟随系统 / 浅色 / 深色`, an optional system dynamic-colour setting, the initial playback quality, and the Wi-Fi-only download preference. The theme defaults to following the system; dynamic colour defaults off to preserve the product palette.
+Use a primary settings page with separate surface groups for appearance, playback, downloads, storage/history, and app information. Provide `跟随系统 / 浅色 / 深色`, an optional system dynamic-colour setting, the initial playback quality, and the Wi-Fi-only download preference. The theme defaults to following the system; dynamic colour defaults off to preserve the product palette.
 
 Switch rows span the card width, including their horizontal content insets, and retain a single accessible switch action. Their ripple is clipped by the enclosing card shape. Noninteractive preference content owns its own padding.
 
@@ -211,7 +204,7 @@ The existing Web and Node proxy remain unchanged. These Android transport decisi
 
 ### Persistence and Refresh
 
-Room holds programme records, date records keyed by programme, content records keyed by programme and date, favourites, and a local download index. Store successful empty archive responses as fetched results rather than treating an empty table as an unfetched request. A successful refresh replaces only the relevant cached snapshot in a transaction; a failed request preserves its last successful snapshot.
+The runtime Room database holds programme/date/content snapshots and the local download index. A separate user database owns favourites, viewing history and migration metadata; its first-open transaction imports legacy favourites once. Store successful empty archive responses as fetched results rather than treating an empty table as an unfetched request. A successful refresh replaces only the relevant cached snapshot in a transaction; a failed request preserves its last successful snapshot.
 
 The repository exposes cache-backed flows with an explicit refresh state. Refresh the catalogue and the selected programme/date on destination entry while presenting their cache. ViewModels keep the displayed snapshot separate from the newest repository result; initial data appears immediately, but later successful differences require explicit acceptance, including a changed or empty response. Apply dates before contents, discard pending rows when their programme/date key changes, and retain errors without inventing content updates. Retry actions request data without automatically accepting pending changes. Do not fetch every programme's archive in the background. Cross-key isolation ensures a date change cannot render another date's contents while a new request is loading.
 
@@ -219,13 +212,13 @@ Use `SavedStateHandle` and saved navigation state for selected IDs, query, and s
 
 ### Download Consistency
 
-Before enqueueing, persist the task identity, requested/actual quality, source URL, network policy, and a unique safe planned filename. Perform a cancellable HEAD media preflight. If HEAD is unsupported, use a small Range request and close it after headers or bounded bytes; never buffer the complete video.
+Persist task and attempt identity, requested/actual quality, accepted context, source URL, network policy and a unique safe filename before transfer. Keep version-1 schema exports unchanged and migrate runtime rows with explicit legacy defaults. Reserve active content/quality keys transactionally. Retry replaces the attempt identity, so old batch targets cannot cancel new work.
 
-Enqueue through the system service, persist its system ID, and derive transfer state from queries. Query active tasks while Downloads is visible and reconcile on app start, foreground entry, and download completion. A broadcast is a reason to query, never proof of successful completion.
+Perform bounded HEAD/Range preflight and require the Referer on media requests. Resume only with a stable validator and valid 206 Content-Range; reject changed or non-resumable resources rather than append unsafe bytes. Media3 owns cache spans and transfer indexing. Restore nonterminal entries with stop reasons before any global resume; interrupted removals do not require a network context. Services lend execution permission and retain/cancel actual Calls through response-body closure. Transient failures wait for later constrained job leases using the same cache key; user pause and integrity failures require the corresponding explicit action.
 
-The task identity includes the content ID, actual quality, and normalized URL. A transaction prevents duplicate active submissions. A crashed enqueue is recovered by matching the persisted unique destination against the app's own system downloads before allowing a retry. Never resubmit an ambiguous task automatically. Failed members of a batch do not stop successful members.
+Journal publication before MediaStore insertion. Recover a unique owned pending row by its planned filename, persist the URI, copy without upstream access, verify byte length and final readability, then clean private media. A copy or finalization failure retains the complete cache for retry. Deletion consent is tied to the exact attempt and URI. Removing a record cannot orphan private cache/index resources or delete an independently published file.
 
-Use content URIs for open, share, and local playback, with temporary read grants when handing files to another app. Recheck availability instead of trusting a saved path. Remove stale platform IDs during restore to another device; do not back up runtime transfer IDs as resumable jobs. Wi-Fi constraints and retry reasons come from the system service.
+Legacy reconciliation retains DownloadManager IDs and resolves interrupted submission only by a unique owned URL/destination match; ambiguous matches block automatic retry. Check content URIs before local playback, sharing or external opening. File handoff uses temporary read grants. Download notifications return to the task list; notification permission is requested only when creating downloads.
 
 ## Verification and Release Criteria
 
