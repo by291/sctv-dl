@@ -1,11 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
+
+Widget host({required Widget home, ThemeData? theme}) => ProviderScope(
+  child: MaterialApp(home: home, theme: theme),
+);
 
 void main() {
   const selection = ProgrammeSelection(
@@ -31,11 +37,58 @@ void main() {
   );
 
   testWidgets(
+    'completed cards keep file actions reachable without transfer-only policy',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = PageRepository([
+        task(DownloadState.completed).copyWith(
+          receivedBytes: 224080691,
+          selection: const ProgrammeSelection(
+            programme: Programme(id: '1', name: '现场快报'),
+            broadcast: BroadcastDate(id: '2', date: '2026-10-17'),
+            content: ProgrammeContent(id: '3', title: '市场监管总局启动智慧计量监管试点'),
+          ),
+        ),
+      ]);
+      DownloadTask? played;
+      await tester.pumpWidget(
+        host(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: DownloadsPage(
+              repository: repository,
+              onPlayLocal: (task) => played = task,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CoverImage), findsOneWidget);
+      expect(find.textContaining('Wi-Fi'), findsNothing);
+      await tester.ensureVisible(find.text('播放'));
+      await tester.tap(find.text('播放'));
+      await tester.pumpAndSettle();
+      expect(played?.id, '1');
+      await tester.ensureVisible(find.byTooltip('文件操作'));
+      await tester.tap(find.byTooltip('文件操作'));
+      await tester.pumpAndSettle();
+      expect(find.text('分享视频'), findsOneWidget);
+      expect(find.text('删除视频文件'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await repository.close();
+    },
+  );
+
+  testWidgets(
     'download header survives empty and observation error states with retry',
     (tester) async {
       final repository = PageRepository([]);
       await tester.pumpWidget(
-        MaterialApp(
+        host(
           home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
         ),
       );
@@ -57,7 +110,7 @@ void main() {
       task(DownloadState.running, resume: true),
     ]);
     await tester.pumpWidget(
-      MaterialApp(
+      host(
         home: MediaQuery(
           data: const MediaQueryData(
             padding: EdgeInsets.only(left: 80, right: 80),
@@ -80,7 +133,7 @@ void main() {
   ) async {
     final repository = PageRepository([task(DownloadState.running)]);
     await tester.pumpWidget(
-      MaterialApp(
+      host(
         home: MediaQuery(
           data: const MediaQueryData(padding: EdgeInsets.only(top: 44)),
           child: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
@@ -97,7 +150,7 @@ void main() {
     (tester) async {
       final repository = PageRepository([task(DownloadState.running)]);
       await tester.pumpWidget(
-        MaterialApp(
+        host(
           home: Scaffold(
             body: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
           ),
@@ -127,7 +180,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(320, 720));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        MaterialApp(
+        host(
           theme: ThemeData.dark(),
           home: MediaQuery(
             data: const MediaQueryData(textScaler: TextScaler.linear(2)),
@@ -156,7 +209,7 @@ void main() {
       final repository = PageRepository([task(DownloadState.completed)]);
       DownloadTask? played;
       await tester.pumpWidget(
-        MaterialApp(
+        host(
           home: Scaffold(
             body: DownloadsPage(
               repository: repository,

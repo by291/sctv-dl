@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -348,13 +349,15 @@ void main() {
       await tester.pumpWidget(
         RepaintBoundary(
           key: captureKey,
-          child: MaterialApp(
-            key: ValueKey(brightness),
-            theme: buildAppTheme(brightness),
-            home: DownloadsPage(
-              repository: fixture,
-              onPlayLocal: (_) {},
-              wifiPolicyLabel: Platform.isIOS ? '仅 Wi-Fi（禁用蜂窝网络）' : '仅 Wi-Fi',
+          child: ProviderScope(
+            child: MaterialApp(
+              key: ValueKey(brightness),
+              theme: buildAppTheme(brightness),
+              home: DownloadsPage(
+                repository: fixture,
+                onPlayLocal: (_) {},
+                wifiPolicyLabel: Platform.isIOS ? '仅 Wi-Fi（禁用蜂窝网络）' : '仅 Wi-Fi',
+              ),
             ),
           ),
         ),

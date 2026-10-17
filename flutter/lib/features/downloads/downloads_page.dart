@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/cover_image.dart';
 import '../../design/state_panel.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
@@ -202,6 +203,9 @@ class _DownloadsPageState extends State<DownloadsPage> {
   Widget _tile(DownloadTask task) {
     final busy = _pending.contains(task.id);
     final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     final status = task.state == DownloadState.finalizing && task.error != null
         ? '文件保存失败'
         : _status(task.state);
@@ -212,50 +216,20 @@ class _DownloadsPageState extends State<DownloadsPage> {
               task.state == DownloadState.running
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
-    final running = task.state == DownloadState.running;
     final total = task.totalBytes;
     final progress = total == null || total <= 0
         ? null
         : (task.receivedBytes / total).clamp(0.0, 1.0);
+    final actions = _taskActions(task, busy);
     return Card(
       key: ValueKey(task.id),
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Icon(_statusIcon(task.state), size: 18, color: statusColour),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    status,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: statusColour,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              task.selection.content.title,
-              style: theme.textTheme.titleMedium?.copyWith(height: 1.4),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${task.selection.programme.name} · ${task.selection.broadcast.date} · ${task.quality.label}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              task.wifiOnly ? widget.wifiPolicyLabel : '允许蜂窝网络',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            _taskHeader(task, busy),
             if (task.isActive && task.state != DownloadState.finalizing) ...[
               const SizedBox(height: 12),
               LinearProgressIndicator(
@@ -265,151 +239,88 @@ class _DownloadsPageState extends State<DownloadsPage> {
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 semanticsLabel: status,
               ),
-              const SizedBox(height: 6),
-              Text(
-                total == null
-                    ? task.receivedBytes == 0
-                          ? '大小未知'
-                          : '${_bytes(task.receivedBytes)} · 大小未知'
-                    : '${_bytes(task.receivedBytes)} / ${_bytes(total)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ] else if (task.state == DownloadState.completed) ...[
-              const SizedBox(height: 6),
-              Text(
-                _bytes(task.receivedBytes),
-                style: Theme.of(context).textTheme.bodySmall,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    total == null || total <= 0
+                        ? task.receivedBytes == 0
+                              ? '大小未知'
+                              : '${_bytes(task.receivedBytes)} · 大小未知'
+                        : '${_bytes(task.receivedBytes)} / ${_bytes(total)}',
+                    style: muted,
+                  ),
+                  Text(
+                    task.wifiOnly ? widget.wifiPolicyLabel : '允许蜂窝网络',
+                    style: muted,
+                  ),
+                ],
               ),
             ],
             if (task.error != null) ...[
               const SizedBox(height: 8),
               Text(
                 task.error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
             ],
             const SizedBox(height: 8),
             Wrap(
-              spacing: 8,
-              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 4,
               children: [
-                if (task.state == DownloadState.completed)
-                  FilledButton.tonalIcon(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(_perform(task.id, () => _play(task))),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('播放'),
-                  ),
-                if (running && task.canResume)
-                  OutlinedButton.icon(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(
-                            _perform(
-                              task.id,
-                              () => widget.repository.pause(task.id),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _statusIcon(task.state),
+                            size: 16,
+                            color: statusColour,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              status,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: statusColour,
+                              ),
                             ),
                           ),
-                    icon: const Icon(Icons.pause),
-                    label: const Text('暂停'),
-                  ),
-                if (task.state == DownloadState.paused && task.canResume)
-                  FilledButton.tonalIcon(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(
-                            _perform(
-                              task.id,
-                              () => widget.repository.resume(task.id),
-                            ),
-                          ),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('继续下载'),
-                  ),
-                if (task.isActive && task.state != DownloadState.finalizing)
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(
-                            _perform(
-                              task.id,
-                              () => widget.repository.cancel(task.id),
-                            ),
-                          ),
-                    child: const Text('取消下载'),
-                  ),
-                if (task.state == DownloadState.finalizing &&
-                    task.error != null)
-                  FilledButton.tonalIcon(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(
-                            _perform(
-                              task.id,
-                              () => widget.repository.publish(task.id),
-                            ),
-                          ),
-                    icon: const Icon(Icons.publish),
-                    label: const Text('重试发布'),
-                  ),
-                if ({
-                  DownloadState.failed,
-                  DownloadState.interrupted,
-                  DownloadState.missing,
-                  DownloadState.cancelled,
-                }.contains(task.state))
-                  FilledButton.tonalIcon(
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(
-                            _perform(
-                              task.id,
-                              () => widget.repository.retry(task.id),
-                            ),
-                          ),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('重新下载'),
-                  ),
-                if (!task.isActive)
-                  PopupMenuButton<String>(
-                    tooltip: '文件操作',
-                    enabled: !busy,
-                    onSelected: (action) => unawaited(
-                      _perform(task.id, () => _fileAction(action, task)),
-                    ),
-                    itemBuilder: (context) => [
-                      if (task.state == DownloadState.completed) ...[
-                        const PopupMenuItem(
-                          value: 'open',
-                          child: Text('使用其他应用打开'),
-                        ),
-                        const PopupMenuItem(
-                          value: 'share',
-                          child: Text('分享视频'),
-                        ),
-                        if (task.fileLocation?.startsWith('documents:') == true)
-                          const PopupMenuItem(
-                            value: 'export',
-                            child: Text('存储到“文件”'),
-                          ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('删除视频文件'),
-                        ),
-                      ],
-                      const PopupMenuItem(
-                        value: 'remove',
-                        child: Text('移除记录（保留文件）'),
+                        ],
                       ),
+                      if (task.state == DownloadState.completed)
+                        Text('· ${_bytes(task.receivedBytes)}', style: muted),
                     ],
                   ),
-                if (busy)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                if (actions.isNotEmpty || busy)
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 4,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ...actions,
+                      if (busy)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -418,6 +329,149 @@ class _DownloadsPageState extends State<DownloadsPage> {
       ),
     );
   }
+
+  Widget _taskHeader(DownloadTask task, bool busy) {
+    final theme = Theme.of(context);
+    final selection = task.selection;
+    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
+    final contentCover = selection.content.cover;
+    final cover = SizedBox(
+      width: largeText ? 104 : 88,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CoverImage(
+          url: contentCover != null && contentCover.trim().isNotEmpty
+              ? contentCover
+              : selection.programme.cover,
+        ),
+      ),
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          selection.content.title,
+          maxLines: largeText ? null : 3,
+          overflow: largeText ? null : TextOverflow.ellipsis,
+          style: theme.textTheme.titleMedium?.copyWith(height: 1.4),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${selection.programme.name} · ${selection.broadcast.date} · ${task.quality.label}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+    if (largeText) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              cover,
+              const Spacer(),
+              if (!task.isActive) _fileMenu(task, busy),
+            ],
+          ),
+          const SizedBox(height: 12),
+          details,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        cover,
+        const SizedBox(width: 12),
+        Expanded(child: details),
+        if (!task.isActive) _fileMenu(task, busy),
+      ],
+    );
+  }
+
+  List<Widget> _taskActions(DownloadTask task, bool busy) => [
+    if (task.state == DownloadState.completed)
+      TextButton.icon(
+        onPressed: busy
+            ? null
+            : () => unawaited(_perform(task.id, () => _play(task))),
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('播放'),
+      ),
+    if (task.state == DownloadState.running && task.canResume)
+      TextButton.icon(
+        onPressed: busy
+            ? null
+            : () => unawaited(
+                _perform(task.id, () => widget.repository.pause(task.id)),
+              ),
+        icon: const Icon(Icons.pause),
+        label: const Text('暂停'),
+      ),
+    if (task.state == DownloadState.paused && task.canResume)
+      TextButton.icon(
+        onPressed: busy
+            ? null
+            : () => unawaited(
+                _perform(task.id, () => widget.repository.resume(task.id)),
+              ),
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('继续下载'),
+      ),
+    if (task.isActive && task.state != DownloadState.finalizing)
+      TextButton(
+        onPressed: busy
+            ? null
+            : () => unawaited(
+                _perform(task.id, () => widget.repository.cancel(task.id)),
+              ),
+        child: const Text('取消下载'),
+      ),
+    if (task.state == DownloadState.finalizing && task.error != null)
+      TextButton.icon(
+        onPressed: busy
+            ? null
+            : () => unawaited(
+                _perform(task.id, () => widget.repository.publish(task.id)),
+              ),
+        icon: const Icon(Icons.publish),
+        label: const Text('重试发布'),
+      ),
+    if ({
+      DownloadState.failed,
+      DownloadState.interrupted,
+      DownloadState.missing,
+      DownloadState.cancelled,
+    }.contains(task.state))
+      TextButton.icon(
+        onPressed: busy
+            ? null
+            : () => unawaited(
+                _perform(task.id, () => widget.repository.retry(task.id)),
+              ),
+        icon: const Icon(Icons.refresh),
+        label: const Text('重新下载'),
+      ),
+  ];
+
+  Widget _fileMenu(DownloadTask task, bool busy) => PopupMenuButton<String>(
+    tooltip: '文件操作',
+    enabled: !busy,
+    onSelected: (action) =>
+        unawaited(_perform(task.id, () => _fileAction(action, task))),
+    itemBuilder: (context) => [
+      if (task.state == DownloadState.completed) ...[
+        const PopupMenuItem(value: 'open', child: Text('使用其他应用打开')),
+        const PopupMenuItem(value: 'share', child: Text('分享视频')),
+        if (task.fileLocation?.startsWith('documents:') == true)
+          const PopupMenuItem(value: 'export', child: Text('存储到“文件”')),
+        const PopupMenuItem(value: 'delete', child: Text('删除视频文件')),
+      ],
+      const PopupMenuItem(value: 'remove', child: Text('移除记录（保留文件）')),
+    ],
+  );
 }
 
 String _status(DownloadState state) => switch (state) {
