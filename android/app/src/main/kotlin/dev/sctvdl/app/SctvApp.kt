@@ -27,6 +27,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.sctvdl.app.navigation.AppDestinations
 import dev.sctvdl.app.navigation.AppNavigationShell
 import dev.sctvdl.app.platform.ActivityPlaybackHost
+import dev.sctvdl.app.platform.rememberDownloadFileConsentRequester
 import dev.sctvdl.feature.player.PlaybackSelection
 import dev.sctvdl.feature.programmes.presentation.rememberProgrammeLibraryState
 import dev.sctvdl.ui.theme.SctvAppTheme
@@ -44,6 +45,7 @@ internal fun SctvApp(activity: MainActivity) {
 
     var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
 
+    val fileConsent = rememberDownloadFileConsentRequester(activity.downloadFileConsents)
     val library = rememberProgrammeLibraryState()
     val host = remember(activity) { ActivityPlaybackHost(activity) }
     val snackbar = remember { SnackbarHostState() }
@@ -72,11 +74,17 @@ internal fun SctvApp(activity: MainActivity) {
 
         Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
             AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) { route, navigator, bottomPadding ->
-                AppDestinations(route, navigator, library, state.settings, host, model::enqueue, {
-                    snackbar.showSnackbar(it)
-                }, playbackSelection, {
-                    playbackSelection = it
-                }, bottomContentPadding = bottomPadding)
+                AppDestinations(
+                    route, navigator, library, state.settings, host,
+                    { requests ->
+                        activity.requestDownloadNotifications()
+                        model.enqueue(requests)
+                    }, {
+                        snackbar.showSnackbar(it)
+                    }, playbackSelection, {
+                        playbackSelection = it
+                    }, bottomContentPadding = bottomPadding, requestFileConsent = fileConsent
+                )
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
         }

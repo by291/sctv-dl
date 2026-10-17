@@ -108,7 +108,7 @@ class NavigationTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val intent = Intent(context, MainActivity::class.java).putExtra("open_downloads", true)
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            assertNotNull(device.wait(Until.findObject(By.text("进行中 · 0")), 5_000))
+            assertNotNull(device.wait(Until.findObject(By.text("下载中 · 0")), 5_000))
             requireNotNull(device.wait(Until.findObject(By.res("tab-Settings")), 5_000)).click()
             assertNotNull(device.wait(Until.findObject(By.text("显示模式")), 5_000))
             scenario.recreate()

@@ -28,7 +28,8 @@ internal fun AppDestinations(
     onMessage: suspend (String) -> Unit,
     playbackSelection: PlaybackSelection?,
     onPlaybackSelection: (PlaybackSelection) -> Unit,
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    requestFileConsent: suspend (String) -> Boolean = { false }
 ) {
     when (route) {
         AppRoute.Settings -> SettingsRoute()
@@ -58,7 +59,9 @@ internal fun AppDestinations(
             onDownload,
             bottomContentPadding = bottomContentPadding
         )
-        AppRoute.Downloads -> DownloadsRoute({ navigator.open(AppRoute.LocalPlayback(it)) }, onMessage)
+        AppRoute.Downloads -> DownloadsRoute({
+            navigator.open(AppRoute.LocalPlayback(it))
+        }, onMessage, requestFileConsent)
         is AppRoute.Playback -> PlayerRoute(
             route.programmeId,
             route.dateId,
