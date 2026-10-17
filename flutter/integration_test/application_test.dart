@@ -220,6 +220,32 @@ void main() {
     // Initialisation is paused. Decode/seek/speed and redirects use native fixtures.
     expect(find.byTooltip('暂停'), findsNothing);
     await capture('player-paused');
+    final pressed = await tester.startGesture(
+      tester.getCenter(find.byTooltip('播放速度')),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump(const Duration(milliseconds: 120));
+    await capture('player-pressed', settle: false);
+    await pressed.cancel();
+    await tester.pumpAndSettle();
+    if (Platform.isAndroid) {
+      final controlsY = tester.getCenter(find.byTooltip('播放速度')).dy;
+      expect(tester.getCenter(find.byType(Slider)).dy, controlsY);
+      await tester.tap(find.byTooltip('全屏'));
+      await waitFor(
+        () => tester.view.physicalSize.width > tester.view.physicalSize.height,
+      );
+      await capture('player-fullscreen');
+      expect(
+        tester.getCenter(find.byType(Slider)).dy,
+        tester.getCenter(find.byTooltip('播放速度')).dy,
+      );
+      await tester.tap(find.byTooltip('退出全屏'));
+      await waitFor(
+        () => tester.view.physicalSize.width < tester.view.physicalSize.height,
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+    }
     await tester.tap(find.byType(BackButton));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
