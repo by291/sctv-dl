@@ -30,6 +30,51 @@ void main() {
         : null,
   );
 
+  testWidgets(
+    'download header survives empty and observation error states with retry',
+    (tester) async {
+      final repository = PageRepository([]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('下载'), findsOneWidget);
+      repository.changes.addError(StateError('storage unavailable'));
+      await tester.pump();
+      expect(find.text('下载'), findsOneWidget);
+      await tester.tap(find.text('重试'));
+      await tester.pumpAndSettle();
+      expect(find.text('还没有下载任务'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await repository.close();
+    },
+  );
+
+  testWidgets('download actions avoid horizontal cutouts', (tester) async {
+    final repository = PageRepository([
+      task(DownloadState.running, resume: true),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(
+            padding: EdgeInsets.only(left: 80, right: 80),
+          ),
+          child: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester.getTopLeft(find.text(selection.content.title)).dx,
+      greaterThanOrEqualTo(80),
+    );
+    await tester.pumpWidget(const SizedBox());
+    await repository.close();
+  });
+
   testWidgets('populated downloads respect the status bar and display cutout', (
     tester,
   ) async {

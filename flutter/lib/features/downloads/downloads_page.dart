@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/state_panel.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
 
@@ -109,91 +110,108 @@ class _DownloadsPageState extends State<DownloadsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: StreamBuilder<List<DownloadTask>>(
-      stream: _tasks,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error_outline, size: 40),
-                  const SizedBox(height: 12),
-                  const Text('无法读取下载记录'),
-                  const SizedBox(height: 8),
-                  Text('${snapshot.error}', textAlign: TextAlign.center),
-                  TextButton(
-                    onPressed: _retryObservation,
-                    child: const Text('重试'),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 88 : 64,
+      title: const Text('下载'),
+    ),
+    body: SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: StreamBuilder<List<DownloadTask>>(
+            stream: _tasks,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _state(
+                  StatePanel(
+                    title: '无法读取下载记录',
+                    message: '${snapshot.error}',
+                    icon: Icons.cloud_off_outlined,
+                    onAction: _retryObservation,
                   ),
-                ],
-              ),
-            ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const Center(
-            child: CircularProgressIndicator(semanticsLabel: '正在读取下载记录'),
-          );
-        }
-        final tasks = snapshot.data!;
-        if (tasks.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.download_outlined, size: 48),
-                  SizedBox(height: 16),
-                  Text('还没有下载任务'),
-                  SizedBox(height: 8),
-                  Text('从栏目回看中选择视频，下载后可离线观看。', textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          );
-        }
-        final active = tasks.where((task) => task.isActive).toList();
-        final finished = tasks.where((task) => !task.isActive).toList();
-        return RefreshIndicator(
-          onRefresh: widget.repository.reconcile,
-          child: ListView(
-            key: const PageStorageKey('downloads'),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-            children: [
-              const Text(
-                '下载',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              const Text('传输由系统调度；返回应用时会核对任务与文件。'),
-              if (active.isNotEmpty) ...[
-                _section('进行中', active.length),
-                ...active.map(_tile),
-              ],
-              if (finished.isNotEmpty) ...[
-                _section('已结束', finished.length),
-                ...finished.map(_tile),
-              ],
-            ],
+                );
+              }
+              if (!snapshot.hasData) return const PageSkeleton(count: 3);
+              final tasks = snapshot.data!;
+              if (tasks.isEmpty) {
+                return _state(
+                  const StatePanel(
+                    title: '还没有下载任务',
+                    message: '在节目回看中选择视频下载，随时离线观看。',
+                    icon: Icons.download_outlined,
+                  ),
+                );
+              }
+              final active = tasks
+                  .where((task) => task.isActive && !_needsAttention(task))
+                  .toList();
+              final completed = tasks
+                  .where((task) => task.state == DownloadState.completed)
+                  .toList();
+              final unfinished = tasks.where(_needsAttention).toList();
+              return RefreshIndicator(
+                onRefresh: () =>
+                    _perform('refresh', widget.repository.reconcile),
+                child: ListView(
+                  key: const PageStorageKey('downloads'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                  children: [
+                    if (active.isNotEmpty) ...[
+                      _section('进行中', active.length),
+                      ...active.map(_tile),
+                    ],
+                    if (unfinished.isNotEmpty) ...[
+                      _section('未完成', unfinished.length),
+                      ...unfinished.map(_tile),
+                    ],
+                    if (completed.isNotEmpty) ...[
+                      _section('已完成', completed.length),
+                      ...completed.map(_tile),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     ),
   );
+
+  Widget _state(Widget child) => CustomScrollView(
+    slivers: [SliverFillRemaining(hasScrollBody: false, child: child)],
+  );
+
+  bool _needsAttention(DownloadTask task) =>
+      (!task.isActive && task.state != DownloadState.completed) ||
+      (task.state == DownloadState.finalizing && task.error != null);
+
   Widget _section(String title, int count) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 8),
+    padding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
     child: Text(
       '$title · $count',
-      style: Theme.of(context).textTheme.titleMedium,
+      style: Theme.of(context).textTheme.labelLarge
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
   );
+
   Widget _tile(DownloadTask task) {
     final busy = _pending.contains(task.id);
+    final theme = Theme.of(context);
+    final status = task.state == DownloadState.finalizing && task.error != null
+        ? '文件保存失败'
+        : _status(task.state);
+    final statusColour =
+        task.error != null || task.state == DownloadState.failed
+        ? theme.colorScheme.error
+        : task.state == DownloadState.completed ||
+              task.state == DownloadState.running
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
     final running = task.state == DownloadState.running;
     final total = task.totalBytes;
     final progress = total == null || total <= 0
@@ -207,24 +225,45 @@ class _DownloadsPageState extends State<DownloadsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SelectableText(
+            Row(
+              children: [
+                Icon(_statusIcon(task.state), size: 18, color: statusColour),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: statusColour,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
               task.selection.content.title,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: theme.textTheme.titleMedium?.copyWith(height: 1.4),
             ),
             const SizedBox(height: 6),
             Text(
               '${task.selection.programme.name} · ${task.selection.broadcast.date} · ${task.quality.label}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              '${_status(task.state)} · ${task.wifiOnly ? widget.wifiPolicyLabel : '允许蜂窝网络'}',
+              task.wifiOnly ? widget.wifiPolicyLabel : '允许蜂窝网络',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (task.isActive && task.state != DownloadState.finalizing) ...[
               const SizedBox(height: 12),
               LinearProgressIndicator(
                 value: progress,
-                semanticsLabel: _status(task.state),
+                minHeight: 4,
+                borderRadius: BorderRadius.circular(4),
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                semanticsLabel: status,
               ),
               const SizedBox(height: 6),
               Text(
@@ -264,8 +303,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                     label: const Text('播放'),
                   ),
                 if (running && task.canResume)
-                  IconButton(
-                    tooltip: '暂停',
+                  OutlinedButton.icon(
                     onPressed: busy
                         ? null
                         : () => unawaited(
@@ -275,6 +313,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                             ),
                           ),
                     icon: const Icon(Icons.pause),
+                    label: const Text('暂停'),
                   ),
                 if (task.state == DownloadState.paused && task.canResume)
                   FilledButton.tonalIcon(
@@ -303,7 +342,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                   ),
                 if (task.state == DownloadState.finalizing &&
                     task.error != null)
-                  TextButton.icon(
+                  FilledButton.tonalIcon(
                     onPressed: busy
                         ? null
                         : () => unawaited(
@@ -321,7 +360,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                   DownloadState.missing,
                   DownloadState.cancelled,
                 }.contains(task.state))
-                  TextButton.icon(
+                  FilledButton.tonalIcon(
                     onPressed: busy
                         ? null
                         : () => unawaited(
@@ -388,7 +427,7 @@ String _status(DownloadState state) => switch (state) {
   DownloadState.waiting => '等待系统或网络',
   DownloadState.paused => '已暂停',
   DownloadState.retrying => '等待自动重试',
-  DownloadState.finalizing => '正在发布文件',
+  DownloadState.finalizing => '正在保存文件',
   DownloadState.completed => '已完成',
   DownloadState.failed => '下载失败',
   DownloadState.cancelled => '已取消',
@@ -403,3 +442,15 @@ String _bytes(int value) {
   }
   return '${(value / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
 }
+
+IconData _statusIcon(DownloadState state) => switch (state) {
+  DownloadState.completed => Icons.check_circle_outline_rounded,
+  DownloadState.running => Icons.downloading_rounded,
+  DownloadState.paused => Icons.pause_circle_outline_rounded,
+  DownloadState.failed ||
+  DownloadState.interrupted => Icons.error_outline_rounded,
+  DownloadState.missing => Icons.folder_off_outlined,
+  DownloadState.cancelled => Icons.cancel_outlined,
+  DownloadState.finalizing => Icons.save_outlined,
+  _ => Icons.schedule_rounded,
+};
