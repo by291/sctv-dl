@@ -153,6 +153,9 @@ class _DownloadsPageState extends State<DownloadsPage> {
                   .where((task) => task.state == DownloadState.completed)
                   .toList();
               final unfinished = tasks.where(_needsAttention).toList();
+              final removed = tasks
+                  .where((task) => task.state == DownloadState.missing)
+                  .toList();
               return RefreshIndicator(
                 onRefresh: () =>
                     _perform('refresh', widget.repository.reconcile),
@@ -173,6 +176,10 @@ class _DownloadsPageState extends State<DownloadsPage> {
                       _section('已完成', completed.length),
                       ...completed.map(_tile),
                     ],
+                    if (removed.isNotEmpty) ...[
+                      _section('已移除', removed.length),
+                      ...removed.map(_tile),
+                    ],
                   ],
                 ),
               );
@@ -188,7 +195,9 @@ class _DownloadsPageState extends State<DownloadsPage> {
   );
 
   bool _needsAttention(DownloadTask task) =>
-      (!task.isActive && task.state != DownloadState.completed) ||
+      (!task.isActive &&
+          task.state != DownloadState.completed &&
+          task.state != DownloadState.missing) ||
       (task.state == DownloadState.finalizing && task.error != null);
 
   Widget _section(String title, int count) => Padding(
@@ -210,7 +219,8 @@ class _DownloadsPageState extends State<DownloadsPage> {
         ? '文件保存失败'
         : _status(task.state);
     final statusColour =
-        task.error != null || task.state == DownloadState.failed
+        (task.error != null && task.state != DownloadState.missing) ||
+            task.state == DownloadState.failed
         ? theme.colorScheme.error
         : task.state == DownloadState.completed ||
               task.state == DownloadState.running
@@ -259,7 +269,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                 ],
               ),
             ],
-            if (task.error != null) ...[
+            if (task.error != null && task.state != DownloadState.missing) ...[
               const SizedBox(height: 8),
               Text(
                 task.error!,
@@ -469,7 +479,12 @@ class _DownloadsPageState extends State<DownloadsPage> {
           const PopupMenuItem(value: 'export', child: Text('存储到“文件”')),
         const PopupMenuItem(value: 'delete', child: Text('删除视频文件')),
       ],
-      const PopupMenuItem(value: 'remove', child: Text('移除记录（保留文件）')),
+      PopupMenuItem(
+        value: 'remove',
+        child: Text(
+          task.state == DownloadState.completed ? '移除记录（保留文件）' : '移除记录',
+        ),
+      ),
     ],
   );
 }

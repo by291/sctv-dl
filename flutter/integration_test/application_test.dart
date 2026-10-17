@@ -323,6 +323,7 @@ void main() {
         DownloadState.running,
         DownloadState.completed,
         DownloadState.failed,
+        DownloadState.missing,
       ])
         DownloadTask(
           id: state.name,
@@ -342,7 +343,11 @@ void main() {
           receivedBytes: state == DownloadState.completed ? 83886080 : 33554432,
           totalBytes: 83886080,
           canResume: state == DownloadState.running,
-          error: state == DownloadState.failed ? '网络连接中断，请重新下载。' : null,
+          error: state == DownloadState.failed
+              ? '网络连接中断，请重新下载。'
+              : state == DownloadState.missing
+              ? '文件已删除'
+              : null,
         ),
     ]);
     for (final brightness in [Brightness.light, Brightness.dark]) {
@@ -366,6 +371,9 @@ void main() {
       await capture('downloads-fixture-${brightness.name}');
       await tester.scrollUntilVisible(find.text('播放'), 200);
       await capture('downloads-completed-${brightness.name}');
+      await tester.scrollUntilVisible(find.text('已移除 · 1'), 200);
+      await capture('downloads-removed-${brightness.name}');
+      expect(find.text('文件已删除'), findsNothing);
       expect(tester.takeException(), isNull);
     }
     await tester.pumpWidget(const SizedBox.shrink());

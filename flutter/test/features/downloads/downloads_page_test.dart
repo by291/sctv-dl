@@ -36,6 +36,26 @@ void main() {
         : null,
   );
 
+  testWidgets('deleted files have their own group and no failure alert', (
+    tester,
+  ) async {
+    final repository = PageRepository([
+      task(DownloadState.missing).copyWith(error: '文件已删除'),
+    ]);
+    await tester.pumpWidget(
+      host(
+        home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('已移除 · 1'), findsOneWidget);
+    expect(find.text('未完成 · 1'), findsNothing);
+    expect(find.text('文件已删除'), findsNothing);
+    expect(find.text('重新下载'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await repository.close();
+  });
+
   testWidgets(
     'completed cards keep file actions reachable without transfer-only policy',
     (tester) async {
