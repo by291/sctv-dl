@@ -42,7 +42,10 @@ internal class OkHttpMediaProbe @Inject constructor(private val client: OkHttpCl
                             it.code,
                             it.header("Content-Type"),
                             it.header("Content-Length")?.toLongOrNull(),
-                            total
+                            total,
+                            it.header("ETag"),
+                            it.header("Last-Modified"),
+                            it.header("Accept-Ranges")?.equals("bytes", true) == true
                         )
                     }
 

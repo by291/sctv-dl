@@ -100,7 +100,8 @@ internal class DownloadManagerRepository(
                     UUID.randomUUID().toString().take(12)
                 ),
                 request.wifiOnly,
-                createdAt = clock.instant()
+                createdAt = clock.instant(),
+                selection = request.selection
             )
 
             var submittedId: Long? = null

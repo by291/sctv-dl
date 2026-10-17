@@ -3,7 +3,14 @@ plugins {
     id("sctv.android.hilt")
     alias(libs.plugins.serialization)
 }
-android { namespace = "dev.sctvdl.data" }
+android {
+    namespace = "dev.sctvdl.data"
+}
+androidComponents {
+    onVariants { variant ->
+        variant.deviceTests.values.forEach { it.sources.assets?.addStaticSourceDirectory("$projectDir/schemas") }
+    }
+}
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
     implementation(project(":core:domain"))
@@ -15,8 +22,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.serialization)
     testImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.mockwebserver)
     androidTestImplementation(libs.room.test)
     implementation(libs.coroutines.android)
+    implementation(libs.media.exoplayer)
+    implementation(libs.media.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     androidTestImplementation(libs.android.test.junit)

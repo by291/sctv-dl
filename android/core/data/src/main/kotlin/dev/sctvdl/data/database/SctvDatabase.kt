@@ -11,7 +11,7 @@ import dev.sctvdl.data.programmes.local.SnapshotEntity
 
 @Database(
     entities = [SnapshotEntity::class, FavouriteEntity::class, DownloadEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 internal abstract class SctvDatabase : RoomDatabase() {

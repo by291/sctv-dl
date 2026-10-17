@@ -7,6 +7,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.sctvdl.data.database.RuntimeMigrations
 import dev.sctvdl.data.database.SctvDatabase
 import dev.sctvdl.data.database.SctvUserDatabase
 import javax.inject.Singleton
@@ -26,5 +27,5 @@ internal object DatabaseModule {
         context,
         SctvDatabase::class.java,
         "sctv-metadata.db"
-    ).build()
+    ).addMigrations(RuntimeMigrations.OneToTwo).build()
 }

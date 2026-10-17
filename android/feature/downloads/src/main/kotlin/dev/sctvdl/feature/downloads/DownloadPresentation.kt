@@ -6,6 +6,8 @@ import dev.sctvdl.domain.download.DownloadTask
 import java.util.Locale
 
 internal fun downloadStatus(task: DownloadTask): String = when (task.state) {
+    DownloadState.Paused -> "已暂停"
+    DownloadState.Finalizing -> "正在保存视频"
     DownloadState.Preparing -> "检查视频"
     DownloadState.Pending -> "等待下载"
     DownloadState.Running -> "正在下载"
