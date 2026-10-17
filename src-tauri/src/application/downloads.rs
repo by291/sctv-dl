@@ -64,7 +64,10 @@ impl<'a, R: Runtime> DownloadService<'a, R> {
             return Ok(DownloadResult::Cancelled);
         };
 
-        let mut result = self.downloads.start(prepared.files, &path).await?;
+        let mut result = self
+            .downloads
+            .start_owned(prepared.files, &path, Some(operation))
+            .await?;
         result.failures.extend(prepared.failures);
         result.used_fallback = self
             .downloads

@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use super::{MediaConfig, MediaServer, PlaybackSession, Quality};
 use crate::{
@@ -15,14 +15,15 @@ pub struct PlaybackRequest {
     pub quality: Quality,
 }
 
+#[derive(Clone)]
 pub struct PlaybackService {
-    server: Mutex<Option<MediaServer>>,
+    server: Arc<Mutex<Option<MediaServer>>>,
 }
 
 impl PlaybackService {
     pub async fn new(config: MediaConfig) -> Result<Self> {
         Ok(Self {
-            server: Mutex::new(Some(MediaServer::bind(config).await?)),
+            server: Arc::new(Mutex::new(Some(MediaServer::bind(config).await?))),
         })
     }
 
@@ -55,6 +56,33 @@ impl PlaybackService {
             .as_ref()
             .ok_or_else(service_closed)?
             .open(selection.sources, selection.selected_quality)
+    }
+
+    pub fn open_local(
+        &self,
+        task_id: String,
+        quality: Quality,
+        file: std::fs::File,
+    ) -> Result<PlaybackSession> {
+        self.server
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or_else(service_closed)?
+            .open_local(task_id, quality, file)
+    }
+
+    pub async fn close_task(&self, task_id: &str) {
+        let producers = self
+            .server
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|server| server.close_task(task_id))
+            .unwrap_or_default();
+        for producer in producers {
+            producer.wait().await;
+        }
     }
 
     pub fn close(&self, id: &str) {

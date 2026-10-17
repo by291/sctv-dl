@@ -40,8 +40,14 @@ impl Default for MediaConfig {
     }
 }
 
+pub(super) enum SessionSource {
+    Upstream(Vec<MediaSource>),
+    Local(super::local::LocalSource),
+}
+
 pub(super) struct Session {
-    pub sources: Vec<MediaSource>,
+    pub source: SessionSource,
+    pub producers: TaskTracker,
     pub cancellation: CancellationToken,
 }
 
@@ -142,7 +148,8 @@ impl MediaServer {
         self.inner.sessions.lock().unwrap().insert(
             id.clone(),
             Arc::new(Session {
-                sources,
+                source: SessionSource::Upstream(sources),
+                producers: TaskTracker::new(),
                 cancellation: CancellationToken::new(),
             }),
         );
@@ -152,6 +159,63 @@ impl MediaServer {
             selected_quality,
             sources: output,
         })
+    }
+
+    pub fn open_local(
+        &self,
+        task_id: String,
+        quality: Quality,
+        file: std::fs::File,
+    ) -> Result<PlaybackSession> {
+        let length = file
+            .metadata()
+            .map_err(|error| AppError::with_source(ErrorCode::Storage, "无法读取本机视频", error))?
+            .len();
+        let id = Uuid::new_v4().to_string();
+        self.inner.sessions.lock().unwrap().insert(
+            id.clone(),
+            Arc::new(Session {
+                source: SessionSource::Local(super::local::LocalSource {
+                    task_id,
+                    quality,
+                    file: Arc::new(file),
+                    length,
+                }),
+                cancellation: CancellationToken::new(),
+                producers: TaskTracker::new(),
+            }),
+        );
+        Ok(PlaybackSession {
+            sources: vec![PlaybackSource {
+                quality,
+                url: format!(
+                    "http://{}/media/{id}/{}",
+                    self.inner.address,
+                    quality.as_str()
+                ),
+            }],
+            selected_quality: quality,
+            id,
+        })
+    }
+
+    pub fn close_task(&self, task_id: &str) -> Vec<TaskTracker> {
+        let mut sessions = self.inner.sessions.lock().unwrap();
+        let ids: Vec<_> = sessions
+            .iter()
+            .filter_map(|(id, session)| {
+                matches!(&session.source, SessionSource::Local(source) if source.task_id == task_id)
+                    .then_some(id.clone())
+            })
+            .collect();
+        ids.into_iter()
+            .filter_map(|id| sessions.remove(&id))
+            .map(|session| {
+                session.cancellation.cancel();
+                session.producers.close();
+                session.producers.clone()
+            })
+            .collect()
     }
 
     pub fn close(&self, id: &str) {

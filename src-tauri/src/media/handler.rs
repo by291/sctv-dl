@@ -8,7 +8,7 @@ use axum::{
 
 use super::{
     MediaSource,
-    http::{Inner, Session},
+    http::{Inner, Session, SessionSource},
     stream,
 };
 use crate::error::{AppError, ErrorCode};
@@ -32,13 +32,6 @@ pub(super) async fn handle(
     let Some(session) = session else {
         return empty(StatusCode::NOT_FOUND);
     };
-    let Some(source) = session
-        .sources
-        .iter()
-        .find(|source| source.quality.as_str() == quality)
-    else {
-        return empty(StatusCode::NOT_FOUND);
-    };
     if request.method() == Method::OPTIONS {
         return response(
             StatusCode::NO_CONTENT,
@@ -47,6 +40,35 @@ pub(super) async fn handle(
             origin,
         );
     }
+    let source = match &session.source {
+        SessionSource::Upstream(sources) => match sources
+            .iter()
+            .find(|source| source.quality.as_str() == quality)
+        {
+            Some(source) => source,
+            None => return empty(StatusCode::NOT_FOUND),
+        },
+        SessionSource::Local(source) => {
+            if source.quality.as_str() != quality {
+                return empty(StatusCode::NOT_FOUND);
+            }
+            // Serialize local producer registration with task-session removal so
+            // deletion can await every producer that was actually admitted.
+            let sessions = inner.sessions.lock().unwrap();
+            if !sessions.contains_key(&id) {
+                return empty(StatusCode::GONE);
+            }
+            let (status, headers, body) = super::local::response(
+                source,
+                request.method(),
+                headers,
+                session.cancellation.clone(),
+                &inner.producers,
+                &session.producers,
+            );
+            return response(status, headers, body, origin);
+        }
+    };
 
     let upstream = match request_upstream(&inner, &session, source, request.method(), headers).await
     {

@@ -15,6 +15,8 @@ async fn programme_stub(contents: Value) -> (support::Stub, ProgrammeService) {
         async move {
             let data = if uri.path().contains("contents") {
                 contents
+            } else if uri.path() == "/app/v1/programs" {
+                json!({"records":[{"id":1,"name":"News"}]})
             } else {
                 json!([{ "id": 2, "date": "2026-10-16" }])
             };

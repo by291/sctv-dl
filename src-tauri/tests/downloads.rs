@@ -37,6 +37,7 @@ async fn stub(router: Router) -> Stub {
 }
 fn prepared(origin: &str, id: &str) -> PreparedDownload {
     PreparedDownload {
+        metadata: serde_json::from_value(serde_json::json!({"content":{"programmeId":"1","dateId":"2","contentId":id},"programmeName":"News","broadcastDate":"2026-10-17","title":"Clip","cover":null})).unwrap(),
         content: ContentRef {
             programme_id: "1".into(),
             date_id: "2".into(),

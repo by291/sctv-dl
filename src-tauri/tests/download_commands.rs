@@ -6,9 +6,10 @@ use axum::{
 use sctv_dl_desktop_lib::{
     commands,
     downloads::{DownloadConfig, DownloadManager},
+    media::{MediaConfig, PlaybackService},
     programmes::{Deadlines, ProgrammeService},
     settings::{DesktopSettings, save_download_directory},
-    state::AppState,
+    state::{AppState, PlaybackState},
 };
 use serde_json::{Value, json};
 use tauri::{
@@ -59,6 +60,8 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
                     }
                     let data = if request.uri().path().contains("contents") {
                         json!([{"id":3,"title":"News","video":format!("{origin}/clip.mp4")}])
+                    } else if request.uri().path() == "/app/v1/programs" {
+                        json!({"records":[{"id":1,"name":"News"}]})
                     } else {
                         json!([{"id":2,"date":"2026-10-16"}])
                     };
@@ -79,6 +82,11 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         .manage(std::sync::Arc::new(
             sctv_dl_desktop_lib::lifecycle::ExitController::default(),
         ))
+        .manage(PlaybackState(Ok(PlaybackService::new(
+            MediaConfig::default(),
+        )
+        .await
+        .unwrap())))
         .manage(AppState::new(Ok(ProgrammeService::new(
             &origin,
             "guest".into(),
@@ -93,6 +101,12 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
             .unwrap(),
         )
         .invoke_handler(tauri::generate_handler![
+            commands::get_download_snapshot,
+            commands::subscribe_download_events,
+            commands::unsubscribe_download_events,
+            commands::act_on_download,
+            commands::open_local_playback,
+            commands::close_playback,
             commands::start_downloads,
             commands::list_downloads,
             commands::subscribe_downloads,
@@ -141,7 +155,47 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         std::fs::read(target.join(tasks[0]["filename"].as_str().unwrap())).unwrap(),
         b"native fixture"
     );
+    let snapshot = invoke(&main, "get_download_snapshot", json!({}), local).unwrap();
+    assert!(snapshot["epoch"].as_str().is_some());
+    assert_eq!(snapshot["tasks"], tasks);
+    let session = invoke(
+        &main,
+        "open_local_playback",
+        json!({
+            "taskId": tasks[0]["id"], "requestId": uuid::Uuid::new_v4().to_string(),
+        }),
+        local,
+    )
+    .unwrap();
+    let url = session["sources"][0]["url"].as_str().unwrap();
+    assert_eq!(
+        reqwest::get(url).await.unwrap().bytes().await.unwrap(),
+        "native fixture"
+    );
+    invoke(
+        &main,
+        "close_playback",
+        json!({ "sessionId": session["id"] }),
+        local,
+    )
+    .unwrap();
+    let stale = invoke(
+        &main,
+        "act_on_download",
+        json!({"request": {
+            "taskId": tasks[0]["id"], "attemptId": "stale", "action": "remove",
+        }}),
+        local,
+    )
+    .unwrap();
+    assert_eq!(stale["kind"], "skipped");
+    assert_eq!(manager.list().len(), 1);
     for command in [
+        "get_download_snapshot",
+        "subscribe_download_events",
+        "unsubscribe_download_events",
+        "act_on_download",
+        "open_local_playback",
         "start_downloads",
         "list_downloads",
         "subscribe_downloads",
@@ -166,6 +220,12 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
                 .contains("not allowed")
         );
     }
+    app.state::<PlaybackState>()
+        .0
+        .as_ref()
+        .unwrap()
+        .shutdown()
+        .await;
     manager.shutdown().await;
     server.abort();
 }

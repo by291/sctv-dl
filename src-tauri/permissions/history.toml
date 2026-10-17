@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "history-api"
+description = "Allows the local main window to manage validated viewing history and progress sessions."
+commands.allow = ["list_history", "begin_history", "record_history", "end_history", "remove_history", "clear_history", "subscribe_history", "unsubscribe_history"]

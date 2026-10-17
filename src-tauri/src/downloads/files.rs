@@ -223,6 +223,104 @@ impl DownloadDirectory {
         Ok(())
     }
 
+    /// Reacquires a v2 reservation only after the private index authorizes its identity.
+    /// The index checkpoint is authoritative when the journal is ahead after a crash.
+    pub fn recover_reservation(
+        self: &Arc<Self>,
+        record: &super::journal::ReservationRecord,
+    ) -> io::Result<Reservation> {
+        use super::journal::ReservationRecord;
+        record.validate()?;
+        let journal = self.root.join(format!(".sctv-dl-{}.json", record.id));
+        if !std::fs::symlink_metadata(&journal)?.is_file() {
+            return Err(invalid("下载恢复记录已被替换"));
+        }
+        let disk = crate::storage::read_json::<ReservationRecord>(&journal, MAX_RECORD_BYTES)?
+            .ok_or_else(|| invalid("下载恢复记录缺失"))?;
+        disk.validate()?;
+        if disk.id != record.id
+            || disk.checkpoint.task_id != record.checkpoint.task_id
+            || disk.checkpoint.attempt_id != record.checkpoint.attempt_id
+            || disk.checkpoint.file_identity != record.checkpoint.file_identity
+        {
+            return Err(invalid("下载恢复记录身份不匹配"));
+        }
+        let temporary = self.root.join(format!(".sctv-dl-{}.part", record.id));
+        let file = record
+            .checkpoint
+            .file_identity
+            .open_verified(&temporary, true)?;
+        if file.metadata()?.len() < record.checkpoint.committed_bytes {
+            return Err(invalid("下载文件短于已保存的进度"));
+        }
+        file.set_len(record.checkpoint.committed_bytes)?;
+        file.sync_all()?;
+        let identity = Handle::from_file(file)?;
+        self.reserved
+            .lock()
+            .unwrap()
+            .insert(record.filename.to_lowercase());
+        Ok(Reservation {
+            directory: self.clone(),
+            base: record
+                .filename
+                .strip_suffix(".mp4")
+                .unwrap_or(&record.filename)
+                .into(),
+            filename: record.filename.clone(),
+            temporary,
+            journal,
+            identity,
+            record_bytes: serde_json::to_vec(&disk)?,
+            durable: Some(record.clone()),
+            retained: false,
+        })
+    }
+
+    /// Removes a recognized publication journal only after the index records completion.
+    pub fn complete_recovered(&self, record: &super::journal::ReservationRecord) -> io::Result<()> {
+        record.validate()?;
+        record
+            .checkpoint
+            .file_identity
+            .open_verified(&self.root.join(&record.filename), false)?;
+        let journal = self.root.join(format!(".sctv-dl-{}.json", record.id));
+        let Some(disk) = crate::storage::read_json::<super::journal::ReservationRecord>(
+            &journal,
+            MAX_RECORD_BYTES,
+        )?
+        else {
+            return Ok(());
+        };
+        if !std::fs::symlink_metadata(&journal)?.is_file()
+            || disk.id != record.id
+            || disk.checkpoint.task_id != record.checkpoint.task_id
+            || disk.checkpoint.attempt_id != record.checkpoint.attempt_id
+            || disk.checkpoint.file_identity != record.checkpoint.file_identity
+        {
+            return Err(invalid("下载发布记录身份不匹配"));
+        }
+        let temporary = self.root.join(format!(".sctv-dl-{}.part", record.id));
+        match record
+            .checkpoint
+            .file_identity
+            .open_verified(&temporary, false)
+        {
+            Ok(file) => {
+                drop(file);
+                std::fs::remove_file(&temporary)?;
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        std::fs::remove_file(&journal)?;
+        self.reserved
+            .lock()
+            .unwrap()
+            .remove(&record.filename.to_lowercase());
+        Ok(())
+    }
+
     fn unique(&self, base: &str, reserved: &HashSet<String>) -> io::Result<String> {
         let occupied: HashSet<_> = std::fs::read_dir(&self.root)?
             .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().to_lowercase()))
@@ -312,6 +410,8 @@ impl DownloadDirectory {
                 journal,
                 identity,
                 record_bytes,
+                durable: None,
+                retained: false,
             },
         ))
     }
@@ -325,6 +425,8 @@ pub struct Reservation {
     journal: PathBuf,
     identity: Handle,
     record_bytes: Vec<u8>,
+    durable: Option<super::journal::ReservationRecord>,
+    retained: bool,
 }
 
 impl Reservation {
@@ -334,6 +436,127 @@ impl Reservation {
 
     pub(crate) fn writer(&self) -> io::Result<File> {
         self.identity.as_file().try_clone()
+    }
+
+    pub fn upgrade(
+        &mut self,
+        task_id: String,
+        attempt_id: String,
+    ) -> io::Result<super::journal::ReservationRecord> {
+        use super::{
+            file_identity::FileIdentity,
+            journal::{PublicationPhase, ReservationRecord, ResumeCheckpoint},
+        };
+        self.identity.as_file().sync_all()?;
+        let record = ReservationRecord {
+            sctv_dl_download: 2,
+            id: self
+                .journal
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .trim_start_matches(".sctv-dl-")
+                .into(),
+            filename: self.filename.clone(),
+            checkpoint: ResumeCheckpoint {
+                task_id,
+                attempt_id,
+                file_identity: FileIdentity::read(self.identity.as_file())?,
+                committed_bytes: 0,
+                total_bytes: None,
+                etag: None,
+            },
+            phase: PublicationPhase::Writing,
+        };
+        self.save_record(record)
+    }
+
+    fn save_record(
+        &mut self,
+        record: super::journal::ReservationRecord,
+    ) -> io::Result<super::journal::ReservationRecord> {
+        let saved = crate::storage::write_json_atomic(&self.journal, &record);
+        if saved.is_ok()
+            || saved
+                .as_ref()
+                .is_err_and(crate::storage::replacement_committed)
+        {
+            self.record_bytes = serde_json::to_vec(&record)?;
+            self.durable = Some(record.clone());
+        }
+        saved?;
+        Ok(record)
+    }
+
+    pub fn checkpoint(
+        &mut self,
+        bytes: u64,
+        total: Option<u64>,
+        etag: Option<String>,
+    ) -> io::Result<super::journal::ReservationRecord> {
+        verify_identity(&self.temporary, &self.identity)?;
+        if self.identity.as_file().metadata()?.len() < bytes {
+            return Err(invalid("下载文件短于待保存的进度"));
+        }
+        self.identity.as_file().sync_all()?;
+        let mut record = self
+            .durable
+            .clone()
+            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+        record.checkpoint.committed_bytes = bytes;
+        record.checkpoint.total_bytes = total;
+        record.checkpoint.etag = etag;
+        self.save_record(record)
+    }
+
+    pub fn new_attempt(
+        &mut self,
+        attempt_id: String,
+    ) -> io::Result<super::journal::ReservationRecord> {
+        let mut record = self
+            .durable
+            .clone()
+            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+        record.checkpoint.attempt_id = attempt_id;
+        record.phase = super::journal::PublicationPhase::Writing;
+        self.save_record(record)
+    }
+
+    pub fn publication_intent(&mut self) -> io::Result<super::journal::ReservationRecord> {
+        let mut names = self.directory.reserved.lock().unwrap();
+        names.remove(&self.filename.to_lowercase());
+        self.filename = self.directory.unique(&self.base, &names)?;
+        names.insert(self.filename.to_lowercase());
+        drop(names);
+        let mut record = self
+            .durable
+            .clone()
+            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+        record.filename = self.filename.clone();
+        record.phase = super::journal::PublicationPhase::Publishing;
+        self.save_record(record)
+    }
+
+    /// Leaves the journal in place until the completed task is durably committed.
+    pub fn publish(&mut self) -> io::Result<()> {
+        verify_identity(&self.temporary, &self.identity)?;
+        let path = TempPath::try_from_path(&self.temporary)?;
+        if let Err(mut error) = path.persist_noclobber(self.directory.root.join(&self.filename)) {
+            error.path.disable_cleanup(true);
+            return Err(error.error);
+        }
+        #[cfg(unix)]
+        File::open(&self.directory.root)?.sync_all()?;
+        Ok(())
+    }
+
+    /// Retains recognized artifacts across owner disposal; reopening must verify identity again.
+    pub fn retain(mut self) {
+        self.retained = true;
+    }
+
+    pub fn complete(self) -> io::Result<()> {
+        self.cleanup()
     }
 
     /// Publishes without clobbering and reports cleanup failures; the caller owns writer durability.
@@ -388,13 +611,26 @@ impl Reservation {
 
     /// Removes only owned artifacts and reports failures while preserving replacement files.
     pub fn cleanup(self) -> io::Result<()> {
-        self.remove_artifacts()
+        let result = self.remove_artifacts();
+        if result.is_ok() {
+            self.directory
+                .reserved
+                .lock()
+                .unwrap()
+                .remove(&self.filename.to_lowercase());
+        }
+        result
     }
 }
 
 impl Drop for Reservation {
     fn drop(&mut self) {
         // Explicit finish/cleanup reports errors; this is an idempotent fallback on early returns.
+        if self.retained || self.durable.is_some() {
+            // A durable reservation may already belong to the task index. Unwind
+            // must preserve it; only explicit cleanup is allowed to delete it.
+            return;
+        }
         let _ = self.remove_artifacts();
         self.directory
             .reserved
