@@ -2,6 +2,7 @@ import { computed, onScopeDispose, ref, toValue } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { canStartViewTransition, runViewTransition } from '@/shared/utils/view-transition'
+import { navigationTab } from '@/shared/navigation/navigation-tab'
 
 import type { MaybeRefOrGetter } from 'vue'
 
@@ -85,8 +86,14 @@ export function useProgrammeCoverNavigation(programmeId: MaybeRefOrGetter<string
 
       return allowed
     })
-    const removeAfter = router.afterEach((to, from, failure) => {
-      if (!failure && from.path === detailPath && to.path !== detailPath) {
+    const removeAfter = router.afterEach((to, _from, failure) => {
+      // Another primary tab only hides this detail. Release the association when
+      // navigation in its own tab replaces it, including a home link from another tab.
+      if (
+        !failure &&
+        navigationTab(to.path) === navigationTab(detailPath) &&
+        to.path !== detailPath
+      ) {
         stopReturnNavigation?.()
       }
     })

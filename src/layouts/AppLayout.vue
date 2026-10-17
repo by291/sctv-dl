@@ -1,16 +1,33 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { NBadge } from 'naive-ui'
-import { Tv, Library, Download, Settings2 } from '@lucide/vue'
+import { Tv, Library, Download, Settings2, History } from '@lucide/vue'
 
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useDownloadTasksStore } from '@/features/downloads/stores/useDownloadTasksStore'
-import { viewTransitionActive } from '@/shared/utils/view-transition'
+import NavigationTabView from '@/layouts/NavigationTabView.vue'
+import { navigationTab } from '@/shared/navigation/navigation-tab'
+import type { NavigationTab } from '@/shared/navigation/navigation-tab'
 import { usePlatform } from '@/shared/platform/usePlatform'
 
-const route = useRoute()
+const router = useRouter()
+const route = computed(() => router.currentRoute.value)
+const activeTab = computed(() => navigationTab(route.value.path))
+const destinations = reactive<Record<NavigationTab, string>>({
+  '/': '/',
+  '/history': '/history',
+  '/downloads': '/downloads',
+  '/settings': '/settings',
+})
+watch(
+  route,
+  (value) => {
+    destinations[navigationTab(value.path)] = value.fullPath
+  },
+  { immediate: true, flush: 'sync' },
+)
 const platform = usePlatform()
 const programmes = useProgrammeCatalogueStore()
 const tasks = useDownloadTasksStore()
@@ -19,6 +36,7 @@ const appVersion = import.meta.env.APP_VERSION
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
+  { to: '/history', label: '观看历史', icon: History },
   ...(downloads.kind === 'native' ? [{ to: '/downloads', label: '下载任务', icon: Download }] : []),
   { to: '/settings', label: '设置', icon: Settings2 },
 ]
@@ -30,11 +48,19 @@ const connectionLabel = computed(() => {
     return '连接暂时不可用'
   }
 
+  if (programmes.refreshError) {
+    return '刷新失败，显示已保存数据'
+  }
+
+  if (programmes.cached) {
+    return '正在显示节目缓存'
+  }
+
   return programmes.updatedAt ? '已连接节目服务' : '四川电视节目'
 })
 
 function isActive(path: string): boolean {
-  return path === '/' ? route.path === '/' || route.name === 'programme' : route.path === path
+  return activeTab.value === path
 }
 
 // The shell keeps progress observation alive while individual pages mount and unmount.
@@ -73,7 +99,7 @@ onBeforeUnmount(() => {
         <RouterLink
           v-for="link in links"
           :key="link.to"
-          :to="link.to"
+          :to="destinations[navigationTab(link.to)]"
           class="nav-link"
           :class="{ active: isActive(link.to) }"
           :aria-label="link.to === '/downloads' ? downloadNavigationLabel : undefined"
@@ -100,7 +126,7 @@ onBeforeUnmount(() => {
         >
           <span
             class="status-dot"
-            :class="{ offline: programmes.error }"
+            :class="{ offline: programmes.error || programmes.refreshError }"
             aria-hidden="true"
           />
           {{ connectionLabel }}
@@ -110,61 +136,33 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </aside>
-    <div class="workspace">
-      <div
-        v-if="programmes.error"
-        class="mobile-connection-warning"
-        role="alert"
-      >
-        <span
-          class="status-dot offline"
-          aria-hidden="true"
-        />
-        {{ connectionLabel }}
-      </div>
-      <main
-        id="main-content"
-        class="main-content"
-      >
-        <RouterView v-slot="{ Component, route: currentRoute }">
-          <Transition
-            name="page"
-            :mode="viewTransitionActive ? undefined : 'out-in'"
-            :css="!viewTransitionActive"
-          >
-            <KeepAlive
-              include="ProgrammeLibraryView"
-              :max="1"
-            >
-              <component
-                :is="Component"
-                :key="currentRoute.path"
-                class="page-view"
-              />
-            </KeepAlive>
-          </Transition>
-        </RouterView>
-      </main>
-    </div>
+    <KeepAlive :max="4">
+      <NavigationTabView
+        :key="activeTab"
+        :route="route"
+        :warning="programmes.error || programmes.refreshError ? connectionLabel : ''"
+      />
+    </KeepAlive>
   </div>
 </template>
 
 <style scoped>
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 .sidebar {
-  position: sticky;
-  top: 0;
   display: flex;
-  height: 100vh;
+  height: 100%;
   width: 232px;
   flex-shrink: 0;
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: var(--panel);
   padding: 36px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: none;
 }
 .brand {
   display: flex;
@@ -239,12 +237,6 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--muted);
 }
-.workspace {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-}
 .connection {
   display: flex;
   align-items: center;
@@ -252,17 +244,6 @@ onBeforeUnmount(() => {
   padding-inline: 14px;
   font-size: 12px;
   color: var(--muted);
-}
-.mobile-connection-warning {
-  display: none;
-}
-.main-content {
-  container: workspace / inline-size;
-  width: 100%;
-  max-width: 1460px;
-  flex: 1;
-  margin: 0 auto;
-  padding: clamp(24px, 2.6vw, 38px) var(--page-gutter) 40px;
 }
 @media (hover: hover) {
   .nav-link:hover {
@@ -326,9 +307,12 @@ onBeforeUnmount(() => {
   }
   .nav-link {
     min-height: 44px;
-    gap: 5px;
-    padding: 8px;
-    font-size: 14px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.3;
   }
   .with-downloads .nav-link {
     flex-direction: column;
@@ -342,23 +326,16 @@ onBeforeUnmount(() => {
     top: 0;
     right: 0;
   }
-  .mobile-connection-warning {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 8px 16px;
-    background: var(--subtle);
-    color: var(--muted);
-    font-size: 13px;
-  }
-  .main-content {
-    padding: 20px 16px 28px;
-  }
 }
 @media (width < 440px) {
   .sidebar {
     padding-inline: 12px;
+  }
+  .brand-icon {
+    display: none;
+  }
+  .with-downloads .nav-link {
+    padding-inline: 5px;
   }
 }
 </style>
