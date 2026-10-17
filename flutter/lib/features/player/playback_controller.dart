@@ -6,6 +6,8 @@ import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 
+enum PlayerControlHold { interaction, accessibility, focus, seek, menu }
+
 /// Owns one pinned playback route. A committed route exit releases its session
 /// after the transition; an active PiP session retains ownership until it stops.
 class PlaybackController extends ChangeNotifier {
@@ -26,11 +28,12 @@ class PlaybackController extends ChangeNotifier {
   bool loading = false;
   bool switchingSource = false;
   bool controlsVisible = true;
-  bool _holdingControls = false;
+  final _controlHolds = <PlayerControlHold>{};
   bool _released = false;
   bool _disposed = false;
   bool _pipRequested = false;
   bool _backgrounded = false;
+  bool _exiting = false;
   int _generation = 0;
   Timer? _hideTimer;
   StreamSubscription<PlaybackSnapshot>? _subscription;
@@ -45,7 +48,11 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> initialize() => _initialize(input);
 
-  Future<void> _initialize(PlaybackInput opening, {double speed = 1}) async {
+  Future<void> _initialize(
+    PlaybackInput opening, {
+    double speed = 1,
+    bool resumePlayback = false,
+  }) async {
     if (_released || loading || session != null) return;
     final generation = ++_generation;
     loading = true;
@@ -75,6 +82,9 @@ class PlaybackController extends ChangeNotifier {
         },
       );
       _accept(opened.value);
+      if (resumePlayback && !_backgrounded && !_exiting) {
+        await opened.play();
+      }
     } catch (error) {
       if (!_released && generation == _generation) {
         message = '无法打开视频，请重试：$error';
@@ -82,6 +92,7 @@ class PlaybackController extends ChangeNotifier {
     } finally {
       if (!_released && generation == _generation) {
         loading = false;
+        _updateVisibility();
         _notify();
       }
     }
@@ -111,7 +122,8 @@ class PlaybackController extends ChangeNotifier {
     _notify();
     try {
       // Failed native handles must be released before constructing a replacement.
-      // Retry always returns paused, preserving accepted source, position and speed.
+      // Explicit retry preserves intent, but backgrounding or committed navigation
+      // while the replacement opens must still prevent resumed playback.
       await _disposeSession();
     } catch (error) {
       message = '无法释放旧播放资源，请重试：$error';
@@ -120,7 +132,13 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
     loading = false;
-    if (!_released) await _initialize(opening, speed: resume?.speed ?? 1);
+    if (!_released) {
+      await _initialize(
+        opening,
+        speed: resume?.speed ?? 1,
+        resumePlayback: resume?.playing == true,
+      );
+    }
   }
 
   void _accept(PlaybackSnapshot snapshot) {
@@ -204,12 +222,28 @@ class PlaybackController extends ChangeNotifier {
     await flushHistory();
   }
 
-  void holdControls(bool hold) {
-    _holdingControls = hold;
+  void holdControls(
+    bool hold, {
+    PlayerControlHold reason = PlayerControlHold.interaction,
+  }) {
+    if (hold) {
+      _controlHolds.add(reason);
+    } else {
+      _controlHolds.remove(reason);
+    }
     showControls();
   }
 
+  void toggleControls() {
+    if (_released) return;
+    controlsVisible = !controlsVisible;
+    _hideTimer?.cancel();
+    _updateVisibility();
+    _notify();
+  }
+
   void showControls() {
+    if (_released) return;
     controlsVisible = true;
     _hideTimer?.cancel();
     _updateVisibility();
@@ -217,12 +251,14 @@ class PlaybackController extends ChangeNotifier {
   }
 
   void _updateVisibility() {
+    if (_released) return;
     final canHide =
         value.playing &&
         !value.buffering &&
         value.error == null &&
         message == null &&
-        !_holdingControls &&
+        _controlHolds.isEmpty &&
+        !loading &&
         !switchingSource;
     if (!canHide) {
       _hideTimer?.cancel();
@@ -276,6 +312,7 @@ class PlaybackController extends ChangeNotifier {
 
   /// Called only after navigation commits, never from a speculative back gesture.
   Future<void> commitExit() async {
+    _exiting = true;
     if (!value.inPip) await session?.pause();
     _saveHistory();
     await flushHistory();
