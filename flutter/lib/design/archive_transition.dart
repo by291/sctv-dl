@@ -15,7 +15,7 @@ class ArchiveMotionCurve extends Curve {
       navigator.userGestureInProgress ? t : Curves.fastOutSlowIn.transform(t);
 }
 
-/// A bounded detail transition; the retained library stays behind the new page.
+/// Shared archive/playback motion with the previous route retained underneath.
 class ArchiveTransitionPage<T> extends Page<T> {
   const ArchiveTransitionPage({
     super.key,

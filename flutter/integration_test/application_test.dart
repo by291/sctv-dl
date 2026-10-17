@@ -196,7 +196,20 @@ void main() {
         : archive.controller.clips.first;
     final title = find.text(playable.title).last;
     await tester.ensureVisible(title);
+    final playbackArchiveBounds = tester.getRect(find.byType(ArchivePage));
+    final playbackScroll = tester
+        .widget<CustomScrollView>(
+          find.descendant(
+            of: find.byType(ArchivePage),
+            matching: find.byType(CustomScrollView),
+          ),
+        )
+        .controller!;
+    final playbackScrollOffset = playbackScroll.offset;
     await tester.tap(title);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await capture('player-enter-transition', settle: false);
     await waitFor(() => find.byType(PlayerPage).evaluate().isNotEmpty);
     await waitFor(() {
       final buttons = tester.widgetList<IconButton>(
@@ -208,7 +221,12 @@ void main() {
     expect(find.byTooltip('暂停'), findsNothing);
     await capture('player-paused');
     await tester.tap(find.byType(BackButton));
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await capture('player-return-transition', settle: false);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getRect(find.byType(ArchivePage)), playbackArchiveBounds);
+    expect(playbackScroll.offset, playbackScrollOffset);
     final archiveScroll = tester
         .widget<CustomScrollView>(
           find.descendant(

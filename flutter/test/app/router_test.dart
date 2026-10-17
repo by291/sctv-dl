@@ -11,6 +11,8 @@ import 'package:sctv_dl_mobile/app/router.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
+import 'package:sctv_dl_mobile/features/player/player_page.dart';
+import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/playback/history_repository.dart';
@@ -50,6 +52,89 @@ DownloadTask localTask() => DownloadTask(
 );
 
 void main() {
+  for (final local in [false, true]) {
+    for (final reduced in [false, true]) {
+      testWidgets(
+        'playback coordinates both pages local=$local reduced=$reduced',
+        (tester) async {
+          final harness = RouteHarness();
+          harness.downloads.tasks = [localTask()];
+          await harness.mount(
+            tester,
+            local ? '/downloads' : '/programme/1',
+            reducedMotion: reduced,
+          );
+          await tester.pumpAndSettle();
+          final previous = find.byType(
+            local ? DownloadsPage : ArchivePage,
+            skipOffstage: false,
+          );
+          final before = tester.getRect(previous);
+          final previousState = tester.element(previous);
+          double opacity(Finder page) => tester
+              .widgetList<Opacity>(
+                find.ancestor(
+                  of: page,
+                  matching: find.byType(Opacity, skipOffstage: false),
+                ),
+              )
+              .fold(1.0, (value, widget) => value * widget.opacity);
+          if (local) {
+            unawaited(harness.router.push('/local/task-one'));
+          } else {
+            tester.widget<ArchivePage>(previous).onPlay(selection);
+          }
+          for (var i = 0; i < 5; i++) {
+            await tester.pump();
+          }
+          final player = find.byType(PlayerPage);
+          expect(player, findsOneWidget);
+          final route = ModalRoute.of(tester.element(player))!;
+          await tester.pump(const Duration(milliseconds: 75));
+          expect(
+            opacity(previous),
+            reduced ? 1 : allOf(greaterThan(0), lessThan(1)),
+          );
+          expect(opacity(player), reduced ? 1 : 0);
+          expect(tester.getRect(previous).top, before.top);
+          expect(tester.getSize(previous), before.size);
+          await tester.pump(const Duration(milliseconds: 75));
+          expect(opacity(previous), reduced ? 1 : 0);
+          expect(
+            opacity(player),
+            reduced ? 1 : allOf(greaterThan(0), lessThan(1)),
+          );
+          await tester.pump(const Duration(milliseconds: 200));
+          final playerBounds = tester.getRect(player);
+          route.handleStartBackGesture(progress: .5);
+          await tester.pump();
+          expect(opacity(player), reduced ? 1 : 0);
+          expect(
+            opacity(previous),
+            reduced ? 1 : allOf(greaterThan(0), lessThan(1)),
+          );
+          route.handleCancelBackGesture();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+          expect(tester.getRect(player), playerBounds);
+          expect(opacity(player), 1);
+          harness.router.pop();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 75));
+          expect(
+            opacity(player),
+            reduced ? 1 : allOf(greaterThan(0), lessThan(1)),
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(player, findsNothing);
+          expect(tester.element(previous), same(previousState));
+          expect(tester.getRect(previous), before);
+          expect(tester.takeException(), isNull);
+          await harness.close(tester);
+        },
+      );
+    }
+  }
   for (final cancelling in [false, true]) {
     testWidgets(
       'removing a gesturing archive releases input cancelling=$cancelling',

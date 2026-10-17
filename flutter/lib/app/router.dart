@@ -214,28 +214,36 @@ GoRouter createAppRouter(AppServices services) {
       ),
       GoRoute(
         path: '/play/:programme/:date/:content',
-        builder: (context, state) => _PlaybackRoute(
-          key: ValueKey('player-${state.uri}'),
-          services: services,
-          target: _OnlinePlaybackTarget(
-            ContentRef(
-              programmeId: state.pathParameters['programme']!,
-              dateId: state.pathParameters['date']!,
-              contentId: state.pathParameters['content']!,
+        pageBuilder: (context, state) => ArchiveTransitionPage<void>(
+          key: state.pageKey,
+          restorationId: state.pageKey.value,
+          child: _PlaybackRoute(
+            key: ValueKey('player-${state.uri}'),
+            services: services,
+            target: _OnlinePlaybackTarget(
+              ContentRef(
+                programmeId: state.pathParameters['programme']!,
+                dateId: state.pathParameters['date']!,
+                contentId: state.pathParameters['content']!,
+              ),
             ),
+            acceptedInput: state.extra is PlaybackInput
+                ? state.extra as PlaybackInput
+                : null,
+            onDownload: (selection) => download(context, [selection]),
           ),
-          acceptedInput: state.extra is PlaybackInput
-              ? state.extra as PlaybackInput
-              : null,
-          onDownload: (selection) => download(context, [selection]),
         ),
       ),
       GoRoute(
         path: '/local/:taskId',
-        builder: (context, state) => _PlaybackRoute(
-          key: ValueKey('local-${state.pathParameters['taskId']}'),
-          services: services,
-          target: _LocalPlaybackTarget(state.pathParameters['taskId']!),
+        pageBuilder: (context, state) => ArchiveTransitionPage<void>(
+          key: state.pageKey,
+          restorationId: state.pageKey.value,
+          child: _PlaybackRoute(
+            key: ValueKey('local-${state.pathParameters['taskId']}'),
+            services: services,
+            target: _LocalPlaybackTarget(state.pathParameters['taskId']!),
+          ),
         ),
       ),
     ],

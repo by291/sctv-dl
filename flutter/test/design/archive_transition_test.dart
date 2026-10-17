@@ -238,6 +238,9 @@ void main() {
 
         open();
         await frames();
+        // Playback covers an archive that already uses this transition.
+        open();
+        await frames();
         await gesture('startBackGesture', 0);
         for (final progress in [.15, .4, .7, .3, .05]) {
           await gesture('updateBackGestureProgress', progress);
