@@ -1,3 +1,7 @@
 <full-backup-content>
     <include domain="file" path="datastore/" />
+    <include domain="database" path="sctv-user.db" />
+    <include domain="database" path="sctv-user.db-wal" />
+    <include domain="database" path="sctv-user.db-shm" />
+    <include domain="database" path="sctv-user.db-journal" />
 </full-backup-content>
