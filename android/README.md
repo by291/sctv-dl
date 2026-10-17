@@ -30,6 +30,14 @@ On macOS or Linux:
 
 Outputs are `app/build/outputs/apk/debug/app-debug.apk` and `app/build/outputs/apk/release/app-release-unsigned.apk`. The debug APK is installable. The optimized release APK uses R8 and resource shrinking and requires your release signing identity before distribution. Signing keys and passwords must remain outside tracked files.
 
+For separate release APKs per architecture, enable ABI splitting explicitly (use `gradlew.bat` on Windows):
+
+```sh
+./android/gradlew -p android :app:assembleRelease -PsplitPerAbi=true
+```
+
+This produces `app-armeabi-v7a-release-unsigned.apk`, `app-arm64-v8a-release-unsigned.apk`, and `app-x86_64-release-unsigned.apk` under `android/app/build/outputs/apk/release/`. CI uses this command for release artifacts. Each APK contains only its matching native libraries; shared Kotlin code and resources remain in every APK. Ordinary builds without the property keep a universal APK, including debug and instrumentation builds. All native APK variants retain the same Git-derived version code; these are standalone distribution artifacts, not legacy Google Play multi-APK uploads. Use an Android App Bundle for store-managed device delivery.
+
 Build from a complete Git checkout with Git available on `PATH`. The displayed version is `0.1.1-<short-commit-id>`, and Android's installation `versionCode` is the number of commits reachable from `HEAD`. New descendant commits increase the code; rebuilding the same commit retains its version. A shallow checkout is rejected to prevent a smaller or repeated version code; run `git fetch --unshallow` first. Android CI fetches the complete history. The settings page reads the installed package version, including its commit suffix. Upstream compatibility headers keep their separate official APK version.
 
 Debug and release use separate application IDs and launcher labels, so both can be installed on the same device. Each installation has its own app data, favourites, settings, and download history.

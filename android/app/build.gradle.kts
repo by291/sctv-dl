@@ -35,6 +35,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures { compose = true }
+    splits {
+        abi {
+            // Opt in for distribution builds; ordinary debug and device tests keep one APK.
+            isEnable = providers.gradleProperty("splitPerAbi").map { it.toBooleanStrict() }.orElse(false).get()
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
