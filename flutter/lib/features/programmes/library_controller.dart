@@ -7,8 +7,6 @@ import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_repository.dart';
 import '../../domain/settings/user_repository.dart';
 
-enum LibraryTab { all, favourites, history }
-
 class LibraryController extends ChangeNotifier {
   LibraryController({
     required this.repository,
@@ -20,8 +18,8 @@ class LibraryController extends ChangeNotifier {
   final ProgrammeRepository repository;
   final UserRepository user;
   final Set<String> _priority;
-  final _queries = {for (final tab in LibraryTab.values) tab: ''};
-  final _nameOrder = {for (final tab in LibraryTab.values) tab: false};
+  String query = '';
+  bool nameOrder = false;
   final _random = Random();
   ProgrammeSnapshot<Programme>? _accepted;
   ProgrammeSnapshot<Programme>? _pending;
@@ -38,8 +36,6 @@ class LibraryController extends ChangeNotifier {
   List<Programme> get programmes => _accepted?.items ?? const [];
   bool get hasPendingUpdate => _pending != null;
   bool get hasSnapshot => _accepted != null;
-  String query(LibraryTab tab) => _queries[tab] ?? '';
-  bool nameOrder(LibraryTab tab) => _nameOrder[tab] ?? false;
   Programme? get featured =>
       programmes.where((p) => p.id == featuredId).firstOrNull;
 
@@ -135,31 +131,29 @@ class LibraryController extends ChangeNotifier {
     }
   }
 
-  void setQuery(LibraryTab tab, String value) {
-    _queries[tab] = value;
+  void setQuery(String value) {
+    query = value;
     notifyListeners();
   }
 
-  void toggleSort(LibraryTab tab) {
-    _nameOrder[tab] = !nameOrder(tab);
+  void toggleSort() {
+    nameOrder = !nameOrder;
     notifyListeners();
   }
 
-  List<Programme> visibleProgrammes(LibraryTab tab) {
-    final filter = query(tab).trim().toLowerCase();
+  List<Programme> visibleProgrammes({bool favouritesOnly = false}) {
+    final filter = query.trim().toLowerCase();
     final indexed = programmes.indexed.where((pair) {
       final item = pair.$2;
-      return (tab != LibraryTab.favourites || favourites.contains(item.id)) &&
+      return (!favouritesOnly || favourites.contains(item.id)) &&
           item.name.toLowerCase().contains(filter);
     }).toList();
     indexed.sort((left, right) {
-      if (tab == LibraryTab.all) {
-        final priority = (_priority.contains(left.$2.id) ? 0 : 1).compareTo(
-          _priority.contains(right.$2.id) ? 0 : 1,
-        );
-        if (priority != 0) return priority;
-      }
-      final byName = nameOrder(tab) ? left.$2.name.compareTo(right.$2.name) : 0;
+      final priority = (_priority.contains(left.$2.id) ? 0 : 1).compareTo(
+        _priority.contains(right.$2.id) ? 0 : 1,
+      );
+      if (priority != 0) return priority;
+      final byName = nameOrder ? left.$2.name.compareTo(right.$2.name) : 0;
       return byName == 0 ? left.$1.compareTo(right.$1) : byName;
     });
     return [for (final pair in indexed) pair.$2];

@@ -18,12 +18,15 @@ import '../features/programmes/archive_controller.dart';
 import '../features/programmes/archive_page.dart';
 import '../features/programmes/download_quality_sheet.dart';
 import '../features/programmes/library_page.dart';
+import '../features/programmes/history_page.dart';
 import '../features/settings/settings_page.dart';
 import '../platform/playback/better_player_backend.dart';
 import 'providers.dart';
 import 'services.dart';
 
 GoRouter createAppRouter(AppServices services) {
+  final historyViewState = HistoryViewState();
+
   Future<void> download(
     BuildContext context,
     List<ProgrammeSelection> selections,
@@ -112,18 +115,9 @@ GoRouter createAppRouter(AppServices services) {
                 path: '/',
                 builder: (context, state) => LibraryPage(
                   controller: services.library,
-                  history: services.history,
                   onOpenProgramme: (programme) =>
                       unawaited(openProgramme(context, programme)),
-                  onOpenHistory: (entry) => unawaited(
-                    play(
-                      context,
-                      entry.selection,
-                      position: entry.completed
-                          ? Duration.zero
-                          : entry.position,
-                    ),
-                  ),
+                  onShowHistory: () => context.push('/history'),
                 ),
               ),
             ],
@@ -153,6 +147,20 @@ GoRouter createAppRouter(AppServices services) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/history',
+        builder: (context, state) => HistoryPage(
+          history: services.history,
+          viewState: historyViewState,
+          onOpen: (entry) => unawaited(
+            play(
+              context,
+              entry.selection,
+              position: entry.completed ? Duration.zero : entry.position,
+            ),
+          ),
+        ),
       ),
       GoRoute(
         path: '/programme/:id',

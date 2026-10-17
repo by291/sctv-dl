@@ -47,6 +47,104 @@ DownloadTask localTask() => DownloadTask(
 );
 
 void main() {
+  for (final completed in [false, true]) {
+    testWidgets('history resumes its exact entry with completed=$completed', (
+      tester,
+    ) async {
+      final harness = RouteHarness();
+      harness.history.entries.add(
+        ViewingEntry(
+          selection: selection,
+          position: const Duration(seconds: 38),
+          completed: completed,
+          viewedAt: DateTime.utc(2026),
+        ),
+      );
+      await harness.mount(tester, '/');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('搜索栏目'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'missing catalogue');
+      await tester.tap(find.byTooltip('观看历史'));
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, '/history');
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(find.byType(NavigationRail), findsNothing);
+
+      await tester.tap(find.text('Accepted news'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      expect(harness.backend.inputs.single.selection, same(selection));
+      expect(
+        harness.backend.inputs.single.initialPosition,
+        completed ? Duration.zero : const Duration(seconds: 38),
+      );
+      harness.router.pop();
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, '/');
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'missing catalogue',
+      );
+      expect(find.text('没有找到相关栏目'), findsOneWidget);
+      await harness.close(tester);
+    });
+  }
+
+  testWidgets(
+    'history search and scroll survive leaving and reopening the route',
+    (tester) async {
+      final harness = RouteHarness();
+      for (var i = 0; i < 30; i++) {
+        harness.history.entries.add(
+          ViewingEntry(
+            selection: ProgrammeSelection(
+              programme: programme,
+              broadcast: broadcast,
+              content: ProgrammeContent(id: '$i', title: 'News episode $i'),
+            ),
+            position: const Duration(seconds: 38),
+            viewedAt: DateTime.utc(2026),
+          ),
+        );
+      }
+      await harness.mount(tester, '/');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('观看历史'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('搜索观看记录'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'News episode');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(ListView), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      final offset = tester
+          .widget<ListView>(find.byType(ListView))
+          .controller!
+          .offset;
+      expect(offset, greaterThan(0));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, '/');
+      await tester.tap(find.byTooltip('观看历史'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'News episode',
+      );
+      expect(
+        tester.widget<ListView>(find.byType(ListView)).controller!.offset,
+        closeTo(offset, 1),
+      );
+      expect(tester.testTextInput.isVisible, isFalse);
+      await harness.close(tester);
+    },
+  );
+
   testWidgets('leaving an archive cancels its metadata resolution', (
     tester,
   ) async {
@@ -455,7 +553,7 @@ class RouteHistory implements HistoryRepository {
   Future<void> save(ViewingEntry entry) async => entries.add(entry);
 
   @override
-  Stream<List<ViewingEntry>> watchHistory() => const Stream.empty();
+  Stream<List<ViewingEntry>> watchHistory() => Stream.value(entries);
 
   @override
   Future<void> remove(ContentRef ref) async =>

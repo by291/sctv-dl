@@ -8,6 +8,7 @@ import 'package:sctv_dl_mobile/features/programmes/archive_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/history_page.dart';
 import 'package:sctv_dl_mobile/features/settings/settings_page.dart';
 import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
 
@@ -64,39 +65,28 @@ void main() {
         duration: const Duration(minutes: 20),
         viewedAt: DateTime(2026, 10, 17),
       );
-      final repository = FakeProgrammeRepository()
-        ..catalogue = snapshot([programme], 'one');
-      final user = FakeUserRepository();
-      final controller = LibraryController(
-        repository: repository,
-        user: user,
-        initialFavourites: {},
-      );
-      addTearDown(controller.dispose);
-      addTearDown(user.close);
       ViewingEntry? opened;
       await tester.pumpWidget(
         host(
-          LibraryPage(
-            controller: controller,
+          HistoryPage(
+            viewState: HistoryViewState(),
             history: EmptyHistory(
               entries: [entry],
               removeError: StateError('storage unavailable'),
             ),
-            onOpenProgramme: (_) {},
-            onOpenHistory: (value) => opened = value,
+            onOpen: (value) => opened = value,
           ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('最近观看'));
-      await tester.pumpAndSettle();
-      controller.setQuery(LibraryTab.history, '不存在');
+      await tester.tap(find.byTooltip('搜索观看记录'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), '不存在');
       await tester.pumpAndSettle();
       expect(find.text('暂无观看记录'), findsNothing);
       await tester.tap(find.text('清除搜索'));
       await tester.pumpAndSettle();
-      expect(controller.query(LibraryTab.history), isEmpty);
+      expect(find.byType(TextField), findsNothing);
       expect(
         tester
             .widget<LinearProgressIndicator>(
@@ -111,6 +101,46 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.tap(find.text('晚间新闻'));
       expect(opened, same(entry));
+    },
+  );
+
+  testWidgets(
+    'favourites only filters the list and leaves the exploration in place',
+    (tester) async {
+      final repository = FakeProgrammeRepository()
+        ..catalogue = snapshot([programme], 'one');
+      final user = FakeUserRepository();
+      final controller = LibraryController(
+        repository: repository,
+        user: user,
+        initialFavourites: {},
+      );
+      addTearDown(controller.dispose);
+      addTearDown(user.close);
+      await tester.pumpWidget(
+        host(
+          LibraryPage(
+            controller: controller,
+            onOpenProgramme: (_) {},
+            onShowHistory: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TabBar), findsNothing);
+      final exploration = tester.getRect(find.text('栏目探索'));
+      final featured = controller.featured;
+      await tester.tap(find.byTooltip('只看收藏'));
+      await tester.pumpAndSettle();
+      expect(find.text('还没有收藏'), findsOneWidget);
+      expect(tester.getRect(find.text('栏目探索')), exploration);
+      expect(controller.featured, same(featured));
+      expect(find.text('查看节目'), findsOneWidget);
+      await tester.tap(find.byTooltip('显示全部栏目'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ProgrammeCard), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -138,9 +168,8 @@ void main() {
           host(
             LibraryPage(
               controller: controller,
-              history: EmptyHistory(),
               onOpenProgramme: (_) => opened++,
-              onOpenHistory: (_) {},
+              onShowHistory: () {},
             ),
             scale: layout.$2,
             brightness: Brightness.dark,
@@ -230,45 +259,58 @@ void main() {
     },
   );
 
-  testWidgets(
-    'search keeps focus and tab filters do not leak into favourites',
-    (tester) async {
-      final repository = FakeProgrammeRepository()
-        ..catalogue = snapshot([
-          programme,
-          const Programme(id: '2', name: '音乐现场'),
-        ], 'one');
-      final user = FakeUserRepository()..favourites = {'1'};
-      final controller = LibraryController(
-        repository: repository,
-        user: user,
-        initialFavourites: {'1'},
-      );
-      addTearDown(controller.dispose);
-      addTearDown(user.close);
-      await tester.pumpWidget(
-        host(
-          LibraryPage(
-            controller: controller,
-            history: EmptyHistory(),
-            onOpenProgramme: (_) {},
-            onOpenHistory: (_) {},
-          ),
+  testWidgets('favourites preserves the current search and sort', (
+    tester,
+  ) async {
+    final repository = FakeProgrammeRepository()
+      ..catalogue = snapshot([
+        programme,
+        const Programme(id: '2', name: '音乐现场'),
+      ], 'one');
+    final user = FakeUserRepository()..favourites = {'1'};
+    final controller = LibraryController(
+      repository: repository,
+      user: user,
+      initialFavourites: {'1'},
+    );
+    addTearDown(controller.dispose);
+    addTearDown(user.close);
+    await tester.pumpWidget(
+      host(
+        LibraryPage(
+          controller: controller,
+          onOpenProgramme: (_) {},
+          onShowHistory: () {},
         ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('搜索栏目'));
-      await tester.pump();
-      await tester.enterText(find.byType(TextField), '不存在');
-      await tester.pump();
-      expect(find.text('没有找到相关栏目'), findsOneWidget);
-      expect(tester.testTextInput.isVisible, isTrue);
-      await tester.tap(find.text('我的收藏'));
-      await tester.pumpAndSettle();
-      expect(find.text('四川新闻'), findsWidgets);
-      expect(find.text('没有找到相关栏目'), findsNothing);
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('搜索栏目'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), '不存在');
+    await tester.pump();
+    expect(find.text('没有找到相关栏目'), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.tap(find.text('默认顺序'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('只看收藏'));
+    await tester.pumpAndSettle();
+    expect(find.text('没有找到相关栏目'), findsOneWidget);
+    expect(find.text('名称排序'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '不存在',
+    );
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.tap(find.byTooltip('显示全部栏目'));
+    await tester.pumpAndSettle();
+    expect(find.text('没有找到相关栏目'), findsOneWidget);
+    expect(find.text('名称排序'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '不存在',
+    );
+  });
 
   testWidgets(
     'archive batch back exits selection and large text keeps all content reachable',
@@ -446,9 +488,8 @@ class _RestorableLibraryState extends State<_RestorableLibrary> {
   @override
   Widget build(BuildContext context) => LibraryPage(
     controller: controller,
-    history: EmptyHistory(),
     onOpenProgramme: (_) {},
-    onOpenHistory: (_) {},
+    onShowHistory: () {},
   );
 }
 
