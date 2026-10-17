@@ -52,6 +52,53 @@ DownloadTask localTask() => DownloadTask(
 );
 
 void main() {
+  for (final player in [false, true]) {
+    testWidgets('download chooser uses the active route player=$player', (
+      tester,
+    ) async {
+      final harness = RouteHarness();
+      await harness.mount(tester, player ? '/play/1/2/3' : '/programme/1');
+      // Native initialization stays pending; download actions are independent
+      // of decoder readiness and no platform texture is needed in this test.
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      await settle();
+      if (!player) {
+        await tester.tap(find.byTooltip('批量下载'));
+        await settle();
+        await tester.tap(find.text(content.title));
+        await settle();
+      }
+      final downloadButton = find.text(player ? '下载节目' : '下载所选 1 项');
+      await tester.tap(downloadButton);
+      await settle();
+      expect(find.text('下载清晰度'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await settle();
+      expect(harness.downloads.requests, isEmpty);
+      expect(downloadButton, findsOneWidget);
+
+      await tester.tap(downloadButton);
+      await settle();
+      await tester.tap(find.widgetWithText(ListTile, '流畅'));
+      await settle();
+      expect(harness.downloads.requests, hasLength(1));
+      final request = harness.downloads.requests.single;
+      expect(request.selections.single.ref, selection.ref);
+      expect(request.quality, VideoQuality.smooth);
+      expect(request.wifiOnly, const Preferences().wifiOnly);
+      expect(find.text('已加入 1 项'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('查看下载'));
+      await settle();
+      expect(find.byType(DownloadsPage), findsOneWidget);
+    });
+  }
+
   for (final local in [false, true]) {
     for (final reduced in [false, true]) {
       testWidgets(
@@ -1049,12 +1096,34 @@ class RouteProgrammes extends FakeProgrammeRepository {
 
 class RouteDownloads implements DownloadRepository {
   List<DownloadTask> tasks = [];
+  final requests =
+      <
+        ({
+          List<ProgrammeSelection> selections,
+          VideoQuality quality,
+          bool wifiOnly,
+        })
+      >[];
   final changes = StreamController<List<DownloadTask>>.broadcast();
   int subscriptions = 0;
   int reconciliations = 0;
 
   @override
   Future<List<DownloadTask>> loadTasks() async => tasks;
+
+  @override
+  Future<DownloadBatchResult> start(
+    List<ProgrammeSelection> selections,
+    VideoQuality quality, {
+    required bool wifiOnly,
+  }) async {
+    requests.add((
+      selections: selections,
+      quality: quality,
+      wifiOnly: wifiOnly,
+    ));
+    return const DownloadBatchResult(taskIds: ['new-task']);
+  }
 
   @override
   Stream<List<DownloadTask>> watchTasks() => Stream.multi((controller) {

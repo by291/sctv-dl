@@ -207,7 +207,7 @@ GoRouter createAppRouter(AppServices services) {
               acceptedProgramme: accepted,
               coverTag: coverTag,
               onPlay: (selection) => unawaited(play(context, selection)),
-              onDownload: (items) => download(context, items),
+              onDownload: download,
             ),
           );
         },
@@ -230,7 +230,8 @@ GoRouter createAppRouter(AppServices services) {
             acceptedInput: state.extra is PlaybackInput
                 ? state.extra as PlaybackInput
                 : null,
-            onDownload: (selection) => download(context, [selection]),
+            onDownload: (pageContext, selection) =>
+                download(pageContext, [selection]),
           ),
         ),
       ),
@@ -459,7 +460,9 @@ class _ArchiveRoute extends StatefulWidget {
   final Programme? acceptedProgramme;
   final String? coverTag;
   final void Function(ProgrammeSelection) onPlay;
-  final Future<void> Function(List<ProgrammeSelection>) onDownload;
+  // Modal actions need the mounted page context below the route's Navigator.
+  final Future<void> Function(BuildContext, List<ProgrammeSelection>)
+  onDownload;
   @override
   State<_ArchiveRoute> createState() => _ArchiveRouteState();
 }
@@ -511,7 +514,7 @@ class _ArchiveRouteState extends State<_ArchiveRoute> {
         controller: controller!,
         library: widget.services.library,
         onPlay: widget.onPlay,
-        onDownload: widget.onDownload,
+        onDownload: (items) => widget.onDownload(context, items),
         onOpenProgramme: (item) =>
             context.replace('/programme/${item.id}', extra: item),
       );
@@ -560,7 +563,7 @@ class _PlaybackRoute extends ConsumerStatefulWidget {
   final AppServices services;
   final _PlaybackTarget target;
   final PlaybackInput? acceptedInput;
-  final Future<void> Function(ProgrammeSelection)? onDownload;
+  final Future<void> Function(BuildContext, ProgrammeSelection)? onDownload;
   @override
   ConsumerState<_PlaybackRoute> createState() => _PlaybackRouteState();
 }
@@ -722,7 +725,7 @@ class _PlaybackRouteState extends ConsumerState<_PlaybackRoute> {
                 prepared.selection == null ||
                 widget.onDownload == null
             ? null
-            : () => widget.onDownload!(prepared.selection!),
+            : () => widget.onDownload!(context, prepared.selection!),
       );
     },
   );

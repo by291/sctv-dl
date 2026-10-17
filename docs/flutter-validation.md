@@ -110,6 +110,8 @@ The time-spacing and feedback refinement uses the same label typography for time
 
 The initial-loading follow-up reproduced a horizontal action jump when the longer quality placeholder was replaced by the resolved label. Quality slots now use the same candidate-based width before and after metadata arrives. A delayed-backend widget regression first failed on changed speed-button bounds and now asserts unchanged play, speed, quality, fullscreen and seek-track rectangles across initialization. Fatal-info analysis and all 197 Dart tests passed. This focused layout correction did not repeat native runtime checks.
 
+The download-modal routing correction passes the mounted archive/player context into download actions instead of capturing the router's page-building context above the Navigator. Both real-router widget journeys reproduced the missing quality sheet before the correction. They now cover opening, dismissing without a repository request, confirming the selected quality and network policy, displaying the enqueue result, and following the Downloads action. Fatal-info analysis and all 199 Dart tests passed. These tests stub the download repository and leave native player initialization pending; they do not establish native transfer or device playback behavior.
+
 ## Remaining Acceptance and Distribution
 
 - Android 10/API 29 and iOS 15 are configured support floors, but minimum-version and physical-device journeys remain unverified.
