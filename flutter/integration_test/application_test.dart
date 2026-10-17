@@ -46,11 +46,11 @@ void main() {
       expect(tester.takeException(), isNull);
     }
 
-    Future<void> capture(String name) async {
+    Future<void> capture(String name, {bool settle = true}) async {
       // Allow visible artwork to settle without making upstream image failures
       // fail the browsing journey. The captured fallback remains useful evidence.
       final deadline = DateTime.now().add(const Duration(seconds: 8));
-      while (DateTime.now().isBefore(deadline)) {
+      while (settle && DateTime.now().isBefore(deadline)) {
         final covers = find.byType(CachedNetworkImage).evaluate();
         final pending = covers.any(
           (element) => find
@@ -65,7 +65,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
-      await tester.pump(const Duration(milliseconds: 500));
+      if (settle) await tester.pump(const Duration(milliseconds: 500));
       final surface =
           captureKey.currentContext!.findRenderObject()!
               as RenderRepaintBoundary;
@@ -93,18 +93,63 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
     final explorationBounds = tester.getRect(find.text('栏目探索'));
     await tester.tap(find.byTooltip('只看收藏'));
+    await tester.pump(const Duration(milliseconds: 60));
+    await capture('favourites-transition', settle: false);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('还没有收藏'), findsOneWidget);
     await capture('favourites-empty');
     expect(tester.getRect(find.text('栏目探索')), explorationBounds);
     await tester.tap(find.byTooltip('显示全部栏目'));
     await tester.pump(const Duration(milliseconds: 300));
+    final shuffleBounds = tester.getRect(find.text('换一个'));
+    await tester.tap(find.text('换一个'));
+    await tester.pump(const Duration(milliseconds: 60));
+    await capture('exploration-transition', settle: false);
+    expect(tester.getRect(find.text('换一个')), shuffleBounds);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.text('换一个')), shuffleBounds);
+    await tester.tap(find.text('查看节目'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('programme-cover-flight')),
+      findsOneWidget,
+    );
+    await capture('exploration-enter-transition', settle: false);
+    await tester.pump(const Duration(milliseconds: 400));
+    if (Platform.isIOS) {
+      final gesture = await tester.startGesture(const Offset(1, 350));
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(70, 0));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byKey(const ValueKey('programme-cover-flight')),
+        findsOneWidget,
+      );
+      await capture('archive-gesture-transition', settle: false);
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump(const Duration(milliseconds: 100));
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(ArchivePage), findsOneWidget);
+    }
+    await tester.tap(find.byType(BackButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('programme-cover-flight')),
+      findsOneWidget,
+    );
+    await capture('exploration-return-transition', settle: false);
+    await tester.pump(const Duration(milliseconds: 400));
     final programme = services.library.programmes.firstWhere(
       (item) => item.name.contains('四川新闻'),
       orElse: () => services.library.programmes.first,
     );
     await tester.tap(find.byTooltip('搜索栏目'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    await capture('search-transition', settle: false);
     await tester
         .enterText(find.byType(TextField), programme.name)
         .timeout(const Duration(seconds: 10));
@@ -112,7 +157,16 @@ void main() {
     expect(find.byType(ProgrammeCard), findsOneWidget);
     await capture('search');
     await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    final libraryBounds = tester.getRect(find.byType(ProgrammeCard));
     await tester.tap(find.byType(ProgrammeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('programme-cover-flight')),
+      findsOneWidget,
+    );
+    await capture('archive-enter-transition', settle: false);
     await waitFor(() {
       final pages = tester.widgetList<ArchivePage>(find.byType(ArchivePage));
       return pages.isNotEmpty &&
@@ -147,9 +201,34 @@ void main() {
     await capture('player-paused');
     await tester.tap(find.byType(BackButton));
     await tester.pump(const Duration(milliseconds: 500));
+    final archiveScroll = tester
+        .widget<CustomScrollView>(
+          find.descendant(
+            of: find.byType(ArchivePage),
+            matching: find.byType(CustomScrollView),
+          ),
+        )
+        .controller!;
+    archiveScroll.jumpTo(
+      500.0.clamp(0, archiveScroll.position.maxScrollExtent),
+    );
+    await tester.pump();
+    final coverWasClipped = archiveScroll.offset > 8;
     await tester.tap(find.byType(BackButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    if (coverWasClipped) {
+      expect(
+        find.byKey(const ValueKey('programme-cover-flight')),
+        findsNothing,
+      );
+    }
+    await capture('archive-return-transition', settle: false);
     await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.getRect(find.byType(ProgrammeCard)), libraryBounds);
     await tester.tap(find.text('下载').last);
+    await tester.pump(const Duration(milliseconds: 60));
+    await capture('navigation-transition', settle: false);
     await tester.pump(const Duration(milliseconds: 500));
     await capture('downloads');
     await tester.tap(find.text('设置').last);

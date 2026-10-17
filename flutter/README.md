@@ -111,4 +111,14 @@ flutter drive --driver=test_driver/integration_test.dart \
 
 This journey writes screenshots into ignored `build/qa/` and creates no live download. Its final `downloads-fixture-*` and `downloads-completed-*` screenshots use presentation-only task data; they establish card layout rather than native transfer or file availability. Controlled transfer/player commands and their evidence are in the validation record. Use disposable devices and keep foreground fixtures distinct from suspension, OS reclamation and user force-quit.
 
+For warmed shared-cover rendering measurements, separate from OS input delivery:
+
+```sh
+flutter drive --profile --no-dds --driver=test_driver/integration_test.dart \
+  --target=integration_test/archive_motion_profile_test.dart -d <device-id> \
+  --dart-define=ARCHIVE_MOTION_PROFILE=true
+```
+
+The opt-in profile journey uses the production application, warms both cover sources, then drives uniform route progress and reports build/raster timings. It does not inject real Android gestures or establish physical-device frame pacing. Use `python3 tool/verify_predictive_back.py --device <disposable-emulator-id>` separately to verify actual OS gesture delivery, cancellation and completion.
+
 The launcher uses an application-owned geometric TV/play mark. On macOS, regenerate its native bitmap sizes with `swift tool/generate_icons.swift`; Android adaptive/monochrome vectors live in the native resource directory.
