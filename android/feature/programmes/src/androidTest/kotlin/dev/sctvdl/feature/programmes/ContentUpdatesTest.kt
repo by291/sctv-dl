@@ -190,6 +190,8 @@ class ContentUpdatesTest {
 }
 
 private class UpdateRepository : ProgrammeRepository {
+    override suspend fun clearCache() = Unit
+
     val programmes = MutableStateFlow(CachedResource(listOf(Programme("one", "Alpha", null, 0))))
     val dates = MutableStateFlow(CachedResource<List<BroadcastDate>>())
     val contents = MutableStateFlow(CachedResource<List<ProgrammeContent>>())

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import dev.sctvdl.domain.common.ErrorKind
 import dev.sctvdl.domain.download.DownloadState
 import dev.sctvdl.domain.testing.FakeDownloads
+import dev.sctvdl.domain.testing.FakeHistory
 import dev.sctvdl.domain.testing.MainDispatcherRule
 import dev.sctvdl.domain.testing.fixtureTask
 import dev.sctvdl.feature.player.local.LocalPlayerViewModel
@@ -25,7 +26,7 @@ class LocalPlayerViewModelTest {
             tasks.value = listOf(fixtureTask(DownloadState.Completed))
             markMissing = true
         }
-        val model = LocalPlayerViewModel(repo, SavedStateHandle())
+        val model = LocalPlayerViewModel(repo, SavedStateHandle(), FakeHistory())
         model.open("task")
         runCurrent()
         assertNull(model.uiState.value.source)

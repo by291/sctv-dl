@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,15 +40,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.feature.player.PlaybackHistoryRecorder
 import dev.sctvdl.feature.player.PlaybackHost
 import dev.sctvdl.player.media3.PlayerSession
 import dev.sctvdl.player.model.PlaybackSource
 import dev.sctvdl.player.ui.PlayerVideo
 import dev.sctvdl.ui.downloads.DownloadQualitySheet
+import dev.sctvdl.ui.media.CoverImage
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -65,8 +70,11 @@ internal fun PlaybackContent(
     onDownload: ((Quality) -> Unit)? = null,
     programmeName: String? = null,
     broadcastDate: LocalDate? = null,
-    host: PlaybackHost
+    host: PlaybackHost,
+    history: PlaybackHistoryRecorder? = null,
+    coverUrl: String? = null
 ) {
+    val currentHistory by rememberUpdatedState(history)
     val context = LocalContext.current
     val session = remember(source.id) { PlayerSession(context, initialQuality) }
     val playback by session.controller.state.collectAsStateWithLifecycle()
@@ -83,9 +91,12 @@ internal fun PlaybackContent(
         while (true) {
             session.controller.tick()
             onPosition(session.controller.state.value.positionMs)
+            currentHistory?.onProgress(session.controller.state.value)
             delay(500)
         }
     }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { currentHistory?.flush(session.controller.state.value) }
 
     LifecycleResumeEffect(fullscreen) {
         // Predictive previews are STARTED; only a committed destination may change the Activity window.
@@ -99,6 +110,8 @@ internal fun PlaybackContent(
         host.bindPlayer(session)
         onDispose {
             onPosition(session.controller.state.value.positionMs)
+            currentHistory?.onProgress(session.controller.state.value)
+            currentHistory?.close(session.controller.state.value)
             host.unbindPlayer(session)
             host.fullscreen(false)
             session.release()
@@ -153,11 +166,28 @@ internal fun PlaybackContent(
                     null
                 },
                 onRetry = session.controller::retry,
+                onTogglePlay = {
+                    session.controller.togglePlay()
+                    currentHistory?.onProgress(session.controller.state.value)
+                },
+                onSeek = {
+                    session.controller.seekTo(it)
+                    currentHistory?.onSeekCompleted(session.controller.state.value)
+                },
                 modifier = Modifier.fillMaxWidth().then(
                     if (fullscreen || pip) Modifier.weight(1f) else Modifier.height(videoHeight)
                 ),
-                controlsEnabled = !pip
+                controlsEnabled = !pip,
+                placeholder = { CoverImage(coverUrl, Modifier.fillMaxSize()) }
             )
+            if (history != null) {
+                val historyError by history.error.collectAsStateWithLifecycle()
+                historyError?.let { message ->
+                    androidx.compose.material3.TextButton(onClick = {
+                        history.retry(session.controller.state.value)
+                    }) { Text(message) }
+                }
+            }
             if (!pip) {
                 if (!fullscreen) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {

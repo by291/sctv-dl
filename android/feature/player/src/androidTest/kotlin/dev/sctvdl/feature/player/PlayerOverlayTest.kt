@@ -35,8 +35,8 @@ class PlayerOverlayTest {
             val fullscreen = requireNotNull(device.findObject(By.desc("全屏播放")))
             assertTrue("PiP belongs at the top of the video", pip.visibleBounds.bottom <= timeline.visibleBounds.top)
             assertTrue(
-                "Fullscreen belongs below the timeline",
-                fullscreen.visibleBounds.top >= timeline.visibleBounds.bottom
+                "Fullscreen shares the compact transport row",
+                kotlin.math.abs(fullscreen.visibleBounds.centerY() - timeline.visibleBounds.centerY()) <= 4
             )
         }
     }

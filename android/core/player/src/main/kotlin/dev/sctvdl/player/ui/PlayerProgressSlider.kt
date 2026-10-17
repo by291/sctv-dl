@@ -23,47 +23,51 @@ import androidx.media3.ui.compose.indicators.ProgressIndicator
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayerProgressSlider(
-    player: Player,
+    state: dev.sctvdl.player.model.PlaybackState,
+    onSeek: (Long) -> Unit,
     interactionSource: MutableInteractionSource,
     onInteraction: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var widthPx by remember { mutableIntStateOf(0) }
+    var seeking by remember { mutableStateOf(false) }
+    var seekPosition by remember { mutableFloatStateOf(0f) }
+    val duration = state.durationMs
+    val enabled = duration != null && duration > 0
+    val colors = SliderDefaults.colors(
+        inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+        disabledInactiveTrackColor = Color.White.copy(alpha = 0.15f)
+    )
 
-    // Media3 owns progress updates and seeking; the native track only removes its default thumb gap.
-    ProgressIndicator(player, totalTickCount = widthPx) {
-        var seeking by remember(player) { mutableStateOf(false) }
-        var seekPosition by remember(player) { mutableFloatStateOf(0f) }
-        val colors = SliderDefaults.colors(
-            inactiveTrackColor = Color.White.copy(alpha = 0.3f),
-            disabledInactiveTrackColor = Color.White.copy(alpha = 0.15f)
-        )
-
-        Slider(
-            value = if (seeking) seekPosition else currentPositionProgress,
-            onValueChange = {
-                seeking = true
-                seekPosition = it
-                onInteraction()
-            },
-            onValueChangeFinished = {
-                updateCurrentPositionProgress(seekPosition)
-                seeking = false
-                onInteraction()
-            },
-            modifier = modifier.onSizeChanged { widthPx = it.width },
-            enabled = changingProgressEnabled,
-            colors = colors,
-            interactionSource = interactionSource,
-            track = { state ->
-                SliderDefaults.Track(
-                    sliderState = state,
-                    enabled = changingProgressEnabled,
-                    colors = colors,
-                    thumbTrackGapSize = 0.dp,
-                    drawStopIndicator = null
-                )
-            }
-        )
-    }
+    Slider(
+        value = if (seeking) {
+            seekPosition
+        } else if (enabled) {
+            (state.positionMs.toDouble() / duration).toFloat().coerceIn(0f, 1f)
+        } else {
+            0f
+        },
+        onValueChange = {
+            seeking = true
+            seekPosition = it
+            onInteraction()
+        },
+        onValueChangeFinished = {
+            duration?.let { onSeek((seekPosition * it).toLong()) }
+            seeking = false
+            onInteraction()
+        },
+        modifier = modifier,
+        enabled = enabled,
+        colors = colors,
+        interactionSource = interactionSource,
+        track = { slider ->
+            SliderDefaults.Track(
+                sliderState = slider,
+                enabled = enabled,
+                colors = colors,
+                thumbTrackGapSize = 0.dp,
+                drawStopIndicator = null
+            )
+        }
+    )
 }

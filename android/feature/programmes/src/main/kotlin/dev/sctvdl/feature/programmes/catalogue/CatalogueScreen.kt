@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -87,7 +88,8 @@ internal fun CatalogueScreen(
     onApplyUpdates: () -> Unit = {},
     catalogueScroll: LazyGridState = rememberLazyGridState(),
     favouritesScroll: LazyGridState = rememberLazyGridState(),
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onHistory: (() -> Unit)? = null
 ) {
     val rows = state.rows(favouritesOnly)
     val initialLoading = state.resource.data == null && state.resource.error == null
@@ -157,6 +159,9 @@ internal fun CatalogueScreen(
                 }
             },
             actions = {
+                if (!searching && onHistory != null) {
+                    IconButton(onClick = onHistory) { Icon(Icons.Outlined.History, "观看记录") }
+                }
                 if (state.hasUpdate) {
                     ContentUpdateAction(onUpdate = {
                         onApplyUpdates()

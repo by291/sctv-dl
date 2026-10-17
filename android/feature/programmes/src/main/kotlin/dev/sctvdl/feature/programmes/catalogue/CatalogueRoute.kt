@@ -13,7 +13,8 @@ fun CatalogueRoute(
     library: ProgrammeLibraryState,
     onOpenProgramme: (String) -> Unit,
     embedded: Boolean = false,
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onHistory: (() -> Unit)? = null
 ) {
     val model = library.model
     val state = library.state.value
@@ -36,6 +37,7 @@ fun CatalogueRoute(
         onApplyUpdates = model::applyUpdates,
         catalogueScroll = catalogueScroll,
         favouritesScroll = favouritesScroll,
-        bottomContentPadding = bottomContentPadding
+        bottomContentPadding = bottomContentPadding,
+        onHistory = onHistory
     )
 }

@@ -38,7 +38,8 @@ internal fun PlayerScreen(
                                     date,
                                     content,
                                     quality,
-                                    wifiOnly
+                                    wifiOnly,
+                                    state.selection
                                 )
                             )
                         )
@@ -47,7 +48,9 @@ internal fun PlayerScreen(
             },
             programmeName = state.programmeName,
             broadcastDate = state.broadcastDate,
-            host = host
+            host = host,
+            history = state.history,
+            coverUrl = state.content?.coverUrl ?: state.selection?.programme?.coverUrl
         )
     } else {
         Column {

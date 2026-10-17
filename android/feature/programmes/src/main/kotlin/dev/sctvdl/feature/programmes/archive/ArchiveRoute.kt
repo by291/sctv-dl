@@ -76,7 +76,8 @@ fun ArchiveRoute(
                                     date.id,
                                     content,
                                     archive.programme?.name ?: "节目",
-                                    date.date
+                                    date.date,
+                                    archive.programme?.coverUrl
                                 )
                             )
                         }

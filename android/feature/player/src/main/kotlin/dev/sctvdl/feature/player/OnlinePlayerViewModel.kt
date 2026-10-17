@@ -6,7 +6,10 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.ErrorKind
+import dev.sctvdl.domain.history.ViewingTarget
 import dev.sctvdl.domain.media.videoVariants
+import dev.sctvdl.domain.programme.ProgrammeSelection
+import dev.sctvdl.domain.repository.HistoryRepository
 import dev.sctvdl.domain.repository.ProgrammeRepository
 import dev.sctvdl.domain.repository.SettingsRepository
 import dev.sctvdl.player.model.PlaybackSource
@@ -23,7 +26,8 @@ import kotlinx.coroutines.launch
 internal class OnlinePlayerViewModel @Inject constructor(
     private val repository: ProgrammeRepository,
     private val settings: SettingsRepository,
-    private val saved: SavedStateHandle
+    private val saved: SavedStateHandle,
+    private val history: HistoryRepository
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PlayerUiState())
     val uiState = mutableState.asStateFlow()
@@ -47,6 +51,8 @@ internal class OnlinePlayerViewModel @Inject constructor(
             // Pin the accepted item so background metadata refreshes cannot change playback or download identity.
             var selectedContent = accepted?.content
             var source: PlaybackSource? = null
+            var recorder: PlaybackHistoryRecorder? = null
+            var context = accepted?.accepted
             var programmeName = accepted?.programmeName
             var broadcastDate = accepted?.broadcastDate
 
@@ -64,10 +70,28 @@ internal class OnlinePlayerViewModel @Inject constructor(
                 ->
                 val content = selectedContent ?: resource.data?.firstOrNull { it.id == contentId }
                 val variants = content?.let(::videoVariants).orEmpty()
+                if (context == null && content != null) {
+                    val programme = programmes.data?.firstOrNull { it.id == programmeId }
+                    val date = dates.data?.firstOrNull { it.id == dateId }
+                    if (programme != null && date != null) context = ProgrammeSelection(programme, date, content)
+                }
+                // Metadata may arrive after the source. Attach recording then without moving an already opened player.
+                val resume = if (recorder == null && context != null) {
+                    PlaybackHistoryRecorder(history, ViewingTarget.Online(requireNotNull(context)), viewModelScope)
+                        .also { recorder = it }.initialize()
+                } else {
+                    0L
+                }
                 if (source == null && content != null && variants.isNotEmpty()) {
                     selectedContent = content
                     source =
-                        PlaybackSource(content.id, content.title, variants, startPositionMs = saved["positionMs"] ?: 0L)
+                        PlaybackSource(
+                            content.id,
+                            content.title,
+                            variants,
+                            startPositionMs =
+                            saved["positionMs"] ?: resume
+                        )
                 }
                 if (programmeName == null) {
                     programmeName = programmes.data?.firstOrNull { it.id == programmeId }?.name
@@ -87,7 +111,9 @@ internal class OnlinePlayerViewModel @Inject constructor(
                     error,
                     preferences.initialQuality,
                     programmeName ?: "节目",
-                    broadcastDate
+                    broadcastDate,
+                    context,
+                    recorder
                 )
             }.collect { if (key == currentKey) mutableState.value = it }
         }

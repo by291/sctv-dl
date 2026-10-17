@@ -7,6 +7,7 @@ import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.programme.ProgrammeContent
 import dev.sctvdl.domain.repository.SettingsRepository
 import dev.sctvdl.domain.settings.AppSettings
+import dev.sctvdl.domain.testing.FakeHistory
 import dev.sctvdl.domain.testing.FakeProgrammes
 import dev.sctvdl.domain.testing.MainDispatcherRule
 import dev.sctvdl.feature.player.OnlinePlayerViewModel
@@ -39,7 +40,7 @@ class OnlinePlayerViewModelTest {
                 listOf(ProgrammeContent("100", "Accepted clip", standardUrl = "accepted.mp4"))
             )
         }
-        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle())
+        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle(), FakeHistory())
         model.open("1", "10", "100")
         runCurrent()
         repo.observeContents("1", "10").value = CachedResource(emptyList())
@@ -51,7 +52,7 @@ class OnlinePlayerViewModelTest {
 
     @Test fun displayedArchiveSelectionWinsOverNewerRepositoryRows() = runTest {
         val repo = FakeProgrammes().apply { observeContents("1", "10").value = CachedResource(emptyList()) }
-        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle())
+        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle(), FakeHistory())
         model.open(
             "1",
             "10",
@@ -78,7 +79,7 @@ class OnlinePlayerViewModelTest {
             observeContents("1", "11").value =
                 CachedResource(listOf(ProgrammeContent("101", "Current clip", standardUrl = "new.mp4")))
         }
-        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle())
+        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle(), FakeHistory())
         model.open(
             "1",
             "11",
@@ -99,7 +100,7 @@ class OnlinePlayerViewModelTest {
     @Test fun currentContentAndSavedPositionWinOverLateArchiveResponses() = runTest {
         val repo = FakeProgrammes()
         val saved = SavedStateHandle(mapOf("positionMs" to 8000L))
-        val model = OnlinePlayerViewModel(repo, settings, saved)
+        val model = OnlinePlayerViewModel(repo, settings, saved, FakeHistory())
         model.open("1", "10", "100")
         model.open("1", "11", "101")
         repo.observeContents(
@@ -149,7 +150,7 @@ class OnlinePlayerViewModelTest {
                 )
             )
         }
-        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle())
+        val model = OnlinePlayerViewModel(repo, settings, SavedStateHandle(), FakeHistory())
         model.open("1", "10", "100")
         runCurrent()
         assertEquals(ErrorKind.NoVideo, model.uiState.value.error?.kind)

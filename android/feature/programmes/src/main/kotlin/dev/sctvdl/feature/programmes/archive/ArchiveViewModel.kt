@@ -12,6 +12,7 @@ import dev.sctvdl.domain.media.videoVariants
 import dev.sctvdl.domain.programme.BroadcastDate
 import dev.sctvdl.domain.programme.Programme
 import dev.sctvdl.domain.programme.ProgrammeContent
+import dev.sctvdl.domain.programme.ProgrammeSelection
 import dev.sctvdl.domain.repository.FavouriteRepository
 import dev.sctvdl.domain.repository.ProgrammeRepository
 import dev.sctvdl.feature.programmes.presentation.AcceptedResourceState
@@ -307,7 +308,16 @@ internal class ArchiveViewModel @Inject constructor(
         return current.contents.data.orEmpty().filter {
             it.id in current.selectedIds &&
                 videoVariants(it).isNotEmpty()
-        }.map { DownloadRequest(current.programme?.name ?: "节目", date.date, it, quality, wifiOnly) }
+        }.map { content ->
+            DownloadRequest(
+                current.programme?.name ?: "节目",
+                date.date,
+                content,
+                quality,
+                wifiOnly,
+                current.programme?.let { ProgrammeSelection(it, date, content) }
+            )
+        }
     }
 
     private fun persistSelection() {

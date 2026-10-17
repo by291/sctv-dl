@@ -52,10 +52,21 @@ private class ExoBackend(context: Context) : PlaybackBackend {
     private val session = MediaSession.Builder(context, player)
         .setId(java.util.UUID.randomUUID().toString())
         .build()
+    private var firstFrameRendered = false
+    private var externalPlayback: ((Boolean) -> Unit)? = null
     private var callback: ((Long, PlaybackBackendSnapshot) -> Unit)? = null
 
     init {
         player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                externalPlayback?.invoke(playWhenReady)
+            }
+
+            override fun onRenderedFirstFrame() {
+                firstFrameRendered = true
+                player.currentMediaItem?.mediaId?.toLongOrNull()?.let { callback?.invoke(it, snapshot()) }
+            }
+
             override fun onEvents(player: Player, events: Player.Events) {
                 player.currentMediaItem?.mediaId?.toLongOrNull()?.let {
                     callback?.invoke(it, snapshot())
@@ -80,7 +91,12 @@ private class ExoBackend(context: Context) : PlaybackBackend {
         callback = listener
     }
 
+    override fun setExternalPlaybackListener(listener: (Boolean) -> Unit) {
+        externalPlayback = listener
+    }
+
     override fun setMedia(uri: String, token: Long, positionMs: Long) {
+        firstFrameRendered = false
         player.setMediaItem(
             MediaItem.Builder().setUri(uri).setMediaId(token.toString()).build(),
             positionMs
@@ -101,11 +117,15 @@ private class ExoBackend(context: Context) : PlaybackBackend {
         player.playbackState == Player.STATE_BUFFERING,
         player.playerError?.let {
             "播放失败，请重试或切换清晰度"
-        }
+        },
+        ready = player.playbackState == Player.STATE_READY,
+        ended = player.playbackState == Player.STATE_ENDED,
+        firstFrameRendered = firstFrameRendered
     )
 
     override fun release() {
         callback = null
+        externalPlayback = null
         session.release()
         player.release()
     }

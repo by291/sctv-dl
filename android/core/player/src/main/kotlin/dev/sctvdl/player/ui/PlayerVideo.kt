@@ -55,8 +55,11 @@ fun PlayerVideo(
     onFullscreen: () -> Unit,
     onPip: (() -> Unit)?,
     onRetry: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    controlsEnabled: Boolean = true
+    controlsEnabled: Boolean = true,
+    placeholder: (@Composable () -> Unit)? = null
 ) {
     var controlsVisible by remember(player) { mutableStateOf(true) }
     var interacting by remember(player) { mutableStateOf(false) }
@@ -110,12 +113,13 @@ fun PlayerVideo(
     ) {
         val menuMaxHeight = (maxHeight - 64.dp).coerceAtLeast(48.dp)
         VideoSurface(player, Modifier.fillMaxSize())
+        if (!state.firstFrameRendered) placeholder?.invoke()
         if (showControls) {
             Box(
                 Modifier.fillMaxSize().focusGroup()
             ) {
                 Box(
-                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(min = 144.dp)
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(min = 96.dp)
                         .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))))
                 )
                 onPip?.let { action ->
@@ -137,8 +141,9 @@ fun PlayerVideo(
                 }
                 Box(Modifier.align(Alignment.BottomCenter)) {
                     PlayerControls(
-                        player,
                         state,
+                        onTogglePlay,
+                        onSeek,
                         onQuality,
                         onSpeed,
                         fullscreen,
@@ -152,6 +157,14 @@ fun PlayerVideo(
         }
         if (state.buffering && controlsEnabled) {
             CircularProgressIndicator(Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.primary)
+        }
+        state.notice?.takeIf { controlsEnabled && state.error == null }?.let { notice ->
+            Text(
+                notice,
+                Modifier.align(Alignment.TopStart).padding(top = 8.dp, start = 16.dp, end = 60.dp),
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium
+            )
         }
         state.error?.takeIf { controlsEnabled }?.let { error ->
             // Keep recovery above the transport row so quality/fullscreen remain reachable.

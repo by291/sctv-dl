@@ -13,5 +13,7 @@ internal data class PlayerUiState(
     val error: AppError? = null,
     val initialQuality: Quality = Quality.Standard,
     val programmeName: String = "节目",
-    val broadcastDate: LocalDate? = null
+    val broadcastDate: LocalDate? = null,
+    val selection: dev.sctvdl.domain.programme.ProgrammeSelection? = null,
+    val history: PlaybackHistoryRecorder? = null
 )
