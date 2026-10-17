@@ -7,6 +7,7 @@ import '../../design/state_panel.dart';
 import '../../domain/playback/history_repository.dart';
 import '../../domain/programmes/programme.dart';
 import 'library_controller.dart';
+import 'components/history_card.dart';
 
 class LibraryPage extends StatefulWidget {
   const LibraryPage({
@@ -37,6 +38,7 @@ class _LibraryPageState extends State<LibraryPage>
   final _restoredSorts = List.generate(3, (_) => RestorableBool(false));
   final _restoredSearch = List.generate(3, (_) => RestorableBool(false));
   final _restoredTab = RestorableInt(0);
+  final _removingHistory = <String>{};
   late final _historyChanges = widget.history.watchHistory();
 
   @override
@@ -161,12 +163,24 @@ class _LibraryPageState extends State<LibraryPage>
                       },
                       onSubmitted: (_) => _focus.unfocus(),
                     )
-                  : const Row(
+                  : Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.live_tv_rounded),
-                        SizedBox(width: 10),
-                        Text('sctv-dl'),
+                        if (MediaQuery.textScalerOf(context).scale(1) <
+                            1.5) ...[
+                          Icon(
+                            Icons.live_tv_rounded,
+                            color: Theme.of(context).iconTheme.color,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        const Flexible(
+                          child: Text(
+                            'sctv-dl',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
               actions: [
@@ -318,7 +332,8 @@ class _LibraryPageState extends State<LibraryPage>
                           columns *
                           9 /
                           16 +
-                      (largeText ? 112 : 82),
+                      (MediaQuery.textScalerOf(context).scale(16) * 1.5 * 2 +
+                          20),
                 ),
                 itemBuilder: (context, index) => ProgrammeCard(
                   programme: items[index],
@@ -335,64 +350,130 @@ class _LibraryPageState extends State<LibraryPage>
     );
   }
 
-  Widget _exploration(Programme programme) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final text = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '栏目探索',
-                style: Theme.of(context).textTheme.labelLarge
-                    ?.copyWith(color: Theme.of(context).colorScheme.primary),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                programme.name,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 4,
-                children: [
-                  TextButton(
-                    onPressed: () => widget.onOpenProgramme(programme),
-                    child: const Text('查看节目'),
-                  ),
-                  TextButton(
-                    onPressed: controller.programmes.length > 1
-                        ? controller.shuffleFeatured
-                        : null,
-                    child: const Text('换一个'),
-                  ),
-                ],
-              ),
-            ],
-          );
-          if (MediaQuery.textScalerOf(context).scale(1) >= 1.5) return text;
-          return Row(
-            children: [
-              Expanded(child: text),
-              const SizedBox(width: 20),
-              SizedBox(
-                width: constraints.maxWidth * .44,
-                child: Transform.rotate(
-                  angle: -.055,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: CoverImage(url: programme.cover),
-                  ),
+  Widget _exploration(Programme programme) {
+    final colours = Theme.of(context).colorScheme;
+    final typography = Theme.of(context).textTheme;
+    return Card(
+      color: colours.primaryContainer.withValues(alpha: .35),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
+            final wide = constraints.maxWidth >= 480;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '栏目探索',
+                            style: typography.labelLarge?.copyWith(
+                              color: colours.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            programme.name,
+                            maxLines: largeText ? 4 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: typography.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (wide) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '发现一个栏目，回看整期节目或精彩片段。',
+                              style: typography.bodyMedium?.copyWith(
+                                color: colours.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (!largeText) ...[
+                      const SizedBox(width: 16),
+                      Transform.rotate(
+                        angle: -.0872665,
+                        child: Container(
+                          width: wide
+                              ? 240
+                              : (constraints.maxWidth * .46).clamp(112, 160),
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: colours.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: colours.shadow.withValues(alpha: .12),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CoverImage(url: programme.cover),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-            ],
-          );
-        },
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colours.primaryContainer,
+                        foregroundColor: colours.onPrimaryContainer,
+                      ),
+                      onPressed: () => widget.onOpenProgramme(programme),
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      label: const Text('查看节目'),
+                    ),
+                    TextButton.icon(
+                      onPressed: controller.programmes.length > 1
+                          ? controller.shuffleFeatured
+                          : null,
+                      icon: const Icon(Icons.shuffle_rounded, size: 18),
+                      label: const Text('换一个'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  Future<void> _removeHistory(ViewingEntry entry) async {
+    final key = entry.selection.ref.key;
+    if (!_removingHistory.add(key)) return;
+    setState(() {});
+    try {
+      await widget.history.remove(entry.selection.ref);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('移除失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _removingHistory.remove(key));
+    }
+  }
 
   Widget _history() => StreamBuilder<List<ViewingEntry>>(
     stream: _historyChanges,
@@ -410,6 +491,15 @@ class _LibraryPageState extends State<LibraryPage>
                     .contains(query),
           )
           .toList();
+      if (items.isEmpty && query.isNotEmpty) {
+        return StatePanel(
+          title: '没有匹配的观看记录',
+          message: '试试节目名称，或清除搜索查看全部记录。',
+          icon: Icons.search_off_rounded,
+          actionLabel: '清除搜索',
+          onAction: _closeSearch,
+        );
+      }
       if (items.isEmpty) {
         return const StatePanel(
           title: '暂无观看记录',
@@ -425,28 +515,13 @@ class _LibraryPageState extends State<LibraryPage>
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
           final entry = items[index];
-          return Card(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              onTap: () => widget.onOpenHistory(entry),
-              leading: const Icon(Icons.play_circle_outline),
-              title: Text(
-                entry.selection.content.title,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${entry.selection.broadcast.date} · ${entry.completed ? '已看完' : '继续观看 ${entry.position.inMinutes}:${(entry.position.inSeconds % 60).toString().padLeft(2, '0')}'}',
-              ),
-              trailing: IconButton(
-                tooltip: '移除观看记录',
-                icon: const Icon(Icons.close),
-                onPressed: () => widget.history.remove(entry.selection.ref),
-              ),
-            ),
+          return HistoryCard(
+            key: ValueKey(entry.selection.ref.key),
+            entry: entry,
+            onOpen: () => widget.onOpenHistory(entry),
+            onRemove: _removingHistory.contains(entry.selection.ref.key)
+                ? null
+                : () => unawaited(_removeHistory(entry)),
           );
         },
       );
@@ -468,41 +543,52 @@ class ProgrammeCard extends StatelessWidget {
   final VoidCallback onFavourite;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      onTap: onOpen,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CoverImage(url: programme.cover),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 2, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      programme.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ),
-                  IconButton(
+  Widget build(BuildContext context) {
+    final colours = Theme.of(context).colorScheme;
+    return Card(
+      child: InkWell(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Stack(
+              children: [
+                CoverImage(url: programme.cover),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton.filledTonal(
                     tooltip: favourite
                         ? '取消收藏 ${programme.name}'
                         : '收藏 ${programme.name}',
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      backgroundColor: colours.surface.withValues(alpha: .94),
+                      foregroundColor: favourite
+                          ? colours.primary
+                          : colours.onSurfaceVariant,
+                    ),
                     isSelected: favourite,
                     onPressed: onFavourite,
-                    icon: const Icon(Icons.favorite_border),
-                    selectedIcon: const Icon(Icons.favorite),
+                    icon: const Icon(Icons.favorite_border, size: 22),
+                    selectedIcon: const Icon(Icons.favorite, size: 22),
                   ),
-                ],
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Text(
+                programme.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(height: 1.5),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

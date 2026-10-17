@@ -7,6 +7,7 @@ import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
 import 'archive_controller.dart';
+import 'components/broadcast_dates.dart';
 import 'library_controller.dart';
 
 class ArchivePage extends StatefulWidget {
@@ -280,17 +281,16 @@ class _ArchivePageState extends State<ArchivePage>
       );
     }
     final selected = controller.selectedDate;
-    final recent = controller.dates.take(7).toList();
-    if (selected != null && !recent.any((date) => date.id == selected.id)) {
-      recent.add(selected);
-    }
     return CustomScrollView(
       controller: _scroll,
       restorationId: 'broadcast-content',
       slivers: [
         if (!controller.selectionMode)
           SliverToBoxAdapter(
-            child: Padding(padding: const EdgeInsets.all(16), child: _header()),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: _header(),
+            ),
           ),
         if (controller.error case final error?)
           SliverPadding(
@@ -321,39 +321,12 @@ class _ArchivePageState extends State<ArchivePage>
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '播出日期',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final date in recent)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  label: Text(date.date),
-                                  selected: date.id == selected?.id,
-                                  onSelected: (_) =>
-                                      unawaited(_selectDate(date)),
-                                ),
-                              ),
-                            if (controller.dates.isNotEmpty)
-                              TextButton.icon(
-                                onPressed: _chooseDate,
-                                icon: const Icon(Icons.calendar_month_outlined),
-                                label: const Text('更多日期'),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: BroadcastDates(
+                    dates: controller.dates,
+                    selected: selected,
+                    onSelected: (date) => unawaited(_selectDate(date)),
+                    onMore: _chooseDate,
                   ),
                 ),
         ),
@@ -361,9 +334,22 @@ class _ArchivePageState extends State<ArchivePage>
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             sliver: SliverToBoxAdapter(
-              child: Text(
-                '${selected.date} · ${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
-                style: Theme.of(context).textTheme.titleMedium,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    selected.date,
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -411,8 +397,9 @@ class _ArchivePageState extends State<ArchivePage>
                       onPressed: controller.selectionMode
                           ? null
                           : _action(controller.toggleSort),
-                      icon: Icon(
-                        controller.ascending ? Icons.sort : Icons.sort_by_alpha,
+                      icon: Transform.flip(
+                        flipY: controller.ascending,
+                        child: const Icon(Icons.sort),
                       ),
                     ),
                   ],
@@ -443,11 +430,22 @@ class _ArchivePageState extends State<ArchivePage>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(programme.name, style: Theme.of(context).textTheme.headlineSmall),
+        Text(
+          programme.name,
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         TextButton.icon(
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            alignment: Alignment.centerLeft,
+          ),
           onPressed: () => widget.library.toggleFavourite(programme.id),
-          icon: Icon(favourite ? Icons.favorite : Icons.favorite_border),
+          icon: Icon(
+            favourite ? Icons.favorite : Icons.favorite_border,
+            size: 18,
+          ),
           label: Text(favourite ? '已收藏' : '收藏栏目'),
         ),
       ],
@@ -456,23 +454,20 @@ class _ArchivePageState extends State<ArchivePage>
       builder: (context, constraints) {
         if (MediaQuery.textScalerOf(context).scale(1) >= 1.5) return details;
         final cover = ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: CoverImage(url: programme.cover),
         );
-        if (constraints.maxWidth < 360) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [cover, const SizedBox(height: 16), details],
-          );
-        }
+        final compact = constraints.maxWidth < 348;
+        final gap = compact ? 12.0 : 16.0;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: (constraints.maxWidth * .6).clamp(0, 360),
+              width: ((constraints.maxWidth - gap) * (compact ? .52 : .54))
+                  .clamp(0, 256),
               child: cover,
             ),
-            const SizedBox(width: 20),
+            SizedBox(width: gap),
             Expanded(child: details),
           ],
         );
@@ -557,7 +552,7 @@ class _ArchivePageState extends State<ArchivePage>
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _playArtwork(item.cover, playable),
+              _playArtwork(item.cover, playable, fullEpisode: true),
               Padding(padding: const EdgeInsets.all(16), child: details),
             ],
           )
@@ -567,7 +562,7 @@ class _ArchivePageState extends State<ArchivePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 112,
+                  width: 104,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: _playArtwork(item.cover, playable),
@@ -608,25 +603,29 @@ class _ArchivePageState extends State<ArchivePage>
     );
   }
 
-  Widget _playArtwork(String? url, bool playable) => Stack(
-    alignment: Alignment.center,
-    children: [
-      CoverImage(url: url),
-      if (playable)
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.black45,
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(5),
-            child: Icon(
-              Icons.play_arrow_rounded,
-              color: Colors.white,
-              size: 30,
+  Widget _playArtwork(String? url, bool playable, {bool fullEpisode = false}) =>
+      Stack(
+        children: [
+          CoverImage(url: url, aspectRatio: fullEpisode ? 16 / 9 : 4 / 3),
+          if (playable)
+            Positioned(
+              right: fullEpisode ? 12 : 6,
+              bottom: fullEpisode ? 12 : 6,
+              child: Container(
+                width: fullEpisode ? 40 : 28,
+                height: fullEpisode ? 40 : 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Theme.of(context).colorScheme.surface
+                      .withValues(alpha: .94),
+                ),
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: fullEpisode ? 24 : 18,
+                ),
+              ),
             ),
-          ),
-        ),
-    ],
-  );
+        ],
+      );
 }

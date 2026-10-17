@@ -14,14 +14,20 @@ import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
 import '../../support/fakes.dart';
 
 class EmptyHistory implements HistoryRepository {
+  EmptyHistory({this.entries = const [], this.removeError});
+  final List<ViewingEntry> entries;
+  final Object? removeError;
   @override
-  Future<List<ViewingEntry>> loadHistory() async => [];
+  Future<List<ViewingEntry>> loadHistory() async => entries;
   @override
-  Stream<List<ViewingEntry>> watchHistory() => Stream.value([]);
+  Stream<List<ViewingEntry>> watchHistory() => Stream.value(entries);
   @override
   Future<void> save(ViewingEntry entry) async {}
   @override
-  Future<void> remove(ContentRef ref) async {}
+  Future<void> remove(ContentRef ref) async {
+    if (removeError case final error?) throw error;
+  }
+
   @override
   Future<void> clear() async {}
 }
@@ -45,6 +51,185 @@ Widget host(
 
 void main() {
   const programme = Programme(id: '1', name: '四川新闻');
+  testWidgets(
+    'history search can recover and removal failures keep playback available',
+    (tester) async {
+      final entry = ViewingEntry(
+        selection: const ProgrammeSelection(
+          programme: programme,
+          broadcast: BroadcastDate(id: '2', date: '2026-10-16'),
+          content: ProgrammeContent(id: '3', title: '晚间新闻'),
+        ),
+        position: const Duration(minutes: 4),
+        duration: const Duration(minutes: 20),
+        viewedAt: DateTime(2026, 10, 17),
+      );
+      final repository = FakeProgrammeRepository()
+        ..catalogue = snapshot([programme], 'one');
+      final user = FakeUserRepository();
+      final controller = LibraryController(
+        repository: repository,
+        user: user,
+        initialFavourites: {},
+      );
+      addTearDown(controller.dispose);
+      addTearDown(user.close);
+      ViewingEntry? opened;
+      await tester.pumpWidget(
+        host(
+          LibraryPage(
+            controller: controller,
+            history: EmptyHistory(
+              entries: [entry],
+              removeError: StateError('storage unavailable'),
+            ),
+            onOpenProgramme: (_) {},
+            onOpenHistory: (value) => opened = value,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('最近观看'));
+      await tester.pumpAndSettle();
+      controller.setQuery(LibraryTab.history, '不存在');
+      await tester.pumpAndSettle();
+      expect(find.text('暂无观看记录'), findsNothing);
+      await tester.tap(find.text('清除搜索'));
+      await tester.pumpAndSettle();
+      expect(controller.query(LibraryTab.history), isEmpty);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byType(LinearProgressIndicator),
+            )
+            .value,
+        .2,
+      );
+      await tester.tap(find.byTooltip('移除观看记录'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('晚间新闻'));
+      expect(opened, same(entry));
+    },
+  );
+
+  for (final layout in [(320.0, 1.0), (320.0, 2.0), (840.0, 1.0)]) {
+    testWidgets(
+      'favourite stays independent of opening a programme at layout $layout',
+      (tester) async {
+        tester.view.physicalSize = Size(layout.$1, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        const longProgramme = Programme(id: '1', name: '四川新闻联播与精彩节目回看');
+        final repository = FakeProgrammeRepository()
+          ..catalogue = snapshot([longProgramme], 'one');
+        final user = FakeUserRepository();
+        final controller = LibraryController(
+          repository: repository,
+          user: user,
+          initialFavourites: {},
+        );
+        addTearDown(controller.dispose);
+        addTearDown(user.close);
+        var opened = 0;
+        await tester.pumpWidget(
+          host(
+            LibraryPage(
+              controller: controller,
+              history: EmptyHistory(),
+              onOpenProgramme: (_) => opened++,
+              onOpenHistory: (_) {},
+            ),
+            scale: layout.$2,
+            brightness: Brightness.dark,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final favourite = find.byTooltip('收藏 ${longProgramme.name}');
+        await tester.ensureVisible(favourite);
+        await tester.tap(favourite);
+        await tester.pumpAndSettle();
+
+        expect(controller.favourites, contains('1'));
+        expect(opened, 0);
+        final title = find.descendant(
+          of: find.byType(ProgrammeCard),
+          matching: find.text(longProgramme.name),
+        );
+        await tester.ensureVisible(title);
+        await tester.tap(title);
+        expect(opened, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'the full date chooser is reachable and keeps an older selection visible',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = FakeProgrammeRepository()
+        ..dates = snapshot([
+          for (var day = 16; day >= 9; day--)
+            BroadcastDate(
+              id: '$day',
+              date: '2026-10-${day.toString().padLeft(2, '0')}',
+            ),
+        ], 'dates');
+      final user = FakeUserRepository();
+      addTearDown(user.close);
+      final library = LibraryController(
+        repository: repository,
+        user: user,
+        initialFavourites: {},
+      );
+      addTearDown(library.dispose);
+      final archive = ArchiveController(
+        repository: repository,
+        programme: programme,
+      );
+      await tester.pumpWidget(
+        host(
+          ArchivePage(
+            controller: archive,
+            library: library,
+            onPlay: (_) {},
+            onDownload: (_) async {},
+            onOpenProgramme: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final more = find.text('更多日期').hitTestable();
+      expect(more, findsOneWidget);
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+      final older = find.text('2026-10-09');
+      await tester.scrollUntilVisible(
+        older,
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(older);
+      await tester.pumpAndSettle();
+
+      expect(archive.selectedDate?.id, '9');
+      expect(find.text('选择播出日期'), findsNothing);
+      final selected = find.byWidgetPredicate(
+        (widget) => widget is ChoiceChip && widget.selected,
+      );
+      expect(selected.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'search keeps focus and tab filters do not leak into favourites',
     (tester) async {
@@ -198,7 +383,7 @@ void main() {
         host(_RestorableArchive(repository: repository, user: user)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('2026-10-15'));
+      await tester.tap(find.widgetWithText(ChoiceChip, '10月15日'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('批量下载'));
       await tester.pumpAndSettle();

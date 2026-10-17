@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../design/theme.dart';
 import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
@@ -278,13 +279,41 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         !controller.switchingSource &&
         !controller.canRetry;
     final accessible = MediaQuery.accessibleNavigationOf(context);
+    final controlsTheme = buildAppTheme(Brightness.dark);
+    final accent = controlsTheme.colorScheme.primary;
     return Focus(
       onFocusChange: (focused) =>
           controller.holdControls(focused || accessible),
       child: Theme(
-        data: ThemeData.dark(useMaterial3: true),
-        child: DefaultTextStyle.merge(
-          style: const TextStyle(color: Colors.white),
+        data: controlsTheme.copyWith(
+          iconTheme: const IconThemeData(color: Colors.white),
+          iconButtonTheme: IconButtonThemeData(
+            style: IconButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.white.withValues(alpha: .12),
+            ),
+          ),
+          sliderTheme: SliderThemeData(
+            activeTrackColor: accent,
+            inactiveTrackColor: Colors.white.withValues(alpha: .3),
+            thumbColor: accent,
+            overlayColor: accent.withValues(alpha: .16),
+            trackHeight: 3,
+          ),
+          popupMenuTheme: PopupMenuThemeData(
+            color: controlsTheme.colorScheme.surfaceContainerLow.withValues(
+              alpha: .96,
+            ),
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        child: DefaultTextStyle(
+          style: controlsTheme.textTheme.bodyMedium!.copyWith(
+            color: Colors.white,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact =
@@ -475,7 +504,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     },
     itemBuilder: (_) => [
       for (final value in values)
-        PopupMenuItem(value: value, child: Text(describe(value))),
+        PopupMenuItem(
+          value: value,
+          child: Row(
+            children: [
+              Expanded(child: Text(describe(value))),
+              if (value == selected) const Icon(Icons.check_rounded, size: 18),
+            ],
+          ),
+        ),
     ],
     child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 48, minWidth: 64),
