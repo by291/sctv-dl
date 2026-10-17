@@ -36,8 +36,17 @@ export function useContentSelection(
       .map((item) => item.id)
   }
 
+  watch(
+    selectedDate,
+    () => {
+      selected.value = []
+    },
+    { flush: 'sync' },
+  )
+
   watch(contents, () => {
-    selected.value = []
+    const ids = new Set(available.value.map((item) => item.id))
+    selected.value = selected.value.filter((id) => ids.has(id))
   })
 
   return {

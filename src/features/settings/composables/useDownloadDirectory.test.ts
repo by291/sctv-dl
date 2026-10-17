@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { createNativeDownloadFixture } from '@/shared/platform/platform.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
@@ -28,6 +29,7 @@ function deferred<T>() {
 
 function nativeDownloads(overrides: Partial<NativeDownloadPort> = {}): NativeDownloadPort {
   return {
+    ...createNativeDownloadFixture(),
     kind: 'native',
     getDirectory: async () => '/initial',
     chooseDirectory: async () => '/selected',

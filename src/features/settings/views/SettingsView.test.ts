@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
+import { createNativeDownloadFixture } from '@/shared/platform/platform.test-support'
 import { afterEach, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { NPopconfirm } from 'naive-ui'
 
 import SettingsView from '@/features/settings/views/SettingsView.vue'
 import { createPlatformFixture } from '@/shared/platform/platform.test-support'
@@ -24,6 +26,7 @@ it('keeps browser directory management and offers recoverable native selection',
   wrapper.unmount()
   let selected: string | null = null
   platform.downloads = {
+    ...createNativeDownloadFixture(),
     kind: 'native',
     getDirectory: async () => {
       throw new Error('Directory unavailable')
@@ -63,6 +66,7 @@ it.each(['success', 'failure'])(
       reject = fail
     })
     platform.downloads = {
+      ...createNativeDownloadFixture(),
       kind: 'native',
       getDirectory: () => initial,
       chooseDirectory: async () => '/new/directory',
@@ -92,3 +96,30 @@ it.each(['success', 'failure'])(
     expect(wrapper.text()).not.toContain('Obsolete directory error')
   },
 )
+
+it('clears only programme metadata after confirmation and keeps user data', async () => {
+  const platform = createPlatformFixture()
+  let clears = 0
+  platform.programmeCache.clear = async () => {
+    clears += 1
+
+    return { epoch: 'next' }
+  }
+
+  const pinia = createPinia()
+  wrapper = mount(SettingsView, {
+    global: { plugins: [pinia], provide: { [platformKey as symbol]: platform } },
+  })
+  await flushPromises()
+  const action = wrapper.findAll('button').find((button) => button.text() === '清除节目缓存')
+  expect(action).toBeDefined()
+  await action!.trigger('click')
+  expect(clears).toBe(0)
+  const confirm = wrapper
+    .findAllComponents(NPopconfirm)
+    .find((component) => component.text().includes('清除节目缓存'))!
+  confirm.vm.$emit('positive-click')
+  await flushPromises()
+  expect(clears).toBe(1)
+  expect(wrapper.text()).toContain('节目缓存已清除')
+})

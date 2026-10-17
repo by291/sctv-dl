@@ -171,5 +171,14 @@ export const useSettingsStore = defineStore('settings', () => {
     port = undefined
   })
 
-  return { quality, theme, favourites, persisted, toggleFavourite, hydrate, flush }
+  return {
+    quality,
+    theme,
+    favourites,
+    persisted,
+    toggleFavourite,
+    hydrate,
+    flush,
+    getWriteRevision: () => localEditRevision,
+  }
 })
