@@ -14,6 +14,7 @@ import time
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True, help="Disposable emulator serial")
+    parser.add_argument("--pages", action="store_true", help="Verify player and history routes")
     args = parser.parse_args()
     if not args.device.startswith("emulator-"):
         parser.error("Use a disposable emulator, not a personal device")
@@ -35,7 +36,7 @@ def main():
 
     process = subprocess.Popen([
         "flutter", "drive", "--driver=test_driver/integration_test.dart",
-        "--target=integration_test/predictive_back_test.dart", "-d", args.device,
+        "--target=integration_test/page_motion_test.dart" if args.pages else "--target=integration_test/predictive_back_test.dart", "-d", args.device,
         "--dart-define=PREDICTIVE_BACK_SMOKE=true",
     ], cwd=Path(__file__).resolve().parents[1], stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, bufsize=0)
@@ -57,8 +58,8 @@ def main():
                     line, pending = pending.split(b"\n", 1)
                     line = line.decode(errors="replace")
                     print(line, flush=True)
-                    ready = re.search(r"PREDICTIVE_READY:(grid|exploration|scrolled):(left|right):(cancel|commit)", line)
-                    captured = re.search(r"PREDICTIVE_CAPTURED:(grid|exploration|scrolled):(left|right):(cancel|commit)", line)
+                    ready = re.search(r"PREDICTIVE_READY:(grid|exploration|scrolled|player|history):(left|right):(cancel|commit)", line)
+                    captured = re.search(r"PREDICTIVE_CAPTURED:(grid|exploration|scrolled|player|history):(left|right):(cancel|commit)", line)
                     if ready:
                         active = ready.groups()
                         _, edge, _ = active
@@ -85,9 +86,10 @@ def main():
             if process.poll() is not None and not selector.get_map():
                 if process.returncode != 0:
                     raise RuntimeError(f"Flutter integration failed: {process.returncode}")
-                if len(completed) != 6:
-                    raise RuntimeError(f"Expected six system gestures, observed {completed}")
-                print("Verified grid, exploration and scrolled return through Android system gestures.")
+                expected = 8 if args.pages else 6
+                if len(completed) != expected:
+                    raise RuntimeError(f"Expected {expected} system gestures, observed {completed}")
+                print("Verified cancellation and completion through Android system gestures.")
                 return
         raise TimeoutError("Predictive-back verification exceeded ten minutes")
     finally:

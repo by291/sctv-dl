@@ -15,7 +15,11 @@ class ArchiveMotionCurve extends Curve {
       navigator.userGestureInProgress ? t : Curves.fastOutSlowIn.transform(t);
 }
 
-/// Shared archive/playback motion with the previous route retained underneath.
+/// Complements the departing page with artwork during a video return.
+double archiveOutgoingOpacity(double elapsed) =>
+    1 - const Cubic(.4, 0, 1, 1).transform((elapsed / .35).clamp(0.0, 1.0));
+
+/// Shared secondary-page motion with the previous route retained underneath.
 class ArchiveTransitionPage<T> extends Page<T> {
   const ArchiveTransitionPage({
     super.key,
@@ -45,6 +49,14 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
        );
 
   final bool cupertino;
+  late final _backObserver = _AndroidBackGestureObserver(this);
+
+  @override
+  void install() {
+    super.install();
+    if (!cupertino) WidgetsBinding.instance.addObserver(_backObserver);
+  }
+
   final _motion = ValueNotifier<(bool returning, double direction)>((false, 1));
   NavigatorState? _gestureNavigator;
   AnimationStatusListener? _settleListener;
@@ -150,6 +162,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
     // Removal can interrupt dragging or cancellation before the controller's
     // terminal status. Release the retained navigator's input lock either way.
     _finishBackGesture();
+    if (!cupertino) WidgetsBinding.instance.removeObserver(_backObserver);
     _motion.dispose();
     super.dispose();
   }
@@ -171,48 +184,32 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
         child,
       );
     }
-    return _AndroidArchiveTransition(
-      route: this,
-      child: _ArchivePageMotion(
-        animation: animation,
-        motion: _motion,
-        navigator: navigator!,
-        previous: false,
-        child: child,
-      ),
+    return _ArchivePageMotion(
+      animation: animation,
+      motion: _motion,
+      navigator: navigator!,
+      previous: false,
+      child: child,
     );
   }
 }
 
 /// System back events drive the same slide/fade as ordinary archive navigation.
 /// Flutter still owns route eligibility, gesture completion and route disposal.
-class _AndroidArchiveTransition extends StatefulWidget {
-  const _AndroidArchiveTransition({required this.route, required this.child});
+class _AndroidBackGestureObserver with WidgetsBindingObserver {
+  _AndroidBackGestureObserver(this.route);
 
+  // Route lifetime is stable when a delegated transition replaces its widget
+  // subtree. Removing a widget-owned observer mid-drag makes the system commit
+  // fall back to popping the newly opened page instead of settling this one.
   final _ArchiveRoute<dynamic> route;
-  final Widget child;
-
-  @override
-  State<_AndroidArchiveTransition> createState() =>
-      _AndroidArchiveTransitionState();
-}
-
-class _AndroidArchiveTransitionState extends State<_AndroidArchiveTransition>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
 
   @override
   bool handleStartBackGesture(PredictiveBackEvent event) {
-    if (event.isButtonEvent ||
-        !widget.route.isCurrent ||
-        !widget.route.popGestureEnabled) {
+    if (event.isButtonEvent || !route.isCurrent || !route.popGestureEnabled) {
       return false;
     }
-    widget.route.handleStartBackGesture(
+    route.handleStartBackGesture(
       progress: 1 - event.progress,
       direction: event.swipeEdge == SwipeEdge.left ? 1 : -1,
     );
@@ -221,23 +218,14 @@ class _AndroidArchiveTransitionState extends State<_AndroidArchiveTransition>
 
   @override
   void handleUpdateBackGestureProgress(PredictiveBackEvent event) {
-    widget.route.handleUpdateBackGestureProgress(progress: 1 - event.progress);
+    route.handleUpdateBackGestureProgress(progress: 1 - event.progress);
   }
 
   @override
-  void handleCancelBackGesture() => widget.route.handleCancelBackGesture();
+  void handleCancelBackGesture() => route.handleCancelBackGesture();
 
   @override
-  void handleCommitBackGesture() => widget.route.handleCommitBackGesture();
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
+  void handleCommitBackGesture() => route.handleCommitBackGesture();
 }
 
 /// Both pages seek one route clock, including a reversed/cancelled gesture.
@@ -281,13 +269,7 @@ class _ArchivePageMotion extends StatelessWidget {
               .2,
               1,
             ).transform(((elapsed - .35) / .65).clamp(0.0, 1.0))
-          : 1 -
-                const Cubic(
-                  .4,
-                  0,
-                  1,
-                  1,
-                ).transform((elapsed / .35).clamp(0.0, 1.0));
+          : archiveOutgoingOpacity(elapsed);
       final travel = ArchiveMotionCurve(navigator).transform(progress);
       final translated = Transform.translate(
         offset: Offset(

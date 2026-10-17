@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sctv_dl_mobile/design/shared_cover.dart';
+import 'package:sctv_dl_mobile/design/archive_transition.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +10,137 @@ import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'playback_controller_test.dart' as fixtures;
 
 void main() {
+  testWidgets('return cover complements video and reverses without seeking', (
+    tester,
+  ) async {
+    final session = fixtures.FakeSession()
+      ..emit(firstFrameRendered: true, position: const Duration(seconds: 42));
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: nav,
+        theme: ThemeData(platform: TargetPlatform.android),
+        home: const Scaffold(
+          body: SizedBox(
+            width: 160,
+            height: 90,
+            child: SharedCover(tag: 'playback-1/2/3', url: null),
+          ),
+        ),
+      ),
+    );
+    final route = ArchiveTransitionPage<void>(
+      child: PlayerPage(
+        input: fixtures.input,
+        backend: fixtures.FakeBackend(session),
+        history: fixtures.MemoryHistory(),
+        surfaceBuilder: (_) => const ColoredBox(color: Colors.green),
+      ),
+    ).createRoute(nav.currentContext!) as PageRoute<void>;
+    nav.currentState!.push(route);
+    await tester.pumpAndSettle();
+    final page = find.byType(PlayerPage);
+    final state = tester.state(page);
+    final bounds = tester.getRect(page);
+    route.handleStartBackGesture(progress: 1);
+    await tester.pump();
+    for (final progress in [.9, .8, .9]) {
+      route.handleUpdateBackGestureProgress(progress: progress);
+      await tester.pump();
+      final flight = find.byKey(const ValueKey('programme-cover-flight'));
+      expect(flight, findsOneWidget);
+      final poster = tester
+          .widget<Opacity>(
+            find.descendant(of: flight, matching: find.byType(Opacity)).first,
+          )
+          .opacity;
+      final video = tester
+          .widgetList<Opacity>(
+            find.ancestor(of: page, matching: find.byType(Opacity)),
+          )
+          .fold(1.0, (value, opacity) => value * opacity.opacity);
+      expect(poster + video, closeTo(1, .001));
+      expect(session.value.position, const Duration(seconds: 42));
+    }
+    route.handleCancelBackGesture();
+    await tester.pumpAndSettle();
+    expect(tester.state(page), same(state));
+    expect(tester.getRect(page), bounds);
+    expect(session.pauseCalls, 0);
+    expect(session.disposeCalls, 0);
+    expect(session.seekCalls, 0);
+    nav.currentState!.pop();
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    expect(session.disposeCalls, 1);
+  });
+
+  testWidgets(
+    'an early native frame waits for route entry before revealing video',
+    (tester) async {
+      final session = fixtures.FakeSession()..emit(firstFrameRendered: true);
+      final nav = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(navigatorKey: nav, home: const Scaffold()),
+      );
+      nav.currentState!.push(
+        ArchiveTransitionPage<void>(
+          child: PlayerPage(
+            input: fixtures.input,
+            backend: fixtures.FakeBackend(session),
+            history: fixtures.MemoryHistory(),
+            surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
+          ),
+        ).createRoute(nav.currentContext!),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 1);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
+      nav.currentState!.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('player retains a cover while native initialization is pending', (
+    tester,
+  ) async {
+    final session = fixtures.FakeSession()..emit(initialized: false);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: PlayerPage(
+            input: fixtures.input,
+            backend: fixtures.FakeBackend(session),
+            history: fixtures.MemoryHistory(),
+            surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(SharedCover), findsOneWidget);
+    final bounds = tester.getRect(find.byType(SharedCover));
+    session.emit();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.getRect(find.byType(SharedCover)), bounds);
+    expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 1);
+    session.emit(firstFrameRendered: true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
+    expect(tester.getRect(find.byType(SharedCover)), bounds);
+    session.emit(firstFrameRendered: true, buffering: true);
+    await tester.pump();
+    expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('large text keeps title download and player controls reachable', (
     tester,
   ) async {

@@ -13,6 +13,8 @@ import 'package:sctv_dl_mobile/app/app.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
+import 'package:sctv_dl_mobile/design/shared_cover.dart';
+import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
@@ -222,6 +224,13 @@ void main() {
     });
     // Initialisation is paused. Decode/seek/speed and redirects use native fixtures.
     expect(find.byTooltip('暂停'), findsNothing);
+    final playbackCover = find.descendant(
+      of: find.byType(PlaybackCover),
+      matching: find.byType(SharedCover),
+    );
+    final videoBounds = tester.getRect(playbackCover);
+    await waitFor(() => tester.widget<SharedCover>(playbackCover).opacity == 0);
+    expect(tester.getRect(playbackCover), videoBounds);
     await capture('player-paused');
     final pressed = await tester.startGesture(
       tester.getCenter(find.byTooltip('播放速度')),

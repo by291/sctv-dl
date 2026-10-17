@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../design/cover_image.dart';
 import '../../design/shared_cover.dart';
+import '../../design/viewport_hero.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
@@ -538,7 +538,7 @@ class _ArchivePageState extends State<ArchivePage>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _playArtwork(
-                item.cover,
+                item,
                 playable,
                 fullEpisode: true,
                 selected: selected,
@@ -555,11 +555,7 @@ class _ArchivePageState extends State<ArchivePage>
                   width: 104,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: _playArtwork(
-                      item.cover,
-                      playable,
-                      selected: selected,
-                    ),
+                    child: _playArtwork(item, playable, selected: selected),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -598,13 +594,22 @@ class _ArchivePageState extends State<ArchivePage>
   }
 
   Widget _playArtwork(
-    String? url,
+    ProgrammeContent item,
     bool playable, {
     bool fullEpisode = false,
     required bool selected,
   }) => Stack(
     children: [
-      CoverImage(url: url, aspectRatio: fullEpisode ? 16 / 9 : 4 / 3),
+      ViewportHero(
+        child: SharedCover(
+          tag: controller.selectionMode
+              ? null
+              : 'playback-${controller.programme.id}/${controller.selectedDate!.id}/${item.id}',
+          url: item.cover ?? controller.programme.cover,
+          radius: fullEpisode ? 12 : 10,
+          aspectRatio: fullEpisode ? 16 / 9 : 4 / 3,
+        ),
+      ),
       if (playable || controller.selectionMode)
         Positioned(
           right: fullEpisode ? 12 : 6,

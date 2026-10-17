@@ -10,6 +10,7 @@ import 'package:sctv_dl_mobile/app/providers.dart';
 import 'package:sctv_dl_mobile/app/router.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
+import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
@@ -112,6 +113,100 @@ void registerDownloadNoticeTests() {
 }
 
 void main() {
+  testWidgets('a clipped content cover stays clipped when entering playback', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = RouteHarness();
+    harness.programmes.contents['2'] = snapshot([
+      content,
+      for (var i = 4; i < 14; i++)
+        ProgrammeContent(id: '$i', title: 'Clip $i', video: content.video),
+    ], 'contents');
+    await harness.mount(tester, '/programme/1');
+    await tester.pumpAndSettle();
+    final artwork = find.byWidgetPredicate(
+      (widget) => widget is SharedCover && widget.tag == 'playback-1/2/3',
+    );
+    final scrollable = find.byType(CustomScrollView);
+    final scroll = tester.widget<CustomScrollView>(scrollable).controller!;
+    scroll.jumpTo(
+      scroll.offset +
+          tester.getRect(artwork).top -
+          tester.getRect(scrollable).top +
+          2,
+    );
+    await tester.pumpAndSettle();
+    final offset = scroll.offset;
+    await tester.tap(find.text(content.title));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('programme-cover-flight')), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+    harness.router.pop();
+    await tester.pumpAndSettle();
+    expect(scroll.offset, offset);
+    await harness.close(tester);
+  });
+
+  testWidgets('history uses the same outgoing fade as archive entry', (
+    tester,
+  ) async {
+    final harness = RouteHarness();
+    await harness.mount(tester, '/');
+    await tester.pumpAndSettle();
+    harness.router.push('/history');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 75));
+    final opacity = tester
+        .widgetList<Opacity>(
+          find.ancestor(
+            of: find.byType(LibraryPage, skipOffstage: false),
+            matching: find.byType(Opacity, skipOffstage: false),
+          ),
+        )
+        .fold(1.0, (value, item) => value * item.opacity);
+    expect(opacity, closeTo(.4183, .002));
+    await harness.close(tester);
+  });
+
+  testWidgets(
+    'archive content cover flies to playback and returns without moving the list',
+    (tester) async {
+      final harness = RouteHarness();
+      await harness.mount(tester, '/');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ProgrammeCard));
+      await tester.pumpAndSettle();
+      final card = find.text(content.title);
+      await tester.ensureVisible(card);
+      await tester.pumpAndSettle();
+      final bounds = tester.getRect(card);
+      await tester.tap(card);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      await tester.pump(const Duration(milliseconds: 80));
+      final flight = find.byKey(const ValueKey('programme-cover-flight'));
+      expect(flight, findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(PlayerPage), findsOneWidget);
+      harness.router.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(flight, findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(card), bounds);
+      expect(tester.takeException(), isNull);
+      await harness.close(tester);
+    },
+  );
+
   registerDownloadNoticeTests();
 
   testWidgets('back leaves download selection before leaving its tab', (

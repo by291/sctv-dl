@@ -318,6 +318,7 @@ class FakeSession implements PlaybackSession {
     supportsPip: true,
   );
   int playCalls = 0;
+  int seekCalls = 0;
   int pauseCalls = 0;
   int disposeCalls = 0;
   bool failSwitch = false;
@@ -330,10 +331,12 @@ class FakeSession implements PlaybackSession {
     Duration position = Duration.zero,
     double speed = 1,
     bool initialized = true,
+    bool? firstFrameRendered,
     String? error,
   }) {
     value = PlaybackSnapshot(
       initialized: initialized,
+      firstFrameRendered: firstFrameRendered ?? value.firstFrameRendered,
       error: error,
       speed: speed,
       source: standard,
@@ -362,7 +365,11 @@ class FakeSession implements PlaybackSession {
   }
 
   @override
-  Future<void> seek(Duration position) async => emit(position: position);
+  Future<void> seek(Duration position) async {
+    seekCalls++;
+    emit(position: position);
+  }
+
   @override
   Future<void> setSpeed(double speed) async => emit(
     playing: value.playing,

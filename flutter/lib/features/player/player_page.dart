@@ -8,6 +8,7 @@ import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 import 'playback_controller.dart';
+import 'playback_cover.dart';
 import 'player_controls.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -271,6 +272,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 fit: StackFit.expand,
                 children: [
                   if (session != null) widget.surfaceBuilder(session),
+                  if (!value.inPip && widget.input.selection != null)
+                    PlaybackCover(
+                      selection: widget.input.selection!,
+                      ready: value.firstFrameRendered,
+                      shared: !fullscreen,
+                    ),
                   if (!value.inPip) ...[
                     if (controller.loading ||
                         value.buffering ||

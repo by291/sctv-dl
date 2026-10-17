@@ -185,14 +185,18 @@ GoRouter createAppRouter(AppServices services) {
       ),
       GoRoute(
         path: '/history',
-        builder: (context, state) => HistoryPage(
-          history: services.history,
-          viewState: historyViewState,
-          onOpen: (entry) => unawaited(
-            play(
-              context,
-              entry.selection,
-              position: entry.completed ? Duration.zero : entry.position,
+        pageBuilder: (context, state) => ArchiveTransitionPage<void>(
+          key: state.pageKey,
+          restorationId: state.pageKey.value,
+          child: HistoryPage(
+            history: services.history,
+            viewState: historyViewState,
+            onOpen: (entry) => unawaited(
+              play(
+                context,
+                entry.selection,
+                position: entry.completed ? Duration.zero : entry.position,
+              ),
             ),
           ),
         ),
@@ -717,6 +721,7 @@ class _PlaybackRouteState extends ConsumerState<_PlaybackRoute> {
   @override
   Widget build(BuildContext context) => FutureBuilder<PlaybackInput>(
     future: input,
+    initialData: widget.acceptedInput,
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return _routeError(
