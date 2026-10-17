@@ -1,0 +1,17 @@
+{
+  "snapshot": {
+    "kind": "catalogue",
+    "items": [],
+    "version": 1,
+    "revision": "fixture-revision",
+    "fetchedAt": "2026-10-17T00:00:00.000Z"
+  },
+  "browse": {
+    "programmeId": "1",
+    "dateId": "2",
+    "date": "2026-10-16",
+    "sort": "desc",
+    "scrollY": 123.5,
+    "visitedAt": "2026-10-17T00:00:00.000Z"
+  }
+}

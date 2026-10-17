@@ -1,0 +1,13 @@
+{
+  "completion": [
+    { "positionMs": 94999, "durationMs": 100000, "ended": false, "completed": false },
+    { "positionMs": 95000, "durationMs": 100000, "ended": false, "completed": true },
+    { "positionMs": 999999, "durationMs": null, "ended": false, "completed": false },
+    { "positionMs": 0, "durationMs": 0, "ended": false, "completed": false },
+    { "positionMs": 0, "durationMs": null, "ended": true, "completed": true }
+  ],
+  "resume": [
+    { "completed": true, "positionMs": 95000, "resumePosition": 0 },
+    { "completed": false, "positionMs": 300000, "resumePosition": 300000 }
+  ]
+}

@@ -46,6 +46,18 @@ describe('application contracts', () => {
   it('preserves unknown transfer totals and rejects negative progress', () => {
     const task = {
       id: 'task-1',
+      attemptId: 'attempt-1',
+      createdAt: '2026-10-17T00:00:00Z',
+      metadata: {
+        content: { programmeId: '1', dateId: '2', contentId: '3' },
+        programmeName: 'News',
+        broadcastDate: '2026-10-17',
+        title: 'News',
+        cover: null,
+      },
+      canResume: false,
+      fileAvailable: false,
+      hasPartial: true,
       content: { programmeId: '1', dateId: '2', contentId: '3' },
       filename: 'news.mp4',
       quality: 'standard',
