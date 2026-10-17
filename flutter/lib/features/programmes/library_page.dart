@@ -6,6 +6,7 @@ import 'package:sliver_tools/sliver_tools.dart';
 
 import '../../design/shared_cover.dart';
 import '../../design/content_transition.dart';
+import '../../design/pending_update_notice.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import 'library_controller.dart';
@@ -34,6 +35,7 @@ class _LibraryPageState extends State<LibraryPage>
   final _search = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
+  final _updateNoticeAnchor = LayerLink();
   final _restoredQuery = RestorableString('');
   final _restoredSort = RestorableBool(false);
   final _restoredSearch = RestorableBool(false);
@@ -54,14 +56,12 @@ class _LibraryPageState extends State<LibraryPage>
     _search.text = controller.query;
   }
 
-  var _scrollRevision = 0;
   LibraryController get controller => widget.controller;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    controller.addListener(_onControllerChanged);
     unawaited(controller.initialize());
   }
 
@@ -80,15 +80,6 @@ class _LibraryPageState extends State<LibraryPage>
     }
   }
 
-  void _onControllerChanged() {
-    if (_scrollRevision == controller.scrollRevision) return;
-    _scrollRevision = controller.scrollRevision;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_scroll.hasClients) _scroll.jumpTo(0);
-    });
-  }
-
   void _closeSearch() {
     setState(() {
       _restoredSearch.value = false;
@@ -102,7 +93,6 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    controller.removeListener(_onControllerChanged);
     _restoredFilter.dispose();
     _restoredQuery.dispose();
     _restoredSort.dispose();
@@ -209,8 +199,6 @@ class _LibraryPageState extends State<LibraryPage>
                   widget.onShowHistory();
                 },
               ),
-              if (controller.hasPendingUpdate)
-                PendingUpdateButton(onPressed: controller.acceptUpdate),
               IconButton(
                 tooltip: searching ? '关闭搜索' : '搜索栏目',
                 icon: Icon(searching ? Icons.close : Icons.search),
@@ -229,7 +217,12 @@ class _LibraryPageState extends State<LibraryPage>
               ),
             ],
           ),
-          body: _catalogue(),
+          body: PendingUpdateOverlay(
+            anchor: _updateNoticeAnchor,
+            visible: widget.active && controller.hasPendingUpdate,
+            onUpdate: controller.acceptUpdate,
+            child: _catalogue(),
+          ),
         ),
       );
     },
@@ -286,59 +279,65 @@ class _LibraryPageState extends State<LibraryPage>
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
               sliver: SliverToBoxAdapter(
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      '共 ${items.length} 个栏目',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: _favouritesOnly ? '显示全部栏目' : '只看收藏',
-                          isSelected: _favouritesOnly,
-                          icon: AnimatedSwitcher(
-                            duration: motionDuration(context, 120),
-                            child: Icon(
-                              _favouritesOnly
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              key: ValueKey(_favouritesOnly),
-                            ),
-                          ),
-                          style:
-                              IconButton.styleFrom(
-                                foregroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .primary,
-                                backgroundColor: _favouritesOnly
-                                    ? Theme.of(context)
-                                          .colorScheme
-                                          .primaryContainer
-                                    : Colors.transparent,
-                              ).copyWith(
-                                animationDuration: motionDuration(context, 120),
+                child: CompositedTransformTarget(
+                  link: _updateNoticeAnchor,
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        '共 ${items.length} 个栏目',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: _favouritesOnly ? '显示全部栏目' : '只看收藏',
+                            isSelected: _favouritesOnly,
+                            icon: AnimatedSwitcher(
+                              duration: motionDuration(context, 120),
+                              child: Icon(
+                                _favouritesOnly
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                key: ValueKey(_favouritesOnly),
                               ),
-                          onPressed: () => setState(() {
-                            _restoredFilter.value = _favouritesOnly ? 0 : 1;
-                          }),
-                        ),
-                        TextButton.icon(
-                          onPressed: () {
-                            controller.toggleSort();
-                            _restoredSort.value = controller.nameOrder;
-                          },
-                          icon: const Icon(Icons.sort),
-                          label: Text(controller.nameOrder ? '名称排序' : '默认顺序'),
-                        ),
-                      ],
-                    ),
-                  ],
+                            ),
+                            style:
+                                IconButton.styleFrom(
+                                  foregroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .primary,
+                                  backgroundColor: _favouritesOnly
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer
+                                      : Colors.transparent,
+                                ).copyWith(
+                                  animationDuration: motionDuration(
+                                    context,
+                                    120,
+                                  ),
+                                ),
+                            onPressed: () => setState(() {
+                              _restoredFilter.value = _favouritesOnly ? 0 : 1;
+                            }),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              controller.toggleSort();
+                              _restoredSort.value = controller.nameOrder;
+                            },
+                            icon: const Icon(Icons.sort),
+                            label: Text(controller.nameOrder ? '名称排序' : '默认顺序'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -31,7 +31,6 @@ class LibraryController extends ChangeNotifier {
   String? error;
   String? featuredId;
   Set<String> favourites;
-  int scrollRevision = 0;
 
   List<Programme> get programmes => _accepted?.items ?? const [];
   bool get hasPendingUpdate => _pending != null;
@@ -104,7 +103,6 @@ class LibraryController extends ChangeNotifier {
     if (_pending case final snapshot?) {
       _display(snapshot);
       _pending = null;
-      scrollRevision++;
       notifyListeners();
     }
   }

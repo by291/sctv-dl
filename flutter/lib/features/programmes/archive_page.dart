@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../design/shared_cover.dart';
 import '../../design/viewport_hero.dart';
 import '../../design/state_panel.dart';
+import '../../design/pending_update_notice.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
 import 'archive_controller.dart';
@@ -38,6 +39,7 @@ class _ArchivePageState extends State<ArchivePage>
     with WidgetsBindingObserver, RestorationMixin {
   ArchiveController get controller => widget.controller;
   final _scroll = ScrollController();
+  final _updateNoticeAnchor = LayerLink();
   final _restoredDate = RestorableStringN(null);
   final _restoredSelection = RestorableString('');
   final _restoredSelectionMode = RestorableBool(false);
@@ -211,8 +213,6 @@ class _ArchivePageState extends State<ArchivePage>
                 : '往期回看',
           ),
           actions: [
-            if (!controller.selectionMode && controller.hasPendingUpdate)
-              PendingUpdateButton(onPressed: controller.acceptUpdates),
             if (!controller.selectionMode &&
                 controller.contents.any(
                   (item) => videoSources(item).isNotEmpty,
@@ -224,18 +224,34 @@ class _ArchivePageState extends State<ArchivePage>
               ),
           ],
         ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final content = _archive();
-            if (constraints.maxWidth < 1000) return content;
-            return Row(
-              children: [
-                SizedBox(width: 270, child: _libraryPane()),
-                const VerticalDivider(width: 1),
-                Expanded(child: content),
-              ],
-            );
-          },
+        body: PendingUpdateOverlay(
+          anchor: _updateNoticeAnchor,
+          targetAnchor: Alignment.topCenter,
+          // Compact clips start with text; keep the notice above that title.
+          // Full/large-text cards start with artwork and can host it inside.
+          anchorOffset: Offset(
+            0,
+            controller.fullEpisodes.isNotEmpty ||
+                    controller.contents.isEmpty ||
+                    MediaQuery.textScalerOf(context).scale(1) >= 1.5
+                ? 8
+                : -40,
+          ),
+          visible: !controller.selectionMode && controller.hasPendingUpdate,
+          onUpdate: _action(controller.acceptUpdates),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = _archive();
+              if (constraints.maxWidth < 1000) return content;
+              return Row(
+                children: [
+                  SizedBox(width: 270, child: _libraryPane()),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: content),
+                ],
+              );
+            },
+          ),
         ),
         bottomNavigationBar: controller.selectionMode
             ? SafeArea(
@@ -369,12 +385,15 @@ class _ArchivePageState extends State<ArchivePage>
           else if (controller.contents.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
-              child: StatePanel(
-                title: '暂无节目内容',
-                message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
-                onAction: controller.error == null
-                    ? null
-                    : () => unawaited(controller.refresh()),
+              child: CompositedTransformTarget(
+                link: _updateNoticeAnchor,
+                child: StatePanel(
+                  title: '暂无节目内容',
+                  message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
+                  onAction: controller.error == null
+                      ? null
+                      : () => unawaited(controller.refresh()),
+                ),
               ),
             )
           else ...[
@@ -563,7 +582,7 @@ class _ArchivePageState extends State<ArchivePage>
               ],
             ),
           );
-    return Semantics(
+    final card = Semantics(
       checked: controller.selectionMode ? selected : null,
       enabled: playable,
       label: controller.selectionMode ? item.title : null,
@@ -591,6 +610,11 @@ class _ArchivePageState extends State<ArchivePage>
         ),
       ),
     );
+    final first =
+        controller.fullEpisodes.firstOrNull ?? controller.clips.firstOrNull;
+    return item.id == first?.id
+        ? CompositedTransformTarget(link: _updateNoticeAnchor, child: card)
+        : card;
   }
 
   Widget _playArtwork(

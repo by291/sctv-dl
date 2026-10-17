@@ -95,18 +95,3 @@ class PageSkeleton extends StatelessWidget {
     ),
   );
 }
-
-class PendingUpdateButton extends StatelessWidget {
-  const PendingUpdateButton({super.key, required this.onPressed});
-  final VoidCallback onPressed;
-  @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: '有新内容，点击更新',
-    onPressed: onPressed,
-    icon: Badge(
-      smallSize: 7,
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      child: const Icon(Icons.update_rounded),
-    ),
-  );
-}
