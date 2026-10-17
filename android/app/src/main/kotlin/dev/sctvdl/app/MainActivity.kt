@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -70,11 +71,15 @@ class MainActivity : ComponentActivity() {
     }
 
     fun bindPlayer(session: PlayerSession) {
+        volumeControlStream = AudioManager.STREAM_MUSIC
         playerSession = session
     }
 
     fun unbindPlayer(session: PlayerSession) {
-        if (playerSession === session) playerSession = null
+        if (playerSession === session) {
+            playerSession = null
+            volumeControlStream = AudioManager.USE_DEFAULT_STREAM_TYPE
+        }
     }
 
     fun pausePlayerForDismissal() {

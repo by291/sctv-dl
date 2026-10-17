@@ -62,6 +62,69 @@ class PlaybackControllerTest {
             )
         )
 
+    @Test fun qualityCheckpointUsesSelectedSpeedInsteadOfTransientDecoderSpeed() {
+        val backend = Backend()
+        val controller = PlaybackController(backend)
+        controller.setSource(source)
+        backend.emit(ready = true)
+        controller.setSpeed(1.5f)
+        backend.speed = 2f
+
+        controller.selectQuality(Quality.Smooth)
+
+        assertEquals(1.5f, backend.speed)
+        backend.emit(error = "replacement failed")
+        assertEquals(1.5f, backend.speed)
+        controller.retry()
+        assertEquals(1.5f, backend.speed)
+    }
+
+    @Test fun unknownDurationRejectsSeekRatherThanInventingABound() {
+        val backend = Backend()
+        val controller = PlaybackController(backend)
+        controller.setSource(source)
+
+        controller.seekTo(30_000)
+
+        assertEquals(0L, backend.positionMs)
+    }
+
+    @Test fun temporarySpeedRestoresSelectionOnReleaseBackgroundAndQualitySwitch() {
+        val backend = Backend()
+        val controller = PlaybackController(backend)
+        controller.setSource(source)
+        controller.setSpeed(1.25f)
+        controller.beginTemporarySpeed()
+        assertEquals(1.25f, backend.speed)
+        controller.togglePlay()
+        backend.callback?.invoke(backend.token, PlaybackBackendSnapshot(playing = true, ready = true))
+
+        controller.beginTemporarySpeed()
+        assertEquals(2f, backend.speed)
+        assertEquals(1.25f, controller.state.value.speed)
+        controller.endTemporarySpeed()
+        assertEquals(1.25f, backend.speed)
+        controller.beginTemporarySpeed()
+        controller.onBackground(true)
+        assertEquals(1.25f, backend.speed)
+        assertTrue(backend.playWhenReady)
+        controller.beginTemporarySpeed()
+        controller.selectQuality(Quality.Smooth)
+        assertEquals(1.25f, backend.speed)
+    }
+
+    @Test fun boundedSeekPreservesPausedIntent() {
+        val backend = Backend()
+        val controller = PlaybackController(backend)
+        controller.setSource(source)
+        backend.callback?.invoke(backend.token, PlaybackBackendSnapshot(durationMs = 10_000))
+
+        controller.seekTo(30_000)
+
+        assertEquals(10_000L, backend.positionMs)
+        assertFalse(backend.playWhenReady)
+    }
+
     @Test fun initialPlaybackIsPausedAndQualitySwitchKeepsPositionAndIntent() {
         val backend = Backend()
         val controller = PlaybackController(backend)

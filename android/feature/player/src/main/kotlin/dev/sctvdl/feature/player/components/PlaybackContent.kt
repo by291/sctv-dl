@@ -96,7 +96,11 @@ internal fun PlaybackContent(
         }
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { currentHistory?.flush(session.controller.state.value) }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
+        session.controller.endTemporarySpeed()
+        host.gestureEnvironment?.restoreBrightness()
+        currentHistory?.flush(session.controller.state.value)
+    }
 
     LifecycleResumeEffect(fullscreen) {
         // Predictive previews are STARTED; only a committed destination may change the Activity window.
@@ -159,7 +163,10 @@ internal fun PlaybackContent(
                 onQuality = session.controller::selectQuality,
                 onSpeed = session.controller::setSpeed,
                 fullscreen = fullscreen,
-                onFullscreen = { fullscreen = !fullscreen },
+                onFullscreen = {
+                    session.controller.endTemporarySpeed()
+                    fullscreen = !fullscreen
+                },
                 onPip = if (host.supportsPictureInPicture) {
                     { host.enterPictureInPicture() }
                 } else {
@@ -178,6 +185,10 @@ internal fun PlaybackContent(
                     if (fullscreen || pip) Modifier.weight(1f) else Modifier.height(videoHeight)
                 ),
                 controlsEnabled = !pip,
+                onTemporarySpeed = { active ->
+                    if (active) session.controller.beginTemporarySpeed() else session.controller.endTemporarySpeed()
+                },
+                gestureEnvironment = host.gestureEnvironment,
                 placeholder = { CoverImage(coverUrl, Modifier.fillMaxSize()) }
             )
             if (history != null) {

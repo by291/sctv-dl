@@ -24,6 +24,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     private var pending: Switch? = null
     private var desiredPlaying = false
     private var released = false
+    private var temporarySpeed = false
 
     init {
         backend.setListener { callbackToken, snapshot ->
@@ -31,6 +32,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
             if (callbackToken == token && !released) apply(snapshot)
         }
         backend.setExternalPlaybackListener { playing ->
+            if (!playing) endTemporarySpeed()
             desiredPlaying = playing
             mutableState.update { it.copy(playWhenReady = playing) }
         }
@@ -39,6 +41,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     fun setSource(source: PlaybackSource) {
         if (released) return
 
+        endTemporarySpeed()
         val variants = source.variants.distinctBy { it.url }
         val selected = variants.firstOrNull { it.quality == initialQuality } ?: variants.firstOrNull()
         pending = null
@@ -64,13 +67,14 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     fun selectQuality(quality: Quality) {
         if (released || quality == (pending?.target?.quality ?: state.value.quality)) return
 
+        endTemporarySpeed()
         val variant = state.value.variants.firstOrNull { it.quality == quality } ?: return
         val previous = if (usable != null && pending == null && state.value.error == null) {
-            current?.copy(position = backend.positionMs, speed = backend.speed)
+            current?.copy(position = backend.positionMs, speed = state.value.speed)
         } else {
             pending?.previous ?: usable
         }
-        val target = Context(variant.url, quality, previous?.position ?: state.value.positionMs, backend.speed)
+        val target = Context(variant.url, quality, previous?.position ?: state.value.positionMs, state.value.speed)
         pending = Switch(target, previous)
         mutableState.update { it.copy(phase = PlaybackPhase.Switching, notice = null) }
         load(target)
@@ -102,6 +106,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     fun setSpeed(speed: Float) {
         if (released || speed !in 0.5f..2f) return
 
+        temporarySpeed = false
         backend.speed = speed
         current = current?.copy(speed = speed)
         pending =
@@ -111,9 +116,22 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
         mutableState.update { it.copy(speed = speed) }
     }
 
+    fun beginTemporarySpeed() {
+        if (released || !state.value.playing) return
+        temporarySpeed = true
+        backend.speed = 2f
+    }
+
+    fun endTemporarySpeed() {
+        if (!temporarySpeed) return
+        temporarySpeed = false
+        backend.speed = state.value.speed
+    }
+
     fun togglePlay() {
         if (released) return
 
+        endTemporarySpeed()
         desiredPlaying = state.value.ended || !desiredPlaying
         if (desiredPlaying && state.value.ended) backend.seekTo(0)
         backend.playWhenReady = desiredPlaying
@@ -123,7 +141,8 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     fun seekTo(positionMs: Long) {
         if (released) return
 
-        val position = positionMs.coerceIn(0, state.value.durationMs ?: Long.MAX_VALUE)
+        val duration = state.value.durationMs?.takeIf { it > 0 } ?: return
+        val position = positionMs.coerceIn(0, duration)
         current = current?.copy(position = position)
         pending = pending?.let {
             it.copy(target = it.target.copy(position = position), previous = it.previous?.copy(position = position))
@@ -134,6 +153,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
 
     fun retry() {
         if (released) return
+        endTemporarySpeed()
         val context = current ?: return
 
         pending = null
@@ -146,6 +166,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     private fun apply(snapshot: PlaybackBackendSnapshot) {
+        if (!snapshot.playing) endTemporarySpeed()
         val operation = pending
         if (snapshot.error != null && operation != null) {
             val previous = operation.previous
@@ -160,7 +181,7 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
             mutableState.update { it.copy(phase = PlaybackPhase.Normal) }
         }
         if (snapshot.ready && snapshot.error == null) {
-            usable = current?.copy(position = snapshot.positionMs, speed = backend.speed)
+            usable = current?.copy(position = snapshot.positionMs, speed = state.value.speed)
             current = usable
             pending = null
             mutableState.update {
@@ -194,12 +215,14 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
 
     fun pauseForDismissal() {
         if (released) return
+        endTemporarySpeed()
         desiredPlaying = false
         backend.playWhenReady = false
         tick()
     }
 
     fun onBackground(inPictureInPicture: Boolean) {
+        endTemporarySpeed()
         if (!inPictureInPicture) pauseForDismissal()
     }
 
