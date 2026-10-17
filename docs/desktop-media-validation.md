@@ -1,5 +1,7 @@
 # Desktop and Media Validation
 
+The sections below are historical phase evidence. Current history, cache, and durable-download acceptance is recorded in [Web and Desktop Feature Validation](web-desktop-feature-validation.md); older process-only and cancel-on-exit observations describe those earlier builds.
+
 This record distinguishes the native shell, Web media compatibility, native transport experiments, and the pending two-platform acceptance gate.
 
 ## Environment
