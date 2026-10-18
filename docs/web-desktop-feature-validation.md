@@ -121,6 +121,8 @@ The uninstaller now has a grey television with a red minus badge, derived from t
 
 ### Remaining Windows Acceptance
 
+Window position, size, and maximization persistence was subsequently wired through `tauri-plugin-window-state` 2.5.0. The agent performed static inspection only and intentionally did not run compilation, tests, or repackaging. The user observed a visible jump from the default position during startup. The follow-up creates the window hidden and explicitly restores it before showing, with automatic initial restoration disabled. The user then manually tested the change and reported no problem before requesting the commit. This confirms the reported startup issue was resolved in that user's check, without establishing coverage of every window-state scenario. Existing desktop CI will compile the integration when these changes are published. Explicit acceptance remains outstanding for maximization and normal-bounds restoration, cancelled active-download exits, quitting while minimized, disconnected displays, and missing or malformed state files.
+
 Signing, remote CI, minimum supported OS versions, external open/reveal actions, and live native failure states were not exercised. The ordinary-context installer repeat covers program files and shortcuts; its registry-observation limitation is recorded above. Narrow-window and keyboard results are limited to the specific interactions recorded in the follow-up.
 
 A single post-playback snapshot totalled approximately 569 MiB working set and 350 MiB private memory across the native process and its WebView2 processes. It is not a baseline comparison or evidence of long-playback memory stability. Fullscreen and picture-in-picture also remain outside this Windows run.

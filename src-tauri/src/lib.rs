@@ -15,12 +15,25 @@ pub mod storage;
 use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
+use tauri_plugin_window_state::{StateFlags, WindowExt};
 
 pub fn run() {
+    let window_state_flags = StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED;
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_filter(|label| label == "main")
+                // Setup restores the initially hidden window before showing it.
+                .skip_initial_state("main")
+                // Keep normal bounds and maximization, without restoring hidden or
+                // fullscreen playback states. Persistence follows actual app exit,
+                // so cancelling our exit confirmation leaves tracking active.
+                .with_state_flags(window_state_flags)
+                .build(),
+        )
         .manage(Arc::new(lifecycle::ExitController::default()))
         .manage(lifecycle::ExitPreparation::default())
         .on_window_event(|window, event| {
@@ -29,7 +42,7 @@ pub fn run() {
                 lifecycle::request_exit(window.app_handle());
             }
         })
-        .setup(|app| {
+        .setup(move |app| {
             lifecycle::install_menu(app.handle())?;
             #[cfg(target_os = "macos")]
             lifecycle::macos::install(app.handle())?;
@@ -99,6 +112,14 @@ pub fn run() {
                 media::PlaybackService::new(media::MediaConfig::default()),
             )));
             app.manage(state::AppState::new(service));
+
+            if let Some(window) = app.get_webview_window("main") {
+                // Show even when state restoration fails; visibility is never persisted.
+                if let Err(error) = window.restore_state(window_state_flags) {
+                    eprintln!("[desktop] restore window state: {error}");
+                }
+                window.show()?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
