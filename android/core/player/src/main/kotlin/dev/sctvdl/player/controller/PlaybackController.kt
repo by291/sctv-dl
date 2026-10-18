@@ -38,12 +38,12 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
         }
     }
 
-    fun setSource(source: PlaybackSource) {
+    fun setSource(source: PlaybackSource, preferredQuality: Quality = initialQuality) {
         if (released) return
 
         endTemporarySpeed()
         val variants = source.variants.distinctBy { it.url }
-        val selected = variants.firstOrNull { it.quality == initialQuality } ?: variants.firstOrNull()
+        val selected = variants.firstOrNull { it.quality == preferredQuality } ?: variants.firstOrNull()
         pending = null
         usable = null
         current = null

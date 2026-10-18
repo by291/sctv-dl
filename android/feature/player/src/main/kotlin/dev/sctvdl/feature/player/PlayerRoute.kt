@@ -27,5 +27,8 @@ fun PlayerRoute(
 
     LaunchedEffect(programmeId, dateId, contentId) { model.open(programmeId, dateId, contentId, selection) }
 
-    PlayerScreen(state, onBack, model::retry, model::savePosition, onDownload, wifiOnly, host)
+    val preview = selection?.takeIf {
+        it.programmeId == programmeId && it.dateId == dateId && it.content.id == contentId
+    }?.accepted
+    PlayerScreen(state, onBack, model::retry, model::savePosition, onDownload, wifiOnly, host, preview)
 }

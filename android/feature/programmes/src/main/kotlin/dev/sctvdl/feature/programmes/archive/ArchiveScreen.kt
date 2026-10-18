@@ -54,6 +54,7 @@ import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.download.DownloadRequest
 import dev.sctvdl.domain.media.videoVariants
 import dev.sctvdl.domain.programme.BroadcastDate
+import dev.sctvdl.domain.programme.ContentRef
 import dev.sctvdl.domain.programme.ProgrammeContent
 import dev.sctvdl.feature.programmes.archive.components.ArchiveContentPlaceholder
 import dev.sctvdl.feature.programmes.archive.components.ArchiveHeader
@@ -233,7 +234,11 @@ internal fun ArchiveScreen(
                                     {
                                         onPlay(content)
                                     },
-                                    { onToggle(content.id) }
+                                    { onToggle(content.id) },
+                                    playbackReference = state.date?.let {
+                                        ContentRef(state.programmeId, it.id, content.id)
+                                    },
+                                    programmeCoverUrl = state.programme?.coverUrl
                                 )
                             }
                         }
@@ -283,7 +288,11 @@ internal fun ArchiveScreen(
                                         onPlay(content)
                                     },
                                     { onToggle(content.id) },
-                                    broadcastDate = state.date?.date
+                                    broadcastDate = state.date?.date,
+                                    playbackReference = state.date?.let {
+                                        ContentRef(state.programmeId, it.id, content.id)
+                                    },
+                                    programmeCoverUrl = state.programme?.coverUrl
                                 )
                             }
                         }

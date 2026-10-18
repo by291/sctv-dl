@@ -17,15 +17,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,13 +42,14 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.domain.programme.ContentRef
 import dev.sctvdl.feature.player.PlaybackHistoryRecorder
 import dev.sctvdl.feature.player.PlaybackHost
 import dev.sctvdl.player.media3.PlayerSession
 import dev.sctvdl.player.model.PlaybackSource
 import dev.sctvdl.player.ui.PlayerVideo
 import dev.sctvdl.ui.downloads.DownloadQualitySheet
-import dev.sctvdl.ui.media.CoverImage
+import dev.sctvdl.ui.programme.PlaybackCover
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -60,7 +57,6 @@ import kotlinx.coroutines.delay
 
 private val PlayerDateLabel = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.SIMPLIFIED_CHINESE)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaybackContent(
     source: PlaybackSource,
@@ -72,9 +68,12 @@ internal fun PlaybackContent(
     broadcastDate: LocalDate? = null,
     host: PlaybackHost,
     history: PlaybackHistoryRecorder? = null,
-    coverUrl: String? = null
+    coverUrl: String? = null,
+    coverReference: ContentRef? = null,
+    sourcePrepared: Boolean = true
 ) {
     val currentHistory by rememberUpdatedState(history)
+    val currentPrepared by rememberUpdatedState(sourcePrepared)
     val context = LocalContext.current
     val session = remember(source.id) { PlayerSession(context, initialQuality) }
     val playback by session.controller.state.collectAsStateWithLifecycle()
@@ -85,9 +84,13 @@ internal fun PlaybackContent(
 
     val canDownload = onDownload != null && source.localUri == null && source.variants.isNotEmpty()
 
-    LaunchedEffect(source.id, source.variants, source.localUri) { session.controller.setSource(source) }
+    // Keep one player and artwork node during entry; only start media after resume/settings restoration.
+    LaunchedEffect(source.id, source.variants, source.localUri, sourcePrepared) {
+        if (sourcePrepared) session.controller.setSource(source, initialQuality)
+    }
 
-    LaunchedEffect(session) {
+    LaunchedEffect(session, sourcePrepared) {
+        if (!sourcePrepared) return@LaunchedEffect
         while (true) {
             session.controller.tick()
             onPosition(session.controller.state.value.positionMs)
@@ -99,7 +102,7 @@ internal fun PlaybackContent(
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         session.controller.endTemporarySpeed()
         host.gestureEnvironment?.restoreBrightness()
-        currentHistory?.flush(session.controller.state.value)
+        if (currentPrepared) currentHistory?.flush(session.controller.state.value)
     }
 
     LifecycleResumeEffect(fullscreen) {
@@ -113,9 +116,12 @@ internal fun PlaybackContent(
     DisposableEffect(session) {
         host.bindPlayer(session)
         onDispose {
-            onPosition(session.controller.state.value.positionMs)
-            currentHistory?.onProgress(session.controller.state.value)
-            currentHistory?.close(session.controller.state.value)
+            // Leaving before preparation must not replace a saved resume point with the empty player's zero.
+            if (currentPrepared) {
+                onPosition(session.controller.state.value.positionMs)
+                currentHistory?.onProgress(session.controller.state.value)
+                currentHistory?.close(session.controller.state.value)
+            }
             host.unbindPlayer(session)
             host.fullscreen(false)
             session.release()
@@ -134,28 +140,16 @@ internal fun PlaybackContent(
     }
 
     val scroll = rememberScrollState()
-    val minimumVideoHeight = if (LocalDensity.current.fontScale >= 1.5f) 208.dp else 176.dp
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val videoHeight = minOf(maxWidth * (9f / 16f), if (maxWidth > maxHeight) maxHeight * 0.4f else maxHeight)
-            .coerceAtLeast(minimumVideoHeight).coerceAtMost(maxHeight)
+        val videoHeight = inlinePlayerHeight(maxWidth, maxHeight, LocalDensity.current.fontScale)
         Column(
             Modifier.fillMaxSize().then(
                 if (!fullscreen && !pip) Modifier.verticalScroll(scroll) else Modifier
             )
         ) {
             if (!fullscreen && !pip) {
-                TopAppBar(
-                    title = { Text("节目播放") },
-                    navigationIcon = {
-                        IconButton(onClick = back) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                "返回节目单"
-                            )
-                        }
-                    }
-                )
+                PlaybackTopBar(back)
             }
             PlayerVideo(
                 player = session.player,
@@ -184,12 +178,19 @@ internal fun PlaybackContent(
                 modifier = Modifier.fillMaxWidth().then(
                     if (fullscreen || pip) Modifier.weight(1f) else Modifier.height(videoHeight)
                 ),
-                controlsEnabled = !pip,
+                controlsEnabled = !pip && sourcePrepared,
                 onTemporarySpeed = { active ->
                     if (active) session.controller.beginTemporarySpeed() else session.controller.endTemporarySpeed()
                 },
                 gestureEnvironment = host.gestureEnvironment,
-                placeholder = { CoverImage(coverUrl, Modifier.fillMaxSize()) }
+                artwork = {
+                    PlaybackCover(
+                        reference = if (fullscreen || pip) null else coverReference,
+                        url = coverUrl,
+                        modifier = Modifier.fillMaxSize(),
+                        videoReady = playback.firstFrameRendered
+                    )
+                }
             )
             if (history != null) {
                 val historyError by history.error.collectAsStateWithLifecycle()

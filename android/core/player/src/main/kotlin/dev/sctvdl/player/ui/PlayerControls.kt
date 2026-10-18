@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -73,13 +75,14 @@ internal fun PlayerControls(
     val speedOptions = remember {
         listOf(0.75f, 1f, 1.25f, 1.5f, 2f).associateWith { "${it.toString().removeSuffix(".0")}×" }
     }
-    val labelStyle = MaterialTheme.typography.labelLarge
+    val labelStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
+    val controlSize = 48.dp
     // Reserve each widest label so elapsed time and menu changes do not move adjacent controls.
     val speedControlWidth = remember(speedOptions, labelStyle, textMeasurer, density) {
         val labelWidth = speedOptions.values.maxOf { textMeasurer.measure(it, labelStyle).size.width }
-        (with(density) { labelWidth.toDp() } + 16.dp).coerceAtLeast(48.dp)
+        (with(density) { labelWidth.toDp() } + 8.dp).coerceAtLeast(controlSize)
     }
 
     val seekInteraction = remember { MutableInteractionSource() }
@@ -93,10 +96,15 @@ internal fun PlayerControls(
         onInteractingChanged(dragging || pressing || speedMenu || qualityMenu || rowScroll.isScrollInProgress)
     }
 
-    val timeStyle = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum")
+    val timeStyle = labelStyle
     val timeWidth = with(density) { textMeasurer.measure("00:00:00", timeStyle).size.width.toDp() } + 4.dp
-    val qualityWidth = with(density) { textMeasurer.measure("清晰度", labelStyle).size.width.toDp() } + 16.dp
-    val rowMinimum = 96.dp + timeWidth * 2 + speedControlWidth + 64.dp +
+    val qualityLabels = state.variants.map { it.quality.label } + "画质"
+    val qualityWidth = (
+        with(density) {
+            qualityLabels.maxOf { textMeasurer.measure(it, labelStyle).size.width }.toDp()
+        } + 8.dp
+        ).coerceAtLeast(controlSize)
+    val rowMinimum = 48.dp + controlSize + timeWidth * 2 + speedControlWidth + 64.dp +
         if (state.variants.isNotEmpty()) qualityWidth else 0.dp
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -126,6 +134,7 @@ internal fun PlayerControls(
                 Modifier.width(timeWidth),
                 color = Color.White,
                 style = timeStyle,
+                textAlign = TextAlign.Center,
                 maxLines = 1
             )
             PlayerProgressSlider(
@@ -140,6 +149,7 @@ internal fun PlayerControls(
                 Modifier.width(timeWidth),
                 color = Color.White,
                 style = timeStyle,
+                textAlign = TextAlign.Center,
                 maxLines = 1
             )
             Box {
@@ -147,7 +157,7 @@ internal fun PlayerControls(
                     "${state.speed.toString().removeSuffix(".0")}×",
                     "播放速度",
                     true,
-                    modifier = Modifier.width(speedControlWidth)
+                    modifier = Modifier.width(speedControlWidth).height(controlSize)
                 ) {
                     onInteraction()
                     speedMenu = true
@@ -172,10 +182,10 @@ internal fun PlayerControls(
             if (state.variants.isNotEmpty()) {
                 Box {
                     PlayerMenuButton(
-                        state.quality?.label ?: "清晰度",
+                        state.quality?.label ?: "画质",
                         "清晰度",
                         true,
-                        modifier = Modifier.width(qualityWidth)
+                        modifier = Modifier.width(qualityWidth).height(controlSize)
                     ) {
                         onInteraction()
                         qualityMenu = true
@@ -203,7 +213,7 @@ internal fun PlayerControls(
                     onInteraction()
                     onFullscreen()
                 },
-                modifier = Modifier.size(48.dp).semantics {
+                modifier = Modifier.size(controlSize).semantics {
                     contentDescription = if (fullscreen) "退出全屏" else "全屏播放"
                 }
             ) {
@@ -228,10 +238,10 @@ private fun PlayerMenuButton(
     TextButton(
         onClick = onClick,
         enabled = switchable,
-        modifier = modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
-        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier.semantics { contentDescription = description },
+        contentPadding = PaddingValues(horizontal = 4.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = Color.White, disabledContentColor = Color.White)
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), maxLines = 1)
     }
 }

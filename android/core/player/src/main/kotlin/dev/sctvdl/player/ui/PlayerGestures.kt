@@ -90,7 +90,7 @@ internal fun Modifier.playerGestures(
                         if (playing()) {
                             boosting = true
                             onTemporarySpeed(true)
-                            onHud("2× 临时倍速")
+                            onHud("2× 倍速播放")
                         }
                     }
                     continue

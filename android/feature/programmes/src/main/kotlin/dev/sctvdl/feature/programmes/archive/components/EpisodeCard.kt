@@ -35,9 +35,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.videoVariants
+import dev.sctvdl.domain.programme.ContentRef
 import dev.sctvdl.domain.programme.ProgrammeContent
 import dev.sctvdl.feature.programmes.archive.clipPublicationLabel
-import dev.sctvdl.ui.media.CoverImage
+import dev.sctvdl.ui.programme.PlaybackCover
 import java.time.LocalDate
 
 @Composable
@@ -48,7 +49,9 @@ internal fun EpisodeCard(
     selected: Boolean,
     onPlay: () -> Unit,
     onSelect: () -> Unit,
-    broadcastDate: LocalDate? = null
+    broadcastDate: LocalDate? = null,
+    playbackReference: ContentRef? = null,
+    programmeCoverUrl: String? = null
 ) {
     val colours = MaterialTheme.colorScheme
     val playable = videoVariants(content).isNotEmpty()
@@ -75,7 +78,9 @@ internal fun EpisodeCard(
             selectionMode = selectionMode,
             selected = selected,
             playable = playable,
-            broadcastDate = broadcastDate
+            broadcastDate = broadcastDate,
+            playbackReference = if (playable && !selectionMode) playbackReference else null,
+            programmeCoverUrl = programmeCoverUrl
         )
     }
 
@@ -111,7 +116,9 @@ private fun EpisodeCardBody(
     selectionMode: Boolean,
     selected: Boolean,
     playable: Boolean,
-    broadcastDate: LocalDate?
+    broadcastDate: LocalDate?,
+    playbackReference: ContentRef?,
+    programmeCoverUrl: String?
 ) {
     val colours = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
@@ -119,7 +126,7 @@ private fun EpisodeCardBody(
 
     Column {
         if (fullEpisode && !selectionMode) {
-            ContentPreview(content, true, playable, Modifier.fillMaxWidth())
+            ContentPreview(content, true, playable, Modifier.fillMaxWidth(), playbackReference, programmeCoverUrl)
         }
         Row(
             Modifier.fillMaxWidth().padding(16.dp),
@@ -139,7 +146,9 @@ private fun EpisodeCardBody(
                     content,
                     false,
                     playable && !selectionMode,
-                    Modifier.width(if (selectionMode) 64.dp else 104.dp)
+                    Modifier.width(if (selectionMode) 64.dp else 104.dp),
+                    playbackReference,
+                    programmeCoverUrl
                 )
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -171,13 +180,20 @@ private fun EpisodeCardBody(
 }
 
 @Composable
-private fun ContentPreview(content: ProgrammeContent, fullEpisode: Boolean, showPlay: Boolean, modifier: Modifier) {
+private fun ContentPreview(
+    content: ProgrammeContent,
+    fullEpisode: Boolean,
+    showPlay: Boolean,
+    modifier: Modifier,
+    playbackReference: ContentRef?,
+    programmeCoverUrl: String?
+) {
     Box(modifier.aspectRatio(if (fullEpisode) 16f / 9f else 4f / 3f)) {
-        CoverImage(
-            content.coverUrl,
-            Modifier.matchParentSize().clip(
-                if (fullEpisode) MaterialTheme.shapes.medium else MaterialTheme.shapes.small
-            )
+        PlaybackCover(
+            playbackReference,
+            content.coverUrl ?: programmeCoverUrl,
+            Modifier.matchParentSize(),
+            cornerRadius = if (fullEpisode) 12.dp else 8.dp
         )
         if (showPlay) {
             Surface(

@@ -69,7 +69,7 @@ fun PlayerVideo(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     controlsEnabled: Boolean = true,
-    placeholder: (@Composable () -> Unit)? = null,
+    artwork: (@Composable () -> Unit)? = null,
     onTemporarySpeed: (Boolean) -> Unit = {},
     gestureEnvironment: PlayerGestureEnvironment? = null
 ) {
@@ -152,7 +152,8 @@ fun PlayerVideo(
     ) {
         val menuMaxHeight = (maxHeight - 64.dp).coerceAtLeast(48.dp)
         VideoSurface(player, Modifier.fillMaxSize())
-        if (!state.firstFrameRendered) placeholder?.invoke()
+        // The owner retains artwork for shared return transitions after the first frame.
+        artwork?.invoke()
         if (controlsEnabled && !touchExploration) {
             Box(
                 Modifier.fillMaxSize().playerGestures(
