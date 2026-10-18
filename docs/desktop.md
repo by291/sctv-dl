@@ -1,6 +1,6 @@
 # Desktop Development
 
-One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application has been checked with bundled assets and Node stopped. Windows, minimum macOS, and public signed distribution still need their own acceptance evidence.
+One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application and a Windows x64 production executable have been checked with bundled assets and no project Node service. See [feature validation](web-desktop-feature-validation.md) for host-specific evidence and remaining acceptance limits. Minimum OS versions and public signed distribution still need their own acceptance evidence.
 
 Desktop targets are Windows x64 and macOS arm64 (Apple Silicon). Intel Macs are outside the supported build and release matrix.
 
@@ -23,7 +23,19 @@ To build only a local macOS application bundle:
 pnpm desktop:build --bundles app
 ```
 
-The output is under `src-tauri/target/release/bundle/`. macOS builds use an ad-hoc signature for local validation; they are not notarized public releases. The proposed macOS minimum is 13.0. Windows configuration selects the NSIS installer. Windows builds and runtime behaviour remain unverified in this batch.
+The output is under `src-tauri/target/release/bundle/`. macOS builds use an ad-hoc signature for local validation; they are not notarized public releases. The proposed macOS minimum is 13.0. Windows configuration selects the NSIS installer. An unsigned x64 installer was built and installed on Windows build 26300.9711, and the installed executable passed the recorded runtime checks. The customized installer subsequently passed program-file and shortcut removal in an ordinary-user-context run; see [feature validation](web-desktop-feature-validation.md) for the initial packaged-host failure and the remaining registry-observation limitation.
+
+### Windows Installer Customization
+
+`src-tauri/tauri.windows.conf.json` selects Simplified Chinese, per-user installation, and the application's icon and bitmap artwork. `src-tauri/windows/installer-hooks.nsh` supplies concise welcome, directory, completion, and uninstall text using NSIS Modern UI settings. `SimpChinese.nsh` supplies Tauri-specific messages and the Windows UI font. The stock Tauri template continues to own WebView2 setup, upgrades, shortcut ownership checks, and uninstall registration; no copied installer template is maintained.
+
+`installer-ui.nsh` sets both window icon sizes, aligns header text, adds native sidebar lettering, and positions optional data removal at the bottom of the uninstall page. The bitmap artwork has four times its base resolution; the header keeps its complete brand artwork in one bitmap to avoid overlapping MUI controls. Welcome and finish use native text over the sidebar graphic. Two small page-entry wrappers attach show callbacks to MUI's existing finish and uninstall page implementations; the uninstall callback first calls Tauri's original checkbox setup, retaining its default state and leave handler. Recheck these wrappers when upgrading NSIS/Tauri. See the [MUI callback reference](https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html) for lifecycle ordering. Fonts and icons created by the hooks are released when the wizard closes.
+
+The uninstaller's application-data checkbox remains unchecked by default. Retaining data preserves settings, favourites, history, and programme cache. Selecting it clears the two private application-data directories after Tauri checks that the application has stopped. Cleanup does not traverse directory links or directories containing the native download ownership marker, including download destinations nested inside private data. It never follows the saved video directory. Preserved or undeletable directories are reported. Installation-only registry values are removed independently of that checkbox, but preserved during upgrades or when the registered location belongs to a different installation. Unknown registry values remain untouched.
+
+On Windows, regenerate the bitmap artwork and uninstaller icon with `pwsh -NoProfile -File tooling/generate-installer-artwork.ps1`. The bitmaps use the existing application icon. Tauri renders `src-tauri/windows/uninstaller.svg` into a multi-size ICO with a grey television and red minus badge; this icon is used for both the uninstaller executable and its window. The application and setup retain the red television icon. Build with `pnpm desktop:build`; when only installer inputs change and the release executable is current, repackage with `pnpm tauri bundle --bundles nsis`.
+
+After the first Windows bundle has provisioned NSIS, run `pwsh -NoProfile -File tooling/check-windows-installer.ps1`. Pass `-NsisDirectory` for another NSIS installation. The test compiles and executes a silent native fixture using the production cleanup macros, verifies actual registry results for normal uninstall, upgrade, unrelated values, and stale installations, and checks private-data removal while preserving external/nested downloads and directory junctions. It removes its uniquely named fixtures afterward. Windows desktop CI runs it after bundling. This fixture does not replace interactive installer/uninstaller acceptance.
 
 Run the portable combined check with `pnpm desktop:check`, or run Rust checks independently:
 
@@ -82,7 +94,7 @@ The service handles GET, HEAD, and OPTIONS, validates Host and any supplied Orig
 
 The shared preview opens sessions through `PlaybackPort`, shows loading/error/retry states, and cancels superseded work. A session arriving after cancellation or malformed IPC validation is closed. Closing pauses immediately and releases the player/session after the modal leave animation; reopening cannot be cleared by an old callback. Artplayer's quality switch retains playback time. PiP checks both the standard and WebKit APIs; fullscreen checks the active WebView's support.
 
-The current custom-protocol response API requires complete response bodies, so the implementation selects streaming loopback HTTP. This implementation decision is separate from release acceptance: Windows WebView2 and complete process-memory measurements remain unverified. CSP permits loopback URLs only for media; metadata and player controls remain IPC. Frontend assets use the normal Tauri protocol, without the Localhost plugin.
+The current custom-protocol response API requires complete response bodies, so the implementation selects streaming loopback HTTP. Windows WebView2 has passed short online/local playback, seeking, and quality-switch checks; sustained playback and comparative process-memory measurements remain unverified. CSP permits loopback URLs only for media; metadata and player controls remain IPC. Frontend assets use the normal Tauri protocol, without the Localhost plugin.
 
 ## Native Downloads
 
@@ -126,4 +138,4 @@ Menus retain Tauri's standard application/edit/window structure and ordinary dec
 
 Windows secrets are `WINDOWS_CERTIFICATE` (base64 PFX) and `WINDOWS_CERTIFICATE_PASSWORD`. A temporary PFX is imported into the runner's user certificate store, its thumbprint configures Tauri's native signer, and the PFX/certificate/configuration are removed afterward. macOS requires `APPLE_CERTIFICATE` (base64 P12), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`; Tauri handles certificate import and notarization. Missing credentials fail instead of falling back to unsigned public packages. Public distribution still requires operator review of installed-app evidence and signing/notarization results.
 
-Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ on Apple Silicon support remains a target until tested on those systems. See [validation evidence](desktop-media-validation.md) for the actual host, checks, and remaining limits.
+Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ on Apple Silicon support remains a target until tested on those systems. See [media validation](desktop-media-validation.md) and [feature validation](web-desktop-feature-validation.md) for the actual hosts, checks, and remaining limits.
