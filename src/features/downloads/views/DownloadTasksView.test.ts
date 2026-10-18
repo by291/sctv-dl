@@ -16,7 +16,7 @@ import {
 import { platformKey } from '@/shared/platform/usePlatform'
 
 import type { NativeDownloadPort } from '@/shared/platform/ports'
-import type { DownloadSnapshot } from '@shared/contracts/downloads'
+import type { DownloadEvent, DownloadSnapshot } from '@shared/contracts/downloads'
 import type { VueWrapper } from '@vue/test-utils'
 
 const task = createDownloadTaskFixture()
@@ -209,4 +209,37 @@ it('offers direct batch actions only for applicable selected tasks and confirms 
   page.findAllComponents(NCheckbox)[0]!.vm.$emit('update:checked', false)
   await flushPromises()
   expect(page.find('[aria-label="批量暂停"]').exists()).toBe(false)
+})
+
+it('keeps batch confirmation tied to the captured attempt after a transfer restarts', async () => {
+  const port = createNativeDownloadFixture()
+  let receive!: (event: DownloadEvent) => void
+  port.subscribeEvents = async (listener) => {
+    receive = listener
+
+    return () => {}
+  }
+
+  port.snapshot = async () => ({ epoch: 'one', revision: 2, tasks: [task] })
+  port.act = vi.fn<NativeDownloadPort['act']>()
+  await useDownloadTasksStore().attach(port)
+  const page = mountPage(port)
+  page.findAllComponents(NCheckbox)[0]!.vm.$emit('update:checked', true)
+  await flushPromises()
+  await page.get('[aria-label="批量取消下载"]').trigger('click')
+
+  receive({
+    kind: 'upsert',
+    epoch: 'one',
+    revision: 3,
+    task: { ...task, attemptId: 'replacement', revision: 3 },
+  })
+  page
+    .findAllComponents(NModal)
+    .find((component) => component.props('show'))!
+    .vm.$emit('positive-click')
+  await flushPromises()
+
+  expect(port.act).not.toHaveBeenCalled()
+  expect(page.get('[role="status"]').text()).toContain('跳过 1 个')
 })

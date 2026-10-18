@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks'
 import { effectScope, nextTick, ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
+import { ZodError } from 'zod'
 
 import { useProgrammeArchive } from '@/features/programmes/composables/useProgrammeArchive'
 
@@ -111,9 +112,22 @@ it.each(['success', 'error'])('removes abort listeners after terminal %s', async
 
 it('rejects malformed DTOs and maps native cancellation to AbortError', async () => {
   mockIPC(() => [{ id: 1, name: 'Bad', cover: null }])
-  await expect(createTauriProgrammeApi().programmes()).rejects.toThrow('数据格式')
+  await expect(createTauriProgrammeApi().programmes()).rejects.toMatchObject({
+    message: expect.stringContaining('数据格式'),
+    cause: expect.any(ZodError),
+  })
   mockIPC(() => Promise.reject({ code: 'cancelled', message: 'Cancelled' }))
   await expect(createTauriProgrammeApi().programmes()).rejects.toMatchObject({ name: 'AbortError' })
+})
+
+it('preserves the original native failure for diagnostics', async () => {
+  const cause = { code: 'upstream', message: 'Service failed' }
+  mockIPC(() => Promise.reject(cause))
+
+  await expect(createTauriProgrammeApi().programmes()).rejects.toMatchObject({
+    message: 'Service failed',
+    cause,
+  })
 })
 
 it('settles cancellation when the cancel command itself fails', async () => {

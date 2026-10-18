@@ -56,7 +56,6 @@ export function createPlatformFixture(): AppPlatform {
       clear: async () => ({ epoch: 'fixture-next' }),
       subscribeCleared: async () => () => {},
     },
-    capabilities: { nativeDownloads: false, directorySelection: false },
     dispose: async () => {},
   }
 }
@@ -65,9 +64,6 @@ export function createNativeDownloadFixture(): NativeDownloadPort {
   return {
     kind: 'native',
     start: async () => ({ kind: 'cancelled' }),
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
     snapshot: async () => ({ epoch: 'fixture', revision: 0, tasks: [] }),
     subscribeEvents: async () => () => {},
     act: async () => ({ kind: 'skipped', message: 'Task not found' }),

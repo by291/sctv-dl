@@ -7,7 +7,7 @@ import {
   historySnapshotSchema,
 } from '@shared/contracts/history'
 import { contentRefSchema } from '@shared/contracts/programmes'
-import { applicationErrorSchema } from '@shared/contracts/errors'
+import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { HistoryPort } from '@/shared/platform/ports'
 
@@ -27,12 +27,10 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
       throw new Error('History disposed')
     }
 
-    try {
-      return schema.parse(await invoke(command, args))
-    } catch (cause) {
-      const error = applicationErrorSchema.safeParse(cause)
-      throw new Error(error.success ? error.data.message : '无法访问观看历史，请重试', { cause })
-    }
+    return invokeValidated(command, args, schema, {
+      failure: '无法访问观看历史，请重试',
+      invalid: '观看历史数据格式异常，请检查客户端版本',
+    })
   }
 
   function mutate<T>(

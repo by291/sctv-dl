@@ -7,6 +7,11 @@ import {
   availableDownloadActions,
   isActiveDownload,
 } from '@/features/downloads/model/download-actions'
+import {
+  batchDownloadActions,
+  downloadActionLabel,
+  downloadActionConfirmation,
+} from '@/features/downloads/model/download-action-presentation'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 import DownloadTaskCard from '@/features/downloads/components/DownloadTaskCard.vue'
 import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePreviewDialog.vue'
@@ -20,23 +25,26 @@ import type { PreviewInput } from '@/features/programmes/model/playback-state'
 import type { BatchResult, DownloadTarget } from '@/features/downloads/stores/useDownloadTasksStore'
 
 type Filter = 'all' | 'active' | 'unfinished' | 'completed' | 'missing'
+
 const { pageScrollPosition, scrollPageTo } = usePageScroll()
 
 const downloads = usePlatform().downloads
 const tasks = useDownloadTasksStore()
 const settings = useSettingsStore()
+
 const filter = ref<Filter>('all')
 const selection = ref<string[]>([])
 const batchBusy = ref(false)
 const batchFeedback = shallowRef<BatchResult | null>(null)
 const offsets = new Map<Filter, number>()
-const content = ref<ProgrammeContent | null>(null)
-const input = shallowRef<PreviewInput | null>(null)
+const previewContent = ref<ProgrammeContent | null>(null)
+const previewInput = shallowRef<PreviewInput | null>(null)
 const confirmation = shallowRef<{
   action: DownloadActionRequest['action']
   targets: DownloadTarget[]
   description: string
 } | null>(null)
+
 const filterOptions: { label: string; value: Filter }[] = [
   { label: '全部任务', value: 'all' },
   { label: '进行中', value: 'active' },
@@ -44,14 +52,29 @@ const filterOptions: { label: string; value: Filter }[] = [
   { label: '已完成', value: 'completed' },
   { label: '文件丢失', value: 'missing' },
 ]
-const batchOptions: { label: string; value: DownloadActionRequest['action'] }[] = [
-  { label: '暂停', value: 'pause' },
-  { label: '继续下载', value: 'resume' },
-  { label: '重新下载', value: 'restart' },
-  { label: '取消下载', value: 'cancel' },
-  { label: '移除记录', value: 'remove' },
-  { label: '删除文件', value: 'deleteFile' },
-]
+
+const filterTabs = computed(() =>
+  filterOptions.map((option) => ({
+    ...option,
+    count: tasks.tasks.filter((task) => matchesFilter(task, option.value)).length,
+  })),
+)
+const filteredTasks = computed(() =>
+  tasks.tasks.filter((task) => matchesFilter(task, filter.value)),
+)
+const selectedTasks = computed(() =>
+  filteredTasks.value.filter((task) => selection.value.includes(task.id)),
+)
+const batchActions = computed(() =>
+  batchDownloadActions
+    .filter((action) =>
+      selectedTasks.value.some((task) => availableDownloadActions(task).includes(action)),
+    )
+    .map((action) => ({ value: action, label: downloadActionLabel(action, 'batch') })),
+)
+const allSelected = computed(
+  () => filteredTasks.value.length > 0 && selectedTasks.value.length === filteredTasks.value.length,
+)
 
 function matchesFilter(task: DownloadTask, value: Filter): boolean {
   switch (value) {
@@ -67,25 +90,6 @@ function matchesFilter(task: DownloadTask, value: Filter): boolean {
       return true
   }
 }
-
-const filterTabs = computed(() =>
-  filterOptions.map((option) => ({
-    ...option,
-    count: tasks.tasks.filter((task) => matchesFilter(task, option.value)).length,
-  })),
-)
-const filtered = computed(() => tasks.tasks.filter((task) => matchesFilter(task, filter.value)))
-const selectedTasks = computed(() =>
-  filtered.value.filter((task) => selection.value.includes(task.id)),
-)
-const batchActions = computed(() =>
-  batchOptions.filter((option) =>
-    selectedTasks.value.some((task) => availableDownloadActions(task).includes(option.value)),
-  ),
-)
-const allSelected = computed(
-  () => filtered.value.length > 0 && selectedTasks.value.length === filtered.value.length,
-)
 
 async function changeFilter(value: Filter): Promise<void> {
   if (filter.value === value) {
@@ -120,23 +124,9 @@ function batch(action: DownloadActionRequest['action']): void {
     return
   }
 
-  const effects = {
-    remove: '只移除任务记录，已下载文件会保留。',
-    deleteFile: '删除已下载文件并停止相关本地播放，任务记录会保留。',
-    cancel: '取消任务并删除未完成片段。',
-    restart: '删除未完成片段并从头下载。',
-  }
-  if (
-    action === 'remove' ||
-    action === 'deleteFile' ||
-    action === 'cancel' ||
-    action === 'restart'
-  ) {
-    confirmation.value = {
-      action,
-      targets,
-      description: `处理所选 ${targets.length} 个任务：${effects[action]} 不适用或已变化的任务会跳过。`,
-    }
+  const description = downloadActionConfirmation(action, { kind: 'batch', count: targets.length })
+  if (description) {
+    confirmation.value = { action, targets, description }
   } else {
     void runBatchAction(action, targets)
   }
@@ -164,7 +154,7 @@ async function confirmBatch(): Promise<void> {
 }
 
 function play(task: DownloadTask): void {
-  content.value = {
+  previewContent.value = {
     id: task.content.contentId,
     title: task.metadata.title,
     cover: task.metadata.cover,
@@ -172,17 +162,17 @@ function play(task: DownloadTask): void {
     smoothVideo: null,
     publishedAt: null,
   }
-  input.value = {
+  previewInput.value = {
     kind: 'download',
     taskId: task.id,
     metadata: task.metadata,
-    content: content.value,
+    content: previewContent.value,
   }
 }
 
 function selectAllVisible(checked: boolean): void {
   batchFeedback.value = null
-  selection.value = checked ? filtered.value.map((task) => task.id) : []
+  selection.value = checked ? filteredTasks.value.map((task) => task.id) : []
 }
 
 function showConfirmation(show: boolean): void {
@@ -202,7 +192,7 @@ function reconnect(): void {
 }
 
 onDeactivated(() => {
-  content.value = null
+  previewContent.value = null
   confirmation.value = null
 })
 </script>
@@ -259,13 +249,13 @@ onDeactivated(() => {
       loading
     />
     <StatePanel
-      v-else-if="!filtered.length && !tasks.error"
+      v-else-if="!filteredTasks.length && !tasks.error"
       class="download-empty"
       :title="tasks.tasks.length ? '当前筛选下没有任务' : '暂无下载任务'"
       description="在节目详情中选择内容并下载，任务会显示在这里。"
     />
     <section
-      v-if="filtered.length"
+      v-if="filteredTasks.length"
       class="download-list-panel"
       aria-label="下载任务"
     >
@@ -307,7 +297,7 @@ onDeactivated(() => {
           v-else
           class="download-list-count"
         >
-          {{ filtered.length }} 个任务
+          {{ filteredTasks.length }} 个任务
         </span>
       </div>
       <ul
@@ -315,7 +305,7 @@ onDeactivated(() => {
         aria-label="下载任务列表"
       >
         <DownloadTaskCard
-          v-for="task in filtered"
+          v-for="task in filteredTasks"
           :key="task.id"
           :task="task"
           :selected="selection.includes(task.id)"
@@ -355,10 +345,10 @@ onDeactivated(() => {
       </NButton>
     </div>
     <ProgrammePreviewDialog
-      v-if="input"
-      v-model="content"
-      :input="input"
-      :reference="input.metadata.content"
+      v-if="previewInput"
+      v-model="previewContent"
+      :input="previewInput"
+      :reference="previewInput.metadata.content"
       :quality="settings.quality"
     />
     <NModal
@@ -501,8 +491,6 @@ onDeactivated(() => {
   }
   .download-list-header {
     padding-inline: 16px;
-  }
-  .download-list-header {
     gap: 8px;
   }
   .batch-actions :deep(.n-button) {

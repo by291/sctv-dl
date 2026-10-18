@@ -23,7 +23,6 @@ export function createWebPlatform(): AppPlatform {
     settings: settings.port,
     history: history.port,
     programmeCache: programmeCache.port,
-    capabilities: { nativeDownloads: false, directorySelection: false },
     async dispose() {
       settings.dispose()
       history.dispose()

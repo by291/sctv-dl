@@ -34,9 +34,6 @@ function nativeDownloads(overrides: Partial<NativeDownloadPort> = {}): NativeDow
     getDirectory: async () => '/initial',
     chooseDirectory: async () => '/selected',
     start: async () => ({ kind: 'cancelled' }),
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
     ...overrides,
   }
 }

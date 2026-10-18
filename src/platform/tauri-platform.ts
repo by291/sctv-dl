@@ -22,7 +22,6 @@ export function createTauriPlatform(): AppPlatform {
     settings: createTauriSettings(),
     history: history.port,
     programmeCache: programmeCache.port,
-    capabilities: { nativeDownloads: true, directorySelection: true },
     prepareExit: prepareNativeExit,
     async dispose() {
       await playback.dispose()

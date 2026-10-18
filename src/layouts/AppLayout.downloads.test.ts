@@ -70,7 +70,7 @@ it('keeps native observation and the active badge alive across route changes', a
   let listener: (value: DownloadEvent) => void = () => {}
 
   const dispose = vi.fn()
-  const cancel = vi.fn<NativeDownloadPort['cancel']>()
+  const act = vi.fn<NativeDownloadPort['act']>()
   const downloads: NativeDownloadPort = {
     ...createNativeDownloadFixture(),
     kind: 'native',
@@ -81,7 +81,7 @@ it('keeps native observation and the active badge alive across route changes', a
     },
     snapshot: async () => ({ epoch: 'one', revision: 2, tasks: [task] }),
     start: async () => ({ kind: 'cancelled' }),
-    cancel,
+    act,
     getDirectory: async () => null,
     chooseDirectory: async () => null,
   }
@@ -109,7 +109,7 @@ it('keeps native observation and the active badge alive across route changes', a
   wrapper!.unmount()
   wrapper = undefined
   expect(dispose).toHaveBeenCalledOnce()
-  expect(cancel).not.toHaveBeenCalled()
+  expect(act).not.toHaveBeenCalled()
 })
 
 it('keeps native download navigation out of the browser application', async () => {

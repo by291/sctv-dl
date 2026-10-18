@@ -38,9 +38,6 @@ function mountDownloads(start: NativeDownloadPort['start']) {
     ...createNativeDownloadFixture(),
     kind: 'native',
     start,
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
     getDirectory: async () => null,
     chooseDirectory: async () => null,
   }

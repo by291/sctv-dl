@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import { z } from 'zod'
 import {
   archiveBrowseStateSchema,
@@ -8,8 +7,8 @@ import {
   programmeCacheKeySchema,
   programmeCachePayloadSchema,
 } from '@shared/contracts/programme-cache'
-import { applicationErrorSchema } from '@shared/contracts/errors'
 import { idSchema } from '@shared/contracts/programmes'
+import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { ProgrammeCachePort } from '@/shared/platform/ports'
 
@@ -26,12 +25,10 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
       throw new Error('Programme cache disposed')
     }
 
-    try {
-      return schema.parse(await invoke(command, args))
-    } catch (cause) {
-      const error = applicationErrorSchema.safeParse(cause)
-      throw new Error(error.success ? error.data.message : '无法访问节目缓存，请重试', { cause })
-    }
+    return invokeValidated(command, args, schema, {
+      failure: '无法访问节目缓存，请重试',
+      invalid: '节目缓存数据格式异常，请检查客户端版本',
+    })
   }
 
   const port: ProgrammeCachePort = {

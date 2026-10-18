@@ -3,7 +3,6 @@ import type { PlaybackRequest, PlaybackSession } from '@shared/contracts/media'
 import type {
   DownloadRequest,
   DownloadStartResult,
-  DownloadTask,
   DownloadSnapshot,
   DownloadEvent,
   DownloadActionRequest,
@@ -72,9 +71,6 @@ export interface BrowserDownloadPort {
 export interface NativeDownloadPort {
   kind: 'native'
   start(request: DownloadRequest): Promise<DownloadStartResult>
-  list(): Promise<DownloadTask[]>
-  subscribe(listener: (task: DownloadTask) => void): Promise<() => void>
-  cancel(id: string): Promise<void>
   snapshot(): Promise<DownloadSnapshot>
   subscribeEvents(listener: (event: DownloadEvent) => void): Promise<() => void>
   act(request: DownloadActionRequest): Promise<DownloadActionResult>
@@ -97,7 +93,6 @@ export interface AppPlatform {
   settings: SettingsPort
   history: HistoryPort
   programmeCache: ProgrammeCachePort
-  capabilities: { nativeDownloads: boolean; directorySelection: boolean }
   prepareExit?(prepare: () => Promise<boolean>): Promise<() => void>
   dispose(): Promise<void>
 }

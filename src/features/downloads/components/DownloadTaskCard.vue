@@ -15,8 +15,11 @@ import {
 } from '@lucide/vue'
 
 import CoverImage from '@/shared/components/CoverImage.vue'
-
 import { availableDownloadActions } from '@/features/downloads/model/download-actions'
+import {
+  downloadActionLabel,
+  downloadActionConfirmation,
+} from '@/features/downloads/model/download-action-presentation'
 
 import type { DownloadTask, DownloadActionRequest } from '@shared/contracts/downloads'
 
@@ -26,7 +29,13 @@ const emit = defineEmits<{
   action: [action: DownloadActionRequest['action']]
   play: []
 }>()
-const actions = computed(() => availableDownloadActions(props.task))
+
+const pending = shallowRef<{
+  action: DownloadActionRequest['action']
+  attemptId: string
+  description: string
+} | null>(null)
+
 const labels: Record<DownloadTask['state'], string> = {
   queued: '等待下载',
   running: '正在下载',
@@ -39,20 +48,6 @@ const labels: Record<DownloadTask['state'], string> = {
   cancelled: '已取消',
   missing: '文件已丢失',
 }
-const actionLabels: Record<DownloadActionRequest['action'], string> = {
-  pause: '暂停',
-  resume: '继续下载',
-  restart: '重新下载',
-  cancel: '取消',
-  remove: '移除记录',
-  deleteFile: '删除文件',
-  openFile: '外部打开',
-  revealFile: '显示文件',
-}
-const playable = computed(() => props.task.state === 'completed' && props.task.fileAvailable)
-const primaryAction = computed(() =>
-  actions.value.find((action) => ['pause', 'resume', 'restart'].includes(action)),
-)
 const actionIcons = {
   pause: Pause,
   resume: Play,
@@ -63,21 +58,22 @@ const actionIcons = {
   openFile: ExternalLink,
   revealFile: FolderOpen,
 }
+
+const actions = computed(() => availableDownloadActions(props.task))
+const playable = computed(() => props.task.state === 'completed' && props.task.fileAvailable)
+const primaryAction = computed(() =>
+  actions.value.find((action) => ['pause', 'resume', 'restart'].includes(action)),
+)
 const menuOptions = computed(() =>
   actions.value
     .filter((action) => action !== primaryAction.value)
     .map((action) => ({
       key: action,
-      label: actionLabels[action],
+      label: downloadActionLabel(action),
       icon: () => h(actionIcons[action], { size: 16 }),
       disabled: props.busy,
     })),
 )
-const pending = shallowRef<{
-  action: DownloadActionRequest['action']
-  attemptId: string
-  description: string
-} | null>(null)
 const showProgress = computed(
   () =>
     !['completed', 'cancelled', 'missing'].includes(props.task.state) &&
@@ -119,32 +115,12 @@ function bytes(value: number): string {
   return `${(value / 1024 ** 3).toFixed(2)} GiB`
 }
 
-function confirmation(action: DownloadActionRequest['action']): string | null {
-  if (action === 'deleteFile') {
-    return '删除此下载文件？相关本地播放会停止，任务记录会保留。'
-  }
-
-  if (action === 'remove') {
-    return '仅移除此任务记录？已下载文件会保留。'
-  }
-
-  if (action === 'restart' && props.task.hasPartial) {
-    return '从头重新下载？已保存的未完成片段会被删除。'
-  }
-
-  if (action === 'cancel' && props.task.hasPartial) {
-    return '取消此任务并删除未完成片段？'
-  }
-
-  return null
-}
-
 function requestAction(action: DownloadActionRequest['action']): void {
   if (props.busy || !actions.value.includes(action)) {
     return
   }
 
-  const description = confirmation(action)
+  const description = downloadActionConfirmation(action, { kind: 'single', task: props.task })
   if (description) {
     pending.value = { action, attemptId: props.task.attemptId, description }
   } else {
@@ -284,7 +260,7 @@ onDeactivated(() => {
         v-else-if="primaryAction"
         secondary
         :disabled="busy"
-        :aria-label="`${actionLabels[primaryAction]}：${task.filename}`"
+        :aria-label="`${downloadActionLabel(primaryAction)}：${task.filename}`"
         @click="requestAction(primaryAction)"
       >
         <template #icon>
@@ -293,7 +269,7 @@ onDeactivated(() => {
             :size="16"
           />
         </template>
-        {{ actionLabels[primaryAction] }}
+        {{ downloadActionLabel(primaryAction) }}
       </NButton>
       <NDropdown
         v-if="menuOptions.length"
@@ -314,7 +290,7 @@ onDeactivated(() => {
     <NModal
       :show="!!pending"
       preset="dialog"
-      :title="pending ? actionLabels[pending.action] : '确认操作'"
+      :title="pending ? downloadActionLabel(pending.action) : '确认操作'"
       positive-text="确认"
       negative-text="取消"
       @positive-click="confirmAction"
