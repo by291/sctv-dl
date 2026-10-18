@@ -38,12 +38,12 @@ beforeEach(async () => {
   const pinia = createPinia()
   setActivePinia(pinia)
   const catalogue = useProgrammeCatalogueStore()
-  catalogue.programmes = [
+  programmeApi.programmes.mockReset().mockResolvedValue([
     { id: '1', name: 'Bravo', cover: null },
     { id: '2', name: 'Alpha', cover: null },
     { id: '3', name: 'Charlie', cover: null },
-  ]
-  catalogue.updatedAt = new Date()
+  ])
+  await catalogue.load()
   useSettingsStore().favourites = ['1', '2']
   router = createRouter({
     history: createMemoryHistory(),
@@ -176,15 +176,20 @@ it('keeps connection announcements available across navigation and recovery', as
   const catalogue = useProgrammeCatalogueStore()
   expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')
 
-  catalogue.error = 'The programme service is unavailable.'
+  programmeApi.programmes.mockRejectedValueOnce(new Error('The programme service is unavailable.'))
+  await catalogue.load(true)
   await router.push('/settings')
   await flushPromises()
 
-  expect(wrapper.get('[role="status"]').text()).toBe('连接暂时不可用')
-  expect(wrapper.get('[role="alert"]').text()).toBe('连接暂时不可用')
+  expect(wrapper.get('[role="status"]').text()).toBe('刷新失败，显示已保存数据')
+  expect(wrapper.get('[role="alert"]').text()).toBe('刷新失败，显示已保存数据')
+  expect(wrapper.get('.connection-status').classes()).toContain('offline')
+  expect(wrapper.findComponent(SettingsView).text()).toContain(
+    'The programme service is unavailable.',
+  )
 
-  catalogue.error = ''
-  await wrapper.vm.$nextTick()
+  await catalogue.load(true)
+  await flushPromises()
 
   expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')
   expect(wrapper.find('[role="alert"]').exists()).toBe(false)

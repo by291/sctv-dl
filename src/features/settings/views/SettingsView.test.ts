@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { createNativeDownloadFixture } from '@/shared/platform/platform.test-support'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { NPopconfirm } from 'naive-ui'
+import { NButton, NPopconfirm } from 'naive-ui'
 
 import SettingsView from '@/features/settings/views/SettingsView.vue'
 import { createPlatformFixture } from '@/shared/platform/platform.test-support'
@@ -32,12 +32,8 @@ it('keeps browser directory management and offers recoverable native selection',
       throw new Error('Directory unavailable')
     },
     chooseDirectory: async () => selected,
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
     start: async () => ({ kind: 'cancelled' }),
   } satisfies NativeDownloadPort
-  platform.capabilities.directorySelection = true
   wrapper = mount(SettingsView, {
     global: { plugins: [createPinia()], provide: { [platformKey as symbol]: platform } },
   })
@@ -70,9 +66,6 @@ it.each(['success', 'failure'])(
       kind: 'native',
       getDirectory: () => initial,
       chooseDirectory: async () => '/new/directory',
-      list: async () => [],
-      subscribe: async () => () => {},
-      cancel: async () => {},
       start: async () => ({ kind: 'cancelled' }),
     }
     wrapper = mount(SettingsView, {
@@ -122,4 +115,84 @@ it('clears only programme metadata after confirmation and keeps user data', asyn
   await flushPromises()
   expect(clears).toBe(1)
   expect(wrapper.text()).toContain('节目缓存已清除')
+})
+
+it('discloses a failed refresh while keeping the previously loaded catalogue usable', async () => {
+  const platform = createPlatformFixture()
+  platform.programmes.programmes = vi
+    .fn()
+    .mockResolvedValueOnce([{ id: '1', name: 'News', cover: null }])
+    .mockRejectedValueOnce(new Error('Programme service offline'))
+  wrapper = mount(SettingsView, {
+    global: { plugins: [createPinia()], provide: { [platformKey as symbol]: platform } },
+  })
+  await flushPromises()
+
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === '检查连接')!
+    .trigger('click')
+  await flushPromises()
+
+  expect(wrapper.text()).toContain('Programme service offline')
+  expect(wrapper.text()).not.toContain('已连接')
+  expect(wrapper.get('.connection-status').classes()).toContain('offline')
+})
+
+it('shows a pending refresh even when a usable catalogue is already present', async () => {
+  const platform = createPlatformFixture()
+  let complete!: (value: []) => void
+  platform.programmes.programmes = vi
+    .fn()
+    .mockResolvedValueOnce([])
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve
+        }),
+    )
+  wrapper = mount(SettingsView, {
+    global: { plugins: [createPinia()], provide: { [platformKey as symbol]: platform } },
+  })
+  await flushPromises()
+
+  const refresh = wrapper.findAllComponents(NButton).find((button) => button.text() === '检查连接')!
+  await refresh.trigger('click')
+  await flushPromises()
+  expect(refresh.props('loading')).toBe(true)
+
+  complete([])
+  await flushPromises()
+  expect(refresh.props('loading')).toBe(false)
+})
+
+it('identifies cached data without claiming a successful live connection', async () => {
+  const platform = createPlatformFixture()
+  platform.programmeCache.read = async () => ({
+    epoch: 'fixture',
+    persisted: true,
+    warning: null,
+    snapshot: {
+      kind: 'catalogue',
+      version: 1,
+      revision: 'saved',
+      fetchedAt: '2026-10-17T00:00:00Z',
+      items: [{ id: '1', name: 'Cached news', cover: null }],
+    },
+  })
+  let complete!: (value: []) => void
+  platform.programmes.programmes = () =>
+    new Promise((resolve) => {
+      complete = resolve
+    })
+  wrapper = mount(SettingsView, {
+    global: { plugins: [createPinia()], provide: { [platformKey as symbol]: platform } },
+  })
+  await flushPromises()
+
+  expect(wrapper.get('.connection-status').element.parentElement?.textContent).toContain('缓存')
+  expect(wrapper.text()).not.toContain('已连接')
+
+  complete([])
+  await flushPromises()
 })

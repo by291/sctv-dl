@@ -44,19 +44,7 @@ const downloadNavigationLabel = computed(() =>
   tasks.activeCount ? `下载任务，${tasks.activeCount} 个进行中` : '下载任务',
 )
 const connectionLabel = computed(() => {
-  if (programmes.error) {
-    return '连接暂时不可用'
-  }
-
-  if (programmes.refreshError) {
-    return '刷新失败，显示已保存数据'
-  }
-
-  if (programmes.cached) {
-    return '正在显示节目缓存'
-  }
-
-  return programmes.updatedAt ? '已连接节目服务' : '四川电视节目'
+  return programmes.serviceStatus.label
 })
 
 function isActive(path: string): boolean {
@@ -126,7 +114,7 @@ onBeforeUnmount(() => {
         >
           <span
             class="status-dot"
-            :class="{ offline: programmes.error || programmes.refreshError }"
+            :class="{ offline: programmes.serviceStatus.error }"
             aria-hidden="true"
           />
           {{ connectionLabel }}
@@ -140,7 +128,7 @@ onBeforeUnmount(() => {
       <NavigationTabView
         :key="activeTab"
         :route="route"
-        :warning="programmes.error || programmes.refreshError ? connectionLabel : ''"
+        :warning="programmes.serviceStatus.error ? connectionLabel : ''"
       />
     </KeepAlive>
   </div>

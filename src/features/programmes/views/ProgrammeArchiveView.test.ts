@@ -134,7 +134,7 @@ beforeEach(async () => {
   })
   pinia = createPinia()
   setActivePinia(pinia)
-  useProgrammeCatalogueStore().programmes = [{ id: '1', name: 'Programme', cover: null }]
+  programmeApi.programmes.mockResolvedValue([{ id: '1', name: 'Programme', cover: null }])
   vi.mocked(programmeApi.dates).mockResolvedValue([{ id: '100', date: '2026-10-06' }])
   vi.mocked(programmeApi.contents).mockResolvedValue([both, standardOnly])
   router = createRouter({
@@ -345,7 +345,9 @@ it('pins history metadata when a preview opens and retains it while archive stat
     },
   }
   expect(dialog.props('input')).toEqual(expected)
-  useProgrammeCatalogueStore().programmes = [{ id: '1', name: 'Renamed programme', cover: null }]
+  programmeApi.programmes.mockResolvedValue([{ id: '1', name: 'Renamed programme', cover: null }])
+  await useProgrammeCatalogueStore().load(true)
+  useProgrammeCatalogueStore().acceptUpdate()
   wrapper.findComponent(ProgrammeDatePicker).vm.$emit('update:modelValue', '2026-10-05')
   await flushPromises()
   expect(dialog.props('input')).toEqual(expected)

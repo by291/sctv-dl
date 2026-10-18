@@ -22,24 +22,6 @@ const clearingCache = ref(false)
 const cacheMessage = ref('')
 const cacheError = ref('')
 
-async function clearCache(): Promise<void> {
-  if (clearingCache.value) {
-    return
-  }
-
-  clearingCache.value = true
-  cacheMessage.value = ''
-  cacheError.value = ''
-  try {
-    await platform.programmeCache.clear()
-    cacheMessage.value = '节目缓存已清除，当前列表会保留到下次刷新。'
-  } catch (cause) {
-    cacheError.value = errorMessage(cause)
-  } finally {
-    clearingCache.value = false
-  }
-}
-
 const settings = useSettingsStore()
 const history = useHistoryStore()
 const programmes = useProgrammeCatalogueStore()
@@ -61,18 +43,32 @@ const directoryDescription = computed(
     directory.value ||
     (directoryError.value ? '请选择可用的下载文件夹。' : '尚未选择，首次下载时会询问。'),
 )
-const connectionLabel = computed(() => {
-  if (programmes.error) {
-    return '连接暂时不可用'
-  }
-
-  return programmes.updatedAt ? '已连接四川观察节目服务' : '正在检查连接'
-})
+const connectionLabel = computed(() => programmes.serviceStatus.label)
 const connectionDescription = computed(
   () =>
-    programmes.error ||
-    `已读取 ${programmes.programmes.length} 个栏目 · 最近检查 ${lastUpdated.value}`,
+    programmes.serviceStatus.error ||
+    `已读取 ${programmes.programmes.length} 个栏目 · 数据更新 ${lastUpdated.value}`,
 )
+
+async function clearCache(): Promise<void> {
+  if (clearingCache.value) {
+    return
+  }
+
+  clearingCache.value = true
+  cacheMessage.value = ''
+  cacheError.value = ''
+
+  try {
+    await platform.programmeCache.clear()
+
+    cacheMessage.value = '节目缓存已清除，当前列表会保留到下次刷新。'
+  } catch (cause) {
+    cacheError.value = errorMessage(cause)
+  } finally {
+    clearingCache.value = false
+  }
+}
 
 onMounted(() => {
   void programmes.load()
@@ -245,7 +241,7 @@ onMounted(() => {
             <h3 class="setting-label">
               <span
                 class="status-dot connection-status"
-                :class="{ offline: programmes.error }"
+                :class="{ offline: programmes.serviceStatus.error }"
               />
               {{ connectionLabel }}
             </h3>
@@ -255,7 +251,7 @@ onMounted(() => {
           </div>
           <NButton
             secondary
-            :loading="programmes.loading"
+            :loading="programmes.refreshing"
             @click="programmes.load(true)"
           >
             <template #icon><RefreshCw :size="16" /></template>

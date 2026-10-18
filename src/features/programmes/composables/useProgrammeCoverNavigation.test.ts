@@ -82,8 +82,7 @@ beforeEach(async () => {
   const pinia = createPinia()
   setActivePinia(pinia)
   const catalogue = useProgrammeCatalogueStore()
-  catalogue.programmes = [{ id: '1', name: 'Programme', cover: null }]
-  catalogue.updatedAt = new Date()
+  await catalogue.load()
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -473,7 +472,9 @@ describe('programme cover navigation', () => {
   it('uses ordinary navigation if the original source has disappeared', async () => {
     await wrapper.get('.programme-cover').trigger('click')
     await flushPromises()
-    useProgrammeCatalogueStore().programmes = []
+    programmeApi.programmes.mockResolvedValueOnce([])
+    await useProgrammeCatalogueStore().load(true)
+    useProgrammeCatalogueStore().acceptUpdate()
     await flushPromises()
     await wrapper.get('.back-link').trigger('click')
     await vi.waitFor(() => expect(wrapper.find('.library-view').exists()).toBe(true))
@@ -514,7 +515,9 @@ describe('programme cover navigation', () => {
     })
     const returning = router.push('/')
     await flushPromises()
-    useProgrammeCatalogueStore().programmes = replacement
+    programmeApi.programmes.mockResolvedValueOnce(replacement)
+    await useProgrammeCatalogueStore().load(true)
+    useProgrammeCatalogueStore().acceptUpdate()
     await flushPromises()
     await runUpdate()
     await returning
