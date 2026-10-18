@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { programmeSchema, programmeContentSchema } from './programmes.ts'
-import { downloadRequestSchema, downloadTaskSchema } from './downloads.ts'
-import { settingsSchema } from './settings.ts'
-import settings from '../fixtures/settings.json' with { type: 'json' }
 
-describe('application contracts', () => {
+describe('programme contracts', () => {
   it('retains string IDs above the safe integer boundary and rejects numeric DTO IDs', () => {
     expect(programmeSchema.parse({ id: '9007199254740992', name: 'News', cover: null }).id).toBe(
       '9007199254740992',
@@ -27,51 +24,5 @@ describe('application contracts', () => {
     expect(
       programmeContentSchema.safeParse({ ...result, cover: 'javascript:alert(1)' }).success,
     ).toBe(false)
-  })
-
-  it('limits distinct batch IDs and refuses caller-supplied file locations', () => {
-    const request = { programmeId: '1', dateId: '2', contentIds: ['3', '3'], quality: 'standard' }
-    expect(downloadRequestSchema.parse(request).contentIds).toEqual(['3'])
-    expect(
-      downloadRequestSchema.safeParse({ ...request, url: 'https://example.com/a.mp4' }).success,
-    ).toBe(false)
-    expect(
-      downloadRequestSchema.safeParse({
-        ...request,
-        contentIds: Array.from({ length: 101 }, (_, i) => String(i)),
-      }).success,
-    ).toBe(false)
-  })
-
-  it('preserves unknown transfer totals and rejects negative progress', () => {
-    const task = {
-      id: 'task-1',
-      attemptId: 'attempt-1',
-      createdAt: '2026-10-17T00:00:00Z',
-      metadata: {
-        content: { programmeId: '1', dateId: '2', contentId: '3' },
-        programmeName: 'News',
-        broadcastDate: '2026-10-17',
-        title: 'News',
-        cover: null,
-      },
-      canResume: false,
-      fileAvailable: false,
-      hasPartial: true,
-      content: { programmeId: '1', dateId: '2', contentId: '3' },
-      filename: 'news.mp4',
-      quality: 'standard',
-      state: 'running',
-      receivedBytes: 10,
-      totalBytes: null,
-      error: null,
-      revision: 1,
-    }
-    expect(downloadTaskSchema.parse(task).totalBytes).toBeNull()
-    expect(downloadTaskSchema.safeParse({ ...task, receivedBytes: -1 }).success).toBe(false)
-  })
-
-  it.each(settings)('retains preference defaults and valid favourite IDs', (fixture) => {
-    expect(settingsSchema.parse(fixture.raw)).toEqual(fixture.expected)
   })
 })

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 import { historyMetadataSchema } from './history.ts'
-
 import { contentRefSchema, idSchema, qualitySchema, urlSchema } from './programmes.ts'
 
 export const downloadRequestSchema = z.strictObject({
@@ -15,7 +14,11 @@ export const downloadRequestSchema = z.strictObject({
   quality: qualitySchema,
 })
 
+export type DownloadRequest = z.infer<typeof downloadRequestSchema>
+
 export const fileFailureSchema = z.object({ contentId: idSchema, message: z.string() })
+
+export type FileFailure = z.infer<typeof fileFailureSchema>
 
 export const preparedDownloadSchema = z.object({
   contentId: idSchema,
@@ -25,11 +28,20 @@ export const preparedDownloadSchema = z.object({
   quality: qualitySchema,
 })
 
+export type PreparedDownload = z.infer<typeof preparedDownloadSchema>
+
 export const preparedDownloadsSchema = z.object({
   files: z.array(preparedDownloadSchema),
   failures: z.array(fileFailureSchema),
   usedFallback: z.boolean(),
 })
+
+export type PreparedDownloads = z.infer<typeof preparedDownloadsSchema>
+
+export type DownloadStartResult =
+  | { kind: 'cancelled' }
+  | { kind: 'browser'; handedOff: number; usedFallback: boolean; failures: FileFailure[] }
+  | { kind: 'native'; taskIds: string[]; usedFallback: boolean; failures: FileFailure[] }
 
 export const downloadTaskSchema = z.object({
   id: z.string().min(1),
@@ -48,6 +60,7 @@ export const downloadTaskSchema = z.object({
     'cancelled',
     'missing',
   ]),
+  // Commands target one transfer attempt; a retry must invalidate delayed actions.
   attemptId: z.string().min(1),
   createdAt: z.iso.datetime(),
   metadata: historyMetadataSchema,
@@ -55,32 +68,25 @@ export const downloadTaskSchema = z.object({
   fileAvailable: z.boolean(),
   hasPartial: z.boolean(),
   receivedBytes: z.number().int().nonnegative(),
+  // null means unknown length, not an empty file or completed transfer.
   totalBytes: z.number().int().nonnegative().nullable(),
   error: z.string().nullable(),
+  // Monotonic within this task; snapshots and events also carry a stream revision.
   revision: z.number().int().nonnegative(),
 })
 
-export type DownloadRequest = z.infer<typeof downloadRequestSchema>
-
-export type PreparedDownload = z.infer<typeof preparedDownloadSchema>
-
-export type PreparedDownloads = z.infer<typeof preparedDownloadsSchema>
-
-export type FileFailure = z.infer<typeof fileFailureSchema>
-
 export type DownloadTask = z.infer<typeof downloadTaskSchema>
 
-export type DownloadStartResult =
-  | { kind: 'cancelled' }
-  | { kind: 'browser'; handedOff: number; usedFallback: boolean; failures: FileFailure[] }
-  | { kind: 'native'; taskIds: string[]; usedFallback: boolean; failures: FileFailure[] }
-
+// Epoch changes reset reconciliation; revisions are comparable only within the same epoch.
 export const downloadSnapshotSchema = z.object({
   epoch: z.string().min(1),
   revision: z.number().int().nonnegative(),
   tasks: z.array(downloadTaskSchema),
 })
 
+export type DownloadSnapshot = z.infer<typeof downloadSnapshotSchema>
+
+// Removal events retain their revision so late snapshots cannot resurrect a task.
 export const downloadEventSchema = z.discriminatedUnion('kind', [
   z.object({
     epoch: z.string().min(1),
@@ -95,6 +101,8 @@ export const downloadEventSchema = z.discriminatedUnion('kind', [
     taskId: z.string().min(1),
   }),
 ])
+
+export type DownloadEvent = z.infer<typeof downloadEventSchema>
 
 export const downloadActionRequestSchema = z.strictObject({
   taskId: z.string().min(1),
@@ -111,15 +119,11 @@ export const downloadActionRequestSchema = z.strictObject({
   ]),
 })
 
+export type DownloadActionRequest = z.infer<typeof downloadActionRequestSchema>
+
 export const downloadActionResultSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('applied'), task: downloadTaskSchema.nullable() }),
   z.object({ kind: z.literal('skipped'), message: z.string() }),
 ])
-
-export type DownloadSnapshot = z.infer<typeof downloadSnapshotSchema>
-
-export type DownloadEvent = z.infer<typeof downloadEventSchema>
-
-export type DownloadActionRequest = z.infer<typeof downloadActionRequestSchema>
 
 export type DownloadActionResult = z.infer<typeof downloadActionResultSchema>

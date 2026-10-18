@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  downloadRequestSchema,
   downloadActionRequestSchema,
   downloadEventSchema,
   downloadSnapshotSchema,
@@ -62,5 +63,51 @@ describe('durable native download contracts', () => {
     expect(downloadActionRequestSchema.safeParse({ taskId: 'task', action: 'pause' }).success).toBe(
       false,
     )
+  })
+})
+
+describe('download preparation contracts', () => {
+  it('limits distinct batch IDs and refuses caller-supplied file locations', () => {
+    const request = { programmeId: '1', dateId: '2', contentIds: ['3', '3'], quality: 'standard' }
+    expect(downloadRequestSchema.parse(request).contentIds).toEqual(['3'])
+    expect(
+      downloadRequestSchema.safeParse({ ...request, url: 'https://example.com/a.mp4' }).success,
+    ).toBe(false)
+    expect(
+      downloadRequestSchema.safeParse({
+        ...request,
+        contentIds: Array.from({ length: 101 }, (_, i) => String(i)),
+      }).success,
+    ).toBe(false)
+  })
+})
+
+describe('download progress contracts', () => {
+  it('preserves unknown transfer totals and rejects negative progress', () => {
+    const task = {
+      id: 'task-1',
+      attemptId: 'attempt-1',
+      createdAt: '2026-10-17T00:00:00Z',
+      metadata: {
+        content: { programmeId: '1', dateId: '2', contentId: '3' },
+        programmeName: 'News',
+        broadcastDate: '2026-10-17',
+        title: 'News',
+        cover: null,
+      },
+      canResume: false,
+      fileAvailable: false,
+      hasPartial: true,
+      content: { programmeId: '1', dateId: '2', contentId: '3' },
+      filename: 'news.mp4',
+      quality: 'standard',
+      state: 'running',
+      receivedBytes: 10,
+      totalBytes: null,
+      error: null,
+      revision: 1,
+    }
+    expect(downloadTaskSchema.parse(task).totalBytes).toBeNull()
+    expect(downloadTaskSchema.safeParse({ ...task, receivedBytes: -1 }).success).toBe(false)
   })
 })

@@ -12,6 +12,7 @@ export const programmeCacheKeySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('contents'), programmeId: idSchema, dateId: idSchema }),
 ])
 
+// Persisted optional fields may be absent in older snapshots; normalize them before comparison.
 const cataloguePayload = z.object({
   kind: z.literal('catalogue'),
   items: z.array(programmeSchema.extend({ cover: programmeSchema.shape.cover.default(null) })),
@@ -93,6 +94,7 @@ export type BrowseStateRead = z.infer<typeof browseStateReadSchema>
 
 export function programmeCacheKey(key: ProgrammeCacheKey): string {
   const parsed = programmeCacheKeySchema.parse(key)
+
   switch (parsed.kind) {
     case 'catalogue':
       return 'catalogue'
