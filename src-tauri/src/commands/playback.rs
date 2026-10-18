@@ -23,6 +23,7 @@ pub async fn open_playback(
         .run(async {
             let _operation = lifecycle.enter().await?;
             let programmes = state.programmes.as_ref().map_err(Clone::clone)?;
+
             playback
                 .0
                 .as_ref()
@@ -56,9 +57,11 @@ pub async fn open_local_playback(
         .run(async {
             let operation = Arc::new(lifecycle.enter().await?);
             let playback = playback.0.as_ref().map_err(Clone::clone)?.clone();
+
             let pending = downloads
                 .open_local_playback(task_id, playback, operation)
                 .await?;
+
             Ok(pending.deliver())
         })
         .await

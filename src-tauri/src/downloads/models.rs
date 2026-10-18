@@ -1,13 +1,7 @@
-use crate::media::Quality;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ContentRef {
-    pub programme_id: String,
-    pub date_id: String,
-    pub content_id: String,
-}
+use crate::media::Quality;
+pub use crate::programmes::ContentRef;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -110,6 +104,7 @@ impl DownloadTask {
                 | TaskState::Finalizing
         ) || self.state == TaskState::Failed && self.has_partial
     }
+
     pub fn active(&self) -> bool {
         matches!(
             self.state,

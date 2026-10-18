@@ -11,7 +11,7 @@ These instructions apply to `src-tauri/` in addition to the root [AGENTS.md](../
 
 ## Rust Readability
 
-- Use rustfmt for mechanical formatting. Separate imports, types, impl blocks, and adjacent methods with clear blank lines. Within a function, separate validation, resource acquisition, external work, state commitment, and cleanup.
+- Use rustfmt for mechanical formatting, then manually review each owned function and macro for logical paragraphs; rustfmt alone does not establish readability. Separate imports, types, impl blocks, and adjacent methods with clear blank lines. Within a function, separate validation, resource acquisition, external work, state commitment, and cleanup where those phases change. Keep a request/result next to its immediate stale or cancellation guard. Expand packed `select!` branches and nested JSON fixtures when their control flow or fields become hard to scan; do not insert blank lines after every statement.
 - Keep each function at one main level of abstraction. Extract named workflow steps or pure rules; split modules by independent responsibilities rather than line count.
 - Make lock scopes visible with local blocks. Copy the data needed for external work, then release shared state locks. Keep filesystem work and potentially blocking lock waits in `spawn_blocking`; move the relevant operation/admission guard into that worker.
 - Document the ownership and completion contracts of resource-bearing APIs: who cancels, who awaits, what a successful return guarantees, and how failure cleans up. `Drop` provides best-effort fallback; explicit finalization must report errors.

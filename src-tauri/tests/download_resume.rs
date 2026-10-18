@@ -18,6 +18,7 @@ fn checkpoint(bytes: u64) -> ResumeCheckpoint {
         etag: Some("\"stable\"".into()),
     }
 }
+
 fn headers(range: &str, etag: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert("content-range", HeaderValue::from_str(range).unwrap());
@@ -28,6 +29,7 @@ fn headers(range: &str, etag: &str) -> HeaderMap {
 #[test]
 fn validates_range_validator_length_and_complete_416_without_appending_incompatible_bytes() {
     let checkpoint = checkpoint(40);
+
     assert_eq!(
         decide(
             &checkpoint,
@@ -41,6 +43,7 @@ fn validates_range_validator_length_and_complete_416_without_appending_incompati
             etag: "\"stable\"".into()
         }
     );
+
     for (status, range, etag, length) in [
         (StatusCode::OK, "bytes 40-99/100", "\"stable\"", 40),
         (
@@ -92,6 +95,7 @@ fn validates_range_validator_length_and_complete_416_without_appending_incompati
             ResumeDecision::RestartRequired { .. }
         ));
     }
+
     let complete = super_checkpoint();
     assert_eq!(
         decide(
@@ -112,6 +116,7 @@ fn validates_range_validator_length_and_complete_416_without_appending_incompati
         ResumeDecision::RestartRequired { .. }
     ));
 }
+
 fn super_checkpoint() -> ResumeCheckpoint {
     checkpoint(100)
 }

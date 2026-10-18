@@ -1,5 +1,6 @@
-use super::file_identity::FileIdentity;
 use serde::{Deserialize, Serialize};
+
+use super::file_identity::FileIdentity;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -55,6 +56,7 @@ impl ReservationRecord {
         {
             return Err(std::io::Error::other("Invalid download recovery record"));
         }
+
         Ok(())
     }
 }

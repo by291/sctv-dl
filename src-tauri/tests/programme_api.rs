@@ -1,6 +1,10 @@
 mod support;
 
-use support::{Stub, serve};
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use axum::{
     Json, Router,
@@ -11,12 +15,9 @@ use sctv_dl_desktop_lib::error::ErrorCode;
 use sctv_dl_desktop_lib::programmes::{Deadlines, ProgrammeService};
 use sctv_dl_desktop_lib::requests::RequestRegistry;
 use serde_json::{Value, json};
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
 use uuid::Uuid;
+
+use support::{Stub, serve};
 
 async fn json_stub(value: Value) -> Stub {
     serve(Router::new().fallback(move || {
@@ -181,6 +182,7 @@ async fn concurrent_requests_use_one_guest_identity_and_the_expected_paths() {
     }))
     .await;
     let client = service(&stub);
+
     let (programmes, dates, contents) = tokio::join!(
         client.programmes(),
         client.dates("1"),
@@ -189,6 +191,7 @@ async fn concurrent_requests_use_one_guest_identity_and_the_expected_paths() {
     programmes.unwrap();
     dates.unwrap();
     contents.unwrap();
+
     let seen = seen.lock().unwrap();
     let ids: Vec<_> = seen
         .iter()
@@ -215,6 +218,7 @@ async fn concurrent_requests_use_one_guest_identity_and_the_expected_paths() {
         assert!(!headers.contains_key("referer"));
         assert!(!headers.contains_key("cookie"));
     }
+
     let mut paths: Vec<_> = seen.iter().map(|(path, _)| path.as_str()).collect();
     paths.sort();
     assert_eq!(
@@ -244,6 +248,7 @@ async fn times_out_headers_and_idle_bodies_but_allows_progressing_bodies() {
         client.programmes().await.unwrap_err().code,
         ErrorCode::Timeout
     );
+
     for delay in [Duration::from_millis(30), Duration::from_millis(200)] {
         let stub = serve(Router::new().fallback(move || async move {
             let chunks = vec!["{\"rs\":200,", "\"data\":{", "\"records\":", "[]}}"];
@@ -258,7 +263,9 @@ async fn times_out_headers_and_idle_bodies_but_allows_progressing_bodies() {
         .await;
         let client =
             ProgrammeService::new(&stub.origin, Uuid::new_v4().to_string(), deadlines).unwrap();
+
         let result = client.programmes().await;
+
         if delay.as_millis() == 30 {
             assert!(result.unwrap().is_empty());
         } else {
@@ -291,6 +298,7 @@ async fn cancels_pending_headers_and_body_reads_and_releases_registry_entries() 
         let client = service(&stub);
         let task = tokio::spawn(async move { guard.run(client.programmes()).await });
         received.recv().await.unwrap();
+
         registry.cancel(&id).unwrap();
         let error = tokio::time::timeout(Duration::from_secs(1), task)
             .await

@@ -1,32 +1,13 @@
-use sctv_dl_desktop_lib::{commands, history::HistoryService, lifecycle::ExitController};
-use serde_json::{Value, json};
-use std::sync::Arc;
-use tauri::{
-    ipc::{CallbackFn, InvokeBody},
-    test::{INVOKE_KEY, get_ipc_response, mock_builder},
-    webview::InvokeRequest,
-};
+#[path = "support/ipc.rs"]
+mod ipc;
 
-fn invoke(
-    window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-    command: &str,
-    body: Value,
-    origin: &str,
-) -> Result<Value, Value> {
-    get_ipc_response(
-        window,
-        InvokeRequest {
-            cmd: command.into(),
-            callback: CallbackFn(0),
-            error: CallbackFn(1),
-            url: origin.parse().unwrap(),
-            body: InvokeBody::Json(body),
-            headers: Default::default(),
-            invoke_key: INVOKE_KEY.into(),
-        },
-    )
-    .map(|body| body.deserialize().unwrap())
-}
+use std::sync::Arc;
+
+use sctv_dl_desktop_lib::{commands, history::HistoryService, lifecycle::ExitController};
+use serde_json::json;
+use tauri::test::mock_builder;
+
+use ipc::{invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
@@ -53,23 +34,45 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
     let secondary = tauri::WebviewWindowBuilder::new(&app, "secondary", Default::default())
         .build()
         .unwrap();
-    let origin = if cfg!(windows) {
-        "http://tauri.localhost"
-    } else {
-        "tauri://localhost"
-    };
-    let metadata = json!({"content":{"programmeId":"1","dateId":"2","contentId":"3"},"programmeName":"News","broadcastDate":"2026-10-17","title":"Evening","cover":null});
-    let session = invoke(&main, "begin_history", json!({"metadata":metadata}), origin).unwrap();
-    let record = json!({"sessionId":session["id"],"sample":{"positionMs":300000,"durationMs":1000000,"ended":false,"sequence":1}});
+    let origin = local_origin();
+
+    let metadata = json!({
+        "content": {
+            "programmeId": "1",
+            "dateId": "2",
+            "contentId": "3"
+        },
+        "programmeName": "News",
+        "broadcastDate": "2026-10-17",
+        "title": "Evening",
+        "cover": null
+    });
+    let session = invoke(
+        &main,
+        "begin_history",
+        json!({"metadata": metadata}),
+        origin,
+    )
+    .unwrap();
+    let record = json!({
+        "sessionId": session["id"],
+        "sample": {
+            "positionMs": 300000,
+            "durationMs": 1000000,
+            "ended": false,
+            "sequence": 1
+        }
+    });
+
     let requests = [
         ("list_history", json!({})),
-        ("begin_history", json!({"metadata":metadata})),
+        ("begin_history", json!({"metadata": metadata})),
         ("record_history", record.clone()),
-        ("end_history", json!({"sessionId":session["id"]})),
-        ("remove_history", json!({"content":metadata["content"]})),
+        ("end_history", json!({"sessionId": session["id"]})),
+        ("remove_history", json!({"content": metadata["content"]})),
         ("clear_history", json!({})),
-        ("subscribe_history", json!({"onEvent":"__CHANNEL__:7"})),
-        ("unsubscribe_history", json!({"subscriptionId":"unknown"})),
+        ("subscribe_history", json!({"onEvent": "__CHANNEL__:7"})),
+        ("unsubscribe_history", json!({"subscriptionId": "unknown"})),
     ];
     for (command, body) in &requests {
         assert!(
@@ -81,27 +84,31 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
             "{command}"
         );
     }
+
     let closing = controller.begin().unwrap();
     assert_eq!(
         invoke(&main, "record_history", record, origin).unwrap(),
-        json!({"accepted":true,"persisted":true})
+        json!({"accepted": true, "persisted": true})
     );
+
     let snapshot = invoke(&main, "list_history", json!({}), origin).unwrap();
     assert_eq!(snapshot["entries"][0]["positionMs"], 300000);
+
     let subscription = invoke(
         &main,
         "subscribe_history",
-        json!({"onEvent":"__CHANNEL__:7"}),
+        json!({"onEvent": "__CHANNEL__:7"}),
         origin,
     )
     .unwrap();
     invoke(
         &main,
         "unsubscribe_history",
-        json!({"subscriptionId":subscription}),
+        json!({"subscriptionId": subscription}),
         origin,
     )
     .unwrap();
+
     let downloads =
         sctv_dl_desktop_lib::downloads::DownloadManager::new(Default::default()).unwrap();
     assert!(closing.complete(&downloads, || async { false }).await);

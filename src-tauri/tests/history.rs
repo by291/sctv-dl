@@ -2,8 +2,20 @@ use sctv_dl_desktop_lib::{history::*, lifecycle::ExitController};
 use serde_json::json;
 
 fn metadata(id: &str) -> HistoryMetadata {
-    serde_json::from_value(json!({"content":{"programmeId":"1","dateId":"2","contentId":id},"programmeName":"News","broadcastDate":"2026-10-17","title":"Evening","cover":null})).unwrap()
+    serde_json::from_value(json!({
+        "content": {
+            "programmeId": "1",
+            "dateId": "2",
+            "contentId": id
+        },
+        "programmeName": "News",
+        "broadcastDate": "2026-10-17",
+        "title": "Evening",
+        "cover": null
+    }))
+    .unwrap()
 }
+
 fn sample(position_ms: u64, sequence: u64) -> HistorySample {
     HistorySample {
         position_ms,
@@ -134,11 +146,13 @@ async fn saves_reload_without_tokens_and_failed_preparation_preserves_progress()
         )
         .await
         .unwrap();
+
     let reopened = service
         .begin(metadata("3"), gate.enter_save().await.unwrap())
         .await
         .unwrap();
     assert_eq!(reopened.entry.unwrap().position_ms, 30_000);
+
     drop(service);
     let service = HistoryService::open(path).await;
     assert_eq!(service.list().entries[0].position_ms, 30_000);
@@ -207,6 +221,7 @@ async fn newest_session_and_sequence_win_and_deletions_cannot_be_resurrected() {
         .await
         .unwrap();
     assert!(!service.list().entries[0].completed);
+
     service
         .remove(metadata("3").content, gate.enter_save().await.unwrap())
         .await
@@ -258,6 +273,7 @@ async fn corrupt_documents_are_preserved_and_second_owner_never_overwrites() {
     );
     assert_eq!(service.list().entries[0].position_ms, 5);
     assert_eq!(std::fs::read(&path).unwrap(), b"{broken");
+
     drop(service);
     std::fs::remove_file(&path).unwrap();
     let first = HistoryService::open(path.clone()).await;
@@ -294,6 +310,7 @@ async fn failed_replacement_rolls_back_entries_and_sequence_for_retry() {
         )
         .await
         .unwrap();
+
     let bytes = std::fs::read(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
     std::fs::create_dir(&path).unwrap();
@@ -309,6 +326,7 @@ async fn failed_replacement_rolls_back_entries_and_sequence_for_retry() {
     );
     assert_eq!(service.list().entries[0].position_ms, 100);
     assert!(!service.list().persisted);
+
     std::fs::remove_dir(&path).unwrap();
     std::fs::write(&path, bytes).unwrap();
     assert!(
@@ -346,7 +364,9 @@ async fn retains_the_newest_500_entries() {
             .await
             .unwrap();
     }
+
     let entries = service.list().entries;
+
     assert_eq!(entries.len(), 500);
     assert_eq!(entries[0].metadata.content.content_id, "500");
     assert_eq!(entries[499].metadata.content.content_id, "1");
@@ -436,6 +456,7 @@ async fn subscribers_observe_committed_snapshots_and_can_detach() {
         assert!(snapshots[1].revision > snapshots[0].revision);
         assert!(snapshots.iter().all(|snapshot| snapshot.persisted));
     }
+
     service.unsubscribe(&subscription);
     service
         .clear(gate.enter_save().await.unwrap())

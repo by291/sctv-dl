@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
+use tauri::{AppHandle, Runtime};
+use tauri_plugin_opener::OpenerExt;
+
 use crate::{
     downloads::{DownloadAction, DownloadActionRequest, DownloadActionResult, DownloadManager},
     error::{AppError, ErrorCode, Result},
     lifecycle::OperationGuard,
     media::PlaybackService,
 };
-use std::sync::Arc;
-use tauri::{AppHandle, Runtime};
-use tauri_plugin_opener::OpenerExt;
 
 pub async fn act_on_file<R: Runtime>(
     app: AppHandle<R>,
@@ -27,6 +29,7 @@ pub async fn act_on_file<R: Runtime>(
                 DownloadAction::RevealFile => app.opener().reveal_item_in_dir(path),
                 _ => unreachable!("only external file actions reach the opener"),
             };
+
             result.map_err(|error| {
                 AppError::with_source(ErrorCode::Storage, "无法打开本机文件或所在文件夹", error)
             })

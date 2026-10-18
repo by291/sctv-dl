@@ -13,12 +13,13 @@ pub mod state;
 pub mod storage;
 
 use std::sync::Arc;
+
 use tauri::Manager;
-use tauri_plugin_store::StoreExt;
-use tauri_plugin_window_state::{StateFlags, WindowExt};
+use tauri_plugin_window_state::StateFlags;
 
 pub fn run() {
     let window_state_flags = StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -46,80 +47,10 @@ pub fn run() {
             lifecycle::install_menu(app.handle())?;
             #[cfg(target_os = "macos")]
             lifecycle::macos::install(app.handle())?;
-            // Initialize identity once before any metadata command can access the service.
-            let store = app
-                .store_builder("desktop.json")
-                .disable_auto_save()
-                .build()
-                .map_err(|cause| {
-                    error::AppError::with_source(
-                        error::ErrorCode::Storage,
-                        "无法打开桌面应用数据",
-                        cause,
-                    )
-                    .reported("open desktop data")
-                });
-            let identity = store
-                .as_ref()
-                .map_err(Clone::clone)
-                .and_then(|store| settings::installation_id(store));
-            let directory_store = match &identity {
-                Ok(_) => store,
-                Err(error) => Err(error.clone()),
-            };
-            let service = identity.and_then(programmes::ProgrammeService::production);
-            app.manage(settings::DesktopSettings::new(directory_store));
-            let history = match app.path().app_data_dir() {
-                Ok(directory) => tauri::async_runtime::block_on(history::HistoryService::open(
-                    directory.join("history-v1.json"),
-                )),
-                Err(error) => history::HistoryService::unavailable(error::AppError::with_source(
-                    error::ErrorCode::Storage,
-                    "无法访问观看记录目录，本次记录仅在当前会话保存",
-                    error,
-                )),
-            };
-            app.manage(history);
-            let programme_cache = match app.path().app_cache_dir() {
-                Ok(directory) => tauri::async_runtime::block_on(
-                    programme_cache::ProgrammeCacheService::open(directory.join("programme-cache")),
-                ),
-                Err(error) => programme_cache::ProgrammeCacheService::unavailable(
-                    error::AppError::with_source(
-                        error::ErrorCode::Storage,
-                        "无法访问节目缓存目录，本次缓存仅在当前会话保存",
-                        error,
-                    ),
-                ),
-            };
-            app.manage(programme_cache);
-            let downloads = match app.path().app_data_dir() {
-                Ok(directory) => tauri::async_runtime::block_on(downloads::DownloadManager::open(
-                    downloads::DownloadConfig::default(),
-                    directory.join("downloads-v1.json"),
-                )),
-                Err(error) => downloads::DownloadManager::unavailable(
-                    downloads::DownloadConfig::default(),
-                    error::AppError::with_source(
-                        error::ErrorCode::Storage,
-                        "无法访问下载记录目录",
-                        error,
-                    ),
-                ),
-            }?;
-            app.manage(downloads);
-            app.manage(state::PlaybackState(tauri::async_runtime::block_on(
-                media::PlaybackService::new(media::MediaConfig::default()),
-            )));
-            app.manage(state::AppState::new(service));
 
-            if let Some(window) = app.get_webview_window("main") {
-                // Show even when state restoration fails; visibility is never persisted.
-                if let Err(error) = window.restore_state(window_state_flags) {
-                    eprintln!("[desktop] restore window state: {error}");
-                }
-                window.show()?;
-            }
+            application::bootstrap::initialize_services(app.handle())?;
+            application::bootstrap::restore_main_window(app.handle(), window_state_flags)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -169,9 +100,11 @@ pub fn run() {
                 api.prevent_exit();
                 lifecycle::request_exit(app);
             }
+
             if matches!(event, tauri::RunEvent::Exit) {
                 tauri::async_runtime::block_on(async {
                     app.state::<downloads::DownloadManager>().shutdown().await;
+
                     if let Ok(playback) = &app.state::<state::PlaybackState>().0 {
                         playback.shutdown().await;
                     }

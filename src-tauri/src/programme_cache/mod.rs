@@ -1,63 +1,96 @@
+mod manifest;
 mod models;
+mod persistence;
+
 pub use models::*;
+
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
+use chrono::{SecondsFormat, Utc};
+use uuid::Uuid;
 
 use crate::{
     error::{AppError, ErrorCode, Result},
     lifecycle::OperationGuard,
-    storage::{read_json, write_json_atomic},
 };
-use chrono::{SecondsFormat, Utc};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fs::{File, OpenOptions},
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-use uuid::Uuid;
+
+use manifest::Manifest;
+use persistence::{CacheStorage, CommitOutcome, DiskRead};
 
 const MAX_BYTES: usize = 20 * 1024 * 1024;
 const WARNING: &str = "节目缓存无法保存到本地，当前数据仅在本次会话中保留";
-#[derive(Clone, Deserialize, Serialize)]
-struct Entry {
-    file: String,
-    bytes: usize,
-    accessed: u64,
+const CORRUPT_INDEX: &str = "节目缓存索引已损坏，已开始新的缓存代际";
+const CORRUPT_SNAPSHOT: &str = "部分节目缓存已损坏，请刷新";
+
+enum SnapshotLoad {
+    Found(Snapshot),
+    Missing,
+    Unavailable,
 }
-#[derive(Clone, Deserialize, Serialize)]
-struct Manifest {
-    version: u32,
-    epoch: String,
-    clock: u64,
-    entries: BTreeMap<String, Entry>,
-    browse: BTreeMap<String, BrowseState>,
-}
-impl Default for Manifest {
-    fn default() -> Self {
-        Self {
-            version: 1,
-            epoch: Uuid::new_v4().to_string(),
-            clock: 0,
-            entries: BTreeMap::new(),
-            browse: BTreeMap::new(),
+
+impl SnapshotLoad {
+    fn readable(&self) -> bool {
+        !matches!(self, Self::Unavailable)
+    }
+
+    fn snapshot(self) -> Option<Snapshot> {
+        match self {
+            Self::Found(snapshot) => Some(snapshot),
+            Self::Missing | Self::Unavailable => None,
         }
     }
 }
+
 struct State {
     manifest: Manifest,
     memory: BTreeMap<String, Snapshot>,
+    manifest_persisted: bool,
     warning: Option<String>,
 }
+
+impl State {
+    fn snapshot_persisted(&self, storage: &CacheStorage, key: &str) -> bool {
+        storage.writable() && self.manifest_persisted && !self.memory.contains_key(key)
+    }
+
+    fn remember(&mut self, key: String, snapshot: Snapshot) {
+        self.memory.insert(key.clone(), snapshot);
+
+        // Failed writes retain bounded process-local results without changing the
+        // committed index. Prefer keeping the result of the current operation.
+        while self.memory.len() > 200
+            || self
+                .memory
+                .values()
+                .map(|value| serde_json::to_vec(value).map_or(MAX_BYTES, |bytes| bytes.len()))
+                .sum::<usize>()
+                > MAX_BYTES
+        {
+            let oldest = self.memory.keys().find(|name| *name != &key).cloned();
+
+            if let Some(oldest) = oldest {
+                self.memory.remove(&oldest);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
 struct Owner {
-    root: PathBuf,
-    writable: bool,
-    _lock: Option<File>,
+    storage: CacheStorage,
     state: Mutex<State>,
 }
+
 /// All I/O and lock waits run in a blocking worker retaining its exit operation
 /// guard. The owner serializes manifest changes through completion, including clear.
 #[derive(Clone)]
 pub struct ProgrammeCacheService(Arc<Owner>);
+
 impl ProgrammeCacheService {
     pub async fn open(root: PathBuf) -> Self {
         match tokio::task::spawn_blocking(move || Self::open_blocking(root)).await {
@@ -67,94 +100,110 @@ impl ProgrammeCacheService {
             }
         }
     }
+
     pub fn unavailable(error: AppError) -> Self {
         Self(Arc::new(Owner {
-            root: PathBuf::new(),
-            writable: false,
-            _lock: None,
+            storage: CacheStorage::unavailable(),
             state: Mutex::new(State {
                 manifest: Manifest::default(),
                 memory: BTreeMap::new(),
+                manifest_persisted: false,
                 warning: Some(error.reported("open programme cache").message),
             }),
         }))
     }
+
     fn open_blocking(root: PathBuf) -> Self {
-        let lock = (|| {
-            std::fs::create_dir_all(&root)?;
-            let file = OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(root.join("cache.lock"))?;
-            file.try_lock()?;
-            Ok::<_, std::io::Error>(file)
-        })();
-        let writable = lock.is_ok();
-        let mut warning = (!writable).then(|| WARNING.to_owned());
-        let manifest = match read_json::<Manifest>(&root.join("manifest.json"), 1024 * 1024) {
-            Ok(Some(value)) if valid_manifest(&value) => value,
-            Ok(None) => Manifest::default(),
-            _ => {
-                warning = Some("节目缓存索引已损坏，已开始新的缓存代际".into());
+        let (mut storage, lock) = CacheStorage::open(root);
+        let mut warning = lock
+            .err()
+            .map(|error| report_storage(error, WARNING, "lock programme cache").message);
+        let manifest = match storage.read_manifest() {
+            DiskRead::Found(manifest) => manifest,
+            DiskRead::Missing => Manifest::default(),
+            DiskRead::Corrupt(error) => {
+                warning = Some(
+                    report_storage(error, CORRUPT_INDEX, "read programme cache index").message,
+                );
+                Manifest::default()
+            }
+            DiskRead::Unavailable(error) => {
+                storage.protect_unreadable_manifest();
+                warning =
+                    Some(report_storage(error, WARNING, "read programme cache index").message);
                 Manifest::default()
             }
         };
-        if writable && let Err(error) = write_json_atomic(&root.join("manifest.json"), &manifest) {
-            AppError::with_source(ErrorCode::Storage, WARNING, error)
-                .reported("initialize programme cache");
-            warning = Some(WARNING.into());
+
+        let mut state = State {
+            manifest,
+            memory: BTreeMap::new(),
+            manifest_persisted: false,
+            warning,
+        };
+
+        if storage.writable() {
+            // Initialization keeps a corruption notice visible until a later
+            // successful operation, even after publishing the fresh generation.
+            let notice = state.warning.clone();
+            let outcome = storage.commit_manifest(&state.manifest);
+            let persisted = apply_commit_status(&mut state, outcome, "initialize programme cache");
+
+            if persisted {
+                state.warning = notice;
+            }
         }
+
         Self(Arc::new(Owner {
-            root,
-            writable,
-            _lock: lock.ok(),
-            state: Mutex::new(State {
-                manifest,
-                memory: BTreeMap::new(),
-                warning,
-            }),
+            storage,
+            state: Mutex::new(state),
         }))
     }
+
     async fn run<T: Send + 'static>(
         &self,
         operation: OperationGuard,
         action: impl FnOnce(&Owner, &mut State) -> Result<T> + Send + 'static,
     ) -> Result<T> {
         let owner = self.0.clone();
+
         tokio::task::spawn_blocking(move || {
             let _operation = operation;
             let mut state = owner.state.lock().unwrap();
-            action(&owner, &mut state)
+
+            action(&owner, &mut state).map_err(|error| error.reported("update programme cache"))
         })
         .await
-        .map_err(|error| AppError::with_source(ErrorCode::Storage, WARNING, error))?
+        .map_err(|error| {
+            AppError::with_source(ErrorCode::Storage, WARNING, error)
+                .reported("update programme cache")
+        })?
     }
+
     pub async fn read(&self, key: CacheKey, operation: OperationGuard) -> Result<CacheRead> {
         let name = key.name()?;
+
         self.run(operation, move |owner, state| {
-            let snapshot = load(owner, state, &name);
-            let memory_only = state.memory.contains_key(&name) || !owner.writable;
-            if snapshot.is_some() {
+            let loaded = load(owner, state, &name);
+            let readable = loaded.readable();
+            let snapshot = loaded.snapshot();
+
+            if snapshot.is_some() && owner.storage.writable() {
                 let mut next = state.manifest.clone();
-                next.clock = next.clock.saturating_add(1);
-                if let Some(entry) = next.entries.get_mut(&name) {
-                    entry.accessed = next.clock;
-                }
-                if owner.writable && commit(owner, state, &next).is_ok() {
-                    state.manifest = next;
-                }
+                next.touch(&name);
+                commit_manifest(owner, state, next);
             }
+
             Ok(CacheRead {
                 epoch: state.manifest.epoch.clone(),
                 snapshot,
-                persisted: !memory_only,
+                persisted: readable && state.snapshot_persisted(&owner.storage, &name),
                 warning: state.warning.clone(),
             })
         })
         .await
     }
+
     pub async fn write(
         &self,
         payload: CachePayload,
@@ -163,17 +212,22 @@ impl ProgrammeCacheService {
     ) -> Result<CacheWriteResult> {
         payload.validate()?;
         let name = payload.key().name()?;
+
         self.run(operation, move |owner, state| {
-            let previous = load(owner, state, &name);
+            let loaded = load(owner, state, &name);
+            let readable = loaded.readable();
+            let previous = loaded.snapshot();
+
             if expected_epoch != state.manifest.epoch {
                 return Ok(CacheWriteResult {
                     epoch: state.manifest.epoch.clone(),
                     snapshot: previous,
                     accepted: false,
-                    persisted: owner.writable,
+                    persisted: readable && state.snapshot_persisted(&owner.storage, &name),
                     warning: state.warning.clone(),
                 });
             }
+
             let revision = previous
                 .filter(|snapshot| snapshot.payload == payload)
                 .map(|snapshot| snapshot.revision)
@@ -187,6 +241,7 @@ impl ProgrammeCacheService {
             let bytes = serde_json::to_vec(&snapshot)
                 .map_err(|error| AppError::with_source(ErrorCode::Storage, WARNING, error))?
                 .len();
+
             if bytes > MAX_BYTES {
                 return Ok(CacheWriteResult {
                     epoch: state.manifest.epoch.clone(),
@@ -196,57 +251,9 @@ impl ProgrammeCacheService {
                     warning: Some("节目数据超过缓存容量，本次结果未保存".into()),
                 });
             }
-            let mut next = state.manifest.clone();
-            next.clock = next.clock.saturating_add(1);
-            let file = format!("{}.json", Uuid::new_v4());
-            next.entries.insert(
-                name.clone(),
-                Entry {
-                    file: file.clone(),
-                    bytes,
-                    accessed: next.clock,
-                },
-            );
-            trim(&mut next);
-            let persisted = owner.writable
-                && std::fs::create_dir_all(owner.root.join(&next.epoch))
-                    .and_then(|()| {
-                        write_json_atomic(&owner.root.join(&next.epoch).join(&file), &snapshot)
-                    })
-                    .and_then(|()| write_json_atomic(&owner.root.join("manifest.json"), &next))
-                    .map_err(|error| {
-                        state.warning = Some(WARNING.into());
-                        AppError::with_source(ErrorCode::Storage, WARNING, error)
-                            .reported("write programme cache");
-                    })
-                    .is_ok();
-            if persisted {
-                cleanup_entries(owner, &state.manifest, &next);
-                state.manifest = next;
-                state.memory.remove(&name);
-            } else {
-                state.memory.insert(name.clone(), snapshot.clone());
-                // A failed durable write does not replace its committed file.
-                // The bounded in-memory index remains usable in this process.
-                while state.memory.len() > 200
-                    || state
-                        .memory
-                        .values()
-                        .map(|value| {
-                            serde_json::to_vec(value).map_or(MAX_BYTES, |bytes| bytes.len())
-                        })
-                        .sum::<usize>()
-                        > MAX_BYTES
-                {
-                    let oldest = state.memory.keys().find(|key| *key != &name).cloned();
-                    if let Some(key) = oldest {
-                        state.memory.remove(&key);
-                    } else {
-                        break;
-                    }
-                }
-                state.warning = Some(WARNING.into());
-            }
+
+            let persisted = save_snapshot(owner, state, &name, &snapshot, bytes);
+
             Ok(CacheWriteResult {
                 epoch: state.manifest.epoch.clone(),
                 snapshot: Some(snapshot),
@@ -257,22 +264,25 @@ impl ProgrammeCacheService {
         })
         .await
     }
+
     pub async fn read_browse(
         &self,
         programme_id: String,
         operation: OperationGuard,
     ) -> Result<BrowseRead> {
         crate::programmes::validate_id(&programme_id)?;
+
         self.run(operation, move |owner, state| {
             Ok(BrowseRead {
                 epoch: state.manifest.epoch.clone(),
                 value: state.manifest.browse.get(&programme_id).cloned(),
-                persisted: owner.writable && state.warning.is_none(),
+                persisted: owner.storage.writable() && state.manifest_persisted,
                 warning: state.warning.clone(),
             })
         })
         .await
     }
+
     pub async fn write_browse(
         &self,
         value: BrowseState,
@@ -280,26 +290,29 @@ impl ProgrammeCacheService {
         operation: OperationGuard,
     ) -> Result<WriteResult> {
         value.validate()?;
+
         self.run(operation, move |owner, state| {
             if expected_epoch != state.manifest.epoch {
                 return Ok(WriteResult {
                     accepted: false,
-                    persisted: owner.writable,
+                    persisted: owner.storage.writable() && state.manifest_persisted,
                 });
             }
+
             let mut next = state.manifest.clone();
-            next.browse.insert(value.programme_id.clone(), value);
-            while next.browse.len() > 100 {
-                let oldest = next
-                    .browse
-                    .iter()
-                    .min_by(|a, b| a.1.visited_at.cmp(&b.1.visited_at))
-                    .map(|(key, _)| key.clone())
-                    .unwrap();
-                next.browse.remove(&oldest);
-            }
-            let persisted = owner.writable && commit(owner, state, &next).is_ok();
+            next.insert_browse(value);
+            let persisted = if owner.storage.writable() {
+                let outcome = owner.storage.commit_manifest(&next);
+                apply_commit_status(state, outcome, "save programme cache index")
+            } else {
+                false
+            };
+
+            // Browse state remains available in this process even if the write
+            // failed before replacement; the next commit retries the full index.
             state.manifest = next;
+            state.manifest_persisted = persisted;
+
             Ok(WriteResult {
                 accepted: true,
                 persisted,
@@ -307,44 +320,53 @@ impl ProgrammeCacheService {
         })
         .await
     }
+
     pub async fn clear(&self, operation: OperationGuard) -> Result<ClearResult> {
         self.run(operation, |owner, state| {
-            let next = Manifest::default();
-            if !owner.writable {
+            if !owner.storage.writable() {
                 return Err(AppError::new(
                     ErrorCode::Storage,
                     "无法清除本地节目缓存，请重试",
                 ));
             }
-            if let Err(error) = write_json_atomic(&owner.root.join("manifest.json"), &next) {
-                // Atomic replacement may have completed before directory sync failed.
-                // Reconcile the durable fence, never revive an earlier generation.
-                if let Ok(Some(actual)) =
-                    read_json::<Manifest>(&owner.root.join("manifest.json"), 1024 * 1024)
-                    && valid_manifest(&actual)
-                {
-                    state.manifest = actual;
-                    state.memory.clear();
-                }
-                return Err(AppError::with_source(
-                    ErrorCode::Storage,
-                    "缓存清除未完成，请重试",
-                    error,
-                ));
+
+            let next = Manifest::default();
+            let outcome = owner.storage.commit_manifest(&next);
+            let applied = outcome.applied();
+
+            if applied {
+                // Replacement is the generation fence even when the final
+                // directory sync fails. Never revive the previous generation.
+                state.manifest = next;
+                state.memory.clear();
             }
-            state.manifest = next;
-            state.memory.clear();
-            state.warning = None;
-            for entry in std::fs::read_dir(&owner.root).map_err(storage_error)? {
-                let entry = entry.map_err(storage_error)?;
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if name != state.manifest.epoch
-                    && Uuid::parse_str(&name).is_ok()
-                    && entry.file_type().map_err(storage_error)?.is_dir()
-                {
-                    std::fs::remove_dir_all(entry.path()).map_err(storage_error)?;
+
+            match outcome {
+                CommitOutcome::Durable => {
+                    state.manifest_persisted = true;
+                    state.warning = None;
+                }
+                CommitOutcome::Replaced(error) | CommitOutcome::Unchanged(error) => {
+                    if applied {
+                        state.manifest_persisted = false;
+                    }
+
+                    state.warning = Some(WARNING.into());
+                    return Err(AppError::with_source(
+                        ErrorCode::Storage,
+                        "缓存清除未完成，请重试",
+                        error,
+                    ));
                 }
             }
+
+            owner
+                .storage
+                .cleanup_epochs(&state.manifest.epoch)
+                .map_err(|error| {
+                    AppError::with_source(ErrorCode::Storage, "缓存清除未完成，请重试", error)
+                })?;
+
             Ok(ClearResult {
                 epoch: state.manifest.epoch.clone(),
             })
@@ -352,84 +374,94 @@ impl ProgrammeCacheService {
         .await
     }
 }
-fn valid_manifest(value: &Manifest) -> bool {
-    value.version == 1
-        && Uuid::parse_str(&value.epoch).is_ok()
-        && value.entries.len() <= 200
-        && value
-            .entries
-            .values()
-            .map(|entry| entry.bytes as u128)
-            .sum::<u128>()
-            <= MAX_BYTES as u128
-        && value.browse.len() <= 100
-        && value
-            .browse
-            .iter()
-            .all(|(key, value)| key == &value.programme_id && value.validate().is_ok())
-        && value.entries.values().all(|entry| {
-            entry
-                .file
-                .strip_suffix(".json")
-                .is_some_and(|stem| Uuid::parse_str(stem).is_ok())
-        })
-}
-fn load(owner: &Owner, state: &mut State, key: &str) -> Option<Snapshot> {
+
+fn load(owner: &Owner, state: &mut State, key: &str) -> SnapshotLoad {
     if let Some(snapshot) = state.memory.get(key) {
-        return Some(snapshot.clone());
+        return SnapshotLoad::Found(snapshot.clone());
     }
-    let entry = state.manifest.entries.get(key)?;
-    match read_json::<Snapshot>(
-        &owner.root.join(&state.manifest.epoch).join(&entry.file),
-        MAX_BYTES as u64,
-    ) {
-        Ok(Some(snapshot))
-            if snapshot.validate().is_ok()
-                && snapshot.payload.key().name().is_ok_and(|name| name == key) =>
-        {
-            Some(snapshot)
-        }
-        _ => {
+
+    match owner.storage.read_snapshot(&state.manifest, key) {
+        DiskRead::Found(snapshot) => SnapshotLoad::Found(snapshot),
+        DiskRead::Missing => {
             state.manifest.entries.remove(key);
-            state.warning = Some("部分节目缓存已损坏，请刷新".into());
-            None
+            SnapshotLoad::Missing
+        }
+        DiskRead::Corrupt(error) => {
+            state.manifest.entries.remove(key);
+            state.warning = Some(
+                report_storage(error, CORRUPT_SNAPSHOT, "read programme cache snapshot").message,
+            );
+            SnapshotLoad::Missing
+        }
+        DiskRead::Unavailable(error) => {
+            // An I/O failure does not prove that the referenced file is invalid.
+            // Keep its index entry so a later read can recover without refetching.
+            state.warning =
+                Some(report_storage(error, WARNING, "read programme cache snapshot").message);
+            SnapshotLoad::Unavailable
         }
     }
 }
-fn commit(owner: &Owner, state: &mut State, next: &Manifest) -> Result<()> {
-    write_json_atomic(&owner.root.join("manifest.json"), next).map_err(|error| {
+
+fn save_snapshot(
+    owner: &Owner,
+    state: &mut State,
+    key: &str,
+    snapshot: &Snapshot,
+    bytes: usize,
+) -> bool {
+    if !owner.storage.writable() {
+        state.remember(key.into(), snapshot.clone());
         state.warning = Some(WARNING.into());
-        AppError::with_source(ErrorCode::Storage, WARNING, error)
-            .reported("save programme cache index")
-    })
-}
-fn trim(manifest: &mut Manifest) {
-    while manifest.entries.len() > 200
-        || manifest
-            .entries
-            .values()
-            .map(|entry| entry.bytes)
-            .sum::<usize>()
-            > MAX_BYTES
-    {
-        let oldest = manifest
-            .entries
-            .iter()
-            .min_by_key(|(_, value)| value.accessed)
-            .map(|(key, _)| key.clone())
-            .unwrap();
-        manifest.entries.remove(&oldest);
+        return false;
     }
+
+    let mut next = state.manifest.clone();
+    next.insert_snapshot(key.into(), format!("{}.json", Uuid::new_v4()), bytes);
+    let outcome = owner.storage.commit_snapshot(&next, key, snapshot);
+
+    if outcome.applied() {
+        owner.storage.cleanup_entries(&state.manifest, &next);
+        state.manifest = next;
+        state.memory.remove(key);
+    } else {
+        state.remember(key.into(), snapshot.clone());
+    }
+
+    apply_commit_status(state, outcome, "write programme cache")
 }
-fn cleanup_entries(owner: &Owner, old: &Manifest, next: &Manifest) {
-    for entry in old.entries.values() {
-        if !next.entries.values().any(|value| value.file == entry.file) {
-            // The manifest is already committed; stale files are reconstructible
-            // debris and a later clear retries their removal.
-            let _ = std::fs::remove_file(owner.root.join(&old.epoch).join(&entry.file));
+
+fn commit_manifest(owner: &Owner, state: &mut State, next: Manifest) -> bool {
+    let outcome = owner.storage.commit_manifest(&next);
+
+    if outcome.applied() {
+        state.manifest = next;
+    }
+
+    apply_commit_status(state, outcome, "save programme cache index")
+}
+
+fn apply_commit_status(state: &mut State, outcome: CommitOutcome, context: &str) -> bool {
+    match outcome {
+        CommitOutcome::Durable => {
+            state.manifest_persisted = true;
+            state.warning = (!state.memory.is_empty()).then(|| WARNING.into());
+            true
+        }
+        CommitOutcome::Replaced(error) => {
+            state.manifest_persisted = false;
+            state.warning = Some(report_storage(error, WARNING, context).message);
+            false
+        }
+        CommitOutcome::Unchanged(error) => {
+            // Discarded candidates cannot change the retained index's durability.
+            // Browse writes explicitly mark their adopted candidate memory-only.
+            state.warning = Some(report_storage(error, WARNING, context).message);
+            false
         }
     }
 }
-fn storage_error(error: std::io::Error) -> AppError {
-    AppError::with_source(ErrorCode::Storage, "缓存清除未完成，请重试", error)
+
+fn report_storage(error: std::io::Error, message: &str, context: &str) -> AppError {
+    AppError::with_source(ErrorCode::Storage, message, error).reported(context)
 }

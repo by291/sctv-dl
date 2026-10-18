@@ -4,7 +4,7 @@ use tauri::{AppHandle, Runtime, State, ipc::Channel};
 
 pub use crate::application::downloads::DownloadResult;
 use crate::{
-    application::downloads::DownloadService,
+    application::downloads::{DownloadActionService, DownloadService},
     downloads::{DownloadManager, DownloadRequest, DownloadTask},
     error::Result,
     lifecycle::ExitController,
@@ -41,7 +41,9 @@ pub async fn cancel_download(
     let Ok(task) = downloads.task(&task_id) else {
         return Ok(());
     };
+
     let operation = Arc::new(lifecycle.enter().await?);
+
     downloads
         .act(
             crate::downloads::DownloadActionRequest {
@@ -53,6 +55,7 @@ pub async fn cancel_download(
             operation,
         )
         .await?;
+
     Ok(())
 }
 
@@ -98,52 +101,7 @@ pub async fn act_on_download<R: Runtime>(
     lifecycle: State<'_, Arc<ExitController>>,
     request: crate::downloads::DownloadActionRequest,
 ) -> Result<crate::downloads::DownloadActionResult> {
-    use crate::downloads::{DownloadAction, DownloadActionResult};
-    let operation = Arc::new(lifecycle.enter().await?);
-    let task = downloads.task(&request.task_id)?;
-    if task.attempt_id != request.attempt_id {
-        return Ok(DownloadActionResult::Skipped {
-            message: "任务已更新，请刷新后重试".into(),
-        });
-    }
-    if matches!(
-        request.action,
-        DownloadAction::DeleteFile | DownloadAction::OpenFile | DownloadAction::RevealFile
-    ) {
-        return crate::application::download_files::act_on_file(
-            app,
-            &downloads,
-            playback.0.as_ref().ok().cloned(),
-            request,
-            operation,
-        )
+    DownloadActionService::new(&state, &downloads, &playback, &lifecycle)
+        .act(app, request)
         .await
-        .map_err(|error| error.reported("download file action"));
-    }
-    let prepared = if matches!(
-        request.action,
-        DownloadAction::Resume | DownloadAction::Restart
-    ) {
-        let service = state.programmes.as_ref().map_err(Clone::clone)?;
-        let mut batch = downloads
-            .prepare(
-                service,
-                DownloadRequest {
-                    programme_id: task.content.programme_id,
-                    date_id: task.content.date_id,
-                    content_ids: vec![task.content.content_id],
-                    quality: task.quality,
-                },
-            )
-            .await?;
-        Some(batch.files.pop().ok_or_else(|| {
-            crate::error::AppError::new(crate::error::ErrorCode::NotFound, "节目视频来源已不可用")
-        })?)
-    } else {
-        None
-    };
-    downloads
-        .act(request, prepared, operation)
-        .await
-        .map_err(|error| error.reported("download action"))
 }

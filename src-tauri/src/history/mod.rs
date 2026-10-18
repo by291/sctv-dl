@@ -1,14 +1,16 @@
 mod models;
+
 pub use models::*;
 
-use chrono::{SecondsFormat, Utc};
-use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+
+use chrono::{SecondsFormat, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -18,6 +20,7 @@ use crate::{
 };
 
 const MAX_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+
 type Listener = Arc<dyn Fn(HistorySnapshot) -> bool + Send + Sync>;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -71,6 +74,7 @@ impl HistoryService {
 
     pub fn unavailable(error: AppError) -> Self {
         let warning = error.reported("open history").message;
+
         Self::from_parts(
             PathBuf::new(),
             None,
@@ -87,6 +91,7 @@ impl HistoryService {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
+
             let lock = OpenOptions::new()
                 .create(true)
                 .truncate(false)
@@ -94,8 +99,10 @@ impl HistoryService {
                 .write(true)
                 .open(path.with_extension("lock"))?;
             lock.try_lock().map_err(std::io::Error::other)?;
+
             Ok(lock)
         })();
+
         let (lock, mut warning) = match lock {
             Ok(lock) => (Some(lock), None),
             Err(error) => (
@@ -111,14 +118,18 @@ impl HistoryService {
                 ),
             ),
         };
+
         let document = read_json::<Document>(&path, MAX_DOCUMENT_BYTES).and_then(|document| {
             let document = document.unwrap_or(Document {
                 version: 1,
                 ..Default::default()
             });
+
             validate_document(&document)?;
+
             Ok(document)
         });
+
         let document = match document {
             Ok(document) => document,
             Err(error) => {
@@ -137,6 +148,7 @@ impl HistoryService {
                 }
             }
         };
+
         Self::from_parts(path, lock, document, warning)
     }
 
@@ -147,6 +159,7 @@ impl HistoryService {
         warning: Option<String>,
     ) -> Self {
         let writable = warning.is_none();
+
         Self(Arc::new(Owner {
             path,
             _process_lock: lock,
@@ -171,11 +184,13 @@ impl HistoryService {
         listener: impl Fn(HistorySnapshot) -> bool + Send + Sync + 'static,
     ) -> String {
         let id = Uuid::new_v4().to_string();
+
         self.0
             .listeners
             .lock()
             .unwrap()
             .insert(id.clone(), Arc::new(listener));
+
         id
     }
 
@@ -190,6 +205,7 @@ impl HistoryService {
     ) -> Result<HistorySession> {
         self.blocking(guard, move |owner| {
             metadata.validate()?;
+
             let mut state = owner.state.lock().unwrap();
             let entry = state
                 .document
@@ -197,6 +213,7 @@ impl HistoryService {
                 .iter()
                 .find(|entry| entry.metadata.content == metadata.content)
                 .cloned();
+
             // Opening metadata never resets a saved resume point. Replacing the
             // previous token immediately makes delayed older samples harmless.
             state
@@ -210,6 +227,7 @@ impl HistoryService {
                     sequence: 0,
                 },
             );
+
             Ok(HistorySession { id, entry })
         })
         .await
@@ -223,6 +241,7 @@ impl HistoryService {
     ) -> Result<RecordResult> {
         self.blocking(guard, move |owner| {
             sample.validate()?;
+
             let mut next = owner.state.lock().unwrap().clone();
             let Some(session) = next.sessions.get_mut(&id) else {
                 return Ok(RecordResult {
@@ -230,6 +249,7 @@ impl HistoryService {
                     persisted: next.persisted,
                 });
             };
+
             if sample.sequence <= session.sequence {
                 // A post-replacement sync failure already consumed this sequence.
                 // Retrying it can establish durability without accepting an old
@@ -237,11 +257,13 @@ impl HistoryService {
                 if sample.sequence == session.sequence && !next.persisted && owner.writable {
                     commit(owner, next)?;
                 }
+
                 return Ok(RecordResult {
                     accepted: false,
                     persisted: owner.state.lock().unwrap().persisted,
                 });
             }
+
             session.sequence = sample.sequence;
             let entry = HistoryEntry {
                 metadata: session.metadata.clone(),
@@ -250,12 +272,15 @@ impl HistoryService {
                 viewed_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
                 completed: sample.completed(),
             };
+
             next.document
                 .entries
                 .retain(|old| old.metadata.content != entry.metadata.content);
             next.document.entries.insert(0, entry);
             next.document.entries.truncate(500);
+
             commit(owner, next)?;
+
             Ok(RecordResult {
                 accepted: true,
                 persisted: owner.state.lock().unwrap().persisted,
@@ -267,6 +292,7 @@ impl HistoryService {
     pub async fn end(&self, id: String, guard: OperationGuard) -> Result<()> {
         self.blocking(guard, move |owner| {
             owner.state.lock().unwrap().sessions.remove(&id);
+
             Ok(())
         })
         .await
@@ -280,6 +306,7 @@ impl HistoryService {
             next.document
                 .entries
                 .retain(|entry| entry.metadata.content != content);
+
             commit(owner, next)
         })
         .await
@@ -290,6 +317,7 @@ impl HistoryService {
             let mut next = owner.state.lock().unwrap().clone();
             next.sessions.clear();
             next.document.entries.clear();
+
             commit(owner, next)
         })
         .await
@@ -301,9 +329,11 @@ impl HistoryService {
         action: impl FnOnce(&Owner) -> Result<T> + Send + 'static,
     ) -> Result<T> {
         let owner = self.0.clone();
+
         tokio::task::spawn_blocking(move || {
             let _operation = guard;
             let _writer = owner.writes.lock().unwrap();
+
             action(&owner).map_err(|error| error.reported("update history"))
         })
         .await
@@ -332,6 +362,7 @@ fn publish(owner: &Owner) {
         .iter()
         .map(|(id, listener)| (id.clone(), listener.clone()))
         .collect();
+
     for (id, listener) in listeners {
         if !listener(current.clone()) {
             owner.listeners.lock().unwrap().remove(&id);
@@ -341,24 +372,50 @@ fn publish(owner: &Owner) {
 
 fn commit(owner: &Owner, mut next: State) -> Result<()> {
     next.document.revision += 1;
-    if owner.writable {
-        let result = serde_json::to_vec(&next.document)
-            .map_err(std::io::Error::other)
-            .and_then(|bytes| {
-                if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "History document exceeds its size limit",
-                    ));
-                }
-                write_json_atomic(&owner.path, &next.document)
-            });
-        if let Err(error) = result {
+
+    let result = if owner.writable {
+        persist_document(&owner.path, &next.document)
+    } else {
+        Ok(())
+    };
+    let result = apply_commit_result(owner, next, result);
+
+    publish(owner);
+    result
+}
+
+fn persist_document(path: &std::path::Path, document: &Document) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec(document).map_err(std::io::Error::other)?;
+
+    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "History document exceeds its size limit",
+        ));
+    }
+
+    write_json_atomic(path, document)
+}
+
+fn apply_commit_result(owner: &Owner, mut next: State, result: std::io::Result<()>) -> Result<()> {
+    match result {
+        Ok(()) => {
+            if owner.writable {
+                next.persisted = true;
+                next.warning = None;
+            }
+
+            *owner.state.lock().unwrap() = next;
+            Ok(())
+        }
+        Err(error) => {
             let replaced = replacement_committed(&error);
             let error =
                 AppError::with_source(ErrorCode::Storage, "观看记录保存失败，请重试", error);
+
             {
                 let mut state = owner.state.lock().unwrap();
+
                 if replaced {
                     // The rename committed entries and token invalidation even
                     // though directory synchronization could not prove durability.
@@ -366,28 +423,27 @@ fn commit(owner: &Owner, mut next: State) -> Result<()> {
                 } else {
                     state.document.revision += 1;
                 }
+
                 state.persisted = false;
                 state.warning = Some(error.message.clone());
             }
-            publish(owner);
-            return Err(error);
+
+            Err(error)
         }
-        next.persisted = true;
-        next.warning = None;
     }
-    *owner.state.lock().unwrap() = next;
-    publish(owner);
-    Ok(())
 }
 
 fn validate_document(document: &Document) -> std::io::Result<()> {
     let valid = document.version == 1
         && document.entries.len() <= 500
         && document.revision < 9_007_199_254_740_991;
+
     if !valid {
         return Err(std::io::Error::other("Invalid history document"));
     }
+
     let mut keys = std::collections::HashSet::new();
+
     for entry in &document.entries {
         entry.metadata.validate().map_err(std::io::Error::other)?;
         HistorySample {
@@ -398,6 +454,7 @@ fn validate_document(document: &Document) -> std::io::Result<()> {
         }
         .validate()
         .map_err(std::io::Error::other)?;
+
         let content = &entry.metadata.content;
         if !keys.insert((&content.programme_id, &content.date_id, &content.content_id))
             || !entry.viewed_at.ends_with('Z')
@@ -406,6 +463,7 @@ fn validate_document(document: &Document) -> std::io::Result<()> {
             return Err(std::io::Error::other("Invalid history entry"));
         }
     }
+
     Ok(())
 }
 

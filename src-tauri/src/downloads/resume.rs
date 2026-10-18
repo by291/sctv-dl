@@ -1,5 +1,6 @@
-use super::journal::ResumeCheckpoint;
 use reqwest::{StatusCode, header::HeaderMap};
+
+use super::journal::ResumeCheckpoint;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ResumeDecision {
@@ -43,6 +44,7 @@ pub fn decide(
     {
         return restart();
     }
+
     let range = headers
         .get("content-range")
         .and_then(|value| value.to_str().ok())
@@ -56,6 +58,7 @@ pub fn decide(
     if status != StatusCode::PARTIAL_CONTENT {
         return restart();
     }
+
     let Some((bounds, returned_total)) = range
         .strip_prefix("bytes ")
         .and_then(|value| value.split_once('/'))
@@ -89,6 +92,7 @@ pub fn decide(
     }) {
         return restart();
     }
+
     ResumeDecision::Append {
         offset: start,
         total,

@@ -1,17 +1,20 @@
 mod actions;
+mod errors;
 mod file_actions;
-mod filename;
-pub use file_actions::PendingLocalPlayback;
 pub mod file_identity;
+mod filename;
 pub mod files;
 pub mod journal;
 mod manager;
 mod models;
 mod prepare;
+mod records;
+mod recovery;
 pub mod resume;
 pub mod store;
 mod worker;
 
+pub use file_actions::PendingLocalPlayback;
 pub use filename::download_filename;
 pub use manager::{DownloadConfig, DownloadManager};
 pub use models::*;

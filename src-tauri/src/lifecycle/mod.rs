@@ -13,6 +13,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
 use crate::{
@@ -40,10 +41,12 @@ impl ExitController {
         if self.closing.load(Ordering::SeqCst) {
             return Err(closing());
         }
+
         let guard = self.operations.clone().read_owned().await;
         if self.closing.load(Ordering::SeqCst) {
             return Err(closing());
         }
+
         Ok(OperationGuard { _admission: guard })
     }
 
@@ -52,10 +55,12 @@ impl ExitController {
         if self.frozen.load(Ordering::SeqCst) || self.committed() {
             return Err(closing());
         }
+
         let guard = self.operations.clone().read_owned().await;
         if self.frozen.load(Ordering::SeqCst) || self.committed() {
             return Err(closing());
         }
+
         Ok(OperationGuard { _admission: guard })
     }
 
@@ -128,17 +133,20 @@ impl ExitRequest {
         // Drain frontend save queues before refusing new preference writes.
         let saved = prepare.await;
         self.controller.frozen.store(true, Ordering::SeqCst);
+
         // Existing picker/prepare/save work must settle before the final task snapshot.
         let _operations = self.controller.operations.clone().write_owned().await;
         if (!saved || downloads.has_active()) && !confirm(saved).await {
             return false;
         }
+
         let _admission = DownloadAdmission(downloads);
         if let Err(error) = downloads.prepare_shutdown().await
             && !force(error.reported("prepare downloads for exit")).await
         {
             return false;
         }
+
         downloads.shutdown().await;
         self.controller.committed.store(true, Ordering::SeqCst);
         true

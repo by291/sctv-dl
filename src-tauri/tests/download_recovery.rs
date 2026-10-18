@@ -1,5 +1,6 @@
-use sctv_dl_desktop_lib::downloads::files::DownloadDirectory;
 use std::io::Write;
+
+use sctv_dl_desktop_lib::downloads::files::DownloadDirectory;
 
 #[test]
 fn resumes_only_the_index_checkpoint_and_preserves_replacements() {
@@ -20,6 +21,7 @@ fn resumes_only_the_index_checkpoint_and_preserves_replacements() {
         .unwrap();
     file.write_all(b"uncommitted tail").unwrap();
     file.flush().unwrap();
+
     // A crash may leave the journal ahead of the private index.
     reservation
         .checkpoint(
@@ -31,10 +33,13 @@ fn resumes_only_the_index_checkpoint_and_preserves_replacements() {
     drop(file);
     reservation.retain();
     drop(directory);
+
     let directory = DownloadDirectory::open(root.path()).unwrap();
     let restored = directory.recover_reservation(&checkpoint).unwrap();
     let path = root.path().join(format!(".sctv-dl-{}.part", initial.id));
+
     assert_eq!(std::fs::metadata(&path).unwrap().len(), 1024 * 1024);
+
     restored.retain();
     std::fs::remove_file(&path).unwrap();
     std::fs::write(&path, b"replacement").unwrap();
@@ -87,6 +92,7 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         history::HistoryMetadata,
         media::Quality,
     };
+
     for published in [false, true] {
         let root = tempfile::tempdir().unwrap();
         let target = root.path().join("files");
@@ -153,10 +159,13 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         reservation.retain();
         drop(directory);
         drop(store);
+
         let manager = DownloadManager::open(Default::default(), index)
             .await
             .unwrap();
+
         let task = manager.list()[0].clone();
+
         assert_eq!(task.id, task_id);
         if published {
             assert_eq!(task.state, TaskState::Completed);
@@ -177,4 +186,84 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         }
         manager.shutdown().await;
     }
+}
+
+#[test]
+fn durable_publication_preserves_late_destinations_and_replaced_partial_files() {
+    for replace_partial in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let directory = DownloadDirectory::open(root.path()).unwrap();
+        let (mut writer, mut reservation) = directory.reserve("clip.mp4").unwrap();
+        reservation
+            .upgrade("task".into(), "attempt".into())
+            .unwrap();
+        writer.write_all(b"complete").unwrap();
+        drop(writer);
+        reservation.checkpoint(8, Some(8), None).unwrap();
+        let record = reservation.publication_intent().unwrap();
+        let partial = root.path().join(format!(".sctv-dl-{}.part", record.id));
+        let destination = root.path().join(&record.filename);
+
+        if replace_partial {
+            std::fs::remove_file(&partial).unwrap();
+            std::fs::write(&partial, b"replacement").unwrap();
+        } else {
+            std::fs::write(&destination, b"external file").unwrap();
+        }
+
+        assert!(reservation.publish().is_err());
+        reservation.retain();
+
+        if replace_partial {
+            assert_eq!(std::fs::read(partial).unwrap(), b"replacement");
+            assert!(!destination.exists());
+        } else {
+            assert_eq!(std::fs::read(partial).unwrap(), b"complete");
+            assert_eq!(std::fs::read(destination).unwrap(), b"external file");
+        }
+        assert!(
+            root.path()
+                .join(format!(".sctv-dl-{}.json", record.id))
+                .exists()
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn cleanup_retains_both_replaced_partial_and_unreadable_journal_causes() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let directory = DownloadDirectory::open(root.path()).unwrap();
+    let (writer, mut reservation) = directory.reserve("clip.mp4").unwrap();
+    drop(writer);
+    let record = reservation
+        .upgrade("task".into(), "attempt".into())
+        .unwrap();
+    let partial = root.path().join(format!(".sctv-dl-{}.part", record.id));
+    let journal = root.path().join(format!(".sctv-dl-{}.json", record.id));
+    let original_journal = std::fs::read(&journal).unwrap();
+    let permissions = std::fs::metadata(&journal).unwrap().permissions();
+
+    std::fs::remove_file(&partial).unwrap();
+    std::fs::write(&partial, b"external replacement").unwrap();
+    std::fs::set_permissions(&journal, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let journal_error = std::fs::read(&journal).unwrap_err();
+
+    let cleanup = reservation.cleanup();
+    std::fs::set_permissions(&journal, permissions).unwrap();
+
+    assert_eq!(journal_error.kind(), std::io::ErrorKind::PermissionDenied);
+    let diagnostic = cleanup.unwrap_err().to_string();
+    assert!(
+        diagnostic.contains("已被替换"),
+        "missing partial-file identity cause: {diagnostic}"
+    );
+    assert!(
+        diagnostic.contains(&journal_error.to_string()),
+        "missing journal read cause: {diagnostic}"
+    );
+    assert_eq!(std::fs::read(&partial).unwrap(), b"external replacement");
+    assert_eq!(std::fs::read(&journal).unwrap(), original_journal);
 }

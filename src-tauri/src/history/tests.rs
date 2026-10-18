@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use super::*;
 use crate::{downloads::DownloadManager, lifecycle::ExitController};
-use std::time::Duration;
 
 #[tokio::test(flavor = "current_thread")]
 async fn dropped_mutations_keep_exit_waiting_and_do_not_block_snapshot_reads() {
@@ -32,6 +33,7 @@ async fn dropped_mutations_keep_exit_waiting_and_do_not_block_snapshot_reads() {
             wait.recv_timeout(Duration::from_secs(5)).unwrap();
         });
         ready.recv().unwrap();
+
         let guard = gate.enter_save().await.unwrap();
         let future: std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>>>> =
             match mutation {
@@ -60,6 +62,7 @@ async fn dropped_mutations_keep_exit_waiting_and_do_not_block_snapshot_reads() {
         let mut future = future;
         assert!(futures_util::poll!(future.as_mut()).is_pending());
         drop(future);
+
         // The snapshot uses only the short state mutex, never the blocked writer.
         assert!(service.list().persisted);
         let downloads = DownloadManager::new(Default::default()).unwrap();
@@ -68,6 +71,7 @@ async fn dropped_mutations_keep_exit_waiting_and_do_not_block_snapshot_reads() {
         let waited = tokio::time::timeout(Duration::from_millis(20), completion.as_mut())
             .await
             .is_err();
+
         release.send(()).unwrap();
         blocker.join().unwrap();
         assert!(completion.await);

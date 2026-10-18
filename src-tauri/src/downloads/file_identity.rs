@@ -1,9 +1,10 @@
-use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io,
     path::Path,
 };
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -17,6 +18,7 @@ impl FileIdentity {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
+
             let metadata = file.metadata()?;
             Ok(Self {
                 device: metadata.dev(),
@@ -29,6 +31,7 @@ impl FileIdentity {
             use windows_sys::Win32::Storage::FileSystem::{
                 BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
             };
+
             let mut information = std::mem::MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
             // SAFETY: the owned File keeps this handle valid and the API initializes
             // the output on success; no uninitialized field is read on failure.
@@ -37,6 +40,7 @@ impl FileIdentity {
             {
                 return Err(io::Error::last_os_error());
             }
+
             let information = unsafe { information.assume_init() };
             Ok(Self {
                 device: u64::from(information.dwVolumeSerialNumber),
@@ -52,10 +56,12 @@ impl FileIdentity {
                 "Owned file was replaced by a non-regular path",
             ));
         }
+
         let file = OpenOptions::new().read(true).write(write).open(path)?;
         if !file.metadata()?.is_file() || Self::read(&file)? != *self {
             return Err(io::Error::other("Owned file identity changed"));
         }
+
         Ok(file)
     }
 }

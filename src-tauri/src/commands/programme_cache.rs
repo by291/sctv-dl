@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use tauri::State;
+
 use crate::{
     error::Result,
     lifecycle::ExitController,
@@ -6,8 +10,6 @@ use crate::{
         ProgrammeCacheService, WriteResult,
     },
 };
-use std::sync::Arc;
-use tauri::State;
 
 #[tauri::command]
 pub async fn read_programme_cache(
@@ -17,6 +19,7 @@ pub async fn read_programme_cache(
 ) -> Result<CacheRead> {
     cache.read(key, lifecycle.enter_save().await?).await
 }
+
 #[tauri::command]
 pub async fn write_programme_cache(
     cache: State<'_, ProgrammeCacheService>,
@@ -28,6 +31,7 @@ pub async fn write_programme_cache(
         .write(payload, expected_epoch, lifecycle.enter_save().await?)
         .await
 }
+
 #[tauri::command]
 pub async fn read_archive_browse_state(
     cache: State<'_, ProgrammeCacheService>,
@@ -38,6 +42,7 @@ pub async fn read_archive_browse_state(
         .read_browse(programme_id, lifecycle.enter_save().await?)
         .await
 }
+
 #[tauri::command]
 pub async fn write_archive_browse_state(
     cache: State<'_, ProgrammeCacheService>,
@@ -49,6 +54,7 @@ pub async fn write_archive_browse_state(
         .write_browse(value, expected_epoch, lifecycle.enter_save().await?)
         .await
 }
+
 #[tauri::command]
 pub async fn clear_programme_cache(
     cache: State<'_, ProgrammeCacheService>,

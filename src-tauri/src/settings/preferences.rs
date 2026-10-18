@@ -20,6 +20,7 @@ impl Preferences {
             .as_str()
             .filter(|value| ["system", "light", "dark"].contains(value))
             .unwrap_or("system");
+
         let mut favourites = Vec::new();
         if let Some(values) = value["favourites"].as_array() {
             for value in values {
@@ -32,6 +33,7 @@ impl Preferences {
                 }
             }
         }
+
         Self {
             quality: quality.into(),
             theme: theme.into(),
@@ -52,6 +54,7 @@ pub fn load_preferences<R: Runtime>(store: Result<&Store<R>>) -> SettingsSnapsho
         .ok()
         .and_then(|store| store.get("preferences"))
         .unwrap_or_default();
+
     SettingsSnapshot {
         value: Preferences::normalize(&value),
         persisted,

@@ -1,4 +1,5 @@
-pub use crate::downloads::ContentRef;
+pub use crate::programmes::ContentRef;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -60,9 +61,11 @@ impl HistoryMetadata {
             error::{AppError, ErrorCode},
             programmes::validate_id,
         };
+
         validate_id(&self.content.programme_id)?;
         validate_id(&self.content.date_id)?;
         validate_id(&self.content.content_id)?;
+
         let date = chrono::NaiveDate::parse_from_str(&self.broadcast_date, "%Y-%m-%d");
         let valid_date = date.is_ok_and(|date| {
             date.format("%Y-%m-%d").to_string() == self.broadcast_date
@@ -72,6 +75,7 @@ impl HistoryMetadata {
             (cover.starts_with("http://") || cover.starts_with("https://"))
                 && reqwest::Url::parse(cover).is_ok()
         });
+
         if !valid_date
             || !valid_cover
             || serde_json::to_vec(self).map_or(true, |bytes| bytes.len() > 16 * 1024)
@@ -81,6 +85,7 @@ impl HistoryMetadata {
                 "观看记录元数据无效或过大",
             ));
         }
+
         Ok(())
     }
 }
@@ -99,6 +104,7 @@ impl HistorySample {
                 "观看进度无效",
             ));
         }
+
         Ok(())
     }
 

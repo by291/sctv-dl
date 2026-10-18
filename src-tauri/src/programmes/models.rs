@@ -1,32 +1,45 @@
 use std::collections::BTreeMap;
 
 use reqwest::Url;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::{AppError, ErrorCode, Result};
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ContentRef {
+    pub programme_id: String,
+    pub date_id: String,
+    pub content_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Programme {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub cover: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ProgrammeDate {
     pub id: String,
     pub date: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgrammeContent {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub cover: Option<String>,
+    #[serde(default)]
     pub video: Option<String>,
+    #[serde(default)]
     pub smooth_video: Option<String>,
+    #[serde(default)]
     pub published_at: Option<String>,
 }
 
@@ -58,10 +71,19 @@ fn id(value: &Value) -> Result<String> {
 fn url(value: &Value, base: &str) -> Option<String> {
     // Match ECMAScript String.trim used by the Node normalizer, including BOM and excluding NEL.
     let text = value.as_str()?.trim_matches(|character: char| {
-        matches!(character,
-            '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}' |
-            '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' |
-            '\u{205f}' | '\u{3000}' | '\u{feff}'
+        matches!(
+            character,
+            '\u{0009}'..='\u{000d}'
+                | '\u{0020}'
+                | '\u{00a0}'
+                | '\u{1680}'
+                | '\u{2000}'..='\u{200a}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202f}'
+                | '\u{205f}'
+                | '\u{3000}'
+                | '\u{feff}'
         )
     });
     if text.is_empty() {

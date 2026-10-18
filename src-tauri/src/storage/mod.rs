@@ -41,6 +41,7 @@ pub fn read_json<T: DeserializeOwned>(path: &Path, max_bytes: u64) -> io::Result
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
+
     let mut bytes = Vec::new();
     file.take(max_bytes.saturating_add(1))
         .read_to_end(&mut bytes)?;
@@ -50,6 +51,7 @@ pub fn read_json<T: DeserializeOwned>(path: &Path, max_bytes: u64) -> io::Result
             "JSON document exceeds its size limit",
         ));
     }
+
     serde_json::from_slice(&bytes)
         .map(Some)
         .map_err(io::Error::other)
@@ -66,14 +68,17 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> io::Result<()>
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
+
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
     serde_json::to_writer(&mut temporary, value).map_err(io::Error::other)?;
     temporary.flush()?;
     temporary.as_file().sync_all()?;
+
     temporary.persist(path).map_err(|error| error.error)?;
     #[cfg(unix)]
     File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|error| io::Error::new(error.kind(), ReplacementSyncError(error)))?;
+
     Ok(())
 }

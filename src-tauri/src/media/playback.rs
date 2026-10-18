@@ -72,6 +72,8 @@ impl PlaybackService {
             .open_local(task_id, quality, file)
     }
 
+    /// Revokes local URLs and waits for every admitted read, even after URL close
+    /// or cancellation of a previous close_task waiter. File deletion follows this.
     pub async fn close_task(&self, task_id: &str) {
         let producers = self
             .server
@@ -80,6 +82,7 @@ impl PlaybackService {
             .as_ref()
             .map(|server| server.close_task(task_id))
             .unwrap_or_default();
+
         for producer in producers {
             producer.wait().await;
         }
@@ -91,7 +94,7 @@ impl PlaybackService {
         }
     }
 
-    /// Prevents new sessions and awaits every connection and upstream producer.
+    /// Prevents new sessions and awaits every connection and local/upstream producer.
     pub async fn shutdown(&self) {
         let server = { self.server.lock().unwrap().take() };
         if let Some(server) = server {

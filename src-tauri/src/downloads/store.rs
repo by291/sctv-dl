@@ -1,12 +1,14 @@
+use std::{
+    fs::{File, OpenOptions},
+    path::{Path, PathBuf},
+};
+
+use serde::{Deserialize, Serialize};
+
 use super::{DownloadTask, file_identity::FileIdentity, journal::ReservationRecord};
 use crate::{
     error::{AppError, ErrorCode, Result},
     storage::{read_json, write_json_atomic},
-};
-use serde::{Deserialize, Serialize};
-use std::{
-    fs::{File, OpenOptions},
-    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -36,6 +38,7 @@ impl DownloadStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(storage)?;
         }
+
         let lock = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -66,6 +69,7 @@ impl DownloadStore {
                 "下载记录版本不受支持，原文件已保留",
             ));
         }
+
         let mut ids = std::collections::HashSet::new();
         for record in &document.tasks {
             let task = &record.task;
@@ -96,6 +100,7 @@ impl DownloadStore {
                 }
             }
         }
+
         Ok(document)
     }
 
@@ -109,6 +114,7 @@ impl DownloadStore {
                 "下载记录已达到存储容量，请移除不需要的已完成记录",
             ));
         }
+
         write_json_atomic(&self.path, document).map_err(storage)
     }
 }
@@ -119,6 +125,7 @@ fn storage(error: std::io::Error) -> AppError {
 
 pub(super) fn replacement_committed(error: &AppError) -> bool {
     use std::error::Error;
+
     error
         .source()
         .and_then(|source| source.downcast_ref::<std::io::Error>())

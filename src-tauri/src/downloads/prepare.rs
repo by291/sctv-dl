@@ -1,5 +1,6 @@
-use reqwest::Url;
 use std::collections::HashSet;
+
+use reqwest::Url;
 
 use super::{
     ContentRef, DownloadRequest, FileFailure, PreparedBatch, PreparedDownload, download_filename,
@@ -52,6 +53,7 @@ pub async fn prepare_downloads(
         .find(|programme| programme.id == request.programme_id)
         .map(|programme| programme.name)
         .unwrap_or_default();
+
     let mut batch = PreparedBatch::default();
     for id in ids {
         let prepared = broadcast

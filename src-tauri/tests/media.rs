@@ -1,6 +1,12 @@
 mod support;
 
-use support::{Stub, serve};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use axum::{
     Router,
@@ -9,13 +15,8 @@ use axum::{
 };
 use sctv_dl_desktop_lib::media::{MediaConfig, MediaServer, MediaSource, Quality};
 use serde_json::Value;
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+
+use support::{Stub, serve};
 
 async fn media(stub: &Stub) -> MediaServer {
     MediaServer::bind(MediaConfig {
@@ -25,12 +26,14 @@ async fn media(stub: &Stub) -> MediaServer {
     .await
     .unwrap()
 }
+
 fn source(stub: &Stub) -> MediaSource {
     MediaSource {
         quality: Quality::Standard,
         url: format!("{}/clip.mp4", stub.origin),
     }
 }
+
 fn range_reply(headers: &HeaderMap, head: bool) -> Response<Body> {
     let bytes: Vec<u8> = (0..200).collect();
     let range = headers.get("range").and_then(|value| value.to_str().ok());
@@ -95,6 +98,7 @@ async fn enforces_the_shared_media_target_policy_before_creating_sessions() {
 #[tokio::test]
 async fn configured_media_origins_replace_the_production_allowlist() {
     let stub = serve(Router::new()).await;
+
     let server = media(&stub).await;
 
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
@@ -125,11 +129,14 @@ async fn streams_head_full_and_single_range_shapes_with_media_only_headers() {
         async move { range_reply(request.headers(), request.method() == "HEAD") }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let url = &session.sources[0].url;
     let client = reqwest::Client::new();
+
     let head = client.head(url).send().await.unwrap();
+
     assert_eq!(head.status(), 200);
     assert_eq!(head.headers()["content-length"], "200");
     assert!(head.bytes().await.unwrap().is_empty());
@@ -160,6 +167,7 @@ async fn streams_head_full_and_single_range_shapes_with_media_only_headers() {
         );
         assert_eq!(response.bytes().await.unwrap().as_ref(), expected);
     }
+
     let invalid = client
         .get(url)
         .header("Range", "bytes=999-")
@@ -193,6 +201,7 @@ async fn rejects_unknown_tokens_remote_origins_rebound_hosts_and_unsupported_met
         async { "should not run" }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let client = reqwest::Client::new();
@@ -236,6 +245,7 @@ async fn rejects_unknown_tokens_remote_origins_rebound_hosts_and_unsupported_met
             .status(),
         404
     );
+
     let options = client
         .request(reqwest::Method::OPTIONS, url)
         .header("Origin", "tauri://localhost")
@@ -264,6 +274,7 @@ async fn rejects_redirects_and_non_video_bodies_without_following_them() {
                 .unwrap()
         }))
         .await;
+
         let server = media(&stub).await;
         let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
         assert_eq!(
@@ -299,6 +310,7 @@ async fn closing_a_session_cancels_an_active_stream_and_never_reuses_its_token()
         }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let mut response = reqwest::get(&session.sources[0].url).await.unwrap();
@@ -309,6 +321,7 @@ async fn closing_a_session_cancels_an_active_stream_and_never_reuses_its_token()
         .await
         .unwrap();
     assert!(result.is_err());
+
     let next = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     assert_ne!(session.id, next.id);
     assert_eq!(
@@ -339,12 +352,14 @@ async fn dropping_the_downstream_body_stops_consuming_the_upstream_stream() {
         }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let mut response = reqwest::get(&session.sources[0].url).await.unwrap();
     response.chunk().await.unwrap().unwrap();
     drop(response);
     tokio::time::sleep(Duration::from_millis(80)).await;
+
     let stopped = sent.load(Ordering::SeqCst);
     tokio::time::sleep(Duration::from_millis(80)).await;
     assert_eq!(sent.load(Ordering::SeqCst), stopped);
@@ -415,6 +430,7 @@ async fn closing_during_response_headers_cancels_the_pending_operation() {
         }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let url = session.sources[0].url.clone();
@@ -437,10 +453,12 @@ async fn concurrent_ranges_and_server_shutdown_release_owned_resources() {
             range_reply(request.headers(), false)
         }))
         .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let url = &session.sources[0].url;
     let client = reqwest::Client::new();
+
     let (first, second) = tokio::join!(
         client.get(url).header("Range", "bytes=0-7").send(),
         client.get(url).header("Range", "bytes=-8").send()
@@ -453,6 +471,7 @@ async fn concurrent_ranges_and_server_shutdown_release_owned_resources() {
         second.unwrap().bytes().await.unwrap().as_ref(),
         &[192, 193, 194, 195, 196, 197, 198, 199]
     );
+
     let url = url.clone();
     tokio::time::timeout(Duration::from_secs(1), server.shutdown())
         .await
@@ -485,6 +504,7 @@ async fn downstream_backpressure_does_not_prefetch_a_gibibyte_into_memory() {
         }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let mut response = reqwest::get(&session.sources[0].url).await.unwrap();
@@ -499,6 +519,7 @@ async fn downstream_backpressure_does_not_prefetch_a_gibibyte_into_memory() {
 }
 
 struct ActiveTransfer(Arc<AtomicUsize>);
+
 impl Drop for ActiveTransfer {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::SeqCst);
@@ -513,6 +534,7 @@ async fn stalled_downstream() -> (
     String,
 ) {
     use tokio::io::AsyncWriteExt;
+
     let active = Arc::new(AtomicUsize::new(0));
     let sent = Arc::new(AtomicUsize::new(0));
     let active_capture = active.clone();
@@ -542,6 +564,7 @@ async fn stalled_downstream() -> (
         }
     }))
     .await;
+
     let server = media(&stub).await;
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let url = reqwest::Url::parse(&session.sources[0].url).unwrap();

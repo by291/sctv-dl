@@ -1,12 +1,5 @@
 mod support;
-use axum::{
-    Router,
-    body::{Body, Bytes},
-    http::{Request, Response, StatusCode},
-};
-use sctv_dl_desktop_lib::{
-    downloads::*, history::HistoryMetadata, lifecycle::ExitController, media::Quality,
-};
+
 use std::{
     sync::{
         Arc,
@@ -15,12 +8,22 @@ use std::{
     time::Duration,
 };
 
+use axum::{
+    Router,
+    body::{Body, Bytes},
+    http::{Request, Response, StatusCode},
+};
+use sctv_dl_desktop_lib::{
+    downloads::*, history::HistoryMetadata, lifecycle::ExitController, media::Quality,
+};
+
 fn prepared(origin: &str) -> PreparedDownload {
     let content = ContentRef {
         programme_id: "1".into(),
         date_id: "2".into(),
         content_id: "3".into(),
     };
+
     PreparedDownload {
         metadata: HistoryMetadata {
             content: content.clone(),
@@ -35,6 +38,7 @@ fn prepared(origin: &str) -> PreparedDownload {
         url: format!("{origin}/clip.mp4"),
     }
 }
+
 async fn act(
     manager: &DownloadManager,
     gate: &ExitController,
@@ -54,6 +58,7 @@ async fn act(
         )
         .await
 }
+
 async fn wait(
     manager: &DownloadManager,
     predicate: impl Fn(&DownloadTask) -> bool,
@@ -104,6 +109,7 @@ async fn pause_restart_recovery_and_valid_resume_preserve_exact_bytes_and_attemp
                     .body(Body::from(bytes[offset..].to_vec()))
                     .unwrap();
             }
+
             let length = bytes.len();
             let stream = futures_util::stream::unfold((bytes, 0), |(bytes, offset)| async move {
                 if offset >= bytes.len() {
@@ -125,6 +131,7 @@ async fn pause_restart_recovery_and_valid_resume_preserve_exact_bytes_and_attemp
         }
     }))
     .await;
+
     let root = tempfile::tempdir().unwrap();
     let directory = root.path().join("files");
     std::fs::create_dir(&directory).unwrap();
@@ -141,10 +148,12 @@ async fn pause_restart_recovery_and_valid_resume_preserve_exact_bytes_and_attemp
         .start(vec![prepared(&server.origin)], &directory)
         .await
         .unwrap();
+
     let running = wait(&manager, |task| task.received_bytes >= 65536).await;
     act(&manager, &gate, &running, DownloadAction::Pause, None)
         .await
         .unwrap();
+
     let paused = manager.list()[0].clone();
     assert_eq!(paused.state, TaskState::Paused);
     assert!(paused.can_resume);
@@ -158,9 +167,12 @@ async fn pause_restart_recovery_and_valid_resume_preserve_exact_bytes_and_attemp
     ));
     manager.shutdown().await;
     drop(manager);
+
     let count = requests.load(Ordering::SeqCst);
     let manager = DownloadManager::open(config(), index).await.unwrap();
+
     let interrupted = manager.list()[0].clone();
+
     assert_eq!(interrupted.state, TaskState::Interrupted);
     assert_eq!(interrupted.received_bytes, paused.received_bytes);
     assert_eq!(requests.load(Ordering::SeqCst), count);
@@ -173,7 +185,9 @@ async fn pause_restart_recovery_and_valid_resume_preserve_exact_bytes_and_attemp
     )
     .await
     .unwrap();
+
     let completed = wait(&manager, |task| task.state == TaskState::Completed).await;
+
     assert_eq!(completed.id, paused.id);
     assert_ne!(completed.attempt_id, paused.attempt_id);
     assert!(completed.revision > paused.revision);
@@ -221,6 +235,7 @@ async fn ignored_range_preserves_partial_and_requires_explicit_restart() {
         }),
     )
     .await;
+
     let root = tempfile::tempdir().unwrap();
     let directory = root.path().join("files");
     std::fs::create_dir(&directory).unwrap();
@@ -238,10 +253,12 @@ async fn ignored_range_preserves_partial_and_requires_explicit_restart() {
         .start(vec![prepared(&server.origin)], &directory)
         .await
         .unwrap();
+
     let running = wait(&manager, |task| task.received_bytes >= 65536).await;
     act(&manager, &gate, &running, DownloadAction::Pause, None)
         .await
         .unwrap();
+
     let paused = manager.list()[0].clone();
     act(
         &manager,
@@ -252,7 +269,9 @@ async fn ignored_range_preserves_partial_and_requires_explicit_restart() {
     )
     .await
     .unwrap();
+
     let failed = wait(&manager, |task| task.state == TaskState::Failed).await;
+
     assert_eq!(failed.received_bytes, paused.received_bytes);
     assert!(!failed.can_resume);
     assert!(failed.has_partial);
@@ -265,7 +284,9 @@ async fn ignored_range_preserves_partial_and_requires_explicit_restart() {
     )
     .await
     .unwrap();
+
     let completed = wait(&manager, |task| task.state == TaskState::Completed).await;
+
     assert_eq!(completed.id, failed.id);
     assert_ne!(completed.attempt_id, failed.attempt_id);
     assert_eq!(
@@ -291,6 +312,7 @@ async fn failed_checkpoint_blocks_repeated_quit_until_a_durable_retry_succeeds()
             .unwrap()
     }))
     .await;
+
     let root = tempfile::tempdir().unwrap();
     let directory = root.path().join("files");
     std::fs::create_dir(&directory).unwrap();
@@ -312,9 +334,12 @@ async fn failed_checkpoint_blocks_repeated_quit_until_a_durable_retry_succeeds()
     let previous = std::fs::read(&path).unwrap();
     std::fs::remove_file(&path).unwrap();
     std::fs::create_dir(&path).unwrap();
+
     assert!(manager.prepare_shutdown().await.is_err());
+
     assert!(manager.prepare_shutdown().await.is_err());
     assert_eq!(manager.list()[0].state, TaskState::Failed);
+
     std::fs::remove_dir(&path).unwrap();
     std::fs::write(&path, previous).unwrap();
     let gate = ExitController::default();

@@ -1,4 +1,7 @@
 mod support;
+
+use std::{sync::Arc, time::Duration};
+
 use axum::{Router, body::Body, http::Response};
 use sctv_dl_desktop_lib::{
     downloads::*,
@@ -6,7 +9,6 @@ use sctv_dl_desktop_lib::{
     lifecycle::ExitController,
     media::{PlaybackService, Quality},
 };
-use std::{sync::Arc, time::Duration};
 
 async fn completed() -> (
     tempfile::TempDir,
@@ -21,6 +23,7 @@ async fn completed() -> (
             .unwrap()
     }))
     .await;
+
     let root = tempfile::tempdir().unwrap();
     let dir = root.path().join("files");
     std::fs::create_dir(&dir).unwrap();
@@ -33,11 +36,13 @@ async fn completed() -> (
     )
     .await
     .unwrap();
+
     let content = ContentRef {
         programme_id: "1".into(),
         date_id: "2".into(),
         content_id: "3".into(),
     };
+
     manager
         .start(
             vec![PreparedDownload {
@@ -57,6 +62,7 @@ async fn completed() -> (
         )
         .await
         .unwrap();
+
     let task = tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let task = manager.list()[0].clone();
@@ -68,9 +74,11 @@ async fn completed() -> (
     })
     .await
     .unwrap();
+
     assert_eq!(task.state, TaskState::Completed);
     (root, manager, task, ExitController::default())
 }
+
 fn request(task: &DownloadTask, action: DownloadAction) -> DownloadActionRequest {
     DownloadActionRequest {
         task_id: task.id.clone(),
@@ -99,6 +107,7 @@ async fn deleting_the_owned_file_stops_local_playback_and_retains_a_missing_reco
             .status(),
         200
     );
+
     manager
         .act_on_file(
             request(&task, DownloadAction::DeleteFile),
@@ -117,6 +126,7 @@ async fn deleting_the_owned_file_stops_local_playback_and_retains_a_missing_reco
             .status(),
         404
     );
+
     playback.shutdown().await;
     manager.shutdown().await;
 }
@@ -154,6 +164,7 @@ async fn validates_external_paths_and_preserves_replacement_files() {
             .iter()
             .all(|(path, _)| path == &expected)
     );
+
     std::fs::rename(&expected, root.path().join("original.mp4")).unwrap();
     std::fs::write(&expected, b"replacement").unwrap();
     assert!(
@@ -203,6 +214,7 @@ async fn removing_the_record_keeps_independent_playback_and_cancelled_open_resul
         )
         .await
         .unwrap();
+
     assert!(manager.list().is_empty());
     assert_eq!(
         reqwest::get(&session.sources[0].url)
@@ -213,6 +225,7 @@ async fn removing_the_record_keeps_independent_playback_and_cancelled_open_resul
             .unwrap(),
         "local bytes"
     );
+
     playback.shutdown().await;
     manager.shutdown().await;
 }

@@ -1,9 +1,15 @@
+use chrono::{DateTime, NaiveDate};
+use serde::{Deserialize, Serialize};
+
+// Cache inputs share the normalized wire shapes; validation remains with CachePayload.
+pub use crate::programmes::{
+    Programme as CachedProgramme, ProgrammeContent as CachedContent, ProgrammeDate as CachedDate,
+};
+
 use crate::{
     error::{AppError, ErrorCode, Result},
     programmes::validate_id,
 };
-use chrono::{DateTime, NaiveDate};
-use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -20,6 +26,7 @@ pub enum CacheKey {
         date_id: String,
     },
 }
+
 impl CacheKey {
     pub fn name(&self) -> Result<String> {
         match self {
@@ -39,32 +46,7 @@ impl CacheKey {
         }
     }
 }
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct CachedProgramme {
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub cover: Option<String>,
-}
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct CachedDate {
-    pub id: String,
-    pub date: String,
-}
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct CachedContent {
-    pub id: String,
-    pub title: String,
-    #[serde(default)]
-    pub cover: Option<String>,
-    #[serde(default)]
-    pub video: Option<String>,
-    #[serde(default)]
-    pub smooth_video: Option<String>,
-    #[serde(default)]
-    pub published_at: Option<String>,
-}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CachePayload {
@@ -84,6 +66,7 @@ pub enum CachePayload {
         items: Vec<CachedContent>,
     },
 }
+
 impl CachePayload {
     pub fn key(&self) -> CacheKey {
         match self {
@@ -101,8 +84,10 @@ impl CachePayload {
             },
         }
     }
+
     pub fn validate(&self) -> Result<()> {
         self.key().name()?;
+
         match self {
             Self::Catalogue { items } => {
                 for item in items {
@@ -128,6 +113,7 @@ impl CachePayload {
         Ok(())
     }
 }
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -137,15 +123,19 @@ pub struct Snapshot {
     pub revision: String,
     pub fetched_at: String,
 }
+
 impl Snapshot {
     pub fn validate(&self) -> Result<()> {
         self.payload.validate()?;
+
         if self.version != 1 || self.revision.is_empty() {
             return Err(invalid());
         }
+
         valid_time(&self.fetched_at)
     }
 }
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BrowseState {
@@ -156,24 +146,29 @@ pub struct BrowseState {
     pub scroll_y: f64,
     pub visited_at: String,
 }
+
 impl BrowseState {
     pub fn validate(&self) -> Result<()> {
         validate_id(&self.programme_id)?;
+
         if let Some(id) = &self.date_id {
             validate_id(id)?;
         }
         if let Some(date) = &self.date {
             valid_date(date)?;
         }
+
         if !matches!(self.sort.as_str(), "asc" | "desc")
             || !self.scroll_y.is_finite()
             || self.scroll_y < 0.0
         {
             return Err(invalid());
         }
+
         valid_time(&self.visited_at)
     }
 }
+
 #[derive(Clone, Debug, Serialize)]
 pub struct CacheRead {
     pub epoch: String,
@@ -181,6 +176,7 @@ pub struct CacheRead {
     pub persisted: bool,
     pub warning: Option<String>,
 }
+
 #[derive(Clone, Debug, Serialize)]
 pub struct CacheWriteResult {
     pub epoch: String,
@@ -189,6 +185,7 @@ pub struct CacheWriteResult {
     pub warning: Option<String>,
     pub accepted: bool,
 }
+
 #[derive(Clone, Debug, Serialize)]
 pub struct BrowseRead {
     pub epoch: String,
@@ -196,11 +193,13 @@ pub struct BrowseRead {
     pub persisted: bool,
     pub warning: Option<String>,
 }
+
 #[derive(Clone, Debug, Serialize)]
 pub struct WriteResult {
     pub accepted: bool,
     pub persisted: bool,
 }
+
 #[derive(Clone, Debug, Serialize)]
 pub struct ClearResult {
     pub epoch: String,
@@ -209,24 +208,31 @@ pub struct ClearResult {
 fn invalid() -> AppError {
     AppError::new(ErrorCode::InvalidInput, "节目缓存数据无效")
 }
+
 fn valid_url(value: &Option<String>) -> Result<()> {
     if let Some(value) = value {
         let url = reqwest::Url::parse(value).map_err(|_| invalid())?;
+
         if !matches!(url.scheme(), "https" | "http") {
             return Err(invalid());
         }
     }
+
     Ok(())
 }
+
 fn valid_date(value: &str) -> Result<()> {
     if value.len() != 10 || NaiveDate::parse_from_str(value, "%Y-%m-%d").is_err() {
         return Err(invalid());
     }
+
     Ok(())
 }
+
 fn valid_time(value: &str) -> Result<()> {
     if !value.ends_with('Z') || DateTime::parse_from_rfc3339(value).is_err() {
         return Err(invalid());
     }
+
     Ok(())
 }

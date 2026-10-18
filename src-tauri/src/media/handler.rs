@@ -22,6 +22,7 @@ pub(super) async fn handle(
     if !allows_request(headers, &inner) {
         return response(StatusCode::FORBIDDEN, HeaderMap::new(), Body::empty(), None);
     }
+
     let origin = headers.get("origin");
     let empty = |status| response(status, HeaderMap::new(), Body::empty(), origin);
     if ![Method::GET, Method::HEAD, Method::OPTIONS].contains(request.method()) {
@@ -32,6 +33,7 @@ pub(super) async fn handle(
     let Some(session) = session else {
         return empty(StatusCode::NOT_FOUND);
     };
+
     if request.method() == Method::OPTIONS {
         return response(
             StatusCode::NO_CONTENT,
@@ -40,6 +42,7 @@ pub(super) async fn handle(
             origin,
         );
     }
+
     let source = match &session.source {
         SessionSource::Upstream(sources) => match sources
             .iter()
@@ -52,19 +55,20 @@ pub(super) async fn handle(
             if source.quality.as_str() != quality {
                 return empty(StatusCode::NOT_FOUND);
             }
+
             // Serialize local producer registration with task-session removal so
             // deletion can await every producer that was actually admitted.
             let sessions = inner.sessions.lock().unwrap();
             if !sessions.contains_key(&id) {
                 return empty(StatusCode::GONE);
             }
+
             let (status, headers, body) = super::local::response(
                 source,
                 request.method(),
                 headers,
                 session.cancellation.clone(),
                 &inner.producers,
-                &session.producers,
             );
             return response(status, headers, body, origin);
         }
@@ -82,6 +86,7 @@ pub(super) async fn handle(
     if !status.is_success() {
         return response(status, error_headers(&upstream), Body::empty(), origin);
     }
+
     let copied = match media_headers(&upstream) {
         Ok(headers) => headers,
         Err(status) => return empty(status),
@@ -158,6 +163,7 @@ fn error_headers(upstream: &reqwest::Response) -> HeaderMap {
     {
         headers.insert("content-range", value.clone());
     }
+
     headers
 }
 
@@ -207,6 +213,7 @@ fn preflight_headers() -> HeaderMap {
         "access-control-allow-headers",
         HeaderValue::from_static("Range, If-Range"),
     );
+
     headers
 }
 
@@ -234,5 +241,6 @@ fn response(
             HeaderValue::from_static("Content-Length, Content-Range, Accept-Ranges"),
         );
     }
+
     response
 }

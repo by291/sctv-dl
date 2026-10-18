@@ -1,8 +1,9 @@
+use std::{sync::Arc, time::Duration};
+
 use sctv_dl_desktop_lib::{
     downloads::{DownloadConfig, DownloadManager},
     lifecycle::ExitController,
 };
-use std::{sync::Arc, time::Duration};
 
 #[tokio::test]
 async fn exit_waits_for_inflight_operations_and_rejects_repeated_requests() {
@@ -30,6 +31,7 @@ async fn exit_waits_for_inflight_operations_and_rejects_repeated_requests() {
 async fn rejecting_exit_reopens_operations_and_keeps_downloads_running() {
     use sctv_dl_desktop_lib::downloads::{ContentRef, PreparedDownload, TaskState};
     use sctv_dl_desktop_lib::media::Quality;
+
     let server = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", server.local_addr().unwrap());
     let server = tokio::spawn(async move {
@@ -40,6 +42,7 @@ async fn rejecting_exit_reopens_operations_and_keeps_downloads_running() {
         .await
         .unwrap();
     });
+
     let root = tempfile::tempdir().unwrap();
     let downloads = DownloadManager::new(DownloadConfig {
         upstream_origins: vec![origin.clone()],
@@ -49,7 +52,18 @@ async fn rejecting_exit_reopens_operations_and_keeps_downloads_running() {
     downloads
         .start(
             vec![PreparedDownload {
-                metadata: serde_json::from_value(serde_json::json!({"content":{"programmeId":"1","dateId":"2","contentId":"3"},"programmeName":"News","broadcastDate":"2026-10-17","title":"Clip","cover":null})).unwrap(),
+                metadata: serde_json::from_value(serde_json::json!({
+                    "content": {
+                        "programmeId": "1",
+                        "dateId": "2",
+                        "contentId": "3"
+                    },
+                    "programmeName": "News",
+                    "broadcastDate": "2026-10-17",
+                    "title": "Clip",
+                    "cover": null
+                }))
+                .unwrap(),
                 content: ContentRef {
                     programme_id: "1".into(),
                     date_id: "2".into(),
@@ -140,6 +154,7 @@ async fn durable_download() -> (
 ) {
     use axum::{Router, body::Body, http::Response};
     use sctv_dl_desktop_lib::downloads::PreparedDownload;
+
     let server = support::serve(Router::new().fallback(|| async {
         let body = futures_util::stream::once(async {
             Ok::<_, std::io::Error>(axum::body::Bytes::from_static(b"partial video bytes"))
@@ -153,6 +168,7 @@ async fn durable_download() -> (
             .unwrap()
     }))
     .await;
+
     let root = tempfile::tempdir().unwrap();
     let target = root.path().join("files");
     std::fs::create_dir(&target).unwrap();
@@ -166,7 +182,19 @@ async fn durable_download() -> (
     )
     .await
     .unwrap();
-    let metadata: sctv_dl_desktop_lib::history::HistoryMetadata = serde_json::from_value(serde_json::json!({"content":{"programmeId":"1","dateId":"2","contentId":"3"},"programmeName":"News","broadcastDate":"2026-10-17","title":"Clip","cover":null})).unwrap();
+    let metadata: sctv_dl_desktop_lib::history::HistoryMetadata =
+        serde_json::from_value(serde_json::json!({
+            "content": {
+                "programmeId": "1",
+                "dateId": "2",
+                "contentId": "3"
+            },
+            "programmeName": "News",
+            "broadcastDate": "2026-10-17",
+            "title": "Clip",
+            "cover": null
+        }))
+        .unwrap();
     manager
         .start(
             vec![PreparedDownload {
@@ -201,13 +229,16 @@ async fn durable_exit_preserves_download_progress_and_does_not_restart_on_open()
             .complete(&manager, || async { true })
             .await
     );
+
     let paused = manager.list()[0].clone();
+
     assert_eq!(
         paused.state,
         sctv_dl_desktop_lib::downloads::TaskState::Paused
     );
     assert!(paused.has_partial);
     assert!(paused.received_bytes > 0);
+
     drop(manager);
     let recovered = DownloadManager::open(Default::default(), index)
         .await
@@ -243,6 +274,7 @@ async fn failed_download_checkpoint_requires_a_separate_force_exit_decision() {
     assert!(!controller.committed());
     assert!(controller.enter().await.is_ok());
     assert!(manager.list()[0].has_partial);
+
     force_offered.store(false, std::sync::atomic::Ordering::SeqCst);
     assert!(
         controller
