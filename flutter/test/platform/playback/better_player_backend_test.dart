@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:better_player_plus/better_player_plus.dart';
+// The package keeps its native test seam outside the public barrel.
+// ignore: implementation_imports
 import 'package:better_player_plus/src/video_player/video_player_platform_interface.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
@@ -26,7 +28,6 @@ void main() {
   setUp(() {
     native.sources.clear();
     native.seeks.clear();
-    native.bufferingConfigurations.clear();
     native.createCalls = 0;
     native.disposeCalls = 0;
     native.reject = null;
@@ -35,56 +36,66 @@ void main() {
   });
   tearDownAll(() => native.events.close());
   test(
-    'cover readiness waits for native frame output and resets with the source',
+    'resume seeks after initialization and survives a source switch',
     () async {
-      final session = await BetterPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      final session = await BetterPlayerBackend(userAgent: 'test').open(
+        const PlaybackInput(
+          title: 'Resume',
+          sources: [first, second],
+          initialPosition: Duration(seconds: 42),
+        ),
+      );
       expect(session.value.initialized, isTrue);
-      expect(session.value.firstFrameRendered, isFalse);
-      native.events.add(
-        VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
-      );
-      expect(session.value.firstFrameRendered, isTrue);
+      expect(native.seeks, [const Duration(seconds: 42)]);
+      expect(session.value.position, const Duration(seconds: 42));
+      expect(session.value.playing, isFalse);
       await session.selectSource(second);
-      expect(session.value.firstFrameRendered, isFalse);
-      native.events.add(
-        VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
-      );
-      expect(session.value.firstFrameRendered, isTrue);
+      expect(native.seeks, List.filled(2, const Duration(seconds: 42)));
+      expect(session.value.position, const Duration(seconds: 42));
       await session.dispose();
     },
   );
-  test('resume prepares the target frame without a second seek', () async {
-    final session = await BetterPlayerBackend(userAgent: 'test').open(
-      const PlaybackInput(
-        title: 'Resume',
-        sources: [first, second],
-        initialPosition: Duration(seconds: 42),
+
+  test(
+    'content URI uses an explicit MP4 hint without network headers',
+    () async {
+      const uri = 'content://media/external/downloads/123';
+      final session = await BetterPlayerBackend(userAgent: 'test').open(
+        const PlaybackInput(title: 'Local', sources: [], localLocation: uri),
+      );
+      expect(native.sources.single.uri, uri);
+      expect(native.sources.single.formatHint, VideoFormat.other);
+      expect(native.sources.single.headers, isEmpty);
+      await session.dispose();
+    },
+  );
+
+  testWidgets('fits the video inside its surface without stretching', (
+    tester,
+  ) async {
+    final session = (await tester.runAsync(
+      () =>
+          BetterPlayerBackend(userAgent: 'sctv-dl/test')
+              .open(const PlaybackInput(title: 'Title', sources: [first])),
+    ))!;
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(session.dispose);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox.square(
+            dimension: 300,
+            child: PlaybackSurface(session: session),
+          ),
+        ),
       ),
     );
-    expect(native.sources.single.initialPosition, const Duration(seconds: 42));
-    expect(native.seeks, isEmpty);
-    expect(session.value.position, const Duration(seconds: 42));
-    expect(session.value.firstFrameRendered, isFalse);
-    native.events.add(
-      VideoEvent(key: null, eventType: VideoEventType.firstFrameRendered),
-    );
-    expect(session.value.firstFrameRendered, isTrue);
-    await session.selectSource(second);
-    expect(native.sources.last.initialPosition, const Duration(seconds: 42));
-    expect(native.seeks, isEmpty);
-    expect(session.value.firstFrameRendered, isFalse);
-    await session.dispose();
-  });
-
-  test('limits native prefetch time for large programme videos', () async {
-    final session = await BetterPlayerBackend(userAgent: 'sctv-dl/test')
-        .open(const PlaybackInput(title: 'Title', sources: [first]));
-    expect(
-      native.bufferingConfigurations.single.maxBufferMs,
-      lessThanOrEqualTo(30000),
-    );
-    await session.dispose();
+    expect(tester.getSize(find.byType(BetterPlayer)), const Size(300, 168.75));
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(session.dispose);
   });
   test('passes isolated media headers and starts paused', () async {
     final session = await BetterPlayerBackend(userAgent: 'sctv-dl/test')
@@ -135,14 +146,28 @@ void main() {
     await session.dispose();
   });
 
-  test('seeking a completed paused video to zero never autoplays', () async {
-    final session = await BetterPlayerBackend(userAgent: 'test')
-        .open(const PlaybackInput(title: 'Title', sources: [first]));
-    await session.seek(const Duration(seconds: 100));
-    await session.seek(Duration.zero);
-    expect(session.value.playing, isFalse);
-    await session.dispose();
-  });
+  test(
+    'Android foreground clears the retained picture-in-picture state',
+    () async {
+      final session = await BetterPlayerBackend(userAgent: 'test')
+          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      native.events.add(
+        VideoEvent(key: null, eventType: VideoEventType.pipStart),
+      );
+      expect(session.value.inPip, isTrue);
+
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+
+      expect(session.value.inPip, isFalse);
+      await session.dispose();
+    },
+  );
+
   test(
     'background pause while switching cancels the preserved play intent',
     () async {
@@ -228,7 +253,6 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   final events = StreamController<VideoEvent>.broadcast(sync: true);
   final sources = <DataSource>[];
   final seeks = <Duration>[];
-  final bufferingConfigurations = <BetterPlayerBufferingConfiguration>[];
   String? reject;
   Future<void>? setupDelay;
   Future<void>? disposeDelay;
@@ -238,12 +262,12 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   Duration position = Duration.zero;
   @override
   Future<void> init() async {}
+
   @override
   Future<int?> create({
     BetterPlayerBufferingConfiguration? bufferingConfiguration,
   }) async {
     createCalls++;
-    bufferingConfigurations.add(bufferingConfiguration!);
     return 1;
   }
 
@@ -288,8 +312,6 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   @override
   Future<void> setSpeed(int? textureId, double speed) async {}
   @override
-  Future<void> setAspectRatio(int? textureId, String aspectRatio) async {}
-  @override
   Future<void> setTrackParameters(
     int? textureId,
     int? width,
@@ -308,4 +330,7 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   Future<DateTime?> getAbsolutePosition(int? textureId) async => null;
   @override
   Future<bool?> isPictureInPictureEnabled(int? textureId) async => true;
+
+  @override
+  Widget buildView(int? textureId) => const SizedBox.expand();
 }

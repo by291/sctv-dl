@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:better_player_plus/better_player_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -53,17 +54,14 @@ class BetterPlayerBackend implements PlaybackBackend {
   }
 }
 
-class _BetterSession implements PlaybackSession {
+class _BetterSession with WidgetsBindingObserver implements PlaybackSession {
   _BetterSession(this.input, this.userAgent)
     : id = 'playback-${++_nextId}',
       controller = BetterPlayerController(
         const BetterPlayerConfiguration(
-          autoPlay: false,
           autoDispose: false,
           handleLifecycle: false,
           fit: BoxFit.contain,
-          aspectRatioIOS: AspectRatioTypeIOS.aspect,
-          aspectRatio: 16 / 9,
           controlsConfiguration: BetterPlayerControlsConfiguration(
             showControls: false,
           ),
@@ -71,6 +69,13 @@ class _BetterSession implements PlaybackSession {
       );
 
   static int _nextId = 0;
+
+  // Bound the requested prefetch window using the upstream API. This is not a
+  // byte budget; high-bitrate streams still require the low-memory regression.
+  static const _buffering = BetterPlayerBufferingConfiguration(
+    minBufferMs: 10000,
+    maxBufferMs: 30000,
+  );
 
   final PlaybackInput input;
   final String userAgent;
@@ -100,23 +105,57 @@ class _BetterSession implements PlaybackSession {
 
   Future<void> initialize() async {
     _source = input.sources.firstOrNull;
-    await controller.setupDataSource(
-      _dataSource(_source, input.initialPosition),
-    );
+    await _prepare(_source, input.initialPosition);
 
+    WidgetsBinding.instance.addObserver(this);
     controller.videoPlayerController!.addListener(_publish);
-    await controller.videoPlayerController!.setMixWithOthers(false);
+    controller.setMixWithOthers(false);
     _supportsPip = await controller.isPictureInPictureSupported();
     await controller.pause();
 
     _publish();
   }
 
-  BetterPlayerDataSource _dataSource(VideoSource? source, Duration position) {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The upstream Android engine has no PiP-exit event. Its higher-level
+    // controller reconciles on resume; our application-owned session does too.
+    if (!_disposed &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        state == AppLifecycleState.resumed &&
+        controller.videoPlayerController!.value.isPip) {
+      final native = controller.videoPlayerController!;
+      native.value = native.value.copyWith(isPip: false);
+    }
+  }
+
+  Future<void> _prepare(VideoSource? source, Duration position) async {
+    await controller.setupDataSource(_dataSource(source));
+
+    // setupDataSource resets iOS gravity; retain uncropped rendering on every
+    // source change through the native controller's public setter.
+    await controller.videoPlayerController!.setAspectRatio('aspect');
+    if (position > Duration.zero) await controller.seekTo(position);
+  }
+
+  BetterPlayerDataSource _dataSource(VideoSource? source) {
     if (input.localLocation case final String location) {
       final uri = Uri.tryParse(location);
+      // The native data source supports content URIs. An explicit format avoids
+      // extension guessing for MediaStore IDs, which have no file extension.
+      if (uri?.scheme == 'content') {
+        return BetterPlayerDataSource.network(
+          location,
+          videoFormat: BetterPlayerVideoFormat.other,
+          bufferingConfiguration: _buffering,
+        );
+      }
       final path = uri?.scheme == 'file' ? uri!.toFilePath() : location;
-      return BetterPlayerDataSource.file(path, initialPosition: position);
+      return BetterPlayerDataSource(
+        BetterPlayerDataSourceType.file,
+        path,
+        bufferingConfiguration: _buffering,
+      );
     }
 
     if (source == null || !isAllowedMediaUrl(source.url)) {
@@ -125,9 +164,9 @@ class _BetterSession implements PlaybackSession {
 
     return BetterPlayerDataSource.network(
       source.url,
-      initialPosition: position,
       headers: {'Referer': 'https://scgc.video.play/', 'User-Agent': userAgent},
       videoFormat: BetterPlayerVideoFormat.other,
+      bufferingConfiguration: _buffering,
       useAsmsSubtitles: false,
       useAsmsTracks: false,
       useAsmsAudioTracks: false,
@@ -142,7 +181,6 @@ class _BetterSession implements PlaybackSession {
 
     _value = PlaybackSnapshot(
       initialized: native.initialized,
-      firstFrameRendered: native.firstFrameRendered,
       playing: native.isPlaying,
       buffering: native.isBuffering,
       position: native.position,
@@ -214,7 +252,7 @@ class _BetterSession implements PlaybackSession {
 
       _source = source;
     } catch (error) {
-      // setupDataSource reuses the native decoder, so rollback restores the old
+      // Source changes reuse the native decoder, so rollback restores the old
       // source explicitly rather than claiming its discarded buffer survived.
       try {
         await _restore(previous, position, speed, playing);
@@ -238,7 +276,7 @@ class _BetterSession implements PlaybackSession {
     bool playing,
   ) async {
     await controller.pause();
-    await controller.setupDataSource(_dataSource(source, position));
+    await _prepare(source, position);
     await controller.setSpeed(speed);
     if (playing && _playIntent) await controller.play();
   }
@@ -249,8 +287,8 @@ class _BetterSession implements PlaybackSession {
       throw StateError('Picture in picture is unavailable');
     }
 
-    // Call the low-level API to avoid the package creating its own fullscreen
-    // route. This surface and session remain owned by our original route.
+    // The engine enters PiP without creating a package-owned fullscreen route.
+    // This surface and session remain owned by our original route.
     final box = surfaceKey.currentContext!.findRenderObject()! as RenderBox;
     final origin = box.localToGlobal(Offset.zero);
 
@@ -282,6 +320,7 @@ class _BetterSession implements PlaybackSession {
 
   Future<void> _disposeOnce() async {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
     final native = controller.videoPlayerController;
     native?.removeListener(_publish);
     (Object, StackTrace)? failure;
@@ -296,9 +335,8 @@ class _BetterSession implements PlaybackSession {
 
     await cleanup(controller.pause);
 
-    // Transfer the native handle out of the package wrapper before disposing it.
-    // Its synchronous disposal otherwise starts unobserved pause/dispose futures;
-    // this session must await the native completion even after pause fails.
+    // The wrapper disposes synchronously and starts unobserved native futures.
+    // Transfer its native handle to this session so replacement awaits release.
     controller.videoPlayerController = null;
     await cleanup(() => controller.dispose(forceDispose: true));
     await cleanup(() async => native?.dispose());
@@ -324,7 +362,13 @@ class PlaybackSurface extends StatelessWidget {
 
     return SizedBox.expand(
       key: native.surfaceKey,
-      child: BetterPlayer(controller: native.controller),
+      child: ValueListenableBuilder(
+        valueListenable: native.controller.videoPlayerController!,
+        builder: (context, value, child) => Center(
+          child: AspectRatio(aspectRatio: value.aspectRatio, child: child),
+        ),
+        child: BetterPlayer(controller: native.controller),
+      ),
     );
   }
 }

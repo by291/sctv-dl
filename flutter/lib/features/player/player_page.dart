@@ -325,7 +325,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   if (!value.inPip && widget.input.selection != null)
                     PlaybackCover(
                       selection: widget.input.selection!,
-                      ready: value.firstFrameRendered,
+                      ready: value.initialized,
                       shared: !fullscreen,
                     ),
                   if (!value.inPip) ...[

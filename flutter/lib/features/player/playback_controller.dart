@@ -282,7 +282,6 @@ class PlaybackController extends ChangeNotifier {
       // Resume checkpoints retain position and intent but never temporary speed.
       _lastUsable = PlaybackSnapshot(
         initialized: snapshot.initialized,
-        firstFrameRendered: snapshot.firstFrameRendered,
         playing: snapshot.playing,
         buffering: snapshot.buffering,
         position: snapshot.position,

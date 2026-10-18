@@ -77,7 +77,7 @@ Playback separates session/source/PiP coordination from controls visibility, his
 
 ### Artwork and route transitions
 
-Archive content cards share their artwork with the fixed playback surface. Accepted playback input builds that surface on the first route frame, avoiding a skeleton-to-player layout swap. The artwork remains above the live texture until both route entry and the native first-frame signal complete, then fades out over 120 ms. Native preparation starts at the requested resume position; it does not reveal the opening frame before seeking. Metadata initialization alone never removes the artwork.
+Archive content cards share their artwork with the fixed playback surface. Accepted playback input builds that surface on the first route frame, avoiding a skeleton-to-player layout swap. The artwork remains above the live texture until route entry and player initialization (including any requested resume seek) complete, then fades out over 120 ms. Rendering and seek completion follow the upstream player; an exact first-frame guarantee is not part of this contract.
 
 Android return-cover opacity complements the departing video's fade on the same route clock, independently of rectangle easing. The current video stays mounted underneath; cancellation retains its session, position and play state.
 
@@ -155,6 +155,6 @@ iOS media lives under the application's `Documents/Downloads`, with Files visibi
 
 ### Scheduling and network policy
 
-Native holding queues schedule at most two transfers independently of the Dart UI. `仅 Wi-Fi 下载` sets the policy for new tasks; it does not rewrite existing transfers. On iOS this disables cellular transport and can permit other noncellular connections. Native background transfers retain the documented system-managed redirect exception; application metadata, artwork and playback transports reject redirects.
+Native holding queues schedule at most two transfers independently of the Dart UI. `仅 Wi-Fi 下载` sets the policy for new tasks; it does not rewrite existing transfers. On iOS this disables cellular transport and can permit other noncellular connections. Native background transfers retain the documented system-managed redirect exception; application metadata and artwork reject redirects, while native playback follows the upstream player redirect policy.
 
-The locally maintained player dependency, its license and patch provenance remain documented in the [Flutter README](../flutter/README.md#player-dependency-repair-and-licenses). Do not replace the path override without preserving its native redirect, disposal, PiP and local-file contracts.
+The hosted player dependency, public configuration and low-memory verification are documented in the [Flutter README](../flutter/README.md#player-dependency-and-licenses). The adapter uses Better Player Plus's public controller and view with application-owned controls, restores progress through public seeks and awaits native disposal. Public configuration requests a 10–30-second buffering window; redirect handling and PiP behavior follow upstream defaults. The adapter does not enforce a buffer byte budget.

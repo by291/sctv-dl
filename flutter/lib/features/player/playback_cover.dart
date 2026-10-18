@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../design/shared_cover.dart';
 import '../../domain/programmes/programme.dart';
 
-/// Keeps artwork in the fixed video bounds until both native output and route
+/// Keeps artwork in the fixed video bounds until both player initialization and route
 /// entry are ready. The texture stays mounted beneath it, including on return.
 class PlaybackCover extends StatefulWidget {
   const PlaybackCover({

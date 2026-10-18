@@ -24,7 +24,7 @@ These instructions apply to this Flutter application, including its native hosts
 - Keep route registration, route adapters, navigation actions, input restoration and concrete bootstrap separate. Bootstrap rollback and shutdown attempt every independent cleanup step and preserve primary failures.
 - Own timers, subscriptions, native handles and asynchronous errors explicitly. Rejected serialized operations must not poison later work; repeated disposal returns the same completion. Use `unawaited` only where the owning boundary handles errors or the called operation already does so.
 - Pages compose focused presentation components; controllers own selection and state transitions. Never mutate selection during `build`. Preserve widget identity, scroll anchors, cover transitions and accessibility during extraction.
-- The Android activity and iOS delegate register capabilities; file-channel and player-environment owners implement them. Keep method names/payloads compatible. Do not mechanically reformat vendored plugins.
+- The Android activity and iOS delegate register capabilities; file-channel and player-environment owners implement them. Keep method names/payloads compatible.
 
 ## Quality gates
 

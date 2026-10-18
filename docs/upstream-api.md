@@ -61,7 +61,7 @@ The default Web deployment proxies metadata and media through one origin, so it 
 
 Native playback and download clients also send `sctv-dl/<package-version>` as their User-Agent because the historical CDN can reject requests without a client identifier. These compatibility rules do not guarantee every upstream object is available. When diagnosing a 403, compare HEAD or a small Range response with the required headers; do not download an entire episode.
 
-Flutter Android uses native device values for the guest profile. Flutter iOS uses the fixed Android-compatible `google`/`Pixel 8`/`14` values, not an independently observed official iOS profile. Metadata identity headers never belong on covers or media. Application-controlled metadata, image, playback and media-preflight transports reject redirects. System-owned legacy DownloadManager and Flutter background transfers retain their native redirect-policy exception; initial URL validation still applies.
+Flutter Android uses native device values for the guest profile. Flutter iOS uses the fixed Android-compatible `google`/`Pixel 8`/`14` values, not an independently observed official iOS profile. Metadata identity headers never belong on covers or media. Application-controlled metadata, image and media-preflight transports reject redirects. Web and Kotlin playback retain their redirect restrictions. Flutter playback follows the upstream player redirect policy; system-owned legacy DownloadManager and Flutter background transfers also retain their native redirect-policy exception. Initial URL validation still applies.
 
 ## Proxy Contracts
 

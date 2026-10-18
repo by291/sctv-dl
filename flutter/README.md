@@ -28,13 +28,17 @@ The application connects directly to the anonymous upstream API; it does not req
 
 Implementation ownership, product behaviour, persistence and resource lifecycles are documented in [Flutter Client Architecture](../docs/flutter.md). [AGENTS.md](AGENTS.md) owns contribution and readability rules. Features consume domain contracts; concrete composition belongs in `lib/app/`, and native effects remain in `lib/platform/`.
 
-## Player dependency repair and licenses
+## Player dependency and licenses
 
-[packages/better_player_plus](packages/better_player_plus) is the portable source copy of `better_player_plus` **2.0.0** originally fetched from [pub.dev](https://pub.dev/packages/better_player_plus/versions/2.0.0). The app selects it through the path override in `pubspec.yaml`. Preserve its [upstream license](packages/better_player_plus/LICENSE) and [patch provenance](packages/better_player_plus/LOCAL_PATCHES.md).
+The app pins the hosted [better_player_plus 2.0.0](https://pub.dev/packages/better_player_plus/versions/2.0.0) dependency. There is no vendored player source or dependency override. Its public `BetterPlayerController` and `BetterPlayer` view provide playback and rendering; the application owns controls, routes and session lifetime.
 
-The local repairs enforce streaming redirect rejection on Android/iOS playback, explicit iOS PiP ownership, awaitable single disposal and Android content-URI handling. Rebase and review those patches when upgrading the player; replacing the path override with an unmodified hosted version removes application behavior. The patch document records the native implementations and their verification limits. Do not reformat or regenerate the upstream package as part of application-wide Dart cleanup.
+Resume and quality changes use public seeks after initialization. Media headers, MP4 format hints, audio mixing and aspect fitting use upstream APIs and Flutter layout. Session disposal transfers ownership of the native controller out of the synchronous package wrapper and awaits native release before replacement. Redirects, first-frame timing, automatic iOS PiP and native playback events follow upstream behavior. The released package already skips video composition on iOS simulators. The Android host build aligns this plugin's Kotlin JVM target with its Java 17 target under AGP 9, so compilation does not inherit a conflicting host JDK target.
 
-Direct Dart dependencies and exact transitive versions are listed in `pubspec.yaml` and `pubspec.lock`; native dependencies are also declared by their owning plugins, including the player's Android Media3/OkHttp and iOS Swift packages. Review native dependency/license changes with that plugin rather than treating a Pub version bump as the whole update. The repository's Dependabot configuration schedules Pub updates for `/flutter`; the vendored override requires a deliberate source update.
+The upstream view can stay blank after a paused quality change until playback resumes. This behavior is accepted without a local player patch.
+
+`BetterPlayerBufferingConfiguration` requests a 10-second minimum and 30-second maximum buffer window while preserving upstream startup/rebuffer thresholds. Android passes these values to Media3; iOS uses the maximum as `preferredForwardBufferDuration`. This is a duration preference, not a memory byte limit, and the package exposes no configurable byte budget. Keep the low-memory runtime check below when upgrading the player; results apply to the tested media and device, not every bitrate.
+
+Direct dependencies and exact transitive versions live in `pubspec.yaml` and `pubspec.lock`. Native dependencies and licenses belong to their plugins; review those changes when upgrading. Dependabot checks the hosted Pub dependency normally.
 
 ## Development checks and release compilation
 
@@ -47,13 +51,12 @@ dart format --output=none --set-exit-if-changed lib test test_driver integration
 dart run tool/check_boundaries.dart
 flutter analyze --fatal-infos
 flutter test
-./android/gradlew -p android :better_player_plus:testDebugUnitTest --no-daemon
 flutter build apk --release --split-per-abi
 flutter build appbundle --release
 flutter build ios --release --no-codesign
 ```
 
-The formatter scopes include integration tests and deliberately exclude the vendored player's upstream Dart. After generation, inspect the diff and commit generated application sources with the source change. Use the generation command above without the obsolete `--delete-conflicting-outputs` option.
+The formatter scopes include integration tests. After generation, inspect the diff and commit generated application sources with the source change. Use the generation command above without the obsolete `--delete-conflicting-outputs` option.
 
 Debug builds on Android and iOS display `蜀台回看 Debug` and use the `.debug` application/bundle ID suffix, so they can coexist with Release/Profile (`蜀台回看`). Their private settings, history and download records are separate; changing the application identity does not migrate existing data. Android Kotlin namespaces and platform-channel names remain stable. iOS debug signing must target the debug Bundle ID.
 
@@ -61,7 +64,7 @@ Release APKs are split into `build/app/outputs/flutter-apk/app-armeabi-v7a-relea
 
 Dart tests use [shared JSON fixtures](../shared/fixtures), disposable SQLite databases and controlled HTTP services. Player/download tests with fake native boundaries verify application decisions; they do not establish native decode, background execution or OS file behavior. Use disposable emulators/simulators and real controlled media/transfer fixtures for runtime acceptance. Record each integration command, device ID, OS version and observed lifecycle mode with its result.
 
-The [Flutter workflow](../.github/workflows/flutter.yml) pins Flutter 3.47.6. Its Ubuntu job checks generation, application Dart formatting, analysis, tests and native player HTTP-policy tests/instrumentation compilation, then compiles Android APK/AAB artifacts. Its macOS job compiles and archives an **unsigned** iOS app. Workflow source validation is distinct from an actual hosted CI run; neither release compilation nor a fake-backed test is native runtime evidence.
+The [Flutter workflow](../.github/workflows/flutter.yml) pins Flutter 3.47.6. Its Ubuntu job checks generation, application Dart formatting, analysis, tests and native host instrumentation compilation, then compiles Android APK/AAB artifacts. Its macOS job compiles and archives an **unsigned** iOS app. Workflow source validation is distinct from an actual hosted CI run; neither release compilation nor a fake-backed test is native runtime evidence.
 
 Android release validation currently uses the debug signing configuration in the native host. The iOS CI app is unsigned and is not an installable distribution package. Production keystores, Apple signing/provisioning, store upload and publication remain separate release work; no production signing material belongs in this repository.
 
@@ -105,10 +108,23 @@ This exercises native paused playback, seeking, speed, replay, fullscreen rotati
 For resume-frame validation, use `integration_test/resume_frame_test.dart` with
 the same define mechanism and a 30-second H264 fixture: solid red for the first
 10 seconds, solid green thereafter. It resumes at 12 seconds, samples actual
-Android texture pixels during entry to reject opening-frame leakage, and checks
+Android texture pixels until the resumed frame renders, and checks
 the retained green frame, session and bounds after cancelling a route gesture.
 It also completes a return and checks the original artwork bounds. Route progress
 is driven by the test; the system-input journey below validates OS gestures.
+
+For the Android OOM regression, run the opt-in long-programme journey on a disposable runtime with a **192 MiB app heap limit**. It uses live metadata and streams a full episode; it does not create a download. It holds the initial paused player for 90 seconds, plays for 90 seconds, seeks, switches quality when the upstream episode has multiple sources, and opens two replacement sessions. The full application services remain alive throughout. Use `PLAYER_MEMORY_DATE=YYYY-MM-DD` to select a historical broadcast, or omit it for the latest date.
+
+```sh
+flutter test integration_test/playback_memory_test.dart -d <device-id> \
+  --dart-define=LIVE_PLAYER_MEMORY=true
+```
+
+For a release-mode run, build an APK with `--target=integration_test/playback_memory_test.dart --dart-define=LIVE_PLAYER_MEMORY=true`, install it on that disposable device, and launch its main Activity. Capture `adb logcat` and sample `adb shell dumpsys meminfo --local dev.sctvdl.flutter` every two seconds. The `--local` option avoids calling into the app and forcing garbage collection; its PSS values are not allocated Java heap sizes. Confirm `dalvik.vm.heapgrowthlimit` and `dalvik.vm.heapsize` are both `192m`; changing only AVD RAM does not set the application heap limit. Require the `PLAYER_MEMORY_PASS` marker, advancing playback after seek/quality changes, and no OOM/crash. This is evidence for the tested stream/device, not a hard byte limit for every bitrate.
+
+Repeat with a generated high-bitrate H264 MP4 to exercise memory pressure independently of the live programme's bitrate. Place a fixture longer than two minutes in the disposable app's `Documents/Downloads`, then pass `--dart-define=PLAYER_MEMORY_FILE=documents:Downloads/stress.mp4`. The journey keeps the same application services alive, resumes replacement sessions at 30-second intervals, and seeks to 90 seconds. Keep large fixtures and memory logs outside tracked source.
+
+Add `--dart-define=PLAYER_MEMORY_STREAM=true` to serve that file over loopback HTTP with streaming backpressure. This exercises network buffering without retaining the full fixture in Dart memory. Android Release builds reject cleartext HTTP by default; for this test only, add a temporary network-security configuration allowing `127.0.0.1`, build the test APK, then remove that configuration from source. Keep production HTTP policy unchanged. The same journey runs on disposable iOS simulators; sample the app process RSS and check native crash logs. It leaves ten seconds after player disposal for sampling. Simulator measurements do not establish physical iOS device jetsam limits.
 
 For native catalogue typography checks, including CJK fallback fonts, scrolling, both themes and 100%/130%/200% text scaling:
 
@@ -125,7 +141,7 @@ For real Android edge gestures on playback and history (cancel and commit from b
 python3 tool/verify_predictive_back.py --device <disposable-emulator-id> --pages
 ```
 
-This opt-in journey uses live metadata and paused native video, waits for the first frame before checking the revealed surface, and verifies retained geometry and scroll state. Without `--pages`, the driver checks the original catalogue/exploration/archive cases.
+This opt-in journey uses live metadata and paused native video, waits for initialization before checking the revealed surface, and verifies retained geometry and scroll state. Without `--pages`, the driver checks the original catalogue/exploration/archive cases.
 
 For warmed shared-cover rendering measurements, separate from OS input delivery:
 

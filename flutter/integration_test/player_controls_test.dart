@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,6 +27,13 @@ void main() {
   testWidgets(
     'native player controls retain the decoder across fullscreen and PiP',
     (tester) async {
+      if (Platform.isIOS) {
+        addTearDown(() => SystemChrome.setPreferredOrientations([]));
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]);
+      }
+
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/Downloads/player-controls.mp4');
       await file.parent.create(recursive: true);
@@ -105,10 +113,11 @@ void main() {
       await tester.tap(find.byTooltip('播放'));
       await waitFor(() => session.value.position > Duration.zero);
       await tester.tapAt(tester.getCenter(find.byType(PlaybackSurface)));
-      await tester.pump();
+      // Single taps settle after the double-tap recognizer's deadline.
+      await waitFor(() => find.byTooltip('暂停').evaluate().isEmpty);
       expect(find.byTooltip('暂停'), findsNothing);
       await tester.tapAt(tester.getCenter(find.byType(PlaybackSurface)));
-      await tester.pump();
+      await waitFor(() => find.byTooltip('暂停').evaluate().isNotEmpty);
       await tester.tap(find.byTooltip('播放速度'));
       await tester.pumpAndSettle();
       await capture('speed-menu');
@@ -147,7 +156,21 @@ void main() {
       );
       expect(backend.opens, 1);
       await capture('fullscreen');
-      await tester.binding.handlePopRoute();
+      if (Platform.isIOS) {
+        // iOS has no system Back action; use the application's exit control.
+        await tester.tap(find.byTooltip('退出全屏'));
+        await waitFor(
+          () => find.text('Player interaction fixture').evaluate().isNotEmpty,
+        );
+
+        // Restoring the OS policy need not rotate an iOS simulator immediately.
+        // Fix the fixture orientation before comparing the restored geometry.
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]);
+      } else {
+        await tester.binding.handlePopRoute();
+      }
       await waitFor(
         () => tester.view.physicalSize.width < tester.view.physicalSize.height,
       );

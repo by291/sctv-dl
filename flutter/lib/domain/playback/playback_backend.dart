@@ -21,7 +21,6 @@ class PlaybackInput {
 class PlaybackSnapshot {
   const PlaybackSnapshot({
     this.initialized = false,
-    this.firstFrameRendered = false,
     this.playing = false,
     this.buffering = false,
     this.position = Duration.zero,
@@ -36,8 +35,6 @@ class PlaybackSnapshot {
 
   final bool initialized;
 
-  /// The native output has produced a frame, independently of metadata readiness.
-  final bool firstFrameRendered;
   final bool playing;
   final bool buffering;
 

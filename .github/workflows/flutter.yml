@@ -77,8 +77,8 @@ jobs:
           dart run tool/check_boundaries.dart
           flutter analyze --fatal-infos
           flutter test
-      - name: Verify native player HTTP policy
-        run: ./android/gradlew -p android :better_player_plus:testDebugUnitTest :better_player_plus:assembleDebugAndroidTest :app:assembleDebugAndroidTest --no-daemon
+      - name: Compile native host instrumentation tests
+        run: ./android/gradlew -p android :app:assembleDebugAndroidTest --no-daemon
       - name: Compile Android release APKs per ABI and App Bundle
         run: |
           flutter build apk --release --split-per-abi

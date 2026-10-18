@@ -9,9 +9,9 @@ environment:
 
 dependencies:
   background_downloader: ^9.6.4
-  better_player_plus: ^2.0.0
+  better_player_plus: 2.0.0
   cached_network_image: ^4.0.4
-  cupertino_icons: ^2.0.0
+  cupertino_icons: ^1.0.9
   device_info_plus: ^13.3.0
   dio: ^5.11.1
   drift: ^2.35.2
@@ -43,7 +43,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-dependency_overrides:
-  better_player_plus:
-    path: packages/better_player_plus

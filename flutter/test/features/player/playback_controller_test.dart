@@ -376,12 +376,10 @@ class FakeSession implements PlaybackSession {
     Duration position = Duration.zero,
     double speed = 1,
     bool initialized = true,
-    bool? firstFrameRendered,
     String? error,
   }) {
     value = PlaybackSnapshot(
       initialized: initialized,
-      firstFrameRendered: firstFrameRendered ?? value.firstFrameRendered,
       error: error,
       speed: speed,
       source: standard,

@@ -170,7 +170,7 @@ void main() {
     tester,
   ) async {
     final session = fixtures.FakeSession()
-      ..emit(firstFrameRendered: true, position: const Duration(seconds: 42));
+      ..emit(position: const Duration(seconds: 42));
     final nav = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
       MaterialApp(
@@ -232,9 +232,9 @@ void main() {
   });
 
   testWidgets(
-    'an early native frame waits for route entry before revealing video',
+    'an initialized player waits for route entry before revealing video',
     (tester) async {
-      final session = fixtures.FakeSession()..emit(firstFrameRendered: true);
+      final session = fixtures.FakeSession()..emit(initialized: true);
       final nav = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
         MaterialApp(navigatorKey: nav, home: const Scaffold()),
@@ -284,13 +284,10 @@ void main() {
     session.emit();
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.getRect(find.byType(SharedCover)), bounds);
-    expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 1);
-    session.emit(firstFrameRendered: true);
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
     expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
     expect(tester.getRect(find.byType(SharedCover)), bounds);
-    session.emit(firstFrameRendered: true, buffering: true);
+    session.emit(buffering: true);
     await tester.pump();
     expect(tester.widget<SharedCover>(find.byType(SharedCover)).opacity, 0);
     await tester.pumpWidget(const SizedBox());
