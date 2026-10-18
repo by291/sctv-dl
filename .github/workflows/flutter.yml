@@ -68,12 +68,13 @@ jobs:
           test -z "$(git status --porcelain -- lib)"
       - name: Check application Dart formatting
         run: |
-          dart format --output=none --set-exit-if-changed lib test test_driver
+          dart format --output=none --set-exit-if-changed lib test test_driver tool
           if [ -d integration_test ]; then
             dart format --output=none --set-exit-if-changed integration_test
           fi
       - name: Analyze and test
         run: |
+          dart run tool/check_boundaries.dart
           flutter analyze --fatal-infos
           flutter test
       - name: Verify native player HTTP policy

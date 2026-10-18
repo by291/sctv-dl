@@ -15,6 +15,7 @@ class ContentTransition extends StatefulWidget {
     required this.background,
     this.milliseconds = 140,
   }) : sliver = false;
+
   const ContentTransition.sliver({
     super.key,
     required this.child,
@@ -40,6 +41,7 @@ class _ContentTransitionState extends State<ContentTransition> {
   @override
   void didUpdateWidget(ContentTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (Widget.canUpdate(oldWidget.child, widget.child)) {
       _entries[_entries.length - 1] = (
         id: _entries.last.id,
@@ -56,6 +58,7 @@ class _ContentTransitionState extends State<ContentTransition> {
 
   void _settled() {
     if (!mounted || _entries.length < 2) return;
+
     setState(() {
       final current = _entries.last;
       _entries
@@ -118,6 +121,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
           });
         }
       });
+
   late int _target = widget.index;
   late List<double> _start = [
     for (var i = 0; i < widget.children.length; i++) i == widget.index ? 1 : 0,
@@ -125,9 +129,11 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
 
   late List<double> _startOffsets = List.filled(widget.children.length, 0);
   late List<double> _endOffsets = List.filled(widget.children.length, 0);
+
   double get _progress => widget.travelDistance == 0
       ? Curves.easeOutCubic.transform(_animation.value)
       : Curves.fastOutSlowIn.transform(_animation.value);
+
   List<double> get _offsets => [
     for (var i = 0; i < _startOffsets.length; i++)
       _startOffsets[i] + (_endOffsets[i] - _startOffsets[i]) * _progress,
@@ -135,6 +141,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
 
   List<double> get _weights {
     final t = _progress;
+
     return [
       for (var i = 0; i < _start.length; i++)
         _start[i] * (1 - t) + (i == _target ? t : 0),
@@ -167,10 +174,12 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
         oldWidget.children.length != widget.children.length) {
       _startOffsets = _offsets;
       _start = _weights;
+
       while (_start.length < widget.children.length) {
         _start.add(0);
         _startOffsets.add(0);
       }
+
       final direction = widget.index > _target ? 1.0 : -1.0;
       if (_start[widget.index] == 0) {
         _startOffsets[widget.index] = direction * widget.travelDistance;
@@ -179,6 +188,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
         for (var i = 0; i < widget.children.length; i++)
           i == widget.index ? 0 : -direction * widget.travelDistance,
       ];
+
       _target = widget.index;
       _animation.duration = motionDuration(context, widget.milliseconds);
       _animation.forward(from: 0);
@@ -199,8 +209,10 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
       final offsets = _offsets;
       var covered = 0.0;
       final layers = <Widget>[];
+
       for (var i = 0; i < widget.children.length; i++) {
         covered += weights[i];
+
         // Convert normalized mixture weights to source-over alpha. The first
         // visible layer is opaque, so no frame exposes an empty backing surface.
         final opacity = covered == 0
@@ -210,6 +222,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
         final hidden = weights[i] == 0 && !active;
         final background =
             widget.background ?? Theme.of(context).scaffoldBackgroundColor;
+
         final content = TickerMode(
           enabled: active,
           child: HeroMode(
@@ -257,6 +270,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
                   ),
                 ),
               );
+
         layers.add(
           KeyedSubtree(
             key: widget.children[i].key ?? ValueKey(i),
@@ -264,6 +278,7 @@ class _RetainedFadeStackState extends State<RetainedFadeStack>
           ),
         );
       }
+
       return widget.sliver
           ? SliverStack(children: layers)
           : Stack(

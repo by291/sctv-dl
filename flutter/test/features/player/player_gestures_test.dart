@@ -1,17 +1,116 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sctv_dl_mobile/features/player/playback_controller.dart';
 import 'package:sctv_dl_mobile/features/player/player_controls.dart';
 import 'package:sctv_dl_mobile/features/player/player_gestures.dart';
-import 'package:sctv_dl_mobile/features/player/playback_controller.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 
 import 'playback_controller_test.dart' as fixtures;
-import 'player_gesture_controller_test.dart' as gesture_fixtures;
 import 'player_environment_controller_test.dart' as environment_fixtures;
+import 'player_gesture_controller_test.dart' as gesture_fixtures;
 
 void main() {
+  testWidgets(
+    'visible inactive fullscreen retains a usable brightness gesture base',
+    (tester) async {
+      final environment = environment_fixtures.Environment()..read.complete(.4);
+      final session = fixtures.FakeSession();
+      final player = PlaybackController(
+        input: fixtures.input,
+        backend: fixtures.FakeBackend(session),
+        history: fixtures.MemoryHistory(),
+      );
+      await player.initialize();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlayerGestures(
+              controller: player,
+              fullscreen: true,
+              environment: environment,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      final surface = tester.getRect(find.byType(PlayerGestures));
+      final gesture = await tester.startGesture(
+        Offset(surface.left + surface.width * .25, surface.center.dy),
+      );
+      await gesture.moveBy(const Offset(0, -30));
+      await gesture.moveBy(const Offset(0, -80));
+      await gesture.up();
+      await tester.pump();
+
+      expect(environment.current, greaterThan(.4));
+      expect(find.textContaining('亮度'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      await tester.runAsync(player.release);
+      player.dispose();
+    },
+  );
+
+  testWidgets(
+    'real background restores brightness and resuming renews gesture ownership',
+    (tester) async {
+      final environment = environment_fixtures.Environment()..read.complete(.4);
+      final session = fixtures.FakeSession();
+      final player = PlaybackController(
+        input: fixtures.input,
+        backend: fixtures.FakeBackend(session),
+        history: fixtures.MemoryHistory(),
+      );
+      await player.initialize();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlayerGestures(
+              controller: player,
+              fullscreen: true,
+              environment: environment,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      Future<void> adjustBrightness() async {
+        final surface = tester.getRect(find.byType(PlayerGestures));
+        final gesture = await tester.startGesture(
+          Offset(surface.left + surface.width * .25, surface.center.dy),
+        );
+        await gesture.moveBy(const Offset(0, -30));
+        await gesture.moveBy(const Offset(0, -80));
+        await gesture.up();
+        await tester.pump();
+      }
+
+      await adjustBrightness();
+      expect(environment.current, greaterThan(.4));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(environment.current, .4);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await adjustBrightness();
+      expect(environment.current, greaterThan(.4));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      expect(environment.current, .4);
+      await tester.runAsync(player.release);
+      player.dispose();
+    },
+  );
+
   testWidgets('pending speed restoration cannot release a newer gesture hold', (
     tester,
   ) async {

@@ -7,6 +7,7 @@ final coverCacheProvider = Provider<BaseCacheManager?>((ref) => null);
 
 class CoverImage extends StatelessWidget {
   const CoverImage({super.key, this.url, this.aspectRatio = 16 / 9});
+
   final String? url;
   final double aspectRatio;
 
@@ -23,6 +24,7 @@ class CoverImage extends StatelessWidget {
         ),
       ),
     );
+
     return ExcludeSemantics(
       child: AspectRatio(
         aspectRatio: aspectRatio,

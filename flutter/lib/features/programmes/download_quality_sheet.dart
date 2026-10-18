@@ -13,10 +13,12 @@ Future<DownloadBatchResult?> showDownloadQualitySheet(
   String wifiPolicyLabel = '仅使用 Wi-Fi',
 }) async {
   if (selections.isEmpty) return null;
+
   final options = <VideoQuality>{
     for (final selection in selections)
       for (final source in videoSources(selection.content)) source.quality,
   };
+
   final quality = await showModalBottomSheet<VideoQuality>(
     context: context,
     showDragHandle: true,
@@ -57,6 +59,7 @@ Future<DownloadBatchResult?> showDownloadQualitySheet(
   );
   // Dismissing the chooser never creates a durable task or starts preflight.
   if (quality == null) return null;
+
   return downloads.start(selections, quality, wifiOnly: wifiOnly);
 }
 
@@ -67,5 +70,6 @@ String downloadResultLabel(DownloadBatchResult result) {
   if (result.failures.isNotEmpty) {
     parts.add('${result.failures.length} 项失败：${result.failures.first.message}');
   }
+
   return parts.join('，');
 }

@@ -19,6 +19,7 @@ class ViewingEntry {
 abstract interface class HistoryRepository {
   Future<List<ViewingEntry>> loadHistory();
   Stream<List<ViewingEntry>> watchHistory();
+
   Future<void> save(ViewingEntry entry);
   Future<void> remove(ContentRef ref);
   Future<void> clear();

@@ -48,6 +48,7 @@ ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
   final iconColour =
       dynamicScheme?.primary ??
       (dark ? const Color(0xFFA8CEEC) : const Color(0xFF4C87B3));
+
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,

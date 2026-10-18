@@ -5,6 +5,7 @@ import 'package:sctv_dl_mobile/design/pending_update_notice.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 

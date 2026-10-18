@@ -8,8 +8,8 @@ import 'package:sctv_dl_mobile/data/database/record_database.dart';
 import 'package:sctv_dl_mobile/data/programmes/cached_programme_repository.dart';
 import 'package:sctv_dl_mobile/data/programmes/dio_programme_client.dart';
 import 'package:sctv_dl_mobile/data/settings/installation_identity.dart';
-import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
+import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 
 void main() {
   late RecordDatabase database;

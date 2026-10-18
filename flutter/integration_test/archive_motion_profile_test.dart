@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
-import 'package:sctv_dl_mobile/app/services.dart';
+import 'package:sctv_dl_mobile/app/bootstrap.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
-import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 
 /// Profile rendering with uniform route progress, separately from OS input
 /// delivery. Run with --profile --no-dds and ARCHIVE_MOTION_PROFILE=true.

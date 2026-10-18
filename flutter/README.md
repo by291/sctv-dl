@@ -39,7 +39,15 @@ The application connects directly to the anonymous upstream API; it does not req
 
 Features consume domain contracts. Application composition owns repository/native lifetimes and supplies concrete adapters. Keep platform handles out of routes and persisted models; pin accepted programme metadata for active playback/download actions. Agent conventions are in [AGENTS.md](AGENTS.md); the [approved design](../docs/superpowers/specs/2026-10-16-flutter-mobile-design.md) defines the complete product and acceptance requirements.
 
+Application registration lives in `app/router.dart`; route adapters live in `app/routes/`, navigation actions in `app/navigation_actions.dart`, accepted/restored playback input in `app/playback_input_resolver.dart`, and concrete construction in `app/bootstrap.dart`. `AppServices` owns shutdown; independent cleanup continues after a failure. Native entry points register file and player capabilities owned by separate handlers.
+
+Programme cards, exploration and archive regions are callback-driven presentation components. Favourite state separates confirmed storage from pending desired edits, with persistence errors and retry independent of programme refresh. Settings preserve optimistic in-memory preferences after a write failure and offer retry. Download selection/filter/batch state belongs to its controller; dialogs and actions belong to its action owner, not card rendering.
+
 User preferences, favourites and the latest 500 viewing entries belong to a user database. Reconstructible programme snapshots, installation identity and native transfer records belong to a separate runtime database, outside user backup. Successful empty snapshots retain their fetched marker. Cache cleanup preserves user data, active downloads and completed videos.
+
+Download task transitions use a short serialized lane; file inspection, publication, cleanup and export run outside it with exclusive ownership of the affected task. Native progress and unrelated observations remain available while those effects run. Explicit reconciliation joins already-owned effects before reporting file availability. Task attempts and durable revisions fence final commits, and shutdown drains accepted effects before releasing shared storage. Completed publication records retain their private recovery pointer until the public location is durable and cleanup succeeds.
+
+Playback separates session/source/PiP coordination from controls visibility, history write ordering and OS window policy. A failed pause cannot skip history or native disposal. Window restoration remains owed after a partial failure, independently of the visible fullscreen layout; cleanup attempts both orientation and system UI restoration. Repeated disposal observes the same completion.
 
 Background refresh compares parsed model fields rather than serialized JSON: programme ID/name/cover, broadcast ID/date, and content ID/title/cover/video variants/publication time. Missing optional values, JSON key order and unused metadata do not create revisions. Additions, removals and effective display-order changes do; broadcast dates retain their existing deduplication and descending-date normalization. Unchanged snapshots keep their revision while advancing the fetched timestamp. A valid refresh repairs malformed cached items. Cancellation, stale-response rejection and serialized cache writes remain authoritative.
 
@@ -90,7 +98,8 @@ Run from this directory:
 ```sh
 flutter pub get --enforce-lockfile
 dart run build_runner build
-dart format --output=none --set-exit-if-changed lib test test_driver
+dart format --output=none --set-exit-if-changed lib test test_driver integration_test tool
+dart run tool/check_boundaries.dart
 flutter analyze --fatal-infos
 flutter test
 ./android/gradlew -p android :better_player_plus:testDebugUnitTest --no-daemon

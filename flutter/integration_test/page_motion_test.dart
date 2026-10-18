@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -7,11 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
-import 'package:sctv_dl_mobile/app/services.dart';
+import 'package:sctv_dl_mobile/app/bootstrap.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 import 'package:sctv_dl_mobile/features/programmes/history_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
@@ -112,7 +114,7 @@ void main() {
             );
             expect(find.byTooltip('暂停'), findsNothing);
           } else {
-            router.push('/history');
+            unawaited(router.push('/history'));
           }
           await tester.pumpAndSettle();
           final page = name == 'player'

@@ -7,16 +7,19 @@ class DriftUserRepository implements UserRepository {
   DriftUserRepository(this._database);
 
   final RecordDatabase _database;
+
   Future<void> _writeTail = Future<void>.value();
   Future<void>? _migration;
 
   Future<void> _serialize(Future<void> Function() action) {
     final result = _writeTail.then((_) => action());
+
     // A failed save is reported to its caller without blocking later changes.
     _writeTail = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
     );
+
     return result;
   }
 
@@ -33,6 +36,7 @@ class DriftUserRepository implements UserRepository {
           'current',
           _encodePreferences(_decodePreferences(legacy)),
         );
+
         final favourites = legacy['favourites'];
         if (favourites is List) {
           for (final id
@@ -40,6 +44,7 @@ class DriftUserRepository implements UserRepository {
             await _database.write('favourites', id, {'id': id});
           }
         }
+
         await _database.remove('settings', 'preferences');
       })
       .onError((Object error, StackTrace stack) {
@@ -50,6 +55,7 @@ class DriftUserRepository implements UserRepository {
   @override
   Future<Preferences> loadPreferences() async {
     await _migrate();
+
     return _decodePreferences(
       await _database.read('preferences', 'current') ?? {},
     );
@@ -58,6 +64,7 @@ class DriftUserRepository implements UserRepository {
   @override
   Future<void> savePreferences(Preferences preferences) => _serialize(() async {
     await _migrate();
+
     await _database.write(
       'preferences',
       'current',
@@ -68,6 +75,7 @@ class DriftUserRepository implements UserRepository {
   @override
   Stream<Preferences> watchPreferences() async* {
     await _migrate();
+
     yield* _database
         .watch('preferences')
         .map((rows) => _decodePreferences(rows['current'] ?? {}));
@@ -76,6 +84,7 @@ class DriftUserRepository implements UserRepository {
   @override
   Future<Set<String>> loadFavourites() async {
     await _migrate();
+
     return (await _database.all('favourites')).keys.where(_isId).toSet();
   }
 
@@ -85,6 +94,7 @@ class DriftUserRepository implements UserRepository {
       throw const FormatException('Invalid programme ID');
     }
     await _migrate();
+
     await _database.transaction(() async {
       final existing = await _database.read('favourites', programmeId);
       if (existing == null) {
@@ -98,6 +108,7 @@ class DriftUserRepository implements UserRepository {
   @override
   Stream<Set<String>> watchFavourites() async* {
     await _migrate();
+
     yield* _database
         .watch('favourites')
         .map((rows) => rows.keys.where(_isId).toSet());

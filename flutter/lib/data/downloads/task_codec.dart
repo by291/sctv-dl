@@ -46,9 +46,11 @@ DownloadTask decodeDownloadTask(Map<String, Object?> json) {
   if (json['version'] != 1) {
     throw const FormatException('Unsupported download record version');
   }
+
   final programme = _map(json['programme']);
   final broadcast = _map(json['broadcast']);
   final content = _map(json['content']);
+
   final url = _string(json, 'url');
   final filename = _string(json, 'filename');
   if (!isAllowedMediaUrl(url) ||
@@ -59,9 +61,11 @@ DownloadTask decodeDownloadTask(Map<String, Object?> json) {
       utf8.encode(filename).length > 255) {
     throw const FormatException('Invalid persisted media destination');
   }
+
   for (final key in ['fileLocation', 'privateLocation']) {
     if (json[key] != null) DownloadFileLocation.parse(json[key] as String);
   }
+
   return DownloadTask(
     id: _string(json, 'id'),
     attemptId: _string(json, 'attemptId'),
@@ -105,11 +109,13 @@ DownloadTask decodeDownloadTask(Map<String, Object?> json) {
 
 Map<String, Object?> _map(Object? value) =>
     Map<String, Object?>.from(value as Map);
+
 String _string(Map<String, Object?> json, String key) {
   final value = json[key];
   if (value is! String || value.isEmpty) {
     throw FormatException('Invalid download $key');
   }
+
   return value;
 }
 
@@ -118,6 +124,7 @@ String _id(Map<String, Object?> json) {
   if (!RegExp(r'^\d+$').hasMatch(value)) {
     throw const FormatException('Invalid content identity');
   }
+
   return value;
 }
 
@@ -125,5 +132,6 @@ int _bytes(Object? value) {
   if (value is! int || value < 0) {
     throw const FormatException('Invalid download byte count or revision');
   }
+
   return value;
 }

@@ -32,11 +32,13 @@ class HistoryPage extends StatefulWidget {
 class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
   late final _query = RestorableString(widget.viewState.query);
   late final _searchOpen = RestorableBool(widget.viewState.searchOpen);
+
   late final _scroll = ScrollController(
     initialScrollOffset: widget.viewState.scrollOffset,
   )..addListener(_rememberScroll);
   final _search = TextEditingController();
   final _focus = FocusNode();
+
   final _removingHistory = <String>{};
   late final _historyChanges = widget.history.watchHistory();
 
@@ -47,6 +49,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
   void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
     registerForRestoration(_query, 'query');
     registerForRestoration(_searchOpen, 'search-open');
+
     _search.text = _query.value;
     widget.viewState.query = _query.value;
     widget.viewState.searchOpen = _searchOpen.value;
@@ -62,6 +65,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
       widget.viewState.searchOpen = false;
       _search.clear();
     });
+
     _focus.unfocus();
   }
 
@@ -70,8 +74,10 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
     _scroll.dispose();
     _search.dispose();
     _focus.dispose();
+
     _query.dispose();
     _searchOpen.dispose();
+
     super.dispose();
   }
 
@@ -104,6 +110,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
               _closeSearch();
               return;
             }
+
             setState(() {
               _searchOpen.value = true;
               widget.viewState.searchOpen = true;
@@ -119,7 +126,9 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
   Future<void> _removeHistory(ViewingEntry entry) async {
     final key = entry.selection.ref.key;
     if (!_removingHistory.add(key)) return;
+
     setState(() {});
+
     try {
       await widget.history.remove(entry.selection.ref);
     } catch (error) {
@@ -145,6 +154,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
         );
       }
       if (!snapshot.hasData) return const PageSkeleton();
+
       final query = _query.value.trim().toLowerCase();
       final items = snapshot.data!
           .where(
@@ -154,6 +164,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
                     .contains(query),
           )
           .toList();
+
       if (items.isEmpty && query.isNotEmpty) {
         return _emptyState(
           StatePanel(
@@ -174,11 +185,13 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
           ),
         );
       }
+
       final rows = _groupHistory(items, DateTime.now());
       final rowIndices = {
         for (var index = 0; index < rows.length; index++)
           rows[index].entry.selection.ref.key: index,
       };
+
       return ListView.separated(
         controller: _scroll,
         restorationId: 'viewing-history',
@@ -190,6 +203,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
         itemBuilder: (context, index) {
           final row = rows[index];
           final entry = row.entry;
+
           return Column(
             key: ValueKey(entry.selection.ref.key),
             children: [
@@ -240,6 +254,7 @@ List<({String? heading, ViewingEntry entry})> _groupHistory(
   // Calendar arithmetic keeps yesterday correct across daylight-saving changes.
   final yesterday = DateTime(today.year, today.month, today.day - 1);
   final groups = <String, List<ViewingEntry>>{'今天': [], '昨天': [], '更早': []};
+
   final sorted = [...entries]
     ..sort((a, b) {
       final time = b.viewedAt.compareTo(a.viewedAt);
@@ -247,6 +262,7 @@ List<({String? heading, ViewingEntry entry})> _groupHistory(
           ? a.selection.ref.key.compareTo(b.selection.ref.key)
           : time;
     });
+
   for (final entry in sorted) {
     final day = entry.viewedAt.toLocal();
     final label = DateUtils.isSameDay(day, today)
@@ -256,6 +272,7 @@ List<({String? heading, ViewingEntry entry})> _groupHistory(
         : '更早';
     groups[label]!.add(entry);
   }
+
   return [
     for (final group in groups.entries)
       for (var index = 0; index < group.value.length; index++)

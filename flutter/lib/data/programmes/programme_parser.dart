@@ -12,12 +12,14 @@ abstract final class ProgrammeParser {
         value == value.truncateToDouble()) {
       return value.toInt().toString();
     }
+
     throw const FormatException('Invalid or unsafe programme ID');
   }
 
   static List<Programme> programmes(Object? value) => List.unmodifiable(
     _list(_map(value)['records']).map((raw) {
       final row = _map(raw);
+
       return Programme(
         id: id(row['id']),
         name: row['name'] is String ? row['name'] as String : '未命名栏目',
@@ -31,9 +33,11 @@ abstract final class ProgrammeParser {
     for (final raw in _list(value)) {
       final row = _map(raw);
       final date = _calendarDate(row['date']);
+
       // A later service record supersedes an earlier record for the same day.
       dates[date] = BroadcastDate(id: id(row['id']), date: date);
     }
+
     return List.unmodifiable(
       dates.values.toList()..sort((a, b) => b.date.compareTo(a.date)),
     );
@@ -42,6 +46,7 @@ abstract final class ProgrammeParser {
   static List<ProgrammeContent> contents(Object? value) => List.unmodifiable(
     _list(value).map((raw) {
       final row = _map(raw);
+
       return ProgrammeContent(
         id: id(row['id']),
         title: row['title'] is String ? row['title'] as String : '未命名节目',
@@ -57,11 +62,13 @@ abstract final class ProgrammeParser {
     if (value is! Map<String, Object?>) {
       throw const FormatException('Expected an object');
     }
+
     return value;
   }
 
   static List<Object?> _list(Object? value) {
     if (value is! List) throw const FormatException('Expected a list');
+
     return value;
   }
 
@@ -69,6 +76,7 @@ abstract final class ProgrammeParser {
     if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
       throw const FormatException('Invalid broadcast date');
     }
+
     final fields = value.split('-').map(int.parse).toList();
     final date = DateTime.utc(fields[0], fields[1], fields[2]);
     if (date.year != fields[0] ||
@@ -76,6 +84,7 @@ abstract final class ProgrammeParser {
         date.day != fields[2]) {
       throw const FormatException('Invalid broadcast date');
     }
+
     return value;
   }
 
@@ -86,6 +95,7 @@ abstract final class ProgrammeParser {
 
   static String? _url(Object? value, String base) {
     if (value is! String) return null;
+
     // Dart trim includes U+0085, while ECMAScript trim includes BOM instead.
     final trimmed = value.replaceAll(
       RegExp(

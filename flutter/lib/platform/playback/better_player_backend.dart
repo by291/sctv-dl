@@ -5,13 +5,14 @@ import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../domain/playback/playback_backend.dart';
 import '../../domain/downloads/file_gateway.dart';
+import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
 
 class BetterPlayerBackend implements PlaybackBackend {
   BetterPlayerBackend({required this.userAgent});
+
   final String userAgent;
 
   @override
@@ -21,6 +22,7 @@ class BetterPlayerBackend implements PlaybackBackend {
             input.sources.any((source) => !isAllowedMediaUrl(source.url)))) {
       throw const FormatException('Unsupported media source');
     }
+
     var resolved = input;
     if (input.localLocation case final String location) {
       final stored = DownloadFileLocation.parse(location);
@@ -29,6 +31,7 @@ class BetterPlayerBackend implements PlaybackBackend {
         PrivateFileLocation(:final documents, :final relativePath) =>
           '${(documents ? await getApplicationDocumentsDirectory() : await getApplicationSupportDirectory()).path}/$relativePath',
       };
+
       resolved = PlaybackInput(
         title: input.title,
         sources: input.sources,
@@ -38,6 +41,7 @@ class BetterPlayerBackend implements PlaybackBackend {
         preferredQuality: input.preferredQuality,
       );
     }
+
     final session = _BetterSession(resolved, userAgent);
     try {
       await session.initialize();
@@ -65,22 +69,32 @@ class _BetterSession implements PlaybackSession {
           ),
         ),
       );
+
   static int _nextId = 0;
+
   final PlaybackInput input;
   final String userAgent;
   final BetterPlayerController controller;
   final GlobalKey surfaceKey = GlobalKey();
+
   final _changes = StreamController<PlaybackSnapshot>.broadcast(sync: true);
   VideoSource? _source;
   bool _supportsPip = false;
+
   bool _disposed = false;
+  Future<void>? _disposal;
+
   bool _switching = false;
   bool _playIntent = false;
+
   PlaybackSnapshot _value = const PlaybackSnapshot();
+
   @override
   final String id;
+
   @override
   PlaybackSnapshot get value => _value;
+
   @override
   Stream<PlaybackSnapshot> get changes => _changes.stream;
 
@@ -89,10 +103,12 @@ class _BetterSession implements PlaybackSession {
     await controller.setupDataSource(
       _dataSource(_source, input.initialPosition),
     );
+
     controller.videoPlayerController!.addListener(_publish);
     await controller.videoPlayerController!.setMixWithOthers(false);
     _supportsPip = await controller.isPictureInPictureSupported();
     await controller.pause();
+
     _publish();
   }
 
@@ -102,9 +118,11 @@ class _BetterSession implements PlaybackSession {
       final path = uri?.scheme == 'file' ? uri!.toFilePath() : location;
       return BetterPlayerDataSource.file(path, initialPosition: position);
     }
+
     if (source == null || !isAllowedMediaUrl(source.url)) {
       throw const FormatException('Unsupported media source');
     }
+
     return BetterPlayerDataSource.network(
       source.url,
       initialPosition: position,
@@ -118,8 +136,10 @@ class _BetterSession implements PlaybackSession {
 
   void _publish() {
     if (_disposed || _switching) return;
+
     final native = controller.videoPlayerController!.value;
     final duration = native.duration;
+
     _value = PlaybackSnapshot(
       initialized: native.initialized,
       firstFrameRendered: native.firstFrameRendered,
@@ -182,13 +202,16 @@ class _BetterSession implements PlaybackSession {
         !isAllowedMediaUrl(source.url)) {
       throw const FormatException('Source was not part of this selection');
     }
+
     final previous = _source!;
     final position = value.position;
     final speed = value.speed;
     final playing = value.playing;
+
     _switching = true;
     try {
       await _restore(source, position, speed, playing);
+
       _source = source;
     } catch (error) {
       // setupDataSource reuses the native decoder, so rollback restores the old
@@ -200,6 +223,7 @@ class _BetterSession implements PlaybackSession {
           'Quality switch failed: $error; restoring previous source failed: $rollback',
         );
       }
+
       rethrow;
     } finally {
       _switching = false;
@@ -224,16 +248,19 @@ class _BetterSession implements PlaybackSession {
     if (!_supportsPip || surfaceKey.currentContext == null) {
       throw StateError('Picture in picture is unavailable');
     }
+
     // Call the low-level API to avoid the package creating its own fullscreen
     // route. This surface and session remain owned by our original route.
     final box = surfaceKey.currentContext!.findRenderObject()! as RenderBox;
     final origin = box.localToGlobal(Offset.zero);
+
     final activated = Completer<void>();
     final observation = changes.listen((snapshot) {
       if (snapshot.inPip && !activated.isCompleted) {
         activated.complete();
       }
     });
+
     try {
       await controller.videoPlayerController!.enablePictureInPicture(
         left: Platform.isIOS ? origin.dx : 0,
@@ -251,27 +278,50 @@ class _BetterSession implements PlaybackSession {
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposal ??= _disposeOnce();
+
+  Future<void> _disposeOnce() async {
     _disposed = true;
-    controller.videoPlayerController?.removeListener(_publish);
-    await controller.pause();
     final native = controller.videoPlayerController;
-    controller.dispose(forceDispose: true);
-    await native?.dispose();
-    await _changes.close();
+    native?.removeListener(_publish);
+    (Object, StackTrace)? failure;
+
+    Future<void> cleanup(FutureOr<void> Function() action) async {
+      try {
+        await action();
+      } catch (error, stack) {
+        failure ??= (error, stack);
+      }
+    }
+
+    await cleanup(controller.pause);
+
+    // Transfer the native handle out of the package wrapper before disposing it.
+    // Its synchronous disposal otherwise starts unobserved pause/dispose futures;
+    // this session must await the native completion even after pause fails.
+    controller.videoPlayerController = null;
+    await cleanup(() => controller.dispose(forceDispose: true));
+    await cleanup(() async => native?.dispose());
+    await cleanup(_changes.close);
+
+    if (failure case (final error, final stack)) {
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 }
 
 class PlaybackSurface extends StatelessWidget {
   const PlaybackSurface({super.key, required this.session});
+
   final PlaybackSession session;
+
   @override
   Widget build(BuildContext context) {
     final native = session;
     if (native is! _BetterSession) {
       throw ArgumentError('Unsupported playback session');
     }
+
     return SizedBox.expand(
       key: native.surfaceKey,
       child: BetterPlayer(controller: native.controller),

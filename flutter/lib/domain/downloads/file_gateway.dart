@@ -3,6 +3,7 @@ import 'download_task.dart';
 /// Persist a base-directory reference, never a changing sandbox absolute path.
 sealed class DownloadFileLocation {
   const DownloadFileLocation();
+
   String get value;
 
   static DownloadFileLocation parse(String value) {
@@ -13,9 +14,11 @@ sealed class DownloadFileLocation {
         uri.userInfo.isNotEmpty) {
       throw FormatException('Invalid download file location', value);
     }
+
     if (uri.scheme == 'content' && uri.host.isNotEmpty) {
       return ContentFileLocation(uri);
     }
+
     if ((uri.scheme == 'support' || uri.scheme == 'documents') &&
         !uri.hasAuthority) {
       final segments = uri.pathSegments;
@@ -32,16 +35,20 @@ sealed class DownloadFileLocation {
           (uri.scheme == 'documents' && segments.first != 'Downloads')) {
         throw FormatException('Invalid relative download path', value);
       }
+
       return PrivateFileLocation(uri.scheme == 'documents', segments.join('/'));
     }
+
     throw FormatException('Unsupported download location', value);
   }
 }
 
 final class PrivateFileLocation extends DownloadFileLocation {
   const PrivateFileLocation(this.documents, this.relativePath);
+
   final bool documents;
   final String relativePath;
+
   @override
   String get value => Uri(
     scheme: documents ? 'documents' : 'support',
@@ -51,19 +58,23 @@ final class PrivateFileLocation extends DownloadFileLocation {
 
 final class ContentFileLocation extends DownloadFileLocation {
   const ContentFileLocation(this.uri);
+
   final Uri uri;
+
   @override
   String get value => uri.toString();
 }
 
 class FileDetails {
   const FileDetails({required this.exists, this.bytes});
+
   final bool exists;
   final int? bytes;
 }
 
 abstract interface class DownloadFileGateway {
   bool get supportsExport;
+
   Future<FileDetails> inspect(String location);
 
   /// Idempotently recover publication by the unique planned filename.

@@ -16,9 +16,11 @@ class PlayerGestures extends StatefulWidget {
     required this.fullscreen,
     this.environment,
   });
+
   final PlaybackController controller;
   final bool fullscreen;
   final PlayerEnvironment? environment;
+
   @override
   State<PlayerGestures> createState() => _PlayerGesturesState();
 }
@@ -26,6 +28,7 @@ class PlayerGestures extends StatefulWidget {
 class _PlayerGesturesState extends State<PlayerGestures>
     with WidgetsBindingObserver {
   PlayerEnvironmentController? effects;
+
   final pointers = <int>{};
   Offset origin = Offset.zero;
   Offset movement = Offset.zero;
@@ -33,30 +36,40 @@ class _PlayerGesturesState extends State<PlayerGestures>
   bool blocked = false;
   int generation = 0;
   int playerEpoch = 0;
+
   Size? viewSize;
   double? pixelRatio;
+
   Future<void> volumeChanges = Future.value();
+
   String? hud;
   Timer? hudTimer;
   Timer? hintTimer;
+
   PlaybackController get player => widget.controller;
+
   @override
   void initState() {
     super.initState();
+
     effects = widget.environment == null
         ? null
         : PlayerEnvironmentController(widget.environment!);
+
     final view = WidgetsBinding.instance.platformDispatcher.views.first;
     viewSize = view.physicalSize;
     pixelRatio = view.devicePixelRatio;
     WidgetsBinding.instance.addObserver(this);
+
     playerEpoch = player.gestureEpoch;
     player.addListener(_playerChanged);
+
     if (widget.fullscreen) _run(_enter());
   }
 
   void _playerChanged() {
     if (playerEpoch == player.gestureEpoch) return;
+
     playerEpoch = player.gestureEpoch;
     generation++;
     blocked = true;
@@ -78,6 +91,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
   @override
   void didUpdateWidget(covariant PlayerGestures old) {
     super.didUpdateWidget(old);
+
     if (old.fullscreen != widget.fullscreen) {
       _cancel();
       if (widget.fullscreen) {
@@ -92,6 +106,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
     final token = generation;
     await effects?.enterFullscreen();
     if (!mounted || !widget.fullscreen || token != generation) return;
+
     _scheduleHint();
   }
 
@@ -106,10 +121,12 @@ class _PlayerGesturesState extends State<PlayerGestures>
             MediaQuery.accessibleNavigationOf(context)) {
           return;
         }
+
         final needed = await widget.environment?.needsGestureHint() ?? false;
         if (!mounted || !widget.fullscreen || token != generation || !needed) {
           return;
         }
+
         _show(
           widget.environment?.supportsVolumeDrag == true
               ? '双击播放 · 横滑进度 · 长按 2×\n左侧亮度 · 右侧音量'
@@ -126,18 +143,25 @@ class _PlayerGesturesState extends State<PlayerGestures>
     if (viewSize == view.physicalSize && pixelRatio == view.devicePixelRatio) {
       return;
     }
+
     viewSize = view.physicalSize;
     pixelRatio = view.devicePixelRatio;
+
     _cancel();
     if (widget.fullscreen) _scheduleHint();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
-      _cancel();
+    if (state != AppLifecycleState.resumed) _cancel();
+
+    // An inactive window can remain visible during OS focus changes. Cancel
+    // its gesture, but keep brightness ownership until it actually backgrounds.
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       _run(effects?.leaveFullscreen() ?? Future.value());
-    } else if (widget.fullscreen) {
+    } else if (state == AppLifecycleState.resumed && widget.fullscreen) {
       _run(_enter());
     }
   }
@@ -145,6 +169,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
   void _show(String text) {
     hudTimer?.cancel();
     if (!mounted) return;
+
     setState(() => hud = text);
     hudTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(() => hud = null);
@@ -155,14 +180,17 @@ class _PlayerGesturesState extends State<PlayerGestures>
     hintTimer?.cancel();
     blocked = true;
     generation++;
+
     final wasDragging = drag != null;
     drag = null;
     if (wasDragging) {
       player.holdControls(false, reason: PlayerControlHold.gesture);
     }
+
     movement = Offset.zero;
     lastVolume = null;
     volumeRemainder = 0;
+
     _run(player.cancelGestures());
     playerEpoch = player.gestureEpoch;
     if (mounted) setState(() => hud = null);
@@ -176,10 +204,12 @@ class _PlayerGesturesState extends State<PlayerGestures>
       _cancel();
       return;
     }
+
     generation++;
     drag = null;
     lastVolume = null;
     volumeRemainder = 0;
+
     origin = event.localPosition;
     movement = Offset.zero;
     blocked =
@@ -191,19 +221,24 @@ class _PlayerGesturesState extends State<PlayerGestures>
 
   double volumeRemainder = 0;
   double? lastVolume;
+
   Future<void> _changeVolume(double delta) async {
     final token = generation;
     volumeChanges = volumeChanges.catchError((Object _) {}).then((_) async {
       if (token != generation) return;
+
       final current = await widget.environment!.volume();
       if (token != generation) return;
+
       if (lastVolume != null && (current - lastVolume!).abs() > .001) {
         volumeRemainder = 0;
       }
       final target = (current + volumeRemainder + delta).clamp(0.0, 1.0);
+
       await widget.environment!.setVolume(target);
       final actual = await widget.environment!.volume();
       if (token != generation) return;
+
       volumeRemainder = target - actual;
       lastVolume = actual;
       if (mounted) _show('音量 ${(actual * 100).round()}%');
@@ -213,12 +248,14 @@ class _PlayerGesturesState extends State<PlayerGestures>
 
   String _time(Duration value) =>
       '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+
   void _updateDrag(DragUpdateDetails details, Size size) {
     if (playerEpoch != player.gestureEpoch) {
       _playerChanged();
       return;
     }
     if (blocked) return;
+
     movement += details.delta;
     if (drag == null) {
       if (movement.distance < 18) return;
@@ -238,6 +275,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
       }
       player.holdControls(true, reason: PlayerControlHold.gesture);
     }
+
     switch (drag) {
       case _Drag.seek:
         player.previewSeek(movement.dx / size.width);
@@ -268,6 +306,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
     final completedDrag = drag;
     drag = null;
     player.holdControls(false, reason: PlayerControlHold.gesture);
+
     if (completedDrag == _Drag.seek) await player.finishSeek(commit: true);
     if (completedDrag == _Drag.volume) await volumeChanges;
   }
@@ -276,14 +315,17 @@ class _PlayerGesturesState extends State<PlayerGestures>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     player.removeListener(_playerChanged);
+
     generation++;
     hudTimer?.cancel();
     hintTimer?.cancel();
+
     unawaited(
       (effects?.leaveFullscreen() ?? Future<void>.value()).catchError(
         (Object _) {},
       ),
     );
+
     super.dispose();
   }
 
@@ -296,9 +338,11 @@ class _PlayerGesturesState extends State<PlayerGestures>
         !player.loading &&
         !player.switchingSource &&
         !player.canRetry;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
+
         return Listener(
           onPointerDown: (event) => _down(event, size),
           onPointerUp: (event) => pointers.remove(event.pointer),

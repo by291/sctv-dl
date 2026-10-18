@@ -1,15 +1,171 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sctv_dl_mobile/design/shared_cover.dart';
-import 'package:sctv_dl_mobile/design/archive_transition.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sctv_dl_mobile/design/archive_transition.dart';
+import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 
 import 'playback_controller_test.dart' as fixtures;
 
 void main() {
+  testWidgets('fullscreen exit restores the window after a platform failure', (
+    tester,
+  ) async {
+    final orientations = <Object?>[];
+    var fail = true;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemChrome.setPreferredOrientations') {
+          orientations.add(call.arguments);
+          if (fail) {
+            fail = false;
+            throw PlatformException(
+              code: 'orientation',
+              message: 'Window failed',
+            );
+          }
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final session = fixtures.FakeSession();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerPage(
+          input: fixtures.input,
+          backend: fixtures.FakeBackend(session),
+          history: fixtures.MemoryHistory(),
+          surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('全屏'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Window failed'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('退出全屏'));
+    await tester.pumpAndSettle();
+
+    expect(orientations.last, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'failed fullscreen exit retains restoration until page disposal',
+    (tester) async {
+      final orientations = <Object?>[];
+      final modes = <Object?>[];
+      var failExit = true;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'SystemChrome.setPreferredOrientations') {
+            orientations.add(call.arguments);
+            if ((call.arguments as List<Object?>).isEmpty && failExit) {
+              failExit = false;
+              throw PlatformException(
+                code: 'orientation',
+                message: 'Exit failed',
+              );
+            }
+          }
+          if (call.method == 'SystemChrome.setEnabledSystemUIMode') {
+            modes.add(call.arguments);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlayerPage(
+            input: fixtures.input,
+            backend: fixtures.FakeBackend(fixtures.FakeSession()),
+            history: fixtures.MemoryHistory(),
+            surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('全屏'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('退出全屏'));
+      await tester.pumpAndSettle();
+      final modesAfterExit = modes.toList();
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+
+      expect(orientations, [
+        ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
+        <Object?>[],
+        <Object?>[],
+      ]);
+      expect(modesAfterExit.last, 'SystemUiMode.edgeToEdge');
+      expect(modes.last, 'SystemUiMode.edgeToEdge');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'an inline-only player does not reset OS window policies on disposal',
+    (tester) async {
+      final windowRequests = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'SystemChrome.setPreferredOrientations' ||
+              call.method == 'SystemChrome.setEnabledSystemUIMode') {
+            windowRequests.add(call.method);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlayerPage(
+            input: fixtures.input,
+            backend: fixtures.FakeBackend(fixtures.FakeSession()),
+            history: fixtures.MemoryHistory(),
+            surfaceBuilder: (_) => const ColoredBox(color: Colors.black),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+
+      expect(windowRequests, isEmpty);
+    },
+  );
+
   testWidgets('return cover complements video and reverses without seeking', (
     tester,
   ) async {

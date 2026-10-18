@@ -1,8 +1,7 @@
 import 'dart:async';
 
-import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
-
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/player/playback_controller.dart';
 
 import 'playback_controller_test.dart' as fixtures;
@@ -135,7 +134,7 @@ void main() {
     await session.restoreStarted.future;
     final cancellation = player.cancelGestures();
     var cancelled = false;
-    cancellation.then((_) => cancelled = true);
+    unawaited(cancellation.then((_) => cancelled = true));
     await Future<void>.delayed(Duration.zero);
     expect(cancelled, isFalse);
     session.restoreGate.complete();

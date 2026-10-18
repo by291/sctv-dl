@@ -10,18 +10,18 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
-import 'package:sctv_dl_mobile/app/services.dart';
-import 'package:sctv_dl_mobile/design/theme.dart';
+import 'package:sctv_dl_mobile/app/bootstrap.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
-import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
+import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
+import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
-import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 
 /// This opt-in smoke journey uses the production composition and live metadata.
 /// It never creates a live download; native transfers have controlled fixtures.

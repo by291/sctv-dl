@@ -6,8 +6,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
-import 'package:sctv_dl_mobile/app/services.dart';
+import 'package:sctv_dl_mobile/app/bootstrap.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
 /// Run with tool/verify_predictive_back.py on a disposable Android device.

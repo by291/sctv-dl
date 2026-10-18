@@ -28,6 +28,7 @@ class _BroadcastDatesState extends State<BroadcastDates> {
   @override
   void didUpdateWidget(BroadcastDates oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (oldWidget.selected?.id != widget.selected?.id ||
         oldWidget.dates != widget.dates) {
       _revealSelection();
@@ -37,9 +38,11 @@ class _BroadcastDatesState extends State<BroadcastDates> {
   void _revealSelection() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
       final context = _selectedKey.currentContext;
       final target = context?.findRenderObject();
       if (context == null || target == null) return;
+
       // Reveal only the horizontal shortcut; keep the archive's vertical position.
       Scrollable.of(context, axis: Axis.horizontal).position.ensureVisible(
         target,
@@ -60,6 +63,7 @@ class _BroadcastDatesState extends State<BroadcastDates> {
         _layout = layout;
         _revealSelection();
       }
+
       return _content(context);
     },
   );
@@ -67,6 +71,7 @@ class _BroadcastDatesState extends State<BroadcastDates> {
   Widget _content(BuildContext context) {
     final colours = Theme.of(context).colorScheme;
     final typography = Theme.of(context).textTheme;
+
     final sorted = [...widget.dates]..sort((a, b) => b.date.compareTo(a.date));
     final recent = sorted.take(7).toList();
     final selected = widget.selected;

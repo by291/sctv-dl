@@ -3,11 +3,13 @@ enum VideoQuality {
   smooth('流畅');
 
   const VideoQuality(this.label);
+
   final String label;
 }
 
 class Programme {
   const Programme({required this.id, required this.name, this.cover});
+
   final String id;
   final String name;
   final String? cover;
@@ -15,6 +17,7 @@ class Programme {
 
 class BroadcastDate {
   const BroadcastDate({required this.id, required this.date});
+
   final String id;
   final String date;
 }
@@ -47,6 +50,7 @@ class ContentRef {
   final String programmeId;
   final String dateId;
   final String contentId;
+
   String get key => '$programmeId/$dateId/$contentId';
 
   @override
@@ -76,6 +80,7 @@ class ProgrammeSelection {
 
 class VideoSource {
   const VideoSource({required this.quality, required this.url});
+
   final VideoQuality quality;
   final String url;
 }

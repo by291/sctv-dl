@@ -175,6 +175,49 @@ void main() {
     controller.dispose();
   });
 
+  test('committed exit saves progress even when native pause fails', () async {
+    final session = FakeSession()..failPause = true;
+    final history = MemoryHistory();
+    final controller = PlaybackController(
+      input: input,
+      backend: FakeBackend(session),
+      history: history,
+    );
+    await controller.initialize();
+    session.emit(position: const Duration(seconds: 42));
+
+    await controller.commitExit();
+
+    expect(history.entries.last.position, const Duration(seconds: 42));
+    expect(controller.message, contains('Pause failed'));
+    await controller.release();
+    expect(session.disposeCalls, 1);
+    controller.dispose();
+  });
+
+  test('repeated release waits until session cleanup finishes', () async {
+    final session = FakeSession();
+    final pending = Completer<void>();
+    session.disposeDelay = pending.future;
+    final controller = PlaybackController(
+      input: input,
+      backend: FakeBackend(session),
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    final first = controller.release();
+    var completed = false;
+    final second = controller.release().then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(completed, isFalse);
+    pending.complete();
+    await first;
+    await second;
+    expect(session.disposeCalls, 1);
+    controller.dispose();
+  });
+
   testWidgets('closing a menu cannot release the accessibility hold', (
     tester,
   ) async {
@@ -322,6 +365,8 @@ class FakeSession implements PlaybackSession {
   int pauseCalls = 0;
   int disposeCalls = 0;
   bool failSwitch = false;
+  bool failPause = false;
+  Future<void>? disposeDelay;
   Future<void>? pipResult;
   void emit({
     bool playing = false,
@@ -361,6 +406,7 @@ class FakeSession implements PlaybackSession {
   @override
   Future<void> pause() async {
     pauseCalls++;
+    if (failPause) throw StateError('Pause failed');
     emit(position: value.position, speed: value.speed);
   }
 
@@ -394,6 +440,7 @@ class FakeSession implements PlaybackSession {
   @override
   Future<void> dispose() async {
     disposeCalls++;
+    await disposeDelay;
     await events.close();
   }
 }

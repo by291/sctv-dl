@@ -1,14 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
-import '../../design/shared_cover.dart';
 import '../../design/content_transition.dart';
 import '../../design/pending_update_notice.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
+import 'components/programme_card.dart';
+import 'components/programme_exploration.dart';
 import 'library_controller.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -20,6 +20,7 @@ class LibraryPage extends StatefulWidget {
     this.active = true,
     this.onOpenExploration,
   });
+
   final LibraryController controller;
   final void Function(Programme) onOpenProgramme;
   final void Function(Programme)? onOpenExploration;
@@ -36,10 +37,12 @@ class _LibraryPageState extends State<LibraryPage>
   final _focus = FocusNode();
   final _scroll = ScrollController();
   final _updateNoticeAnchor = LayerLink();
+
   final _restoredQuery = RestorableString('');
   final _restoredSort = RestorableBool(false);
   final _restoredSearch = RestorableBool(false);
   final _restoredFilter = RestorableInt(0);
+
   bool get _favouritesOnly => _restoredFilter.value == 1;
 
   @override
@@ -51,6 +54,7 @@ class _LibraryPageState extends State<LibraryPage>
     registerForRestoration(_restoredQuery, 'query-all');
     registerForRestoration(_restoredSort, 'sort-all');
     registerForRestoration(_restoredSearch, 'search-all');
+
     controller.setQuery(_restoredQuery.value);
     if (controller.nameOrder != _restoredSort.value) controller.toggleSort();
     _search.text = controller.query;
@@ -61,6 +65,7 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
     unawaited(controller.initialize());
   }
@@ -68,6 +73,7 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   void didUpdateWidget(LibraryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (!oldWidget.active && widget.active) unawaited(controller.refresh());
   }
 
@@ -85,6 +91,7 @@ class _LibraryPageState extends State<LibraryPage>
       _restoredSearch.value = false;
       _search.clear();
     });
+
     _restoredQuery.value = '';
     controller.setQuery('');
     _focus.unfocus();
@@ -93,13 +100,16 @@ class _LibraryPageState extends State<LibraryPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+
     _restoredFilter.dispose();
     _restoredQuery.dispose();
     _restoredSort.dispose();
     _restoredSearch.dispose();
+
     _search.dispose();
     _focus.dispose();
     _scroll.dispose();
+
     super.dispose();
   }
 
@@ -108,6 +118,7 @@ class _LibraryPageState extends State<LibraryPage>
     listenable: controller,
     builder: (context, _) {
       final searching = _restoredSearch.value;
+
       return PopScope(
         canPop: !searching,
         onPopInvokedWithResult: (didPop, _) {
@@ -207,6 +218,7 @@ class _LibraryPageState extends State<LibraryPage>
                     _closeSearch();
                     return;
                   }
+
                   setState(() {
                     _restoredSearch.value = true;
                   });
@@ -240,7 +252,9 @@ class _LibraryPageState extends State<LibraryPage>
         onAction: () => unawaited(controller.refresh()),
       );
     }
+
     final items = controller.visibleProgrammes(favouritesOnly: _favouritesOnly);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
@@ -254,11 +268,22 @@ class _LibraryPageState extends State<LibraryPage>
           controller.programmes.map((programme) => programme.name),
           cardWidth - 24,
         );
+
         return CustomScrollView(
           controller: _scroll,
           restorationId: 'catalogue-all',
           key: const PageStorageKey('catalogue-all'),
           slivers: [
+            if (controller.favouriteError case final favouriteError?)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: CachedErrorBanner(
+                    message: favouriteError,
+                    onRetry: () => unawaited(controller.retryFavourites()),
+                  ),
+                ),
+              ),
             if (controller.error case final error?)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -273,7 +298,16 @@ class _LibraryPageState extends State<LibraryPage>
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                 sliver: SliverToBoxAdapter(
-                  child: _exploration(controller.featured!),
+                  child: ProgrammeExploration(
+                    programme: controller.featured!,
+                    onOpen: () =>
+                        (widget.onOpenExploration ?? widget.onOpenProgramme)(
+                          controller.featured!,
+                        ),
+                    onShuffle: controller.programmes.length > 1
+                        ? controller.shuffleFeatured
+                        : null,
+                  ),
                 ),
               ),
             SliverPadding(
@@ -385,124 +419,9 @@ class _LibraryPageState extends State<LibraryPage>
     );
   }
 
-  Widget _exploration(Programme programme) {
-    final colours = Theme.of(context).colorScheme;
-    final typography = Theme.of(context).textTheme;
-    final cardColour = Color.alphaBlend(
-      colours.primaryContainer.withValues(alpha: .35),
-      Theme.of(context).scaffoldBackgroundColor,
-    );
-    return Card(
-      color: cardColour,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
-            final wide = constraints.maxWidth >= 480;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ContentTransition(
-                  background: cardColour,
-                  milliseconds: 160,
-                  child: Row(
-                    key: ValueKey(programme.id),
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '栏目探索',
-                              style: typography.labelLarge?.copyWith(
-                                color: colours.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            SizedBox(
-                              height:
-                                  MediaQuery.textScalerOf(context)
-                                      .scale(typography.titleLarge!.fontSize!) *
-                                  1.3 *
-                                  (largeText ? 4 : 2),
-                              child: Text(
-                                programme.name,
-                                maxLines: largeText ? 4 : 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: typography.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ),
-                            if (wide) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                '发现一个栏目，回看整期节目或精彩片段。',
-                                style: typography.bodyMedium?.copyWith(
-                                  color: colours.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (!largeText) ...[
-                        const SizedBox(width: 16),
-                        SizedBox(
-                          width: wide
-                              ? 240
-                              : (constraints.maxWidth * .46).clamp(112, 160),
-                          child: SharedCover(
-                            tag: 'exploration-${programme.id}',
-                            url: programme.cover,
-                            rotation: -.0872665,
-                            frameInset: 4,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    FilledButton.tonalIcon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colours.primaryContainer,
-                        foregroundColor: colours.onPrimaryContainer,
-                      ),
-                      onPressed: () =>
-                          (widget.onOpenExploration ?? widget.onOpenProgramme)(
-                            programme,
-                          ),
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                      label: const Text('查看节目'),
-                    ),
-                    TextButton.icon(
-                      onPressed: controller.programmes.length > 1
-                          ? controller.shuffleFeatured
-                          : null,
-                      icon: const Icon(Icons.shuffle_rounded, size: 18),
-                      label: const Text('换一个'),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   Widget _emptyCatalogue() {
     final filtering = controller.query.trim().isNotEmpty;
+
     return StatePanel(
       title: filtering
           ? '没有找到相关栏目'
@@ -518,113 +437,6 @@ class _LibraryPageState extends State<LibraryPage>
       onAction: controller.error != null
           ? () => unawaited(controller.refresh())
           : null,
-    );
-  }
-}
-
-class ProgrammeCard extends StatelessWidget {
-  const ProgrammeCard({
-    super.key,
-    required this.programme,
-    required this.favourite,
-    required this.onOpen,
-    required this.onFavourite,
-  });
-  final Programme programme;
-  final bool favourite;
-  final VoidCallback onOpen;
-  final VoidCallback onFavourite;
-
-  static int titleMaxLines(BuildContext context) =>
-      MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 2 : 1;
-
-  static TextStyle _titleStyle(BuildContext context) =>
-      Theme.of(context).textTheme.titleMedium!.copyWith(height: 1.5);
-
-  static double titleHeight(
-    BuildContext context,
-    Iterable<String> titles,
-    double width,
-  ) {
-    final style = _titleStyle(context);
-    final scaler = MediaQuery.textScalerOf(context);
-    final lines = titleMaxLines(context);
-    var height = scaler.scale(style.fontSize!) * style.height! * lines;
-    final painter = TextPainter(
-      textDirection: Directionality.of(context),
-      textScaler: scaler,
-      locale: Localizations.maybeLocaleOf(context),
-      maxLines: lines,
-      ellipsis: '…',
-    );
-    // CJK fallback fonts can exceed fontSize * height. Measure the same text
-    // layout as the card, across the full catalogue so filtering keeps row sizes.
-    for (final title in titles) {
-      painter.text = TextSpan(text: title, style: style);
-      painter.layout(maxWidth: width);
-      height = math.max(height, painter.height);
-    }
-    painter.dispose();
-    return height.ceilToDouble();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colours = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onOpen,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Stack(
-              children: [
-                SharedCover(
-                  tag: 'catalogue-${programme.id}',
-                  url: programme.cover,
-                  radius: 16,
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: ClipOval(
-                    child: IconButton.filledTonal(
-                      tooltip: favourite
-                          ? '取消收藏 ${programme.name}'
-                          : '收藏 ${programme.name}',
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(32, 32),
-                        fixedSize: const Size(32, 32),
-                        padding: const EdgeInsets.all(6),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.standard,
-                        backgroundColor: colours.surface.withValues(alpha: .94),
-                        foregroundColor: favourite
-                            ? colours.primary
-                            : colours.onSurfaceVariant,
-                      ),
-                      isSelected: favourite,
-                      onPressed: onFavourite,
-                      icon: const Icon(Icons.favorite_border, size: 20),
-                      selectedIcon: const Icon(Icons.favorite, size: 20),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Text(
-                programme.name,
-                maxLines: titleMaxLines(context),
-                overflow: TextOverflow.ellipsis,
-                style: _titleStyle(context),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -30,6 +30,8 @@ void main() {
     native.createCalls = 0;
     native.disposeCalls = 0;
     native.reject = null;
+    native.failPause = false;
+    native.disposeDelay = null;
   });
   tearDownAll(() => native.events.close());
   test(
@@ -158,6 +160,51 @@ void main() {
       await session.dispose();
     },
   );
+  test(
+    'pause failure still releases native handles and closes observations',
+    () async {
+      final session = await BetterPlayerBackend(userAgent: 'test')
+          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      var closed = false;
+      final subscription = session.changes.listen(
+        (_) {},
+        onDone: () => closed = true,
+      );
+      native.failPause = true;
+
+      await expectLater(session.dispose(), throwsStateError);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(native.disposeCalls, 1);
+      expect(closed, isTrue);
+      await expectLater(session.dispose(), throwsStateError);
+      expect(native.disposeCalls, 1);
+      await subscription.cancel();
+    },
+  );
+
+  test(
+    'repeated disposal waits for the same native release completion',
+    () async {
+      final session = await BetterPlayerBackend(userAgent: 'test')
+          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final pending = Completer<void>();
+      native.disposeDelay = pending.future;
+      final firstRelease = session.dispose();
+      var secondCompleted = false;
+      final secondRelease = session.dispose().then(
+        (_) => secondCompleted = true,
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(secondCompleted, isFalse);
+      pending.complete();
+      await firstRelease;
+      await secondRelease;
+      expect(native.disposeCalls, 1);
+    },
+  );
+
   test('rejects unapproved media before native creation', () async {
     await expectLater(
       BetterPlayerBackend(userAgent: 'test').open(
@@ -184,6 +231,8 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   final bufferingConfigurations = <BetterPlayerBufferingConfiguration>[];
   String? reject;
   Future<void>? setupDelay;
+  Future<void>? disposeDelay;
+  bool failPause = false;
   int createCalls = 0;
   int disposeCalls = 0;
   Duration position = Duration.zero;
@@ -220,6 +269,7 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   @override
   Future<void> dispose(int? textureId) async {
     disposeCalls++;
+    await disposeDelay;
   }
 
   @override
@@ -231,7 +281,10 @@ class NativePlayerFixture extends VideoPlayerPlatform {
   @override
   Future<void> play(int? textureId) async {}
   @override
-  Future<void> pause(int? textureId) async {}
+  Future<void> pause(int? textureId) async {
+    if (failPause) throw StateError('Pause failed');
+  }
+
   @override
   Future<void> setSpeed(int? textureId, double speed) async {}
   @override

@@ -2,16 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
+import '../../domain/playback/player_environment.dart';
 import '../../domain/programmes/programme.dart';
 import 'playback_controller.dart';
 import 'playback_cover.dart';
 import 'player_controls.dart';
 import 'player_gestures.dart';
-import '../../domain/playback/player_environment.dart';
+import 'player_window_controller.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -24,6 +24,7 @@ class PlayerPage extends StatefulWidget {
     this.environment,
     this.systemVolume,
   });
+
   final PlayerEnvironment? environment;
   final Widget? systemVolume;
   final PlaybackInput input;
@@ -38,12 +39,15 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final PlaybackController controller;
+
   bool fullscreen = false;
   bool downloading = false;
   bool accessibleNavigation = false;
   bool controlsFocused = false;
+
   final detailsScroll = ScrollController();
-  Future<void> _windowChanges = Future.value();
+  final window = PlayerWindowController();
+
   final surfaceKey = GlobalKey();
   final surfacePointers = <int>{};
 
@@ -51,11 +55,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
     controller = PlaybackController(
       input: widget.input,
       backend: widget.backend,
       history: widget.history,
     );
+
     FocusManager.instance.addHighlightModeListener(_highlightChanged);
     unawaited(controller.initialize());
   }
@@ -73,6 +79,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     controller.holdControls(
       accessibleNavigation,
@@ -92,32 +99,37 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> _toggleFullscreen() async {
     await controller.cancelGestures();
     if (!mounted) return;
+
     setState(() => fullscreen = !fullscreen);
     controller.showControls();
     await _setFullscreenWindow(fullscreen);
   }
 
-  Future<void> _setFullscreenWindow(bool enabled) {
-    // Serialize window changes so a rapid return cannot leave a late landscape
-    // request behind. An empty orientation list restores the OS policy.
-    return _windowChanges = _windowChanges.then((_) async {
-      await SystemChrome.setPreferredOrientations(
-        enabled
-            ? [
-                DeviceOrientation.landscapeLeft,
-                DeviceOrientation.landscapeRight,
-              ]
-            : [],
-      );
-      await SystemChrome.setEnabledSystemUIMode(
-        enabled ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-      );
-    });
+  Future<void> _setFullscreenWindow(bool enabled) async {
+    try {
+      await window.setFullscreen(enabled);
+    } catch (error, stack) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('无法调整播放窗口：$error')));
+      } else {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'playback',
+            context: ErrorDescription('while restoring the player window'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _download() async {
     if (downloading) return;
+
     setState(() => downloading = true);
+
     try {
       await widget.onDownload?.call();
     } catch (error) {
@@ -134,9 +146,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeHighlightModeListener(_highlightChanged);
-    if (fullscreen) {
+
+    if (window.needsRestoration) {
       unawaited(_setFullscreenWindow(false));
     }
+
     // Navigator disposes a popped route after its leave transition completes.
     // Gesture cancellation never reaches here; PiP is retained by the controller.
     detailsScroll.dispose();
@@ -152,6 +166,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       final surface = _surface();
       final inPip = controller.value.inPip;
       final videoOnly = fullscreen || inPip;
+
       return PopScope<Object?>(
         canPop: !fullscreen || inPip,
         onPopInvokedWithResult: (didPop, result) {
@@ -182,6 +197,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           ),
                         ),
                       );
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -211,6 +227,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.input.sources.any((source) => source.quality == preferred)) {
       return null;
     }
+
     return '未提供${preferred.label}画质，已使用${actual.label}';
   }
 
@@ -271,6 +288,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Widget _surface() {
     final value = controller.value;
     final session = controller.session;
+
     return Container(
       key: surfaceKey,
       color: Colors.black,
@@ -356,6 +374,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final seconds = duration.inSeconds.clamp(0, 1 << 32);
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
     final remainder = (seconds % 60).toString().padLeft(2, '0');
+
     return '$minutes:$remainder';
   }
 }
@@ -366,8 +385,10 @@ class _SystemVolumeInteraction extends StatefulWidget {
     required this.controller,
     required this.child,
   });
+
   final PlaybackController controller;
   final Widget child;
+
   @override
   State<_SystemVolumeInteraction> createState() =>
       _SystemVolumeInteractionState();
@@ -376,10 +397,12 @@ class _SystemVolumeInteraction extends StatefulWidget {
 class _SystemVolumeInteractionState extends State<_SystemVolumeInteraction> {
   final pointers = <int>{};
   bool focused = false;
+
   void updateHold() => widget.controller.holdControls(
     pointers.isNotEmpty || focused,
     reason: PlayerControlHold.systemVolume,
   );
+
   @override
   void dispose() {
     widget.controller.detachControlHold(PlayerControlHold.systemVolume);

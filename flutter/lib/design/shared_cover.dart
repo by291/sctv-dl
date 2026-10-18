@@ -58,9 +58,11 @@ class SharedCover extends StatelessWidget {
     if (tag == null || !active || MediaQuery.disableAnimationsOf(context)) {
       return frame;
     }
+
     final curve = Theme.of(context).platform == TargetPlatform.android
         ? ArchiveMotionCurve(Navigator.of(context, rootNavigator: true))
         : Curves.fastOutSlowIn;
+
     return Hero(
       tag: tag!,
       transitionOnUserGestures: true,
@@ -77,6 +79,7 @@ class SharedCover extends StatelessWidget {
             direction == HeroFlightDirection.pop &&
             Theme.of(from).platform == TargetPlatform.android &&
             departingRoute != null;
+
         return AnimatedBuilder(
           animation: Listenable.merge([
             animation,
@@ -86,6 +89,7 @@ class SharedCover extends StatelessWidget {
             final t = direction == HeroFlightDirection.push
                 ? animation.value
                 : 1 - animation.value;
+
             return _CoverFrame(
               key: const ValueKey('programme-cover-flight'),
               url: source.url,
@@ -125,6 +129,7 @@ class _CoverFrame extends StatelessWidget {
     required this.aspectRatio,
     required this.opacity,
   });
+
   final String? url;
   final double rotation;
   final double radius;

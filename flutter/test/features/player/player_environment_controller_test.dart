@@ -18,6 +18,27 @@ void main() {
       expect(controller.brightnessValue, isNull);
     },
   );
+  test('resuming waits for restoration before capturing the gesture brightness base', () async {
+    final environment = RestoringEnvironment();
+    final controller = PlayerEnvironmentController(environment);
+    await controller.enterFullscreen();
+    await controller.changeBrightness(.3);
+    final leaving = controller.leaveFullscreen();
+    await environment.restoring.future;
+
+    final entering = controller.enterFullscreen();
+    await Future<void>.delayed(Duration.zero);
+    final prematureBase = controller.brightnessValue;
+    environment.restoreGate.complete();
+    await Future.wait([leaving, entering]);
+
+    expect(prematureBase, isNull);
+    expect(controller.brightnessValue, .4);
+    await controller.changeBrightness(.1);
+    expect(environment.current, .5);
+    await controller.leaveFullscreen();
+  });
+
   test(
     'brightness writes finish before restoring the entering value',
     () async {
@@ -59,4 +80,19 @@ class Environment implements PlayerEnvironment {
   Future<bool> needsGestureHint() async => true;
   @override
   Future<void> acknowledgeGestureHint() async {}
+}
+
+class RestoringEnvironment extends Environment {
+  final restoring = Completer<void>();
+  final restoreGate = Completer<void>();
+
+  @override
+  Future<double> beginBrightness() async => current;
+
+  @override
+  Future<void> restoreBrightness() async {
+    if (!restoring.isCompleted) restoring.complete();
+    await restoreGate.future;
+    current = .4;
+  }
 }

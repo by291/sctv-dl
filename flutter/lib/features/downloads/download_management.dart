@@ -10,6 +10,7 @@ enum DownloadFilter {
   removed('已移除');
 
   const DownloadFilter(this.label);
+
   final String label;
 
   bool includes(DownloadTask task) => switch (this) {
@@ -36,6 +37,7 @@ enum DownloadAction {
   remove('移除记录');
 
   const DownloadAction(this.label);
+
   final String label;
 
   bool supports(DownloadTask task) => switch (this) {
@@ -85,11 +87,13 @@ Future<DownloadActionResult> runDownloadBatch(
         result.skipped.add(target.id);
         continue;
       }
+
       await action.execute(repository, target.id);
       result.succeeded.add(target.id);
     } catch (error) {
       result.failures[target.id] = error.toString();
     }
   }
+
   return result;
 }

@@ -56,6 +56,7 @@ class PendingUpdateOverlay extends StatelessWidget {
         ),
       ),
     );
+
     return LayoutBuilder(
       builder: (context, constraints) => ClipRect(
         child: Stack(
@@ -98,11 +99,13 @@ class PendingUpdateOverlay extends StatelessWidget {
 
 class PendingUpdateNotice extends StatelessWidget {
   const PendingUpdateNotice({super.key, required this.onPressed});
+
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colours = Theme.of(context).colorScheme;
+
     return Semantics(
       liveRegion: true,
       child: Tooltip(

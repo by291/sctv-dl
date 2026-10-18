@@ -18,6 +18,7 @@ class HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     final selection = entry.selection;
     final duration = entry.duration;
     final started = entry.position > Duration.zero;
@@ -28,6 +29,7 @@ class HistoryCard extends StatelessWidget {
             1.0,
           )
         : null;
+
     final status = entry.completed
         ? '已看完'
         : !started
@@ -38,6 +40,7 @@ class HistoryCard extends StatelessWidget {
         : started
         ? '继续观看'
         : '播放';
+
     final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -50,6 +53,7 @@ class HistoryCard extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final stacked = largeText && constraints.maxWidth < 480;
+
               final cover = SizedBox(
                 width: constraints.maxWidth < 340 ? 88 : 104,
                 child: ClipRRect(
@@ -79,6 +83,7 @@ class HistoryCard extends StatelessWidget {
                   ),
                 ),
               );
+
               final details = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -96,6 +101,7 @@ class HistoryCard extends StatelessWidget {
                   ),
                 ],
               );
+
               final actions = Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -191,6 +197,7 @@ String _time(Duration duration) {
   final seconds = duration.isNegative ? 0 : duration.inSeconds;
   final minutes = seconds ~/ 60;
   final remainder = (seconds % 60).toString().padLeft(2, '0');
+
   if (minutes < 60) return '$minutes:$remainder';
   return '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}:$remainder';
 }

@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 /// Measure after layout without scrolling or changing the child's geometry.
 class ViewportHero extends StatefulWidget {
   const ViewportHero({super.key, required this.child});
+
   final Widget child;
 
   @override
@@ -19,12 +20,14 @@ class _ViewportHeroState extends State<ViewportHero> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     final position = Scrollable.maybeOf(context)?.position;
     if (position != _position) {
       _position?.removeListener(_scheduleCheck);
       _position = position;
       position?.addListener(_scheduleCheck);
     }
+
     _scheduleCheck();
   }
 
@@ -36,12 +39,15 @@ class _ViewportHeroState extends State<ViewportHero> {
 
   void _scheduleCheck() {
     if (_scheduled) return;
+
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
       if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+
       final box = context.findRenderObject();
       if (box is! RenderBox || !box.hasSize) return;
+
       final viewport = RenderAbstractViewport.maybeOf(box);
       final bounds = viewport == null
           ? null
@@ -53,6 +59,7 @@ class _ViewportHeroState extends State<ViewportHero> {
           bounds == null ||
           viewport!.paintBounds.inflate(.5).contains(bounds.topLeft) &&
               viewport.paintBounds.inflate(.5).contains(bounds.bottomRight);
+
       if (visible != _visible) setState(() => _visible = visible);
     });
   }

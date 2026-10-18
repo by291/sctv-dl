@@ -40,11 +40,13 @@ class PlaybackSnapshot {
   final bool firstFrameRendered;
   final bool playing;
   final bool buffering;
+
   final Duration position;
   final Duration? duration;
   final double speed;
   final VideoSource? source;
   final String? error;
+
   final bool supportsPip;
   final bool inPip;
   final bool ended;
@@ -58,11 +60,13 @@ abstract interface class PlaybackSession {
   String get id;
   PlaybackSnapshot get value;
   Stream<PlaybackSnapshot> get changes;
+
   Future<void> play();
   Future<void> pause();
   Future<void> seek(Duration position);
   Future<void> setSpeed(double speed);
   Future<void> selectSource(VideoSource source);
   Future<void> enterPictureInPicture();
+
   Future<void> dispose();
 }

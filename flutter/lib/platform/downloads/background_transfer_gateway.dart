@@ -9,11 +9,11 @@ import 'package:flutter/services.dart';
 import '../../domain/downloads/download_task.dart';
 import '../../domain/downloads/file_gateway.dart';
 import '../../domain/downloads/media_probe.dart';
+import '../../domain/downloads/transfer_gateway.dart';
+import '../../domain/programmes/programme_policy.dart';
 import '../../domain/programmes/programme_repository.dart';
 import 'dio_media_probe.dart';
 import 'notification_inbox.dart';
-import '../../domain/downloads/transfer_gateway.dart';
-import '../../domain/programmes/programme_policy.dart';
 
 /// background_downloader owns all scheduling, including its native holding
 /// queue. No Dart queue is involved when the application is suspended.
@@ -30,20 +30,26 @@ class BackgroundTransferGateway implements TransferGateway {
   final String appVersion;
   final DownloadMediaProbe _mediaProbe;
   final _preparing = <String, RequestScope>{};
+
   final native.FileDownloader? _providedDownloader;
   final bool _isIOS;
+
   native.FileDownloader get _downloader =>
       _providedDownloader ?? native.FileDownloader();
+
   static const group = 'sctv-downloads';
+
   final _events = StreamController<TransferSnapshot>.broadcast(sync: true);
   final _notificationTaps = NotificationInbox();
   final _latest = <String, TransferSnapshot>{};
   final _nativeTasks = <String, native.DownloadTask>{};
+
   Future<void>? _initialization;
   bool _disposed = false;
 
   @override
   Stream<TransferSnapshot> get events => _events.stream;
+
   @override
   Stream<String> get notificationTaps => _notificationTaps.events;
 
@@ -62,6 +68,7 @@ class BackgroundTransferGateway implements TransferGateway {
     if (appVersion.isEmpty || appVersion.contains(RegExp(r'[\r\n]'))) {
       throw ArgumentError('Invalid application version');
     }
+
     return native.DownloadTask(
       taskId: task.attemptId,
       url: task.url,
@@ -91,8 +98,10 @@ class BackgroundTransferGateway implements TransferGateway {
     if (_disposed) {
       return Future.error(StateError('Transfer gateway is disposed'));
     }
+
     final existing = _initialization;
     if (existing != null) return existing;
+
     late final Future<void> attempt;
     attempt = _initialize().then<void>(
       (_) {},
@@ -107,17 +116,20 @@ class BackgroundTransferGateway implements TransferGateway {
       },
     );
     _initialization = attempt;
+
     return attempt;
   }
 
   Future<void> _initialize() async {
     if (_disposed) throw StateError('Transfer gateway is disposed');
+
     _downloader.registerCallbacks(
       group: group,
       taskStatusCallback: _status,
       taskProgressCallback: _progress,
       taskNotificationTapCallback: (task, _) {
         if (_disposed) return;
+
         try {
           final metadata = jsonDecode(task.metaData);
           if (metadata is Map && metadata['id'] is String) {
@@ -145,6 +157,7 @@ class BackgroundTransferGateway implements TransferGateway {
         }
       },
     );
+
     _downloader.configureNotificationForGroup(
       group,
       running: const native.TaskNotification('正在下载', '{displayName}'),
@@ -154,6 +167,7 @@ class BackgroundTransferGateway implements TransferGateway {
       progressBar: true,
       tapOpensFile: false,
     );
+
     final configurations = await _downloader.configure(
       globalConfig: [
         (native.Config.holdingQueue, (2, 2, 2)),
@@ -176,6 +190,7 @@ class BackgroundTransferGateway implements TransferGateway {
     if (failures.isNotEmpty) {
       throw StateError('Downloader configuration failed: $failures');
     }
+
     // Do not call start(): its killed-task rescheduling could rerun unverified
     // runtime identities restored without their original native jobs.
     await _downloader.trackTasksInGroup(group, markDownloadedComplete: false);
@@ -187,11 +202,14 @@ class BackgroundTransferGateway implements TransferGateway {
     final request = buildNativeTask(task);
     final scope = RequestScope();
     _preparing[task.attemptId] = scope;
+
     try {
       await _mediaProbe.validate(task.url, scope: scope);
       scope.throwIfCancelled();
+
       await initialize();
       scope.throwIfCancelled();
+
       final permission = await _downloader.permissions.status(
         native.PermissionType.notifications,
       );
@@ -201,6 +219,7 @@ class BackgroundTransferGateway implements TransferGateway {
         );
       }
       scope.throwIfCancelled();
+
       _nativeTasks[request.taskId] = request;
       try {
         return await _downloader.enqueue(request);
@@ -216,6 +235,7 @@ class BackgroundTransferGateway implements TransferGateway {
 
   void _emit(TransferSnapshot snapshot) {
     if (_disposed) return;
+
     _latest[snapshot.attemptId] = snapshot;
     _events.add(snapshot);
   }
@@ -224,6 +244,7 @@ class BackgroundTransferGateway implements TransferGateway {
     task.baseDirectory == native.BaseDirectory.applicationDocuments,
     '${task.directory}/${task.filename}',
   ).value;
+
   DownloadState _state(native.TaskStatus status) => switch (status) {
     native.TaskStatus.enqueued => DownloadState.queued,
     native.TaskStatus.running => DownloadState.running,
@@ -234,11 +255,13 @@ class BackgroundTransferGateway implements TransferGateway {
     native.TaskStatus.waitingToRetry => DownloadState.retrying,
     native.TaskStatus.paused => DownloadState.paused,
   };
+
   void _status(native.TaskStatusUpdate update) {
     final task = update.task;
     if (task is! native.DownloadTask || task.group != group || _disposed) {
       return;
     }
+
     _nativeTasks[task.taskId] = task;
     final previous = _latest[task.taskId];
     final state = _state(update.status);
@@ -260,6 +283,7 @@ class BackgroundTransferGateway implements TransferGateway {
         canResume: previous?.canResume ?? false,
       ),
     );
+
     if (state == DownloadState.running || state == DownloadState.paused) {
       // This Future settles when native code has verified Range/resume support.
       unawaited(
@@ -274,6 +298,7 @@ class BackgroundTransferGateway implements TransferGateway {
                         latest.state != DownloadState.paused)) {
                   return;
                 }
+
                 _emit(
                   TransferSnapshot(
                     attemptId: task.taskId,
@@ -295,6 +320,7 @@ class BackgroundTransferGateway implements TransferGateway {
 
   void _progress(native.TaskProgressUpdate update) {
     if (update.task.group != group || _disposed || update.progress < 0) return;
+
     final previous = _latest[update.task.taskId];
     if (previous != null &&
         !{
@@ -306,6 +332,7 @@ class BackgroundTransferGateway implements TransferGateway {
         }.contains(previous.state)) {
       return;
     }
+
     // Unknown-length transfers provide no byte counter in the plugin. Keep the
     // last observed count and a nullable total; never invent percentage bytes.
     final hasTotal =
@@ -328,17 +355,20 @@ class BackgroundTransferGateway implements TransferGateway {
   @override
   Future<Map<String, TransferSnapshot>> query() async {
     await initialize();
+
     final active = {
       for (final task in await _downloader.allTasks(group: group))
         task.taskId: task,
     };
     final records = await _downloader.database.allRecords(group: group);
+
     final result = <String, TransferSnapshot>{};
     for (final record in records) {
       final task = record.task;
       if (task is! native.DownloadTask || !isAllowedMediaUrl(task.url)) {
         continue;
       }
+
       _nativeTasks[task.taskId] = task;
       final nativeExists = active.containsKey(task.taskId);
       final state = record.status.isNotFinalState && !nativeExists
@@ -351,6 +381,7 @@ class BackgroundTransferGateway implements TransferGateway {
           total != null && record.progress > 0 && record.progress < 1
           ? (total * record.progress).round()
           : _latest[task.taskId]?.receivedBytes ?? 0;
+
       var canResume = false;
       if (nativeExists &&
           (state == DownloadState.running || state == DownloadState.paused)) {
@@ -358,6 +389,7 @@ class BackgroundTransferGateway implements TransferGateway {
             .taskCanResume(task)
             .timeout(const Duration(milliseconds: 200), onTimeout: () => false);
       }
+
       result[task.taskId] = TransferSnapshot(
         attemptId: task.taskId,
         state: state,
@@ -372,12 +404,14 @@ class BackgroundTransferGateway implements TransferGateway {
             : record.exception?.description,
       );
     }
+
     // A native task may already exist before its tracked database row is saved.
     for (final entry in active.entries) {
       final task = entry.value;
       if (task is! native.DownloadTask || !isAllowedMediaUrl(task.url)) {
         continue;
       }
+
       _nativeTasks[entry.key] = task;
       result.putIfAbsent(
         entry.key,
@@ -386,6 +420,7 @@ class BackgroundTransferGateway implements TransferGateway {
             TransferSnapshot(attemptId: entry.key, state: DownloadState.queued),
       );
     }
+
     return result;
   }
 
@@ -395,6 +430,7 @@ class BackgroundTransferGateway implements TransferGateway {
         _nativeTasks[attemptId] ??
         await _downloader.taskForId(attemptId) ??
         (await _downloader.database.recordForId(attemptId))?.task;
+
     return task is native.DownloadTask && task.group == group ? task : null;
   }
 
@@ -417,6 +453,7 @@ class BackgroundTransferGateway implements TransferGateway {
     if (preparation != null && !_nativeTasks.containsKey(attemptId)) {
       return true;
     }
+
     await initialize();
     return _downloader.cancelTaskWithId(attemptId);
   }
@@ -424,12 +461,15 @@ class BackgroundTransferGateway implements TransferGateway {
   @override
   Future<void> dispose() async {
     if (_disposed) return;
+
     _disposed = true;
     for (final scope in _preparing.values) {
       scope.cancel();
     }
+
     _mediaProbe.dispose();
     if (_initialization != null) _downloader.unregisterCallbacks(group: group);
+
     await _events.close();
     await _notificationTaps.dispose();
     // Queued transfers remain native-owned after the UI observer is disposed.

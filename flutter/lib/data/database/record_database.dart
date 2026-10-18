@@ -35,6 +35,7 @@ class RecordDatabase extends _$RecordDatabase {
               (row) => row.collection.equals(collection) & row.key.equals(key),
             ))
             .getSingleOrNull();
+
     return row == null ? null : _decode(row.payload);
   }
 

@@ -25,6 +25,7 @@ class InstallationIdentity {
 
   final RecordDatabase _database;
   final MetadataDeviceProfile profile;
+
   Future<String>? _deviceId;
 
   Future<String> _loadDeviceId() => _deviceId ??= _database
@@ -44,6 +45,7 @@ class InstallationIdentity {
           'model': profile.model,
           'systemVersion': profile.systemVersion,
         });
+
         return id;
       })
       .onError((Object error, StackTrace stack) {

@@ -9,6 +9,7 @@ class StatePanel extends StatelessWidget {
     this.onAction,
     this.actionLabel = '重试',
   });
+
   final String title;
   final String message;
   final IconData icon;
@@ -50,6 +51,7 @@ class CachedErrorBanner extends StatelessWidget {
     required this.message,
     required this.onRetry,
   });
+
   final String message;
   final VoidCallback onRetry;
 
@@ -73,6 +75,7 @@ class CachedErrorBanner extends StatelessWidget {
 
 class PageSkeleton extends StatelessWidget {
   const PageSkeleton({super.key, this.count = 4});
+
   final int count;
 
   @override

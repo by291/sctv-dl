@@ -28,11 +28,13 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
   @override
   void initState() {
     super.initState();
+
     final sorted = [...widget.dates]..sort((a, b) => b.date.compareTo(a.date));
     final months = <String, List<BroadcastDate>>{};
     for (final date in sorted) {
       months.putIfAbsent(date.date.substring(0, 7), () => []).add(date);
     }
+
     _entries = [
       for (final month in months.entries) ...[
         _MonthHeading(month.key, month.value.length),
@@ -49,12 +51,14 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
   @override
   void dispose() {
     _scroll?.dispose();
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return SafeArea(
       top: false,
       child: Column(
@@ -100,6 +104,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
     final weekdayStyle = typography.bodyMedium!;
     final monthStyle = typography.titleMedium!;
     final countStyle = typography.labelMedium!;
+
     Size measure(String text, TextStyle style) {
       final painter = TextPainter(
         text: TextSpan(text: text, style: style),
@@ -109,6 +114,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
       )..layout();
       final size = painter.size;
       painter.dispose();
+
       return size;
     }
 
@@ -131,6 +137,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
           countHeight = math.max(countHeight, count.height);
       }
     }
+
     // Share measured extents with the lazy list and initial positioning. This
     // includes CJK fallback metrics and avoids a post-opening scroll correction.
     final stackedDate =
@@ -148,6 +155,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
             ? headingHeight + 4 + countHeight
             : math.max(headingHeight, countHeight)) +
         12;
+
     final extents = [
       for (final entry in _entries)
         switch (entry) {
@@ -158,6 +166,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
     ];
     final totalHeight = extents.fold(0.0, (sum, height) => sum + height);
     final viewportHeight = math.min(totalHeight, constraints.maxHeight);
+
     final selectedIndex = _entries.indexWhere(
       (entry) => entry is _DateOption && entry.date.id == widget.selectedId,
     );
@@ -165,6 +174,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
         ? 0.0
         : extents.take(selectedIndex).fold(0.0, (sum, height) => sum + height) -
               (viewportHeight - extents[selectedIndex]) / 2;
+
     _scroll ??= ScrollController(
       initialScrollOffset: selectedOffset.clamp(
         0,
@@ -219,6 +229,7 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
     final colours = Theme.of(context).colorScheme;
     final typography = Theme.of(context).textTheme;
     final selected = option.date.id == widget.selectedId;
+
     final date = Text(
       option.label,
       style: typography.titleSmall?.copyWith(
@@ -231,7 +242,9 @@ class _BroadcastDateSheetState extends State<BroadcastDateSheet> {
         color: selected ? colours.onPrimaryContainer : colours.onSurfaceVariant,
       ),
     );
+
     void select() => widget.onSelected(option.date);
+
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, option.last ? 24 : 0),
       child: Material(
@@ -321,8 +334,10 @@ sealed class _DateEntry {}
 
 class _MonthHeading extends _DateEntry {
   _MonthHeading(this.month, this.count);
+
   final String month;
   final int count;
+
   String get label =>
       '${month.substring(0, 4)}年${int.parse(month.substring(5))}月';
   String get countLabel => '$count 个播出日';
@@ -331,10 +346,12 @@ class _MonthHeading extends _DateEntry {
 class _DateOption extends _DateEntry {
   _DateOption(this.date, {required this.first, required this.last})
     : day = DateTime.parse(date.date);
+
   final BroadcastDate date;
   final DateTime day;
   final bool first;
   final bool last;
+
   String get label => '${day.month}月${day.day}日';
   String get weekday =>
       const ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'][day.weekday - 1];

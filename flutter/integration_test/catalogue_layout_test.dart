@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 

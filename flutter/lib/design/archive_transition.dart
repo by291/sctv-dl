@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A gesture already supplies progress; easing it again makes the cover lag
@@ -27,6 +27,7 @@ class ArchiveTransitionPage<T> extends Page<T> {
     super.restorationId,
     required this.child,
   });
+
   final Widget child;
 
   @override
@@ -63,6 +64,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
 
   @override
   Duration get transitionDuration => const Duration(milliseconds: 300);
+
   @override
   Duration get reverseTransitionDuration => transitionDuration;
 
@@ -95,6 +97,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
         controller!.isCompleted) {
       _motion.value = (true, 1);
     }
+
     return super.didPop(result);
   }
 
@@ -115,19 +118,24 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
   void _finishBackGesture() {
     final navigation = _gestureNavigator;
     if (navigation == null) return;
+
     _gestureNavigator = null;
+
     final listener = _settleListener;
     if (listener != null) controller?.removeStatusListener(listener);
     _settleListener = null;
+
     navigation.didStopUserGesture();
   }
 
   void _finishWhenSettled() {
     if (_gestureNavigator == null) return;
+
     if (!(controller?.isAnimating ?? false)) {
       _finishBackGesture();
       return;
     }
+
     _settleListener = (status) {
       if (status == AnimationStatus.completed ||
           status == AnimationStatus.dismissed) {
@@ -140,6 +148,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
   @override
   void handleCancelBackGesture() {
     if (_gestureNavigator == null) return;
+
     _restoreInterruptedGesture();
     if (isCurrent) controller?.forward();
     _finishWhenSettled();
@@ -148,6 +157,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
   @override
   void handleCommitBackGesture() {
     if (_gestureNavigator == null) return;
+
     _restoreInterruptedGesture();
 
     // The default predictive commit resets the controller to 1. Keep the actual
@@ -163,6 +173,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
     // terminal status. Release the retained navigator's input lock either way.
     _finishBackGesture();
     if (!cupertino) WidgetsBinding.instance.removeObserver(_backObserver);
+
     _motion.dispose();
     super.dispose();
   }
@@ -184,6 +195,7 @@ class _ArchiveRoute<T> extends MaterialPageRoute<T> {
         child,
       );
     }
+
     return _ArchivePageMotion(
       animation: animation,
       motion: _motion,
@@ -209,6 +221,7 @@ class _AndroidBackGestureObserver with WidgetsBindingObserver {
     if (event.isButtonEvent || !route.isCurrent || !route.popGestureEnabled) {
       return false;
     }
+
     route.handleStartBackGesture(
       progress: 1 - event.progress,
       direction: event.swipeEdge == SwipeEdge.left ? 1 : -1,
@@ -271,6 +284,7 @@ class _ArchivePageMotion extends StatelessWidget {
             ).transform(((elapsed - .35) / .65).clamp(0.0, 1.0))
           : archiveOutgoingOpacity(elapsed);
       final travel = ArchiveMotionCurve(navigator).transform(progress);
+
       final translated = Transform.translate(
         offset: Offset(
           reduced ? 0 : 30 * (previous ? -travel : 1 - travel) * direction,
@@ -278,6 +292,7 @@ class _ArchivePageMotion extends StatelessWidget {
         ),
         child: Opacity(opacity: opacity, child: child),
       );
+
       // The fade-through gap deliberately has no page content, but always has
       // an opaque, stationary theme surface beneath the shared-cover overlay.
       return previous

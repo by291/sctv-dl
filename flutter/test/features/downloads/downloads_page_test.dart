@@ -362,6 +362,36 @@ void main() {
     },
   );
 
+  testWidgets(
+    'native list removal clears selection before the record reappears',
+    (tester) async {
+      final completed = task(DownloadState.completed);
+      final repository = PageRepository([completed]);
+      await tester.pumpWidget(
+        host(
+          home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('批量管理'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('全选当前列表'));
+      await tester.pumpAndSettle();
+      expect(find.text('已选择 1 项'), findsOneWidget);
+
+      repository.changes.add([]);
+      await tester.pumpAndSettle();
+      expect(find.text('已选择 0 项'), findsOneWidget);
+      repository.changes.add([completed]);
+      await tester.pumpAndSettle();
+      expect(find.text('已选择 0 项'), findsOneWidget);
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await repository.close();
+    },
+  );
+
   testWidgets('download actions avoid horizontal cutouts', (tester) async {
     final repository = PageRepository([
       task(DownloadState.running, resume: true),

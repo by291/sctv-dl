@@ -28,12 +28,14 @@ class _PlaybackCoverState extends State<PlaybackCover> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     final animation = ModalRoute.of(context)?.animation;
     if (animation != _routeAnimation) {
       _routeAnimation?.removeStatusListener(_routeStatus);
       _routeAnimation = animation;
       animation?.addStatusListener(_routeStatus);
     }
+
     _entered |=
         animation == null || animation.status == AnimationStatus.completed;
   }

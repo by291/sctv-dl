@@ -11,10 +11,6 @@ import 'package:sctv_dl_mobile/app/router.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
-import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
-import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
-import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/playback/history_repository.dart';
@@ -22,6 +18,11 @@ import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
+import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
+import 'package:sctv_dl_mobile/features/player/player_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
+import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
+import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
 import '../support/fakes.dart';
 
@@ -160,7 +161,7 @@ void main() {
     final harness = RouteHarness();
     await harness.mount(tester, '/');
     await tester.pumpAndSettle();
-    harness.router.push('/history');
+    unawaited(harness.router.push('/history'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 75));
     final opacity = tester
@@ -469,7 +470,7 @@ void main() {
 
       await event('startBackGesture', 0);
       await event('updateBackGestureProgress', .45);
-      harness.router.push('/history');
+      unawaited(harness.router.push('/history'));
       await tester.pump();
       await event(ending);
       await tester.pumpAndSettle();
@@ -808,9 +809,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ProgrammeCard));
     await tester.pumpAndSettle();
-    harness.router.replace(
-      '/programme/9',
-      extra: const Programme(id: '9', name: 'Another programme'),
+    unawaited(
+      harness.router.replace(
+        '/programme/9',
+        extra: const Programme(id: '9', name: 'Another programme'),
+      ),
     );
     await tester.pumpAndSettle();
     final archive = tester.widget<ArchivePage>(find.byType(ArchivePage));

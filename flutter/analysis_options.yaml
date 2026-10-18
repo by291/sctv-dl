@@ -6,3 +6,8 @@ analyzer:
     - android/**
     - ios/**
     - packages/**
+
+linter:
+  rules:
+    directives_ordering: true
+    unawaited_futures: true

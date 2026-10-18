@@ -6,8 +6,8 @@ import 'package:sctv_dl_mobile/domain/playback/history_repository.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/programmes/components/history_card.dart';
 
-import 'pages_test.dart' show host;
 import '../../support/history_fixture.dart';
+import 'pages_test.dart' show host;
 
 void main() {
   for (final brightness in Brightness.values) {
