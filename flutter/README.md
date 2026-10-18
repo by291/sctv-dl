@@ -174,4 +174,4 @@ flutter drive --profile --no-dds --driver=test_driver/integration_test.dart \
 
 The opt-in profile journey uses the production application, warms both cover sources, then drives uniform route progress and reports build/raster timings. It does not inject real Android gestures or establish physical-device frame pacing. Use `python3 tool/verify_predictive_back.py --device <disposable-emulator-id>` separately to verify actual OS gesture delivery, cancellation and completion.
 
-The launcher uses an application-owned geometric TV/play mark. On macOS, regenerate its native bitmap sizes with `swift tool/generate_icons.swift`; Android adaptive/monochrome vectors live in the native resource directory.
+The launcher uses an application-owned geometric TV/play mark. On macOS, regenerate its native bitmap sizes with `swift tool/generate_icons.swift`; Android adaptive/monochrome vectors live in the native resource directory. Both Android layers share `app_icon_launcher_foreground.xml`, whose 12.5% inset scales the already-padded mark to 75% for visual parity with the Kotlin launcher icon.
