@@ -36,7 +36,7 @@ import org.junit.Test
 class NativeRefreshTest {
     private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
-    @Test fun toolbarSearchOpensAboveTheTabsAndClosesWithoutLeavingAFilter() {
+    @Test fun toolbarSearchOpensAboveTheCatalogueFilterAndClosesWithoutLeavingAQuery() {
         var state by mutableStateOf(
             CatalogueUiState(resource = CachedResource(listOf(Programme("one", "Alpha", null, 0))))
         )
@@ -56,8 +56,11 @@ class NativeRefreshTest {
             requireNotNull(device.wait(Until.findObject(By.desc("搜索栏目")), 5_000)).click()
             val search = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5_000)
             assertNotNull(search)
-            val tabs = requireNotNull(device.findObject(By.text("全部栏目")))
-            assertTrue("Search belongs above the library tabs", search!!.visibleBounds.bottom <= tabs.visibleBounds.top)
+            val filter = requireNotNull(device.findObject(By.desc("只看收藏")))
+            assertTrue(
+                "Search belongs above the library filters",
+                search!!.visibleBounds.bottom <= filter.visibleBounds.top
+            )
             search.text = "missing"
             assertNotNull(device.wait(Until.findObject(By.text("没有匹配的栏目")), 5_000))
             requireNotNull(device.wait(Until.findObject(By.desc("退出搜索")), 5_000)).click()

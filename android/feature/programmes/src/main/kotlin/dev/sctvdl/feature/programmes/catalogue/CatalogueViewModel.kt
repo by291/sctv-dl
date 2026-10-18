@@ -118,6 +118,11 @@ internal class CatalogueViewModel @Inject constructor(
     }
 
     fun filter(favouritesOnly: Boolean) {
+        // This is a list filter, not a separate page. Carry the active controls across legacy saved scopes.
+        val activeQuery = if (this.favouritesOnly.value) favouritesQuery.value else query.value
+        val activeSort = if (this.favouritesOnly.value) favouritesByName.value else byName.value
+        saved[if (favouritesOnly) "favouritesQuery" else "query"] = activeQuery
+        saved[if (favouritesOnly) "favouritesByName" else "byName"] = activeSort
         saved["favouritesOnly"] = favouritesOnly
     }
 

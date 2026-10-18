@@ -26,9 +26,9 @@ class PrimaryTopBarTest {
             val catalogue = toolbarBounds(await(By.text("sctv-dl")))
             assertEquals("The library must use the primary toolbar height", heightPx, catalogue.height())
 
-            await(By.res("filter-favourites")).click()
+            await(By.desc("只看收藏")).click()
             assertEquals(catalogue, toolbarBounds(await(By.text("sctv-dl"))))
-            await(By.res("filter-all")).click()
+            await(By.desc("显示全部栏目")).click()
             await(By.desc("搜索栏目")).click()
             assertEquals(
                 "Opening search must keep the toolbar height when keyboard insets change",

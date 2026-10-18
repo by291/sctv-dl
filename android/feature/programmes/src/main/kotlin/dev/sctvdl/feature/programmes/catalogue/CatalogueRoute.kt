@@ -19,7 +19,6 @@ fun CatalogueRoute(
     val model = library.model
     val state = library.state.value
     val catalogueScroll = rememberCatalogueScrollState(if (embedded) library.cataloguePanePosition else null)
-    val favouritesScroll = rememberCatalogueScrollState(if (embedded) library.favouritesPanePosition else null)
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { model.enter() }
 
@@ -36,7 +35,6 @@ fun CatalogueRoute(
         embedded = embedded,
         onApplyUpdates = model::applyUpdates,
         catalogueScroll = catalogueScroll,
-        favouritesScroll = favouritesScroll,
         bottomContentPadding = bottomContentPadding,
         onHistory = onHistory
     )
