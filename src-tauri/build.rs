@@ -1,6 +1,20 @@
 fn main() {
-    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&[
+    let mut attributes = tauri_build::Attributes::new();
+    if std::env::var("TARGET").is_ok_and(|target| target.ends_with("windows-msvc")) {
+        // Tauri embeds application resources only into binaries. Test executables also
+        // need Common Controls v6 before loading the native dialog dependency.
+        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        println!(
+            "cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+        );
+        // The linker now embeds the same dependency for every executable; avoid
+        // adding a second manifest resource to the application binary.
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    }
+
+    tauri_build::try_build(
+        attributes.app_manifest(tauri_build::AppManifest::new().commands(&[
             "read_programme_cache",
             "write_programme_cache",
             "read_archive_browse_state",
@@ -37,7 +51,7 @@ fn main() {
             "subscribe_exit",
             "unsubscribe_exit",
             "complete_exit_preparation",
-        ]),
-    ))
+        ])),
+    )
     .expect("failed to build Tauri application permissions");
 }
