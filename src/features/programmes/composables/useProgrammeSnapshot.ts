@@ -103,43 +103,46 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
     }
 
     let networkReceived = false
-    const cacheRead = cache
-      ? cache
-          .read(key)
-          .then((result) => {
-            if (!request.isCurrent()) {
+
+    function readCachedSnapshot() {
+      return cache
+        ? cache
+            .read(key)
+            .then((result) => {
+              if (!request.isCurrent()) {
+                return null
+              }
+
+              cacheWarning.value = result.warning ?? ''
+              const snapshot = result.snapshot
+              if (
+                !networkReceived &&
+                snapshot &&
+                matches(snapshot) &&
+                programmeCacheKey(snapshot) === encoded &&
+                !accepted.value
+              ) {
+                state.value = receiveProgrammeSnapshot(state.value, snapshot, 'cache')
+                cached.value = true
+                persisted.value = result.persisted
+              }
+
+              return result
+            })
+            .catch((cause) => {
+              if (request.isCurrent()) {
+                cacheWarning.value = errorMessage(cause)
+              }
+
               return null
-            }
+            })
+        : Promise.resolve(null)
+    }
 
-            cacheWarning.value = result.warning ?? ''
-            const snapshot = result.snapshot
-            if (
-              !networkReceived &&
-              snapshot &&
-              matches(snapshot) &&
-              programmeCacheKey(snapshot) === encoded &&
-              !accepted.value
-            ) {
-              state.value = receiveProgrammeSnapshot(state.value, snapshot, 'cache')
-              cached.value = true
-              persisted.value = result.persisted
-            }
-
-            return result
-          })
-          .catch((cause) => {
-            if (request.isCurrent()) {
-              cacheWarning.value = errorMessage(cause)
-            }
-
-            return null
-          })
-      : Promise.resolve(null)
-
-    try {
+    async function receiveLiveSnapshot(): Promise<Snapshot<K> | null> {
       const items = await fetcher(request.signal)
       if (!request.isCurrent()) {
-        return
+        return null
       }
 
       networkReceived = true
@@ -151,7 +154,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
         fetchedAt: new Date().toISOString(),
       })
       if (!matches(snapshot)) {
-        return
+        return null
       }
 
       state.value = receiveProgrammeSnapshot(state.value, snapshot, 'network')
@@ -161,6 +164,10 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
 
       refreshing.value = false
 
+      return snapshot
+    }
+
+    async function persistLiveSnapshot(snapshot: Snapshot<K>) {
       // A late cache read supplies only the persistence epoch, never older presentation.
       const read = await cacheRead
       if (!request.isCurrent() || !cache || !read) {
@@ -186,6 +193,16 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
           cacheWarning.value = errorMessage(cause)
         }
       }
+    }
+
+    const cacheRead = readCachedSnapshot()
+    try {
+      const snapshot = await receiveLiveSnapshot()
+      if (!request.isCurrent() || !snapshot) {
+        return
+      }
+
+      await persistLiveSnapshot(snapshot)
     } catch (cause) {
       if (request.isCurrent()) {
         failure.value = errorMessage(cause)

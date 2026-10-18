@@ -175,6 +175,24 @@ it('blocks retry autoplay when the preview becomes inactive during restoration',
   wrapper.unmount()
 })
 
+it('does not resume or publish a pending restore after the player is disposed', () => {
+  const media = mediaPlayer()
+  createPlayer.mockReturnValue(media)
+  const wrapper = mount(ProgrammeVideoPlayer, {
+    props: { ...props, restore: { positionMs: 300000, speed: 1, playing: true } },
+  })
+  fire('loadedmetadata')
+  const snapshotsBeforeDisposal = wrapper.emitted('snapshot')?.length ?? 0
+
+  wrapper.unmount()
+  fire('seeked')
+  fire('timeupdate')
+
+  expect(media.video.play).not.toHaveBeenCalled()
+  expect(wrapper.emitted('snapshot') ?? []).toHaveLength(snapshotsBeforeDisposal)
+  expect(media.destroy).toHaveBeenCalledOnce()
+})
+
 it('reports the actual selected quality and tolerates rejected autoplay', async () => {
   const media = mediaPlayer()
   media.video.currentSrc = '/smooth.mp4'

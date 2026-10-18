@@ -1,28 +1,12 @@
 <script setup lang="ts">
-import {
-  computed,
-  inject,
-  nextTick,
-  onBeforeUnmount,
-  onActivated,
-  onDeactivated,
-  onMounted,
-  ref,
-  shallowRef,
-  watch,
-} from 'vue'
+import { computed, onDeactivated, onMounted, ref, shallowRef } from 'vue'
 
-import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
+import { RouterLink } from 'vue-router'
 import { NButton, NCheckbox, useMessage } from 'naive-ui'
-import { useEventListener, useThrottleFn } from '@vueuse/core'
 import { ArrowLeft, CalendarDays, Star } from '@lucide/vue'
 
-import {
-  createScrollRestoration,
-  scrollRestorationKey,
-} from '@/shared/navigation/scroll-restoration'
-import { usePageScroll } from '@/shared/navigation/page-scroll'
 import { useArchiveBrowseState } from '@/features/programmes/composables/useArchiveBrowseState'
+import { useArchiveBrowseRestoration } from '@/features/programmes/composables/useArchiveBrowseRestoration'
 import { usePlatform } from '@/shared/platform/usePlatform'
 import ProgrammeUpdateNotice from '@/features/programmes/components/ProgrammeUpdateNotice.vue'
 import { errorMessage } from '@/shared/utils/errors'
@@ -41,9 +25,6 @@ import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeD
 import type { PreviewInput } from '@/features/programmes/model/playback-state'
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
-import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
-
-const { pageScrollMaximum, pageScrollPosition, pageScrollTarget, scrollPageTo } = usePageScroll()
 
 const props = defineProps<{ id: string }>()
 
@@ -59,30 +40,11 @@ const isFavourite = computed(
 )
 
 const platform = usePlatform()
-const route = useRoute()
 const preview = ref<ProgrammeContent | null>(null)
 const previewInput = shallowRef<PreviewInput | null>(null)
-const contentSortOrder = ref<ContentSortOrder>('asc')
 const browse = useArchiveBrowseState(programmeId, platform.programmeCache)
-const restoration = inject(scrollRestorationKey, null) ?? createScrollRestoration()
-let scrollEntry = restoration.begin(route.fullPath)
-let scrollFrame: number | undefined
-let departed = false
-let viewDisposed = false
-let scrollSettled = false
-let activated = false
 const interactionHold = computed(
   () => !!preview.value || selected.value.length > 0 || preparingIds.value.length > 0,
-)
-watch(
-  browse.saved,
-  (saved) => {
-    // Clearing persistence must not reorder a currently visible archive.
-    if (saved) {
-      contentSortOrder.value = saved.sort
-    }
-  },
-  { flush: 'sync' },
 )
 
 const {
@@ -119,6 +81,15 @@ const { preparingIds, prepareDownloads } = useProgrammeDownloads()
 const selectedDateId = computed(
   () => dates.value.find((date) => date.date === selectedDate.value)?.id || '',
 )
+const { contentSortOrder, preserveScrollAfter } = useArchiveBrowseRestoration({
+  programmeId,
+  browse,
+  datesLoaded,
+  contentsLoaded,
+  selectedDateId,
+  selectedDate,
+})
+
 const previewReference = computed(() => previewInput.value?.metadata.content ?? null)
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
@@ -209,114 +180,14 @@ async function applyUpdate() {
     return
   }
 
-  const { top } = pageScrollPosition()
-  await acceptUpdate()
-  await nextTick()
-  scrollPageTo({ top: Math.min(top, pageScrollMaximum()) })
+  await preserveScrollAfter(acceptUpdate)
 }
-
-function saveBrowse() {
-  if (!datesLoaded.value || departed || viewDisposed) {
-    return
-  }
-
-  void browse.save({
-    dateId: selectedDateId.value || null,
-    date: selectedDate.value,
-    sort: contentSortOrder.value,
-    // Date hydration finishes before content layout; keep the saved offset until restoration.
-    scrollY: scrollSettled
-      ? pageScrollPosition().top
-      : (browse.saved.value?.scrollY ?? pageScrollPosition().top),
-  })
-}
-
-function visibilityChanged() {
-  if (document.hidden) {
-    saveBrowse()
-  }
-}
-
-document.addEventListener('visibilitychange', visibilityChanged)
-// Leading-only throttling has no trailing timer to outlive the route; scrollend captures the tail.
-const saveScroll = useThrottleFn(saveBrowse, 1000, false, true)
-useEventListener(window, 'pagehide', saveBrowse)
-watch([datesLoaded, selectedDateId, selectedDate, contentSortOrder], saveBrowse, { flush: 'post' })
-
-onBeforeRouteLeave(() => {
-  saveBrowse()
-  departed = true
-  scrollEntry.cancel()
-})
-onBeforeUnmount(() => {
-  if (!departed) {
-    saveBrowse()
-  }
-
-  viewDisposed = true
-  document.removeEventListener('visibilitychange', visibilityChanged)
-  scrollEntry.cancel()
-  if (scrollFrame !== undefined) {
-    cancelAnimationFrame(scrollFrame)
-  }
-})
-
-watch(programmeId, () => {
-  scrollSettled = false
-  scrollEntry.cancel()
-  scrollEntry = restoration.begin(route.fullPath)
-  departed = false
-})
-watch(
-  [datesLoaded, contentsLoaded, selectedDate],
-  async () => {
-    if (!datesLoaded.value || (selectedDate.value && !contentsLoaded.value)) {
-      return
-    }
-
-    const entry = scrollEntry
-    const id = programmeId.value
-    await browse.ready
-    await nextTick()
-    if (viewDisposed || departed || id !== programmeId.value) {
-      return
-    }
-
-    if (scrollFrame !== undefined) {
-      cancelAnimationFrame(scrollFrame)
-    }
-
-    scrollFrame = requestAnimationFrame(() => {
-      if (viewDisposed || departed || id !== programmeId.value || entry !== scrollEntry) {
-        return
-      }
-
-      entry.restore(browse.saved.value?.scrollY ?? 0)
-      scrollSettled = true
-      saveBrowse()
-    })
-  },
-  { flush: 'post' },
-)
-
-onActivated(() => {
-  departed = false
-  // A returning tab owns its live offset, even if loading finished while it was hidden.
-  if (activated) {
-    scrollSettled = true
-  }
-
-  activated = true
-})
 
 onDeactivated(() => {
-  departed = true
   preview.value = null
 })
 
 onMounted(() => {
-  useEventListener(pageScrollTarget(), 'scroll', saveScroll, { passive: true })
-  useEventListener(pageScrollTarget(), 'scrollend', saveBrowse)
   void catalogue.load()
 })
 </script>

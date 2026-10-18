@@ -253,7 +253,7 @@ onActivated(async () => {
   outline: 3px solid #e99389;
   outline-offset: -3px;
 }
-.library-tabs :deep(.filter-count) {
+.library-tabs .filter-count {
   position: absolute;
   top: 50%;
   left: 100%;
@@ -269,7 +269,7 @@ onActivated(async () => {
     color 140ms ease,
     background-color 140ms ease;
 }
-.library-tabs :deep(.n-tabs-tab--active .filter-count) {
+.library-tabs :deep(.n-tabs-tab--active) .filter-count {
   background: var(--accent-soft);
   color: var(--accent);
 }

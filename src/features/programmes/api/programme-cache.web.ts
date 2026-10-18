@@ -34,6 +34,63 @@ interface CacheState {
 const storageWarning = '节目缓存无法保存到本地，当前数据仅在本次会话中保留'
 const oversizedWarning = '节目数据超过缓存容量，本次结果未保存'
 
+function decodeCacheState(
+  storedEpoch: unknown,
+  snapshots: unknown[],
+  browse: unknown[],
+  initialEpoch: string,
+): CacheState {
+  const epoch = typeof storedEpoch === 'string' && storedEpoch ? storedEpoch : initialEpoch
+  const draft: CacheState = { epoch, snapshots: new Map(), browse: new Map() }
+  for (const raw of snapshots) {
+    const row = snapshotRowSchema.safeParse(raw)
+    if (row.success && row.data.epoch === epoch) {
+      draft.snapshots.set(programmeCacheKey(row.data.snapshot), row.data)
+    }
+  }
+
+  for (const raw of browse) {
+    const row = browseRowSchema.safeParse(raw)
+    if (row.success && row.data.epoch === epoch) {
+      draft.browse.set(row.data.value.programmeId, row.data)
+    }
+  }
+
+  return draft
+}
+
+function mergeFallbackState(draft: CacheState, fallback: CacheState): void {
+  for (const [key, row] of fallback.snapshots) {
+    const current = draft.snapshots.get(key)
+    if (!current || row.snapshot.fetchedAt >= current.snapshot.fetchedAt) {
+      draft.snapshots.set(key, row)
+    }
+  }
+
+  for (const [key, row] of fallback.browse) {
+    const current = draft.browse.get(key)
+    if (!current || row.value.visitedAt >= current.value.visitedAt) {
+      draft.browse.set(key, row)
+    }
+  }
+}
+
+function writeCacheState(transaction: IDBTransaction, draft: CacheState): void {
+  const snapshots = transaction.objectStore('programmeCache')
+  snapshots.clear()
+  for (const [key, value] of draft.snapshots) {
+    snapshots.put(value, key)
+  }
+
+  const browse = transaction.objectStore('browseState')
+  browse.clear()
+  for (const [key, value] of draft.browse) {
+    browse.put(value, key)
+  }
+
+  transaction.objectStore('meta').put(draft.epoch, 'cacheEpoch')
+}
+
 export function createWebProgrammeCache(database: ApplicationDatabase): {
   port: ProgrammeCachePort
   dispose(): void
@@ -118,39 +175,12 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
 
       epoch.onsuccess = () => {
         try {
-          const currentEpoch =
-            typeof epoch.result === 'string' && epoch.result ? epoch.result : state.epoch
-          draft = { epoch: currentEpoch, snapshots: new Map(), browse: new Map() }
-          for (const raw of snapshots.result as unknown[]) {
-            const row = snapshotRowSchema.safeParse(raw)
-            if (row.success && row.data.epoch === currentEpoch) {
-              draft.snapshots.set(programmeCacheKey(row.data.snapshot), row.data)
-            }
-          }
-
-          for (const raw of browse.result as unknown[]) {
-            const row = browseRowSchema.safeParse(raw)
-            if (row.success && row.data.epoch === currentEpoch) {
-              draft.browse.set(row.data.value.programmeId, row.data)
-            }
-          }
+          draft = decodeCacheState(epoch.result, snapshots.result, browse.result, state.epoch)
 
           // Retry memory-only writes after quota/permission failures, but only
           // within their captured epoch. A durable clear discards every fallback.
-          if (fallback?.epoch === currentEpoch) {
-            for (const [key, row] of fallback.snapshots) {
-              const current = draft.snapshots.get(key)
-              if (!current || row.snapshot.fetchedAt >= current.snapshot.fetchedAt) {
-                draft.snapshots.set(key, row)
-              }
-            }
-
-            for (const [key, row] of fallback.browse) {
-              const current = draft.browse.get(key)
-              if (!current || row.value.visitedAt >= current.value.visitedAt) {
-                draft.browse.set(key, row)
-              }
-            }
+          if (fallback?.epoch === draft.epoch) {
+            mergeFallbackState(draft, fallback)
           } else {
             fallback = null
           }
@@ -159,17 +189,7 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
           state = structuredClone(draft)
           result = action(draft)
           trim(draft)
-          tx.objectStore('programmeCache').clear()
-          for (const [key, value] of draft.snapshots) {
-            tx.objectStore('programmeCache').put(value, key)
-          }
-
-          tx.objectStore('browseState').clear()
-          for (const [key, value] of draft.browse) {
-            tx.objectStore('browseState').put(value, key)
-          }
-
-          tx.objectStore('meta').put(draft.epoch, 'cacheEpoch')
+          writeCacheState(tx, draft)
         } catch (error) {
           cause = error
           tx.abort()

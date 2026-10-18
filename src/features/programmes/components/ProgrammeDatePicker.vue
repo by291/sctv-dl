@@ -9,6 +9,8 @@ const selectedDate = defineModel<string | null>({ required: true })
 const props = defineProps<{ dates: ProgrammeDate[]; loading: boolean }>()
 const emit = defineEmits<{ refresh: [] }>()
 
+const refreshButtonTheme = { heightMedium: '42px' }
+
 const options = computed(() => props.dates.map((item) => ({ label: item.date, value: item.date })))
 </script>
 
@@ -31,7 +33,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
         aria-label="播出日期"
       />
       <NButton
-        class="date-refresh"
+        :theme-overrides="refreshButtonTheme"
         quaternary
         circle
         aria-label="重新读取播出日期"
@@ -80,11 +82,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   color: var(--muted);
 }
 .date-select {
-  width: 215px !important;
-}
-.date-refresh {
-  width: 42px !important;
-  height: 42px !important;
+  width: 215px;
 }
 .recent-dates {
   display: flex;
@@ -134,7 +132,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   }
   .date-select {
     min-width: 0;
-    width: auto !important;
+    width: auto;
     flex: 1;
   }
   .recent-dates {
