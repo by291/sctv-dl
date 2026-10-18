@@ -1,6 +1,5 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { once } from 'node:events'
 import { join, relative, sep } from 'node:path'
 import { createServer } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +54,6 @@ beforeEach(async () => {
     logLevel: 'silent',
     server: { ...config.server, middlewareMode: true, hmr: false },
   })
-  await once(server.watcher, 'ready')
 })
 
 afterEach(async () => {
@@ -88,6 +86,8 @@ describe('Web development scanning', () => {
     const sourceFile = join(sourceDirectory, 'main.js')
 
     server!.watcher.on('change', (file) => changes.push(file))
+
+    // Vite starts watching before createServer resolves, so its one-shot ready event may be past.
     await vi.waitFor(() => {
       expect(server!.watcher.getWatched()[sourceDirectory]).toContain('main.js')
     })
