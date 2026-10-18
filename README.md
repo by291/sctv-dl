@@ -46,20 +46,22 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Production uses one Node se
 
 Commands and dependency versions are defined in `package.json`. Run commands from the repository root.
 
-| Command                             | Purpose                                         |
-| ----------------------------------- | ----------------------------------------------- |
-| `pnpm dev`                          | Frontend and proxies at port 5180               |
-| `pnpm typecheck`                    | Browser and Node TypeScript checks              |
-| `pnpm test`                         | Vitest suite                                    |
-| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and CSS rules               |
-| `pnpm format` / `pnpm format:check` | Format or check source and documentation        |
-| `pnpm check`                        | Type checking, tests, lint, and formatting      |
-| `pnpm build`                        | Type checking and production frontend build     |
-| `pnpm preview`                      | Built app and local proxies at port 4173        |
-| `pnpm start`                        | Production Node service; requires `dist/`       |
-| `pnpm desktop:dev`                  | Run the desktop client with frontend hot reload |
-| `pnpm desktop:check`                | Check Rust formatting, Clippy, and native tests |
-| `pnpm desktop:build`                | Build the host platform's desktop package       |
+| Command                             | Purpose                                                        |
+| ----------------------------------- | -------------------------------------------------------------- |
+| `pnpm dev`                          | Frontend and proxies at port 5180                              |
+| `pnpm typecheck`                    | Browser and Node TypeScript checks                             |
+| `pnpm test`                         | Vitest suite                                                   |
+| `pnpm lint` / `pnpm lint:fix`       | Check or fix ESLint and CSS rules                              |
+| `pnpm format` / `pnpm format:check` | Format or check source and documentation                       |
+| `pnpm docs:check`                   | Check local Markdown file and heading links                    |
+| `pnpm ci:lint`                      | Validate GitHub Actions with pinned actionlint (requires Go)   |
+| `pnpm check`                        | Type checking, tests, lint, formatting and documentation links |
+| `pnpm build`                        | Type checking and production frontend build                    |
+| `pnpm preview`                      | Built app and local proxies at port 4173                       |
+| `pnpm start`                        | Production Node service; requires `dist/`                      |
+| `pnpm desktop:dev`                  | Run the desktop client with frontend hot reload                |
+| `pnpm desktop:check`                | Check Rust formatting, Clippy, and native tests                |
+| `pnpm desktop:build`                | Build the host platform's desktop package                      |
 
 The development and preview ports are strict. If 5180 is occupied, choose a free port explicitly, for example `pnpm dev --port 5181`. Restart Vite after configuration changes. Preview is for local build verification.
 

@@ -74,7 +74,7 @@ Run commands from the repository root:
 | ------------------------------- | ---------------------------------------------------------------- |
 | Application or server behaviour | `pnpm check` and `pnpm build`                                    |
 | UI                              | The above plus browser verification at desktop and narrow widths |
-| Documentation only              | `pnpm format:check`, local links, and referenced commands        |
+| Documentation only              | `pnpm format:check`, `pnpm docs:check`, and referenced commands  |
 
 Add meaningful regression coverage for behaviour changes. Tests are colocated as `*.test.ts`; tooling tests live in `tooling/`. Use disposable fixtures and stub upstream services. Do not add tests that duplicate copy or formatting, or run application tests/builds for documentation-only changes.
 
