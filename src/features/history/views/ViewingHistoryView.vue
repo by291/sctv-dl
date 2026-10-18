@@ -21,7 +21,7 @@ const { content, input, open } = useHistoryPreview()
 const query = ref('')
 const results = useTemplateRef<HTMLElement>('results')
 const heading = useTemplateRef<HTMLElement>('heading')
-const filtered = computed(() => {
+const filteredEntries = computed(() => {
   const search = query.value.trim().toLocaleLowerCase()
 
   return history.entries.filter((entry) =>
@@ -30,9 +30,9 @@ const filtered = computed(() => {
       .includes(search),
   )
 })
-const days = computed(() => {
+const entriesByDay = computed(() => {
   const groups = new Map<string, HistoryEntry[]>()
-  for (const entry of filtered.value) {
+  for (const entry of filteredEntries.value) {
     const day = new Date(entry.viewedAt).toLocaleDateString('zh-CN')
     const entries = groups.get(day) ?? []
     entries.push(entry)
@@ -43,18 +43,21 @@ const days = computed(() => {
 })
 
 async function remove(entry: HistoryEntry): Promise<void> {
-  const index = filtered.value.findIndex(
+  const index = filteredEntries.value.findIndex(
     (value) => historyKey(value.content) === historyKey(entry.content),
   )
   const active = document.activeElement
   const restoreFocus = active instanceof HTMLElement && !!results.value?.contains(active)
   const scroll = pageScrollPosition()
+
   await history.remove(entry.content)
   await nextTick()
+
   if (!history.error && restoreFocus) {
     const cards = results.value?.querySelectorAll<HTMLElement>('.history-card')
     const card = cards?.[Math.min(index, cards.length - 1)]
-    ;(card?.querySelector<HTMLElement>('button') ?? heading.value)?.focus({ preventScroll: true })
+    const focusTarget = card?.querySelector<HTMLElement>('button') ?? heading.value
+    focusTarget?.focus({ preventScroll: true })
   }
 
   scrollPageTo(scroll)
@@ -107,7 +110,7 @@ async function remove(entry: HistoryEntry): Promise<void> {
       @retry="history.reload"
     />
     <StatePanel
-      v-if="!history.loading && !history.error && !filtered.length"
+      v-if="!history.loading && !history.error && !filteredEntries.length"
       :title="query ? '没有找到匹配的记录' : '还没有观看记录'"
       description="播放节目后，可在这里继续观看。"
     />
@@ -116,7 +119,7 @@ async function remove(entry: HistoryEntry): Promise<void> {
       class="history-results"
     >
       <section
-        v-for="day in days"
+        v-for="day in entriesByDay"
         :key="day.date"
         class="history-day"
       >

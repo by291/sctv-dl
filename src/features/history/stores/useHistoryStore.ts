@@ -46,9 +46,11 @@ export const useHistoryStore = defineStore('history', () => {
     detach()
     port = next
     const version = connectionVersion
+
     snapshotRevision = -1
     loading.value = true
     error.value = ''
+
     try {
       // Subscribe before loading; an event may contain a newer revision than list().
       const stop = await next.subscribe((snapshot) => {
@@ -63,7 +65,9 @@ export const useHistoryStore = defineStore('history', () => {
       }
 
       unsubscribe = stop
+
       const snapshot = await next.list()
+
       if (version === connectionVersion) {
         apply(snapshot)
       }

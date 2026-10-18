@@ -15,7 +15,9 @@ export async function prepareNativeExit(prepare: () => Promise<boolean>): Promis
       } finally {
         await invoke('complete_exit_preparation', { requestId, saved })
       }
-    })().catch(() => {})
+    })().catch(() => {
+      // A failed save still sends saved=false; acknowledgement can fail during native exit.
+    })
   }
 
   const subscriptionId = await invoke<string>('subscribe_exit', { onEvent })
@@ -26,6 +28,7 @@ export async function prepareNativeExit(prepare: () => Promise<boolean>): Promis
     }
 
     active = false
+    // Local callbacks stop immediately; native teardown is best effort during process exit.
     void invoke('unsubscribe_exit', { subscriptionId }).catch(() => {})
   }
 }

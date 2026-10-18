@@ -26,6 +26,19 @@ void startWithRecovery(root, async () => {
   const settings = useSettingsStore(pinia)
   const history = useHistoryStore(pinia)
   let stopExit: (() => void) | undefined
+  let disposal: Promise<void> | undefined
+
+  function disposeApplication(): Promise<void> {
+    // Startup recovery and unmount share the same owner and may both request cleanup.
+    disposal ??= (async () => {
+      stopExit?.()
+      scrollRestoration.cancel()
+      disposePinia(pinia)
+      await platform.dispose()
+    })()
+
+    return disposal
+  }
 
   try {
     stopExit = await platform.prepareExit?.(async () => {
@@ -54,22 +67,17 @@ void startWithRecovery(root, async () => {
       .use(router)
 
     app.onUnmount(() => {
-      stopExit?.()
-      scrollRestoration.cancel()
-      settings.$dispose()
-      history.$dispose()
-      disposePinia(pinia)
-      void platform.dispose()
+      void disposeApplication().catch((cause) => {
+        console.error('Failed to release application resources', cause)
+      })
     })
 
     app.mount(root)
   } catch (error) {
-    stopExit?.()
-    scrollRestoration.cancel()
-    settings.$dispose()
-    history.$dispose()
-    disposePinia(pinia)
-    await platform.dispose()
+    await disposeApplication().catch((cause) => {
+      // Keep the startup failure actionable even when teardown also fails.
+      console.error('Failed to release application resources after startup failure', cause)
+    })
 
     throw error
   }

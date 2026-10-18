@@ -3,7 +3,9 @@ import { ref, watch } from 'vue'
 import { Tv } from '@lucide/vue'
 
 const props = defineProps<{ src: string | null; alt: string }>()
+
 const failed = ref(false)
+
 watch(
   () => props.src,
   () => {
