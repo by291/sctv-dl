@@ -104,11 +104,45 @@ class NavigationTest {
         }
     }
 
+    @Test fun downloadPlaybackOpensImmediatelyAndBackReturnsToDownloads() {
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    SctvAppTheme(AppSettings()) {
+                        Box(Modifier.semantics { testTagsAsResourceId = true }) {
+                            AppNavigationShell { route, navigator, _ ->
+                                when (route) {
+                                    AppRoute.Downloads -> Button(onClick = {
+                                        navigator.open(AppRoute.LocalPlayback("downloaded-video"))
+                                    }) { Text("播放下载视频") }
+                                    is AppRoute.LocalPlayback -> Button(onClick = navigator.back) {
+                                        Text("返回下载列表")
+                                    }
+                                    else -> Text("页面 ${route::class.simpleName}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            requireNotNull(device.wait(Until.findObject(By.res("tab-Downloads")), 5_000)).click()
+            requireNotNull(device.wait(Until.findObject(By.text("播放下载视频")), 5_000)).click()
+            assertNotNull(device.wait(Until.findObject(By.text("返回下载列表")), 5_000))
+            device.waitForIdle()
+            assertNull(device.findObject(By.res("tab-Downloads")))
+
+            requireNotNull(device.findObject(By.text("返回下载列表"))).click()
+            assertNotNull(device.wait(Until.findObject(By.text("播放下载视频")), 5_000))
+            requireNotNull(device.wait(Until.findObject(By.res("tab-Catalogue")), 5_000)).click()
+            assertNotNull(device.wait(Until.findObject(By.text("页面 Catalogue")), 5_000))
+        }
+    }
+
     @Test fun notificationIntentDoesNotOverrideTheRestoredDestination() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val intent = Intent(context, MainActivity::class.java).putExtra("open_downloads", true)
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            assertNotNull(device.wait(Until.findObject(By.text("进行中 · 0")), 5_000))
+            assertNotNull(device.wait(Until.findObject(By.desc("系统下载")), 5_000))
             requireNotNull(device.wait(Until.findObject(By.res("tab-Settings")), 5_000)).click()
             assertNotNull(device.wait(Until.findObject(By.text("显示模式")), 5_000))
             scenario.recreate()

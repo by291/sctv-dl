@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
+import '../../domain/playback/player_environment.dart';
 import '../../domain/programmes/programme.dart';
 import 'playback_controller.dart';
+import 'playback_cover.dart';
+import 'player_controls.dart';
+import 'player_gestures.dart';
+import 'player_window_controller.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -17,7 +21,12 @@ class PlayerPage extends StatefulWidget {
     required this.surfaceBuilder,
     required this.history,
     this.onDownload,
+    this.environment,
+    this.systemVolume,
   });
+
+  final PlayerEnvironment? environment;
+  final Widget? systemVolume;
   final PlaybackInput input;
   final PlaybackBackend backend;
   final Widget Function(PlaybackSession) surfaceBuilder;
@@ -30,29 +39,52 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final PlaybackController controller;
+
   bool fullscreen = false;
   bool downloading = false;
   bool accessibleNavigation = false;
-  double? seeking;
+  bool controlsFocused = false;
+
+  final detailsScroll = ScrollController();
+  final window = PlayerWindowController();
+
   final surfaceKey = GlobalKey();
+  final surfacePointers = <int>{};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
     controller = PlaybackController(
       input: widget.input,
       backend: widget.backend,
       history: widget.history,
     );
+
+    FocusManager.instance.addHighlightModeListener(_highlightChanged);
     unawaited(controller.initialize());
+  }
+
+  void _highlightChanged(FocusHighlightMode mode) => _updateFocusHold();
+
+  void _updateFocusHold() {
+    controller.holdControls(
+      controlsFocused &&
+          FocusManager.instance.highlightMode == FocusHighlightMode.traditional,
+      reason: PlayerControlHold.focus,
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
-    controller.holdControls(accessibleNavigation);
+    controller.holdControls(
+      accessibleNavigation,
+      reason: PlayerControlHold.accessibility,
+    );
   }
 
   @override
@@ -65,18 +97,39 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleFullscreen() async {
+    await controller.cancelGestures();
+    if (!mounted) return;
+
     setState(() => fullscreen = !fullscreen);
-    // Orientation follows the device throughout; only the visible window chrome
-    // changes, so leaving fullscreen never overwrites an OS orientation choice.
-    await SystemChrome.setEnabledSystemUIMode(
-      fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-    );
     controller.showControls();
+    await _setFullscreenWindow(fullscreen);
+  }
+
+  Future<void> _setFullscreenWindow(bool enabled) async {
+    try {
+      await window.setFullscreen(enabled);
+    } catch (error, stack) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('无法调整播放窗口：$error')));
+      } else {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'playback',
+            context: ErrorDescription('while restoring the player window'),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _download() async {
     if (downloading) return;
+
     setState(() => downloading = true);
+
     try {
       await widget.onDownload?.call();
     } catch (error) {
@@ -92,35 +145,42 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    if (fullscreen) {
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    FocusManager.instance.removeHighlightModeListener(_highlightChanged);
+
+    if (window.needsRestoration) {
+      unawaited(_setFullscreenWindow(false));
     }
+
     // Navigator disposes a popped route after its leave transition completes.
     // Gesture cancellation never reaches here; PiP is retained by the controller.
+    detailsScroll.dispose();
     controller.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => PopScope<Object?>(
-    canPop: !fullscreen,
-    onPopInvokedWithResult: (didPop, result) {
-      if (didPop) {
-        unawaited(controller.commitExit());
-      } else if (fullscreen) {
-        unawaited(_toggleFullscreen());
-      }
-    },
-    child: AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final selection = widget.input.selection;
-        final surface = _surface();
-        return Scaffold(
-          backgroundColor: fullscreen ? Colors.black : null,
-          appBar: fullscreen ? null : AppBar(title: const Text('播放')),
-          body: fullscreen
-              ? SafeArea(child: surface)
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      final selection = widget.input.selection;
+      final surface = _surface();
+      final inPip = controller.value.inPip;
+      final videoOnly = fullscreen || inPip;
+
+      return PopScope<Object?>(
+        canPop: !fullscreen || inPip,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) {
+            unawaited(controller.commitExit());
+          } else if (fullscreen && !inPip) {
+            unawaited(_toggleFullscreen());
+          }
+        },
+        child: Scaffold(
+          backgroundColor: videoOnly ? Colors.black : null,
+          appBar: videoOnly ? null : AppBar(title: const Text('播放')),
+          body: videoOnly
+              ? (inPip ? surface : SafeArea(child: surface))
               : SafeArea(
                   top: false,
                   child: LayoutBuilder(
@@ -128,19 +188,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       final surfaceHeight = math.min(
                         constraints.maxHeight,
                         math.max(
-                          96.0,
+                          MediaQuery.textScalerOf(context).scale(1) >= 1.5
+                              ? 208.0
+                              : 176.0,
                           math.min(
                             constraints.maxWidth * 9 / 16,
                             constraints.maxHeight * .65,
                           ),
                         ),
                       );
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           SizedBox(height: surfaceHeight, child: surface),
                           Expanded(
                             child: SingleChildScrollView(
+                              key: const PageStorageKey('player-details'),
+                              controller: detailsScroll,
                               child: _details(selection),
                             ),
                           ),
@@ -149,9 +214,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     },
                   ),
                 ),
-        );
-      },
-    ),
+        ),
+      );
+    },
   );
 
   String? get _qualityFallbackNotice {
@@ -162,6 +227,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.input.sources.any((source) => source.quality == preferred)) {
       return null;
     }
+
     return '未提供${preferred.label}画质，已使用${actual.label}';
   }
 
@@ -181,10 +247,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
-        if (controller.value.source case final source?) ...[
+        if (_qualityFallbackNotice case final String notice) ...[
           const SizedBox(height: 12),
-          Text('当前画质：${source.quality.label}'),
-          if (_qualityFallbackNotice case final String notice) Text(notice),
+          Text(notice),
         ],
         if (widget.input.initialPosition > Duration.zero) ...[
           const SizedBox(height: 12),
@@ -198,11 +263,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           const Padding(padding: EdgeInsets.only(top: 12), child: Text('本地视频')),
         if (widget.onDownload != null &&
             widget.input.localLocation == null) ...[
-          const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            onPressed: downloading ? null : _download,
-            icon: const Icon(Icons.download_outlined),
-            label: Text(downloading ? '正在创建下载…' : '下载当前节目'),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: downloading ? null : _download,
+              icon: const Icon(Icons.download_outlined, size: 20),
+              label: Text(downloading ? '正在创建下载…' : '下载节目'),
+            ),
           ),
         ],
         if (controller.message case final String message)
@@ -213,15 +281,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
-        if (controller.canRetry)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: OutlinedButton.icon(
-              onPressed: controller.retry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重试播放'),
-            ),
-          ),
       ],
     ),
   );
@@ -229,269 +288,148 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Widget _surface() {
     final value = controller.value;
     final session = controller.session;
+
     return Container(
       key: surfaceKey,
       color: Colors.black,
-      child: MouseRegion(
-        onHover: (_) => controller.showControls(),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: controller.showControls,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (session != null) widget.surfaceBuilder(session),
-              if (controller.loading ||
-                  value.buffering ||
-                  controller.switchingSource)
-                const Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    semanticsLabel: '正在缓冲视频',
-                  ),
-                ),
-              if (value.error case final String error when !controller.loading)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      '播放失败：$error',
-                      style: const TextStyle(color: Colors.white),
+      child: Focus(
+        onKeyEvent: (_, _) {
+          controller.showControls();
+          return KeyEventResult.ignored;
+        },
+        onFocusChange: (focused) {
+          controlsFocused = focused;
+          _updateFocusHold();
+        },
+        child: MouseRegion(
+          onHover: (_) => controller.showControls(),
+          child: Semantics(
+            label: value.inPip ? null : '显示播放控件',
+            onTap: value.inPip ? null : controller.showControls,
+            child: Listener(
+              onPointerDown: (event) {
+                surfacePointers.add(event.pointer);
+                // Observe every video descendant without entering its gesture
+                // arena, including native controls and the transport slider.
+                if (surfacePointers.length > 1) {
+                  unawaited(controller.cancelGestures());
+                  controller.showControls();
+                }
+              },
+              onPointerUp: (event) => surfacePointers.remove(event.pointer),
+              onPointerCancel: (event) => surfacePointers.remove(event.pointer),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (session != null) widget.surfaceBuilder(session),
+                  if (!value.inPip && widget.input.selection != null)
+                    PlaybackCover(
+                      selection: widget.input.selection!,
+                      ready: value.firstFrameRendered,
+                      shared: !fullscreen,
                     ),
-                  ),
-                ),
-              if (controller.controlsVisible) _controls(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _controls() {
-    final value = controller.value;
-    final duration = value.duration;
-    final enabled =
-        value.initialized &&
-        value.error == null &&
-        !controller.loading &&
-        !controller.switchingSource &&
-        !controller.canRetry;
-    final accessible = MediaQuery.accessibleNavigationOf(context);
-    return Focus(
-      onFocusChange: (focused) =>
-          controller.holdControls(focused || accessible),
-      child: Theme(
-        data: ThemeData.dark(useMaterial3: true),
-        child: DefaultTextStyle.merge(
-          style: const TextStyle(color: Colors.white),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact =
-                  constraints.maxHeight < 250 ||
-                  MediaQuery.textScalerOf(context).scale(1) > 1.5;
-              final actions = <Widget>[
-                if (compact)
-                  IconButton.filledTonal(
-                    tooltip: value.playing ? '暂停' : '播放',
-                    onPressed: enabled ? controller.togglePlayback : null,
-                    icon: Icon(value.playing ? Icons.pause : Icons.play_arrow),
-                  ),
-                _option<double>(
-                  label: '${value.speed}×',
-                  tooltip: '播放速度',
-                  enabled: enabled,
-                  values: const [.5, .75, 1, 1.25, 1.5, 1.75, 2],
-                  describe: (speed) => '$speed×',
-                  selected: value.speed,
-                  onSelected: controller.setSpeed,
-                ),
-                if (widget.input.localLocation == null &&
-                    widget.input.sources.length > 1)
-                  _option<VideoSource>(
-                    label: value.source?.quality.label ?? '画质',
-                    tooltip: '视频画质',
-                    enabled: enabled,
-                    values: widget.input.sources,
-                    describe: (source) => source.quality.label,
-                    selected: value.source,
-                    onSelected: controller.selectSource,
-                  ),
-                if (value.supportsPip)
-                  IconButton(
-                    tooltip: '画中画',
-                    onPressed: enabled
-                        ? controller.enterPictureInPicture
-                        : null,
-                    icon: const Icon(Icons.picture_in_picture_alt),
-                  ),
-                IconButton(
-                  tooltip: fullscreen ? '退出全屏' : '全屏',
-                  onPressed: _toggleFullscreen,
-                  icon: Icon(
-                    fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                  ),
-                ),
-              ];
-              return DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black87],
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    if (compact)
-                      const Spacer()
-                    else
-                      Expanded(
-                        child: Center(
-                          child: IconButton.filledTonal(
-                            tooltip: value.playing ? '暂停' : '播放',
-                            onPressed: enabled
-                                ? controller.togglePlayback
-                                : null,
-                            iconSize: compact ? 28 : 40,
-                            icon: Icon(
-                              value.playing ? Icons.pause : Icons.play_arrow,
-                            ),
-                          ),
+                  if (!value.inPip) ...[
+                    PlayerGestures(
+                      controller: controller,
+                      fullscreen: fullscreen,
+                      environment: widget.environment,
+                    ),
+                    if (fullscreen &&
+                        controller.controlsVisible &&
+                        widget.systemVolume != null)
+                      Positioned(
+                        top: 4,
+                        left: 24,
+                        child: _SystemVolumeInteraction(
+                          controller: controller,
+                          child: widget.systemVolume!,
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          Text(
-                            _time(
-                              Duration(
-                                milliseconds:
-                                    seeking?.round() ??
-                                    value.position.inMilliseconds,
-                              ),
-                            ),
-                            textScaler: TextScaler.noScaling,
-                          ),
-                          Expanded(
-                            child: Slider(
-                              min: 0,
-                              max: duration == null
-                                  ? 1
-                                  : duration.inMilliseconds.toDouble().clamp(
-                                      1,
-                                      double.infinity,
-                                    ),
-                              value:
-                                  (seeking ??
-                                          value.position.inMilliseconds
-                                              .toDouble())
-                                      .clamp(
-                                        0,
-                                        duration?.inMilliseconds.toDouble() ??
-                                            1,
-                                      ),
-                              semanticFormatterCallback: (milliseconds) =>
-                                  _time(
-                                    Duration(
-                                      milliseconds: milliseconds.round(),
-                                    ),
-                                  ),
-                              onChangeStart: enabled && duration != null
-                                  ? (_) => controller.holdControls(true)
-                                  : null,
-                              onChanged: enabled && duration != null
-                                  ? (position) =>
-                                        setState(() => seeking = position)
-                                  : null,
-                              onChangeEnd: enabled && duration != null
-                                  ? (position) async {
-                                      await controller.seek(
-                                        Duration(
-                                          milliseconds: position.round(),
-                                        ),
-                                      );
-                                      if (mounted) {
-                                        setState(() => seeking = null);
-                                      }
-                                      controller.holdControls(accessible);
-                                    }
-                                  : null,
-                            ),
-                          ),
-                          Text(
-                            duration == null ? '--:--' : _time(duration),
-                            textScaler: TextScaler.noScaling,
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      height: 48,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: actions,
+                    if (controller.loading ||
+                        value.buffering ||
+                        controller.switchingSource)
+                      Center(
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                          semanticsLabel: '正在缓冲视频',
                         ),
                       ),
-                    ),
+                    if (controller.controlsVisible)
+                      PlayerControls(
+                        controller: controller,
+                        fullscreen: fullscreen,
+                        onFullscreen: _toggleFullscreen,
+                      ),
                   ],
-                ),
-              );
-            },
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
-
-  Widget _option<T>({
-    required String label,
-    required String tooltip,
-    required bool enabled,
-    required List<T> values,
-    required String Function(T) describe,
-    required T? selected,
-    required Future<void> Function(T) onSelected,
-  }) => PopupMenuButton<T>(
-    tooltip: tooltip,
-    enabled: enabled,
-    initialValue: selected,
-    position: PopupMenuPosition.over,
-    offset: const Offset(0, -48),
-    constraints: const BoxConstraints(
-      minWidth: 120,
-      maxWidth: 220,
-      maxHeight: 280,
-    ),
-    onOpened: () => controller.holdControls(true),
-    onCanceled: () =>
-        controller.holdControls(MediaQuery.accessibleNavigationOf(context)),
-    onSelected: (value) async {
-      await onSelected(value);
-      if (mounted) controller.holdControls(accessibleNavigation);
-    },
-    itemBuilder: (_) => [
-      for (final value in values)
-        PopupMenuItem(value: value, child: Text(describe(value))),
-    ],
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48, minWidth: 64),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(label),
-        ),
-      ),
-    ),
-  );
 
   String _time(Duration duration) {
     final seconds = duration.inSeconds.clamp(0, 1 << 32);
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
     final remainder = (seconds % 60).toString().padLeft(2, '0');
+
     return '$minutes:$remainder';
   }
+}
+
+/// Keeps the public native volume view alive for the complete interaction.
+class _SystemVolumeInteraction extends StatefulWidget {
+  const _SystemVolumeInteraction({
+    required this.controller,
+    required this.child,
+  });
+
+  final PlaybackController controller;
+  final Widget child;
+
+  @override
+  State<_SystemVolumeInteraction> createState() =>
+      _SystemVolumeInteractionState();
+}
+
+class _SystemVolumeInteractionState extends State<_SystemVolumeInteraction> {
+  final pointers = <int>{};
+  bool focused = false;
+
+  void updateHold() => widget.controller.holdControls(
+    pointers.isNotEmpty || focused,
+    reason: PlayerControlHold.systemVolume,
+  );
+
+  @override
+  void dispose() {
+    widget.controller.detachControlHold(PlayerControlHold.systemVolume);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    onFocusChange: (value) {
+      focused = value;
+      updateHold();
+    },
+    child: Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) {
+        pointers.add(event.pointer);
+        updateHold();
+      },
+      onPointerUp: (event) {
+        pointers.remove(event.pointer);
+        updateHold();
+      },
+      onPointerCancel: (event) {
+        pointers.remove(event.pointer);
+        updateHold();
+      },
+      child: widget.child,
+    ),
+  );
 }

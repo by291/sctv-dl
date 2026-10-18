@@ -2,8 +2,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 
 import { reportHttpFailure } from '../http-diagnostics.ts'
-import { contentDisposition } from './proxy-policy.ts'
-import { programmeHeaders } from './programme-headers.ts'
+import { proxyRequestHeaders, proxyResponseHeaders } from './proxy-headers.ts'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProxyTarget } from './proxy-policy.ts'
@@ -13,32 +12,23 @@ export async function streamUpstream(
   response: ServerResponse,
   target: ProxyTarget,
 ): Promise<void> {
-  const media = target.kind === 'media'
+  const diagnosticPath = target.kind === 'media' ? '/media' : '/api'
   const controller = new AbortController()
   const abort = () => controller.abort()
   request.once('aborted', abort)
   response.once('close', abort)
 
-  const timer = setTimeout(abort, 20_000)
+  // Only response headers have a deadline; downstream disconnect owns the whole transfer.
+  const headerDeadline = setTimeout(abort, 20_000)
+
   try {
-    const headers: Record<string, string> = media
-      ? { Referer: 'https://scgc.video.play/', 'Accept-Encoding': 'identity' }
-      : programmeHeaders(request, response)
-    if (media && request.headers.range) {
-      headers.Range = request.headers.range
-    }
-
-    if (media && typeof request.headers['if-range'] === 'string') {
-      headers['If-Range'] = request.headers['if-range']
-    }
-
     const upstream = await fetch(target.url, {
       method: request.method,
-      headers,
+      headers: proxyRequestHeaders(request, response, target),
       redirect: 'manual',
       signal: controller.signal,
     })
-    clearTimeout(timer)
+    clearTimeout(headerDeadline)
 
     if (upstream.status >= 300 && upstream.status < 400) {
       await upstream.body?.cancel()
@@ -50,7 +40,7 @@ export async function streamUpstream(
       if (upstream.status >= 500) {
         reportHttpFailure(
           request.method,
-          media ? '/media' : '/api',
+          diagnosticPath,
           new Error(`Upstream returned HTTP ${upstream.status}`),
         )
       }
@@ -62,34 +52,8 @@ export async function streamUpstream(
       return
     }
 
-    const copied: Record<string, string> = {
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    }
-    for (const key of [
-      'content-type',
-      'content-length',
-      'content-range',
-      'accept-ranges',
-      'etag',
-      'last-modified',
-    ]) {
-      const value = upstream.headers.get(key)
-      // fetch decompresses encoded bodies, so their original length is no longer valid.
-      if (key === 'content-length' && upstream.headers.has('content-encoding')) {
-        continue
-      }
+    response.writeHead(upstream.status, proxyResponseHeaders(upstream, target))
 
-      if (value) {
-        copied[key] = value
-      }
-    }
-
-    if (target.kind === 'media' && target.filename !== null) {
-      copied['Content-Disposition'] = contentDisposition(target.filename)
-    }
-
-    response.writeHead(upstream.status, copied)
     if (request.method === 'HEAD' || !upstream.body) {
       response.end()
 
@@ -100,7 +64,7 @@ export async function streamUpstream(
     source.once('error', (cause) => {
       // pipeline destroys the response on source errors, so capture them before close aborts it.
       if (!controller.signal.aborted) {
-        reportHttpFailure(request.method, media ? '/media' : '/api', cause)
+        reportHttpFailure(request.method, diagnosticPath, cause)
       }
     })
 
@@ -110,7 +74,7 @@ export async function streamUpstream(
       return
     }
 
-    reportHttpFailure(request.method, media ? '/media' : '/api', cause)
+    reportHttpFailure(request.method, diagnosticPath, cause)
 
     if (response.headersSent) {
       response.destroy()
@@ -120,7 +84,7 @@ export async function streamUpstream(
         .end('无法连接节目服务，请稍后重试')
     }
   } finally {
-    clearTimeout(timer)
+    clearTimeout(headerDeadline)
     request.off('aborted', abort)
     response.off('close', abort)
   }

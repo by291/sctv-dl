@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onDeactivated, onMounted, ref, shallowRef } from 'vue'
 
 import { RouterLink } from 'vue-router'
 import { NButton, NCheckbox, useMessage } from 'naive-ui'
 import { ArrowLeft, CalendarDays, Star } from '@lucide/vue'
 
+import { useArchiveBrowseState } from '@/features/programmes/composables/useArchiveBrowseState'
+import { useArchiveBrowseRestoration } from '@/features/programmes/composables/useArchiveBrowseRestoration'
+import { usePlatform } from '@/shared/platform/usePlatform'
+import ProgrammeUpdateNotice from '@/features/programmes/components/ProgrammeUpdateNotice.vue'
 import { errorMessage } from '@/shared/utils/errors'
 import { useProgrammeDownloads } from '@/features/programmes/composables/useProgrammeDownloads'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
@@ -18,10 +22,9 @@ import ProgrammeContentList from '@/features/programmes/components/ProgrammeCont
 import ProgrammePreviewDialog from '@/features/programmes/components/ProgrammePreviewDialog.vue'
 import ProgrammeDownloadButton from '@/features/programmes/components/ProgrammeDownloadButton.vue'
 
-import type { ContentRef } from '@shared/contracts/programmes'
+import type { PreviewInput } from '@/features/programmes/model/playback-state'
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
-import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
 
 const props = defineProps<{ id: string }>()
 
@@ -36,6 +39,14 @@ const isFavourite = computed(
   () => !!programme.value && settings.favourites.includes(programme.value.id),
 )
 
+const platform = usePlatform()
+const preview = ref<ProgrammeContent | null>(null)
+const previewInput = shallowRef<PreviewInput | null>(null)
+const browse = useArchiveBrowseState(programmeId, platform.programmeCache)
+const interactionHold = computed(
+  () => !!preview.value || selected.value.length > 0 || preparingIds.value.length > 0,
+)
+
 const {
   dates,
   selectedDate,
@@ -46,29 +57,40 @@ const {
   contentError,
   loadDates,
   loadContents,
-} = useProgrammeArchive(programmeId)
+  pendingUpdate,
+  cached,
+  fetchedAt,
+  refreshError,
+  cacheWarning,
+  acceptUpdate,
+  selectionNotice,
+  datesLoaded,
+  contentsLoaded,
+} = useProgrammeArchive(programmeId, platform.programmes, platform.programmeCache, {
+  interactionHold,
+  restoration: { ready: () => browse.ready, saved: browse.saved },
+})
 const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useContentSelection(
   contents,
   programmeName,
   selectedDate,
 )
 
-const preview = ref<ProgrammeContent | null>(null)
-const contentSortOrder = ref<ContentSortOrder>('asc')
 const { preparingIds, prepareDownloads } = useProgrammeDownloads()
 
 const selectedDateId = computed(
   () => dates.value.find((date) => date.date === selectedDate.value)?.id || '',
 )
-const previewReference = computed<ContentRef | null>(() =>
-  preview.value
-    ? {
-        programmeId: props.id,
-        dateId: selectedDateId.value,
-        contentId: preview.value.id,
-      }
-    : null,
-)
+const { contentSortOrder, preserveScrollAfter } = useArchiveBrowseRestoration({
+  programmeId,
+  browse,
+  datesLoaded,
+  contentsLoaded,
+  selectedDateId,
+  selectedDate,
+})
+
+const previewReference = computed(() => previewInput.value?.metadata.content ?? null)
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
 )
@@ -92,7 +114,24 @@ const selectionButtonTheme = {
 }
 
 function openPreview(content: ProgrammeContent) {
-  preview.value = content
+  if (!selectedDate.value || !selectedDateId.value) {
+    return
+  }
+
+  // Pin IDs and presentation before archive requests can replace their source state.
+  const pinned = { ...content }
+  previewInput.value = {
+    kind: 'online',
+    content: pinned,
+    metadata: {
+      content: { programmeId: props.id, dateId: selectedDateId.value, contentId: content.id },
+      programmeName: programmeName.value,
+      broadcastDate: selectedDate.value,
+      title: content.title,
+      cover: content.cover,
+    },
+  }
+  preview.value = pinned
 }
 
 async function downloadContents(items: ProgrammeContent[], quality: Quality) {
@@ -129,7 +168,22 @@ async function downloadContents(items: ProgrammeContent[], quality: Quality) {
   }
 }
 
-watch(contents, () => {
+function refreshArchive() {
+  void loadDates()
+  if (selectedDateId.value) {
+    void loadContents()
+  }
+}
+
+async function applyUpdate() {
+  if (interactionHold.value) {
+    return
+  }
+
+  await preserveScrollAfter(acceptUpdate)
+}
+
+onDeactivated(() => {
   preview.value = null
 })
 
@@ -187,13 +241,30 @@ onMounted(() => {
       </NButton>
     </section>
 
+    <ProgrammeUpdateNotice
+      :pending="pendingUpdate"
+      :held="interactionHold"
+      :cached="cached"
+      :fetched-at="fetchedAt"
+      :refresh-error="refreshError"
+      :cache-warning="cacheWarning || browse.warning.value"
+      @accept="applyUpdate"
+      @retry="refreshArchive"
+    />
+    <p
+      v-if="selectionNotice"
+      class="archive-selection-notice"
+      role="status"
+    >
+      {{ selectionNotice }}
+    </p>
     <div class="content-panel">
       <section class="date-panel">
         <ProgrammeDatePicker
           v-model="selectedDate"
           :dates="dates"
           :loading="loadingDates"
-          @refresh="loadDates"
+          @refresh="refreshArchive"
         />
 
         <StatePanel
@@ -295,11 +366,17 @@ onMounted(() => {
       v-model="preview"
       :quality="settings.quality"
       :reference="previewReference"
+      :input="previewInput"
     />
   </div>
 </template>
 
 <style scoped>
+.archive-selection-notice {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .back-link {
   display: inline-flex;
   align-items: center;

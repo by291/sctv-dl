@@ -21,9 +21,10 @@ const programmeApi = vi.hoisted(() => ({
 }))
 
 vi.mock('@/shared/platform/usePlatform', async () => {
-  const { createWebDownloads } = await import('@/features/programmes/api/downloads.web')
+  const { createPlatformFixture } = await import('@/shared/platform/platform.test-support')
+  const platform = createPlatformFixture()
 
-  return { usePlatform: () => ({ programmes: programmeApi, downloads: createWebDownloads() }) }
+  return { usePlatform: () => ({ ...platform, programmes: programmeApi }) }
 })
 
 let wrapper: VueWrapper
@@ -45,7 +46,11 @@ beforeEach(async () => {
   sources = []
   captures = []
   destinationRendered = false
-  vi.mocked(programmeApi.dates).mockResolvedValue([])
+  programmeApi.dates.mockReset().mockResolvedValue([])
+  programmeApi.contents.mockReset().mockResolvedValue([])
+  programmeApi.programmes
+    .mockReset()
+    .mockResolvedValue([{ id: '1', name: 'Programme', cover: null }])
   startTransition = vi.fn((update: () => Promise<void>) => {
     sources = namedCovers()
     const before = document.querySelector('.detail-cover') ? ['detail-cover'] : sources
@@ -53,7 +58,11 @@ beforeEach(async () => {
       .then(update)
       .then(() => {
         destinationRendered = Boolean(document.querySelector('.detail-cover'))
-        captures.push({ before, after: namedCovers(), scroll: window.scrollY })
+        captures.push({
+          before,
+          after: namedCovers(),
+          scroll: document.getElementById('workspace-scroll')?.scrollTop ?? 0,
+        })
       })
 
     return {
@@ -73,14 +82,14 @@ beforeEach(async () => {
   const pinia = createPinia()
   setActivePinia(pinia)
   const catalogue = useProgrammeCatalogueStore()
-  catalogue.programmes = [{ id: '1', name: 'Programme', cover: null }]
-  catalogue.updatedAt = new Date()
+  await catalogue.load()
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: ProgrammeLibraryView },
       { path: '/programmes/:id', component: async () => ProgrammeArchiveView, props: true },
-      { path: '/settings', component: ProgrammeLibraryView },
+      { path: '/settings', component: { template: '<h1>Settings</h1>' } },
+      { path: '/history', component: { template: '<h1>History</h1>' } },
     ],
   })
   await router.push('/')
@@ -134,10 +143,11 @@ describe('programme cover navigation', () => {
     { link: '.featured-visual', cover: 'featured-image', history: true },
   ])('returns to the original $cover (history: $history)', async ({ link, cover, history }) => {
     const originalCover = wrapper.get(`.${cover}`).element
-    window.scrollTo({ top: 480, left: 0 })
+    const workspace = wrapper.get<HTMLElement>('#workspace-scroll').element
+    workspace.scrollTo({ top: 480, left: 0 })
     await wrapper.get(link).trigger('click')
     await flushPromises()
-    window.scrollTo({ top: 0, left: 0 })
+    workspace.scrollTo({ top: 0, left: 0 })
 
     if (history) {
       router.back()
@@ -170,6 +180,68 @@ describe('programme cover navigation', () => {
     expect(router.currentRoute.value.path).toBe('/')
     expect(startTransition).toHaveBeenCalledTimes(3)
     expect(captures.at(-1)?.after[0]).toContain('featured-image')
+    expect(namedCovers()).toEqual([])
+  })
+
+  it.each([
+    { link: '.programme-cover', cover: 'programme-image', history: false },
+    { link: '.featured-visual', cover: 'featured-image', history: false },
+    { link: '.programme-cover', cover: 'programme-image', history: true },
+  ])(
+    'retains the $cover return animation across tab switches (history: $history)',
+    async ({ link, cover, history }) => {
+      const original = wrapper.get(`.${cover}`).element
+      wrapper.get<HTMLElement>('#workspace-scroll').element.scrollTo({ top: 480 })
+      await wrapper.get(link).trigger('click')
+      await flushPromises()
+      await router.push('/settings')
+      await flushPromises()
+
+      if (history) {
+        router.back()
+      } else {
+        await wrapper.get('.nav-link').trigger('click')
+      }
+
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/programmes/1')
+      expect(startTransition).toHaveBeenCalledOnce()
+
+      if (history) {
+        router.back()
+      } else {
+        await wrapper.get('.back-link').trigger('click')
+      }
+
+      await flushPromises()
+
+      expect(router.currentRoute.value.path).toBe('/')
+      expect(startTransition).toHaveBeenCalledTimes(2)
+      expect(captures[1]?.before).toEqual(['detail-cover'])
+      expect(captures[1]?.after).toHaveLength(1)
+      expect(captures[1]?.after[0]).toContain(cover)
+      expect(captures[1]?.scroll).toBe(480)
+      expect(wrapper.get(`.${cover}`).element).toBe(original)
+      expect(namedCovers()).toEqual([])
+    },
+  )
+
+  it('releases the old cover association when a home link replaces the hidden detail', async () => {
+    await wrapper.get('.programme-cover').trigger('click')
+    await flushPromises()
+    await router.push('/settings')
+    await flushPromises()
+    await wrapper.get('.brand').trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('.programme-cover').exists()).toBe(true))
+
+    // A later direct entry has no animated source and must not reuse the disposed detail's hook.
+    await router.push('/programmes/1')
+    await vi.waitFor(() => expect(wrapper.find('.detail-cover').exists()).toBe(true))
+    await router.push('/')
+    await vi.waitFor(() => expect(wrapper.find('.programme-cover').exists()).toBe(true))
+
+    expect(startTransition).toHaveBeenCalledOnce()
     expect(namedCovers()).toEqual([])
   })
 
@@ -400,7 +472,9 @@ describe('programme cover navigation', () => {
   it('uses ordinary navigation if the original source has disappeared', async () => {
     await wrapper.get('.programme-cover').trigger('click')
     await flushPromises()
-    useProgrammeCatalogueStore().programmes = []
+    programmeApi.programmes.mockResolvedValueOnce([])
+    await useProgrammeCatalogueStore().load(true)
+    useProgrammeCatalogueStore().acceptUpdate()
     await flushPromises()
     await wrapper.get('.back-link').trigger('click')
     await vi.waitFor(() => expect(wrapper.find('.library-view').exists()).toBe(true))
@@ -441,7 +515,9 @@ describe('programme cover navigation', () => {
     })
     const returning = router.push('/')
     await flushPromises()
-    useProgrammeCatalogueStore().programmes = replacement
+    programmeApi.programmes.mockResolvedValueOnce(replacement)
+    await useProgrammeCatalogueStore().load(true)
+    useProgrammeCatalogueStore().acceptUpdate()
     await flushPromises()
     await runUpdate()
     await returning

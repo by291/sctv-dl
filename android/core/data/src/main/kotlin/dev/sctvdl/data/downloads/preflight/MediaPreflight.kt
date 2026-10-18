@@ -9,7 +9,17 @@ internal data class ProbeResponse(
     val status: Int,
     val contentType: String?,
     val contentLength: Long? = null,
-    val totalBytes: Long? = null
+    val totalBytes: Long? = null,
+    val etag: String? = null,
+    val lastModified: String? = null,
+    val acceptsRanges: Boolean = false
+)
+
+internal data class MediaIdentity(
+    val totalBytes: Long?,
+    val etag: String?,
+    val lastModified: String?,
+    val acceptsRanges: Boolean
 )
 
 internal fun interface MediaProbe {
@@ -18,7 +28,9 @@ internal fun interface MediaProbe {
 
 /** Validates media headers without downloading the episode; a missing total size remains unknown. */
 internal class MediaPreflight(private val probe: MediaProbe) {
-    suspend fun check(url: String): Long? {
+    suspend fun check(url: String): Long? = inspect(url).totalBytes
+
+    suspend fun inspect(url: String): MediaIdentity {
         val target = UpstreamUrlPolicy.media(url) ?: throw AppException(AppError(ErrorKind.UnsafeUrl, "视频地址不受支持"))
 
         var response = probe.request(target, "HEAD", null)
@@ -38,12 +50,18 @@ internal class MediaPreflight(private val probe: MediaProbe) {
         }
 
         // Content-Length on a partial response describes the probe, not the complete download.
-        return (
+        val total = (
             if (range && response.status == 206) {
                 response.totalBytes
             } else {
                 response.contentLength
             }
             )?.takeIf { it > 0 }
+        return MediaIdentity(
+            total,
+            response.etag?.takeUnless { it.startsWith("W/", true) },
+            response.lastModified,
+            response.acceptsRanges || response.status == 206
+        )
     }
 }

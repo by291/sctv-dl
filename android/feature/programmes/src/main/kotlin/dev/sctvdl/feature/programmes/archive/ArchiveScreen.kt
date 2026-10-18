@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,11 +48,13 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
+import dev.sctvdl.design.components.PrimaryTopAppBar
 import dev.sctvdl.design.components.StatePanel
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.download.DownloadRequest
 import dev.sctvdl.domain.media.videoVariants
 import dev.sctvdl.domain.programme.BroadcastDate
+import dev.sctvdl.domain.programme.ContentRef
 import dev.sctvdl.domain.programme.ProgrammeContent
 import dev.sctvdl.feature.programmes.archive.components.ArchiveContentPlaceholder
 import dev.sctvdl.feature.programmes.archive.components.ArchiveHeader
@@ -87,12 +88,13 @@ internal fun ArchiveScreen(
     onDownload: (List<DownloadRequest>) -> Unit,
     onApplyUpdates: () -> Unit = {},
     onToggleClipSort: () -> Unit = {},
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onRetryFavourites: () -> Unit = {}
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
 
-    val errors = listOfNotNull(state.dates.error, state.contents.error).distinctBy { it.message }
+    val errors = listOfNotNull(state.dates.error, state.contents.error, state.contextError).distinctBy { it.message }
     val loadingDates = state.dates.data == null && state.dates.error == null
     val loadingContents = state.date != null && state.contents.data == null && state.contents.error == null
     val largeText = LocalDensity.current.fontScale >= 1.5f
@@ -108,9 +110,8 @@ internal fun ArchiveScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
+        PrimaryTopAppBar(
             modifier = Modifier.testTag("archive-toolbar"),
-            expandedHeight = if (largeText) 88.dp else 64.dp,
             title = { Text(if (state.selectionMode) "已选 ${state.selectedIds.size} 个" else "栏目详情") },
             navigationIcon = {
                 IconButton(onClick = if (state.selectionMode) onExitSelection else onBack) {
@@ -162,6 +163,11 @@ internal fun ArchiveScreen(
                         item(key = "dates") {
                             BroadcastDates(state.dates.data.orEmpty(), state.date, onDate, { showDates = true })
                         }
+                    }
+                }
+                state.favouriteError?.let { error ->
+                    item(key = "favourite-error") {
+                        CachedErrorBanner(error, false, onRetryFavourites, retryLabel = "重试")
                     }
                 }
                 if (errors.isNotEmpty()) {
@@ -233,7 +239,11 @@ internal fun ArchiveScreen(
                                     {
                                         onPlay(content)
                                     },
-                                    { onToggle(content.id) }
+                                    { onToggle(content.id) },
+                                    playbackReference = state.date?.let {
+                                        ContentRef(state.programmeId, it.id, content.id)
+                                    },
+                                    programmeCoverUrl = state.programme?.coverUrl
                                 )
                             }
                         }
@@ -283,7 +293,11 @@ internal fun ArchiveScreen(
                                         onPlay(content)
                                     },
                                     { onToggle(content.id) },
-                                    broadcastDate = state.date?.date
+                                    broadcastDate = state.date?.date,
+                                    playbackReference = state.date?.let {
+                                        ContentRef(state.programmeId, it.id, content.id)
+                                    },
+                                    programmeCoverUrl = state.programme?.coverUrl
                                 )
                             }
                         }
@@ -319,20 +333,7 @@ internal fun ArchiveScreen(
             selected.flatMap(::videoVariants).distinctBy { it.quality }
         }
         DownloadQualitySheet(variants, selected.size, { quality ->
-            val date = state.date
-            if (date != null) {
-                onDownload(
-                    selected.map {
-                        DownloadRequest(
-                            state.programme?.name ?: "节目",
-                            date.date,
-                            it,
-                            quality,
-                            wifiOnly
-                        )
-                    }
-                )
-            }
+            onDownload(archiveDownloadRequests(state, downloadIds.toSet(), quality, wifiOnly))
             downloadIds = arrayListOf()
         }, { downloadIds = arrayListOf() })
     }

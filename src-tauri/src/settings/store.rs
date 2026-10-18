@@ -21,6 +21,7 @@ pub(super) fn save_value<R: Runtime>(
         } else {
             store.delete(key);
         }
+
         // The plugin saves registered stores on exit even with auto-save disabled.
         // Unregister failed writes so that shutdown cannot overwrite a damaged file.
         store.close_resource();
@@ -40,6 +41,7 @@ pub fn installation_id<R: Runtime>(store: &Store<R>) -> Result<String> {
     if result.is_err() {
         store.close_resource();
     }
+
     result.map_err(|error| error.reported("load installation identity"))
 }
 

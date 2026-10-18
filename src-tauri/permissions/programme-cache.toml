@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "programme-cache"
+description = "Read, update and clear bounded programme metadata and archive browse state."
+commands.allow = ["read_programme_cache", "write_programme_cache", "read_archive_browse_state", "write_archive_browse_state", "clear_programme_cache"]

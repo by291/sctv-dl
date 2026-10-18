@@ -21,15 +21,17 @@ let router: ReturnType<typeof createRouter>
 beforeEach(async () => {
   localStorage.clear()
   pinia = createPinia()
-  createApp({}).provide(platformKey, createPlatformFixture()).use(pinia)
-  setActivePinia(pinia)
-  useProgrammeCatalogueStore().programmes = [
-    { id: 'c', name: 'Charlie', cover: null },
-    { id: 'b', name: 'Bravo', cover: null },
-    { id: 'a', name: 'Alpha', cover: null },
-    { id: 'd', name: 'Delta', cover: null },
+  const platform = createPlatformFixture()
+  platform.programmes.programmes = async () => [
+    { id: '3', name: 'Charlie', cover: null },
+    { id: '2', name: 'Bravo', cover: null },
+    { id: '1', name: 'Alpha', cover: null },
+    { id: '4', name: 'Delta', cover: null },
   ]
-  useSettingsStore().favourites = ['d', 'b']
+  createApp({}).provide(platformKey, platform).use(pinia)
+  setActivePinia(pinia)
+  await useProgrammeCatalogueStore().load()
+  useSettingsStore().favourites = ['4', '2']
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -65,10 +67,10 @@ describe('programme catalogue ordering', () => {
 
     expect(displayedNames()).toEqual(expected)
     expect(useProgrammeCatalogueStore().programmes.map((programme) => programme.id)).toEqual([
-      'c',
-      'b',
-      'a',
-      'd',
+      '3',
+      '2',
+      '1',
+      '4',
     ])
   })
 
@@ -86,7 +88,7 @@ describe('programme catalogue ordering', () => {
       await wrapper.find('[aria-label="取消收藏Bravo"]').trigger('click')
       expect(displayedNames()).toEqual(originalNames)
       expect(wrapper.get('[aria-label="收藏Bravo"]').attributes('aria-pressed')).toBe('false')
-      expect(useSettingsStore().favourites).toEqual(['d', 'c'])
+      expect(useSettingsStore().favourites).toEqual(['4', '3'])
     },
   )
 

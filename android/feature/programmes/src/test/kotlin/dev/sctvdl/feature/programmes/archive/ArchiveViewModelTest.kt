@@ -220,7 +220,15 @@ class ArchiveViewModelTest {
         assertFalse("22" in model.uiState.value.selectedIds)
         model.selectFullEpisodes()
         assertEquals(setOf("20"), model.uiState.value.selectedIds)
-        assertEquals("20", model.downloadRequests(Quality.Standard, false).single().content.id)
+        assertEquals(
+            "20",
+            archiveDownloadRequests(
+                model.uiState.value,
+                model.uiState.value.selectedIds,
+                Quality.Standard,
+                false
+            ).single().content.id
+        )
         model.selectDate(older)
         runCurrent()
         assertTrue(model.uiState.value.selectedIds.isEmpty())

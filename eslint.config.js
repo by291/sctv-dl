@@ -38,6 +38,10 @@ const sharedImportPatterns = [
 const contractImportPatterns = [
   ...sharedImportPatterns,
   {
+    regex: '(?:^|/)tooling(?:/|$)|^(?:vite|vitest)(?:/|$)|^@vitejs/',
+    message: 'Shared contracts must not depend on build or test tooling.',
+  },
+  {
     regex: `^node:|^(?:${builtinModules.join('|')})(?:/|$)|^@tauri-apps/`,
     message: 'Shared contracts must not depend on Node or native platform APIs.',
   },

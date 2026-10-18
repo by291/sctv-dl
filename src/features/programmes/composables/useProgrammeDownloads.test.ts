@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { createNativeDownloadFixture } from '@/shared/platform/platform.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
@@ -34,11 +35,9 @@ function mountDownloads(start: NativeDownloadPort['start']) {
   const platform = createPlatformFixture()
   const pinia = createPinia()
   platform.downloads = {
+    ...createNativeDownloadFixture(),
     kind: 'native',
     start,
-    list: async () => [],
-    subscribe: async () => () => {},
-    cancel: async () => {},
     getDirectory: async () => null,
     chooseDirectory: async () => null,
   }
@@ -92,7 +91,12 @@ it('blocks duplicate preparation until directory selection is cancelled, then al
           finish = resolve
         }),
     )
-    .mockResolvedValue({ kind: 'native', taskIds: ['job'], usedFallback: false, failures: [] })
+    .mockResolvedValue({
+      kind: 'native',
+      taskIds: ['job'],
+      usedFallback: false,
+      failures: [],
+    })
   const { downloads, tasks } = mountDownloads(start)
 
   const first = downloads.prepareDownloads([content], '2', 'standard', '1')

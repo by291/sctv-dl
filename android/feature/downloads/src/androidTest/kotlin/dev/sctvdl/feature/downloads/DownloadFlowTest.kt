@@ -2,6 +2,7 @@ package dev.sctvdl.feature.downloads
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.sctvdl.domain.download.DownloadState
@@ -54,24 +55,26 @@ class DownloadFlowTest {
                 )
             }
         }
-        compose.onNodeWithText("已下载 4.0 KiB").assertIsDisplayed()
+        compose.onNodeWithText("4.0 KiB · 大小未知").assertIsDisplayed()
         compose.onNodeWithText("暂停").assertDoesNotExist()
-        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithText("取消下载").performClick()
+        compose.runOnIdle { assertEquals(null, cancelled) }
+        compose.onNodeWithText("确认取消下载").performClick()
         compose.runOnIdle { assertEquals("task", cancelled) }
     }
 
-    @Test fun failedTransferRemainsVisibleAndOffersRetryInTheActiveSection() {
+    @Test fun failedTransferOffersRetryInTheUnfinishedSection() {
         var retried: String? = null
         compose.setContent {
             SctvAppTheme(AppSettings()) {
                 DownloadsScreen(
-                    DownloadsUiState(listOf(task(DownloadState.Failed)), loading = false),
+                    DownloadsUiState(listOf(task(DownloadState.Failed)), DownloadTab.Unfinished, loading = false),
                     {}, {}, { retried = it }, {}, {}, {}, {}, {}
                 )
             }
         }
         compose.onNodeWithText("下载失败").assertIsDisplayed()
-        compose.onNodeWithText("重试").performClick()
+        compose.onNodeWithText("重新下载").performClick()
         compose.runOnIdle { assertEquals("task", retried) }
     }
 
@@ -83,7 +86,7 @@ class DownloadFlowTest {
                 DownloadsScreen(
                     DownloadsUiState(
                         listOf(task(DownloadState.Missing)),
-                        DownloadTab.Completed,
+                        DownloadTab.Removed,
                         false
                     ),
                     {
@@ -94,9 +97,11 @@ class DownloadFlowTest {
             }
         }
         compose.onNodeWithText("文件已移除").assertIsDisplayed()
-        compose.onNodeWithText("本地播放").assertDoesNotExist()
+        compose.onNodeWithText("播放").assertDoesNotExist()
         compose.onNodeWithText("重新下载").performClick()
+        compose.onNodeWithContentDescription("文件操作").performClick()
         compose.onNodeWithText("移除记录").performClick()
+        compose.onNodeWithText("确认移除记录").performClick()
         compose.runOnIdle {
             assertTrue(retried)
             assertTrue(removed)

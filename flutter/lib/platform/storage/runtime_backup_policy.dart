@@ -22,8 +22,10 @@ Future<void> excludeIOSRuntimeState({
     '${support.parent.path}/Preferences',
     '${documents.path}/Downloads',
   ];
+
   for (final path in paths) {
     await Directory(path).create(recursive: true);
+
     final excluded = await channel.invokeMethod<bool>('excludeFromBackup', {
       'path': path,
     });

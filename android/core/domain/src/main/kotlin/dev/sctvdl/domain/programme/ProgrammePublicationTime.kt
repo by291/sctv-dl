@@ -16,7 +16,10 @@ fun ProgrammeContent.publicationTime(): LocalDateTime? = try {
 }
 
 fun sortContentsByPublicationTime(contents: List<ProgrammeContent>, ascending: Boolean = true): List<ProgrammeContent> =
-    contents.map { it to it.publicationTime() }.sortedWith { left, right ->
+    contents.map {
+        it to
+            it.publicationTime()
+    }.sortedWith { left, right ->
         val leftTime = left.second
         val rightTime = right.second
         when {

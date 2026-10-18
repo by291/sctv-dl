@@ -1,9 +1,10 @@
+use std::time::Duration;
+
 use reqwest::{
     Client, Url,
     header::{HeaderMap, HeaderValue},
 };
 use serde_json::Value;
-use std::time::Duration;
 
 use super::models::{self, Programme, ProgrammeContent, ProgrammeDate};
 use crate::error::{AppError, ErrorCode, Result};

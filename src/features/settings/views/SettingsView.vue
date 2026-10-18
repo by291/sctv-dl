@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
-import { NButton, NRadioGroup, NRadioButton } from 'naive-ui'
+import { NButton, NRadioGroup, NRadioButton, NPopconfirm } from 'naive-ui'
 import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
 import { usePlatform } from '@/shared/platform/usePlatform'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useDownloadDirectory } from '@/features/settings/composables/useDownloadDirectory'
+import { errorMessage } from '@/shared/utils/errors'
+import { useHistoryStore } from '@/features/history/stores/useHistoryStore'
 
 const themeOptions = [
   { label: '跟随系统', value: 'system' },
@@ -15,7 +17,13 @@ const themeOptions = [
   { label: '深色', value: 'dark' },
 ]
 
+const platform = usePlatform()
+const clearingCache = ref(false)
+const cacheMessage = ref('')
+const cacheError = ref('')
+
 const settings = useSettingsStore()
+const history = useHistoryStore()
 const programmes = useProgrammeCatalogueStore()
 const {
   directory,
@@ -23,7 +31,7 @@ const {
   busy: directoryBusy,
   canChooseDirectory,
   chooseDirectory,
-} = useDownloadDirectory(usePlatform().downloads)
+} = useDownloadDirectory(platform.downloads)
 
 const lastUpdated = computed(
   () =>
@@ -35,18 +43,32 @@ const directoryDescription = computed(
     directory.value ||
     (directoryError.value ? '请选择可用的下载文件夹。' : '尚未选择，首次下载时会询问。'),
 )
-const connectionLabel = computed(() => {
-  if (programmes.error) {
-    return '连接暂时不可用'
-  }
-
-  return programmes.updatedAt ? '已连接四川观察节目服务' : '正在检查连接'
-})
+const connectionLabel = computed(() => programmes.serviceStatus.label)
 const connectionDescription = computed(
   () =>
-    programmes.error ||
-    `已读取 ${programmes.programmes.length} 个栏目 · 最近检查 ${lastUpdated.value}`,
+    programmes.serviceStatus.error ||
+    `已读取 ${programmes.programmes.length} 个栏目 · 数据更新 ${lastUpdated.value}`,
 )
+
+async function clearCache(): Promise<void> {
+  if (clearingCache.value) {
+    return
+  }
+
+  clearingCache.value = true
+  cacheMessage.value = ''
+  cacheError.value = ''
+
+  try {
+    await platform.programmeCache.clear()
+
+    cacheMessage.value = '节目缓存已清除，当前列表会保留到下次刷新。'
+  } catch (cause) {
+    cacheError.value = errorMessage(cause)
+  } finally {
+    clearingCache.value = false
+  }
+}
 
 onMounted(() => {
   void programmes.load()
@@ -69,6 +91,62 @@ onMounted(() => {
     </div>
 
     <div class="settings-sections">
+      <section class="settings-card">
+        <div class="settings-title"><h2 class="settings-heading">本地记录</h2></div>
+        <div class="setting-row">
+          <div class="setting-description">
+            <h3 class="setting-label">观看历史</h3>
+            <p class="setting-help">保留最近 500 条记录。清空历史不会删除下载文件、收藏或设置。</p>
+            <p
+              v-if="history.error || history.warning"
+              class="setting-help"
+              role="status"
+            >
+              {{ history.error || history.warning }}
+            </p>
+          </div>
+          <NPopconfirm @positive-click="history.clear">
+            <template #trigger>
+              <NButton
+                secondary
+                :disabled="!history.entries.length"
+              >
+                清空观看历史
+              </NButton>
+            </template>
+            确定清空全部观看历史？
+          </NPopconfirm>
+        </div>
+      </section>
+      <section class="settings-card">
+        <div class="settings-title"><h2 class="settings-heading">节目缓存</h2></div>
+        <div class="setting-row">
+          <div class="setting-description">
+            <h3 class="setting-label">栏目、日期和节目列表</h3>
+            <p class="setting-help">
+              缓存可加快返回列表。清除缓存及浏览位置，不影响观看历史、下载文件、收藏和设置。
+            </p>
+            <p
+              v-if="cacheMessage || cacheError"
+              class="setting-help"
+              role="status"
+            >
+              {{ cacheError || cacheMessage }}
+            </p>
+          </div>
+          <NPopconfirm @positive-click="clearCache">
+            <template #trigger>
+              <NButton
+                secondary
+                :loading="clearingCache"
+              >
+                清除节目缓存
+              </NButton>
+            </template>
+            清除节目缓存和浏览位置？当前列表会继续显示。
+          </NPopconfirm>
+        </div>
+      </section>
       <section class="settings-card">
         <div class="settings-title">
           <SlidersHorizontal :size="20" />
@@ -163,7 +241,7 @@ onMounted(() => {
             <h3 class="setting-label">
               <span
                 class="status-dot connection-status"
-                :class="{ offline: programmes.error }"
+                :class="{ offline: programmes.serviceStatus.error }"
               />
               {{ connectionLabel }}
             </h3>
@@ -173,7 +251,7 @@ onMounted(() => {
           </div>
           <NButton
             secondary
-            :loading="programmes.loading"
+            :loading="programmes.refreshing"
             @click="programmes.load(true)"
           >
             <template #icon><RefreshCw :size="16" /></template>

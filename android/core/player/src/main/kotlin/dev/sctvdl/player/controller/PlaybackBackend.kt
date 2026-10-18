@@ -14,6 +14,8 @@ interface PlaybackBackend {
 
     fun setListener(listener: (Long, PlaybackBackendSnapshot) -> Unit)
 
+    fun setExternalPlaybackListener(listener: (Boolean) -> Unit) {}
+
     fun setMedia(uri: String, token: Long, positionMs: Long)
 
     fun prepare()

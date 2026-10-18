@@ -49,6 +49,7 @@ class DioProgrammeClient {
   final bool _ownsDio;
   final Uri _origin;
   final Duration timeout;
+
   final Set<CancelToken> _requests = {};
   bool _closed = false;
 
@@ -95,6 +96,7 @@ class DioProgrammeClient {
   Future<Object?> _request(String path, RequestScope? scope) async {
     if (_closed) throw StateError('Programme client is closed');
     scope?.throwIfCancelled();
+
     final cancel = CancelToken();
     _requests.add(cancel);
     final unsubscribe = scope?.onCancel(() => cancel.cancel());
@@ -113,6 +115,7 @@ class DioProgrammeClient {
       }
       scope?.throwIfCancelled();
       if (cancel.isCancelled) throw const RequestCancelled();
+
       final response = await _dio.getUri<ResponseBody>(
         _origin.resolve(path),
         cancelToken: cancel,
@@ -136,6 +139,7 @@ class DioProgrammeClient {
         );
       }
       if (body == null) throw const FormatException('Missing response body');
+
       final bytes = await _readBody(body, cancel).timeout(
         timeout,
         onTimeout: () {
@@ -147,23 +151,27 @@ class DioProgrammeClient {
         },
       );
       scope?.throwIfCancelled();
+
       final raw = jsonDecode(utf8.decode(bytes));
       if (raw is! Map<String, Object?> ||
           raw['rs'] is! num ||
           !raw.containsKey('data')) {
         throw const FormatException('Invalid programme envelope');
       }
+
       if (raw['rs'] != 200) {
         throw ProgrammeFailure(
           ProgrammeFailureKind.business,
           raw['error'] is String ? raw['error'] as String : '节目服务暂时不可用',
         );
       }
+
       return raw['data'];
     } on DioException catch (error) {
       if (cancel.isCancelled || error.type == DioExceptionType.cancel) {
         throw const RequestCancelled();
       }
+
       if (error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout ||
           error.type == DioExceptionType.sendTimeout) {
@@ -173,6 +181,7 @@ class DioProgrammeClient {
           cause: error,
         );
       }
+
       throw ProgrammeFailure(
         ProgrammeFailureKind.network,
         '无法连接节目服务，请稍后重试',
@@ -201,6 +210,7 @@ class DioProgrammeClient {
         '节目服务数据超过大小限制',
       );
     }
+
     final bytes = BytesBuilder(copy: false);
     await for (final chunk in body.stream) {
       if (bytes.length + chunk.length > maximumBodyBytes) {
@@ -210,17 +220,21 @@ class DioProgrammeClient {
           '节目服务数据超过大小限制',
         );
       }
+
       bytes.add(chunk);
     }
+
     return bytes.takeBytes();
   }
 
   void close() {
     if (_closed) return;
+
     _closed = true;
     for (final request in _requests) {
       request.cancel();
     }
+
     if (_ownsDio) _dio.close(force: true);
   }
 }

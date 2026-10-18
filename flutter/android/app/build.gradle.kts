@@ -30,6 +30,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             // Local release smoke builds use debug signing. Store distribution
             // requires a separately supplied production signing configuration.

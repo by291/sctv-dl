@@ -11,7 +11,7 @@ import org.junit.Test
 class CatalogueRestorationTest {
     private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
-    @Test fun catalogueAndFavouriteFiltersRemainIndependentAfterRecreation() {
+    @Test fun favouriteToggleKeepsTheSearchAndRestoresItAfterRecreation() {
         val wifi = device.executeShellCommand("settings get global wifi_on").trim()
         val mobile = device.executeShellCommand("settings get global mobile_data").trim()
         try {
@@ -21,20 +21,20 @@ class CatalogueRestorationTest {
                 val editable = By.clazz("android.widget.EditText")
                 requireNotNull(device.wait(Until.findObject(By.desc("搜索栏目")), 5_000)).click()
                 requireNotNull(device.wait(Until.findObject(editable), 5_000)).text = "catalogue-filter"
-                requireNotNull(device.wait(Until.findObject(By.res("filter-favourites")), 5_000)).click()
+                requireNotNull(device.wait(Until.findObject(By.desc("只看收藏")), 5_000)).click()
                 val favouritesSearch = device.wait(
-                    Until.findObject(By.clazz("android.widget.EditText").text("")),
+                    Until.findObject(By.clazz("android.widget.EditText").text("catalogue-filter")),
                     5_000
                 )
-                assertNotNull("Favourites must have their own empty filter", favouritesSearch)
+                assertNotNull("Toggling favourites must keep the current search", favouritesSearch)
                 favouritesSearch!!.text = "favourites-filter"
-                requireNotNull(device.wait(Until.findObject(By.res("filter-all")), 5_000)).click()
+                requireNotNull(device.wait(Until.findObject(By.desc("显示全部栏目")), 5_000)).click()
                 assertNotNull(
-                    device.wait(Until.findObject(By.clazz("android.widget.EditText").text("catalogue-filter")), 5_000)
+                    device.wait(Until.findObject(By.clazz("android.widget.EditText").text("favourites-filter")), 5_000)
                 )
                 scenario.recreate()
                 assertNotNull(
-                    device.wait(Until.findObject(By.clazz("android.widget.EditText").text("catalogue-filter")), 5_000)
+                    device.wait(Until.findObject(By.clazz("android.widget.EditText").text("favourites-filter")), 5_000)
                 )
             }
         } finally {

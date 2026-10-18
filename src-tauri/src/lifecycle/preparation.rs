@@ -2,6 +2,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -43,23 +44,28 @@ impl ExitPreparation {
             .unwrap()
             .as_ref()
             .map(|(_, listener)| listener.clone());
+
         let Some(listener) = listener else {
             // No mounted frontend means no edits can be queued there.
             return true;
         };
+
         let id = Uuid::new_v4().to_string();
         let (send, receive) = oneshot::channel();
         *self.pending.lock().unwrap() = Some((id.clone(), send));
+
         let saved = listener(id.clone())
             && tokio::time::timeout(timeout, receive)
                 .await
                 .ok()
                 .and_then(|result| result.ok())
                 .unwrap_or(false);
+
         let mut pending = self.pending.lock().unwrap();
         if pending.as_ref().is_some_and(|(current, _)| current == &id) {
             pending.take();
         }
+
         saved
     }
 }

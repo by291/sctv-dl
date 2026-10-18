@@ -14,6 +14,7 @@ pub fn download_directory<R: Runtime>(store: &Store<R>) -> Result<Option<PathBuf
         .as_str()
         .filter(|path| !path.is_empty())
         .ok_or_else(|| AppError::new(ErrorCode::Storage, "保存的下载目录无效，请重新选择"))?;
+
     let path = Path::new(path).canonicalize().map_err(|error| {
         AppError::with_source(
             ErrorCode::Storage,

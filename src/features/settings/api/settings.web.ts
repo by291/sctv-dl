@@ -17,6 +17,7 @@ export function createWebSettings(): { port: SettingsPort; dispose: () => void }
     async save(value) {
       state.value.value = settingsSchema.parse(value)
       await nextTick()
+
       if (!state.persisted.value) {
         throw new Error('设置无法保存到本地存储')
       }

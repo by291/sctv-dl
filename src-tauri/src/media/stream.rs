@@ -40,7 +40,11 @@ pub(super) fn body(
             tokio::select! {
                 biased;
                 _ = producer_cancellation.cancelled() => break,
-                result = sender.send(item) => if result.is_err() { break; },
+                result = sender.send(item) => {
+                    if result.is_err() {
+                        break;
+                    }
+                },
             }
             if failed {
                 break;
@@ -61,8 +65,10 @@ pub(super) fn body(
                     None => None,
                 },
             };
+
             Ok(chunk.map(|chunk| (chunk, (receiver, cancellation))))
         },
     );
+
     Body::from_stream(stream)
 }

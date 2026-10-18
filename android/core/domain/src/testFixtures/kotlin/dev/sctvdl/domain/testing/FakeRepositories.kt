@@ -10,6 +10,8 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeProgrammes : ProgrammeRepository {
+    override suspend fun clearCache() = Unit
+
     val catalogue = MutableStateFlow(CachedResource<List<Programme>>())
     private val dates =
         mutableMapOf<String, MutableStateFlow<CachedResource<List<BroadcastDate>>>>()
@@ -36,8 +38,9 @@ class FakeProgrammes : ProgrammeRepository {
         dateRefreshGate?.await()
     }
 
-    override fun observeContents(programmeId: String, dateId: String) =
-        contents.getOrPut("$programmeId:$dateId") { MutableStateFlow(CachedResource()) }
+    override fun observeContents(programmeId: String, dateId: String) = contents.getOrPut("$programmeId:$dateId") {
+        MutableStateFlow(CachedResource())
+    }
 
     override suspend fun refreshContents(programmeId: String, dateId: String) {
         contentRequests.add(programmeId to dateId)

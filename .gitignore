@@ -12,6 +12,7 @@ dist/
 # Tauri build outputs, generated schemas, and signing material
 src-tauri/target/
 src-tauri/gen/
+src-tauri/tauri.release.conf.json
 *.p12
 *.pfx
 *.key

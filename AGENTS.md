@@ -10,6 +10,10 @@ Read only the documents relevant to the change:
 - [Architecture](docs/architecture.md): module ownership, request and storage lifecycles, downloads, and player behaviour.
 - [Deployment](docs/deployment.md): server configuration, hosting, and operations.
 - [Upstream API](docs/upstream-api.md): response schemas, IDs, video variants, and proxy contracts.
+- [Repository Maintenance](docs/maintenance.md): verification scope, CI, dependencies, and documentation ownership.
+- [Android Architecture](docs/android.md): native product, data, and lifecycle contracts.
+- [Flutter Architecture](docs/flutter.md): Flutter product, boundaries, and resource ownership.
+- [Flutter Instructions](flutter/AGENTS.md): Dart/native-host conventions and checks.
 - [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
 - [Desktop Development](docs/desktop.md): Tauri scaffold, shared contracts, native commands, and current integration limits.
 - [Desktop Instructions](src-tauri/AGENTS.md): Rust ownership, readability, blocking work, and resource completion rules.
@@ -44,6 +48,14 @@ Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.j
 - Keep side effects with their lifecycle owner. Requests, listeners, subscriptions, and player sessions need a visible cleanup path. Handle asynchronous failures at the owning boundary, preserve useful causes, and explain intentional best-effort cleanup when errors are ignored.
 - Organize tests into setup, action, and observable assertions. Cover business boundaries and lifecycle races; do not test source spelling, formatting, or private decomposition.
 
+### Server, Shared Contracts, and Tooling
+
+- Keep HTTP input errors independent of business services and response mapping. Handlers coordinate validation, service execution, and replies; header policies and business decisions have named owners.
+- Keep request listeners, deadlines, cancellation, and stream cleanup with their lifecycle owner. Distinguish response-header deadlines from body reception limits and long-lived media streaming; preserve backpressure and disconnect cancellation.
+- Shared contracts must not depend on build/test tooling. Keep schema types and protocol semantics together, including nullable fields, epoch/revision/attempt guards, and saved-data defaults. Keep tests beside the contract they exercise.
+- Release bootstrap commands that run before dependency installation use Node-only APIs and explicit guards for unknown JSON input. Do not replace runtime validation with type assertions or add a dependency to these entrypoints.
+- Workflows orchestrate commands; platform signing scripts own credential validation, temporary files, and certificate cleanup. Document ownership transfer between setup and post-build cleanup, preserve original failures during rollback, and never print credentials.
+
 ### CSS and UI
 
 - Use descriptive classes in templates and native CSS in the owning component's scoped stylesheet. Keep responsive rules in the same file with native `@media` conditions.
@@ -62,7 +74,7 @@ Run commands from the repository root:
 | ------------------------------- | ---------------------------------------------------------------- |
 | Application or server behaviour | `pnpm check` and `pnpm build`                                    |
 | UI                              | The above plus browser verification at desktop and narrow widths |
-| Documentation only              | `pnpm format:check`, local links, and referenced commands        |
+| Documentation only              | `pnpm format:check`, `pnpm docs:check`, and referenced commands  |
 
 Add meaningful regression coverage for behaviour changes. Tests are colocated as `*.test.ts`; tooling tests live in `tooling/`. Use disposable fixtures and stub upstream services. Do not add tests that duplicate copy or formatting, or run application tests/builds for documentation-only changes.
 

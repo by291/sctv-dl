@@ -14,6 +14,7 @@ class NotificationInbox {
 
   void add(String taskId) {
     if (_events.isClosed) return;
+
     if (_events.hasListener) {
       _events.add(taskId);
     } else {

@@ -6,6 +6,8 @@ import dev.sctvdl.domain.download.DownloadTask
 import java.util.Locale
 
 internal fun downloadStatus(task: DownloadTask): String = when (task.state) {
+    DownloadState.Paused -> "已暂停"
+    DownloadState.Finalizing -> "正在保存视频"
     DownloadState.Preparing -> "检查视频"
     DownloadState.Pending -> "等待下载"
     DownloadState.Running -> "正在下载"
@@ -15,7 +17,7 @@ internal fun downloadStatus(task: DownloadTask): String = when (task.state) {
         else -> "等待系统重试"
     }
     DownloadState.Completed -> "已完成"
-    DownloadState.Failed -> "下载失败"
+    DownloadState.Failed -> if (task.cacheComplete) "文件保存失败" else "下载失败"
     DownloadState.Cancelled -> "已取消"
     DownloadState.Missing -> "文件已移除"
 }
@@ -23,11 +25,13 @@ internal fun downloadStatus(task: DownloadTask): String = when (task.state) {
 internal fun downloadProgress(task: DownloadTask): String {
     val total = task.totalBytes?.takeIf { it > 0 }
     return if (total == null) {
-        "已下载 ${formatBytes(task.bytes)}"
+        if (task.bytes > 0) "${formatBytes(task.bytes)} · 大小未知" else "大小未知"
     } else {
         "${formatBytes(task.bytes)} / ${formatBytes(total)}"
     }
 }
+
+internal fun downloadSize(task: DownloadTask): String = formatBytes(task.bytes)
 
 private fun formatBytes(value: Long): String {
     val bytes = value.coerceAtLeast(0)

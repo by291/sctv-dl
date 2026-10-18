@@ -1,5 +1,6 @@
 package dev.sctvdl.feature.programmes.presentation
 
+import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.CachedResource
 
 /**
@@ -33,5 +34,11 @@ internal class AcceptedResourceState<T> {
         )
 
         return resource
+    }
+
+    fun fail(error: AppError) {
+        // A read failure changes feedback, never the accepted or pending data snapshot.
+        resource = resource.copy(isRefreshing = false, error = error)
+        latest = latest.copy(isRefreshing = false, error = error)
     }
 }

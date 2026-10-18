@@ -4,11 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.sctvdl.domain.download.isActive
 import dev.sctvdl.domain.programme.Programme
 import dev.sctvdl.domain.repository.FavouriteRepository
 import dev.sctvdl.domain.repository.ProgrammeRepository
 import dev.sctvdl.feature.programmes.presentation.AcceptedResourceState
+import dev.sctvdl.feature.programmes.presentation.FavouriteState
+import dev.sctvdl.feature.programmes.presentation.onReadFailure
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,9 +22,11 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 internal class CatalogueViewModel @Inject constructor(
     private val repository: ProgrammeRepository,
-    private val favourites: FavouriteRepository,
+    favourites: FavouriteRepository,
     private val saved: SavedStateHandle
 ) : ViewModel() {
+    private val favouriteActions = FavouriteState(favourites, viewModelScope)
+
     private val query = saved.getStateFlow("query", "")
     private val byName = saved.getStateFlow("byName", false)
 
@@ -34,9 +37,10 @@ internal class CatalogueViewModel @Inject constructor(
 
     private val snapshot = AcceptedResourceState<List<Programme>>()
     private val catalogue = MutableStateFlow(CatalogueUiState())
-    private val favouriteState = MutableStateFlow<FavouriteState?>(null)
+    private val favouriteState = MutableStateFlow<FavouriteOrdering?>(null)
 
     private var refreshJob: Job? = null
+    private var observationJob: Job? = null
 
     private val filters = combine(query, byName, favouritesQuery, favouritesByName, favouritesOnly) {
             query,
@@ -52,18 +56,20 @@ internal class CatalogueViewModel @Inject constructor(
         )
     }
 
-    val uiState = combine(catalogue, favouriteState.filterNotNull(), filters, featuredId) {
+    val uiState = combine(catalogue, favouriteState.filterNotNull(), filters, featuredId, favouriteActions.error) {
             catalogue,
             favourites,
             filters,
-            featuredId
+            featuredId,
+            favouriteError
         ->
         filters.copy(
             resource = catalogue.resource,
             hasUpdate = catalogue.hasUpdate,
             favourites = favourites.current,
             orderingFavourites = favourites.ordering,
-            featuredId = featuredId
+            featuredId = featuredId,
+            favouriteError = favouriteError
         )
     }.stateIn(
         viewModelScope,
@@ -78,13 +84,21 @@ internal class CatalogueViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            favourites.observeIds().collect { ids ->
-                favouriteState.value = FavouriteState(ids, favouriteState.value?.ordering ?: ids)
+            favouriteActions.ids.filterNotNull().collect { ids ->
+                favouriteState.value = FavouriteOrdering(ids, favouriteState.value?.ordering ?: ids)
             }
         }
 
-        viewModelScope.launch {
-            repository.observeProgrammes().collect { resource ->
+        observeCatalogue()
+    }
+
+    private fun observeCatalogue() {
+        if (observationJob?.isActive == true) return
+        observationJob = viewModelScope.launch {
+            repository.observeProgrammes().onReadFailure {
+                snapshot.fail(it)
+                publish()
+            }.collect { resource ->
                 snapshot.observe(resource)
                 publish()
             }
@@ -118,6 +132,11 @@ internal class CatalogueViewModel @Inject constructor(
     }
 
     fun filter(favouritesOnly: Boolean) {
+        // This is a list filter, not a separate page. Carry the active controls across legacy saved scopes.
+        val activeQuery = if (this.favouritesOnly.value) favouritesQuery.value else query.value
+        val activeSort = if (this.favouritesOnly.value) favouritesByName.value else byName.value
+        saved[if (favouritesOnly) "favouritesQuery" else "query"] = activeQuery
+        saved[if (favouritesOnly) "favouritesByName" else "byName"] = activeSort
         saved["favouritesOnly"] = favouritesOnly
     }
 
@@ -129,15 +148,18 @@ internal class CatalogueViewModel @Inject constructor(
     }
 
     fun refresh() {
+        observeCatalogue()
         if (refreshJob?.isActive == true) return
 
         refreshJob = viewModelScope.launch { repository.refreshProgrammes() }
     }
 
     fun toggleFavourite(id: String) {
-        viewModelScope.launch { favourites.toggle(id) }
+        favouriteActions.toggle(id)
     }
 
+    fun retryFavourites() = favouriteActions.retry()
+
     // Keep startup favourite priority for this library's lifetime; hearts and favourite membership stay live.
-    private data class FavouriteState(val current: Set<String>, val ordering: Set<String>)
+    private data class FavouriteOrdering(val current: Set<String>, val ordering: Set<String>)
 }

@@ -17,6 +17,7 @@ bool _allowedHttps(Uri? uri, Set<String> hosts) =>
 
 bool isAllowedMediaUrl(String value) {
   final uri = Uri.tryParse(value);
+
   return _allowedHttps(uri, _mediaHosts) &&
       uri!.path.toLowerCase().endsWith('.mp4');
 }
@@ -27,6 +28,7 @@ bool isAllowedCoverUrl(String value) =>
 List<VideoSource> videoSources(ProgrammeContent content) {
   final result = <VideoSource>[];
   final seen = <String>{};
+
   for (final source in [
     if (content.video case final String url)
       VideoSource(quality: VideoQuality.standard, url: url),
@@ -37,6 +39,7 @@ List<VideoSource> videoSources(ProgrammeContent content) {
       result.add(source);
     }
   }
+
   return List.unmodifiable(result);
 }
 
@@ -45,24 +48,29 @@ VideoSource? resolveVideo(ProgrammeContent content, VideoQuality quality) {
   for (final source in sources) {
     if (source.quality == quality) return source;
   }
+
   return sources.firstOrNull;
 }
 
 bool isFullEpisode(String title, String programmeName, String date) {
   if (programmeName.isEmpty || date.isEmpty) return false;
+
   final normalized = title.replaceAll(_titleWhitespace, '');
   final broadcast = date.replaceAll('-', '.');
+
   return normalized == '$programmeName（$broadcast）' ||
       normalized == '$programmeName($broadcast)';
 }
 
 DateTime? publicationTime(String? text) {
   if (text == null || text.trim().isEmpty) return null;
+
   final value = text.trim().replaceFirst(' ', 'T');
   final parts = RegExp(
     r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$',
   ).firstMatch(value);
   if (parts == null) return null;
+
   final fields = [for (var i = 1; i <= 6; i++) int.parse(parts[i] ?? '0')];
   final calendar = DateTime.utc(fields[0], fields[1], fields[2]);
   if (calendar.year != fields[0] ||
@@ -73,6 +81,7 @@ DateTime? publicationTime(String? text) {
       fields[5] > 59) {
     return null;
   }
+
   // Offset-free upstream wall times belong to Sichuan, regardless of the device zone.
   return DateTime.tryParse(parts[7] == null ? '$value+08:00' : value)?.toUtc();
 }
@@ -87,18 +96,22 @@ List<ProgrammeContent> orderClips(
     final right = publicationTime(b.$2.publishedAt);
     if (left == null) return right == null ? a.$1.compareTo(b.$1) : 1;
     if (right == null) return -1;
+
     final comparison = left.compareTo(right) * (ascending ? 1 : -1);
     return comparison == 0 ? a.$1.compareTo(b.$1) : comparison;
   });
+
   return [for (final pair in indexed) pair.$2];
 }
 
 String publicationLabel(String? text, String broadcastDate) {
   final time = publicationTime(text)?.add(const Duration(hours: 8));
   if (time == null) return '发布时间未知';
+
   String two(int n) => n.toString().padLeft(2, '0');
   final date = '${time.year}-${two(time.month)}-${two(time.day)}';
   final clock = '${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
+
   return date == broadcastDate ? clock : '$date $clock';
 }
 
@@ -111,11 +124,13 @@ String downloadFilename(
       .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1f\x7f]'), '_')
       .replaceAll(RegExp(r'[. ]+$'), '')
       .trim();
+
   final date = sanitize(selection.broadcast.date);
   final tail = '_${quality.label}_${sanitize(suffix)}.mp4';
   final prefix = '${date}_';
   final budget = 255 - utf8.encode('$prefix$tail').length;
   if (budget < 1) throw const FormatException('Filename suffix is too long');
+
   final title = sanitize(selection.content.title);
   final buffer = StringBuffer();
   var bytes = 0;
@@ -123,8 +138,10 @@ String downloadFilename(
     final character = String.fromCharCode(rune);
     final size = utf8.encode(character).length;
     if (bytes + size > budget) break;
+
     buffer.write(character);
     bytes += size;
   }
+
   return '$prefix$buffer$tail';
 }

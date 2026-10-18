@@ -284,14 +284,15 @@ class PlayerSessionTest {
                             PlayerVideo(
                                 current.player, state, current.controller::selectQuality, current.controller::setSpeed,
                                 false, {}, null, current.controller::retry,
+                                current.controller::togglePlay, current.controller::seekTo,
                                 Modifier.fillMaxWidth().height(240.dp)
                             )
                         }
                     }
                 }
                 val progress = requireNotNull(device.wait(Until.findObject(By.desc("播放进度")), 5_000)).visibleBounds
-                device.click(progress.left + progress.width() / 6, progress.centerY())
-                await { current.player.currentPosition in 4_000..9_000 }
+                device.click(progress.centerX(), progress.centerY())
+                await { current.player.currentPosition in 18_000..22_000 }
                 var seekPosition = 0L
                 onMain {
                     assertFalse(current.player.playWhenReady)

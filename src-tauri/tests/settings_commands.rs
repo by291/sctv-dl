@@ -1,34 +1,14 @@
-use sctv_dl_desktop_lib::{commands, lifecycle::ExitController, settings::DesktopSettings};
-use serde_json::{Value, json};
+#[path = "support/ipc.rs"]
+mod ipc;
+
 use std::sync::Arc;
-use tauri::{
-    Manager,
-    ipc::{CallbackFn, InvokeBody},
-    test::{INVOKE_KEY, get_ipc_response, mock_builder},
-    webview::InvokeRequest,
-};
+
+use sctv_dl_desktop_lib::{commands, lifecycle::ExitController, settings::DesktopSettings};
+use serde_json::json;
+use tauri::{Manager, test::mock_builder};
 use tauri_plugin_store::StoreExt;
 
-fn invoke(
-    window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-    command: &str,
-    body: Value,
-    origin: &str,
-) -> Result<Value, Value> {
-    get_ipc_response(
-        window,
-        InvokeRequest {
-            cmd: command.into(),
-            callback: CallbackFn(0),
-            error: CallbackFn(1),
-            url: origin.parse().unwrap(),
-            body: InvokeBody::Json(body),
-            headers: Default::default(),
-            invoke_key: INVOKE_KEY.into(),
-        },
-    )
-    .map(|body| body.deserialize().unwrap())
-}
+use ipc::{invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_time_writes() {
@@ -43,6 +23,7 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
         ])
         .build(tauri::generate_context!(test = true))
         .unwrap();
+
     let store = app
         .store_builder(root.path().join("desktop.json"))
         .disable_auto_save()
@@ -50,19 +31,21 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
         .unwrap();
     store.set("installationId", json!("private"));
     app.manage(DesktopSettings::new(Ok(store)));
+
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
     let secondary = tauri::WebviewWindowBuilder::new(&app, "secondary", Default::default())
         .build()
         .unwrap();
-    let origin = if cfg!(windows) {
-        "http://tauri.localhost"
-    } else {
-        "tauri://localhost"
-    };
+    let origin = local_origin();
+
     let body = json!({
-        "value": { "theme": "dark", "quality": "smooth", "favourites": ["1"] }
+        "value": {
+            "theme": "dark",
+            "quality": "smooth",
+            "favourites": ["1"]
+        }
     });
 
     invoke(&main, "save_settings", body.clone(), origin).unwrap();
@@ -70,7 +53,11 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
     assert_eq!(
         snapshot,
         json!({
-            "value": { "theme": "dark", "quality": "smooth", "favourites": ["1"] },
+            "value": {
+                "theme": "dark",
+                "quality": "smooth",
+                "favourites": ["1"]
+            },
             "persisted": true
         })
     );
@@ -81,8 +68,10 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
     }
 
     let closing = controller.begin().unwrap();
+
     // Queued frontend saves still reach Rust during exit preparation.
     invoke(&main, "save_settings", body.clone(), origin).unwrap();
+
     let downloads =
         sctv_dl_desktop_lib::downloads::DownloadManager::new(Default::default()).unwrap();
     assert!(closing.complete(&downloads, || async { false }).await);

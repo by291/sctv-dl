@@ -144,10 +144,12 @@ impl<R: Runtime> DesktopSettings<R> {
         tokio::task::spawn_blocking(move || {
             let _operation = guard;
             let _write = writes.lock().unwrap();
+
             let store = store
                 .as_ref()
                 .map(|store| store.as_ref())
                 .map_err(|error| error.clone().reported(operation));
+
             action(store).map_err(|error| error.reported(operation))
         })
         .await

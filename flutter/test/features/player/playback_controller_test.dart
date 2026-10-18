@@ -103,7 +103,7 @@ void main() {
     },
   );
 
-  test('native error retry replaces the failed session and restores paused progress', () async {
+  test('native error retry replaces the failed session and restores playback intent', () async {
     final first = FakeSession();
     final replacement = FakeSession();
     final backend = SequenceBackend([first, replacement]);
@@ -129,9 +129,115 @@ void main() {
     expect(controller.session, same(replacement));
     expect(controller.value.position, const Duration(seconds: 12));
     expect(controller.value.speed, 1.5);
-    expect(controller.value.playing, isFalse);
+    expect(controller.value.playing, isTrue);
     expect(controller.canRetry, isFalse);
     await controller.release();
+    controller.dispose();
+  });
+
+  test('retry remains paused when playback failed while paused', () async {
+    final first = FakeSession();
+    final controller = PlaybackController(
+      input: input,
+      backend: SequenceBackend([first, FakeSession()]),
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    first.emit(position: const Duration(seconds: 12));
+    first.emit(error: 'Decoder failed');
+    await controller.retry();
+    expect(controller.value.playing, isFalse);
+    expect(controller.value.position, const Duration(seconds: 12));
+    await controller.release();
+    controller.dispose();
+  });
+
+  test('backgrounding during retry cancels the earlier play intent', () async {
+    final first = FakeSession();
+    final replacement = FakeSession();
+    final backend = RetryBackend(first);
+    final controller = PlaybackController(
+      input: input,
+      backend: backend,
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    first.emit(playing: true);
+    first.emit(error: 'Decoder failed');
+    final retry = controller.retry();
+    await Future<void>.delayed(Duration.zero);
+    await controller.background();
+    backend.replacement.complete(replacement);
+    await retry;
+    expect(controller.value.playing, isFalse);
+    expect(replacement.playCalls, 0);
+    await controller.release();
+    controller.dispose();
+  });
+
+  test('committed exit saves progress even when native pause fails', () async {
+    final session = FakeSession()..failPause = true;
+    final history = MemoryHistory();
+    final controller = PlaybackController(
+      input: input,
+      backend: FakeBackend(session),
+      history: history,
+    );
+    await controller.initialize();
+    session.emit(position: const Duration(seconds: 42));
+
+    await controller.commitExit();
+
+    expect(history.entries.last.position, const Duration(seconds: 42));
+    expect(controller.message, contains('Pause failed'));
+    await controller.release();
+    expect(session.disposeCalls, 1);
+    controller.dispose();
+  });
+
+  test('repeated release waits until session cleanup finishes', () async {
+    final session = FakeSession();
+    final pending = Completer<void>();
+    session.disposeDelay = pending.future;
+    final controller = PlaybackController(
+      input: input,
+      backend: FakeBackend(session),
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    final first = controller.release();
+    var completed = false;
+    final second = controller.release().then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(completed, isFalse);
+    pending.complete();
+    await first;
+    await second;
+    expect(session.disposeCalls, 1);
+    controller.dispose();
+  });
+
+  testWidgets('closing a menu cannot release the accessibility hold', (
+    tester,
+  ) async {
+    final session = FakeSession();
+    final controller = PlaybackController(
+      input: input,
+      backend: FakeBackend(session),
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    session.emit(playing: true);
+    controller.holdControls(true, reason: PlayerControlHold.accessibility);
+    controller.holdControls(true, reason: PlayerControlHold.menu);
+    controller.holdControls(false, reason: PlayerControlHold.menu);
+    await tester.pump(const Duration(seconds: 5));
+    expect(controller.controlsVisible, isTrue);
+    controller.holdControls(false, reason: PlayerControlHold.accessibility);
+    await tester.pump(const Duration(milliseconds: 3501));
+    expect(controller.controlsVisible, isFalse);
+    await tester.runAsync(controller.release);
     controller.dispose();
   });
 
@@ -255,26 +361,34 @@ class FakeSession implements PlaybackSession {
     supportsPip: true,
   );
   int playCalls = 0;
+  int seekCalls = 0;
   int pauseCalls = 0;
   int disposeCalls = 0;
   bool failSwitch = false;
+  bool failPause = false;
+  Future<void>? disposeDelay;
   Future<void>? pipResult;
   void emit({
     bool playing = false,
     bool inPip = false,
+    bool buffering = false,
+    Duration? duration = const Duration(seconds: 100),
     Duration position = Duration.zero,
     double speed = 1,
     bool initialized = true,
+    bool? firstFrameRendered,
     String? error,
   }) {
     value = PlaybackSnapshot(
       initialized: initialized,
+      firstFrameRendered: firstFrameRendered ?? value.firstFrameRendered,
       error: error,
       speed: speed,
       source: standard,
-      duration: const Duration(seconds: 100),
+      duration: duration,
       playing: playing,
       inPip: inPip,
+      buffering: buffering,
       position: position,
       supportsPip: true,
     );
@@ -292,11 +406,16 @@ class FakeSession implements PlaybackSession {
   @override
   Future<void> pause() async {
     pauseCalls++;
+    if (failPause) throw StateError('Pause failed');
     emit(position: value.position, speed: value.speed);
   }
 
   @override
-  Future<void> seek(Duration position) async => emit(position: position);
+  Future<void> seek(Duration position) async {
+    seekCalls++;
+    emit(position: position);
+  }
+
   @override
   Future<void> setSpeed(double speed) async => emit(
     playing: value.playing,
@@ -321,6 +440,7 @@ class FakeSession implements PlaybackSession {
   @override
   Future<void> dispose() async {
     disposeCalls++;
+    await disposeDelay;
     await events.close();
   }
 }
@@ -337,4 +457,17 @@ class MemoryHistory implements HistoryRepository {
   Future<void> remove(ContentRef ref) async {}
   @override
   Future<void> clear() async => entries.clear();
+}
+
+class RetryBackend implements PlaybackBackend {
+  RetryBackend(this.first);
+  final FakeSession first;
+  final replacement = Completer<PlaybackSession>();
+  bool opened = false;
+  @override
+  Future<PlaybackSession> open(PlaybackInput input) async {
+    if (opened) return replacement.future;
+    opened = true;
+    return first;
+  }
 }

@@ -11,6 +11,10 @@ import StatePanel from '@/shared/components/StatePanel.vue'
 import ProgrammeCard from '@/features/programmes/components/ProgrammeCard.vue'
 import ProgrammeSpotlight from '@/features/programmes/components/ProgrammeSpotlight.vue'
 import { useFeaturedProgramme } from '@/features/programmes/composables/useFeaturedProgramme'
+import ProgrammeUpdateNotice from '@/features/programmes/components/ProgrammeUpdateNotice.vue'
+import { usePageScroll } from '@/shared/navigation/page-scroll'
+
+const { pageScrollPosition, scrollPageTo } = usePageScroll()
 
 const store = useProgrammeCatalogueStore()
 const settings = useSettingsStore()
@@ -71,12 +75,16 @@ onMounted(() => {
 })
 
 onBeforeRouteLeave(() => {
-  scrollPosition = { left: window.scrollX, top: window.scrollY }
+  scrollPosition = pageScrollPosition()
 })
 
 onActivated(async () => {
+  if (store.fetchedAt && !store.refreshing) {
+    void store.load(true)
+  }
+
   await nextTick()
-  window.scrollTo({ ...scrollPosition, behavior: 'instant' })
+  scrollPageTo(scrollPosition)
 })
 </script>
 
@@ -87,7 +95,7 @@ onActivated(async () => {
         <h1>节目库</h1>
       </div>
       <NButton
-        :loading="store.loading"
+        :loading="store.refreshing"
         secondary
         @click="store.load(true)"
       >
@@ -95,6 +103,16 @@ onActivated(async () => {
         刷新节目
       </NButton>
     </section>
+
+    <ProgrammeUpdateNotice
+      :pending="store.pendingUpdate"
+      :cached="store.cached"
+      :fetched-at="store.fetchedAt"
+      :refresh-error="store.refreshError"
+      :cache-warning="store.cacheWarning"
+      @accept="store.acceptUpdate"
+      @retry="store.load(true)"
+    />
 
     <div
       v-if="featured"
@@ -235,7 +253,7 @@ onActivated(async () => {
   outline: 3px solid #e99389;
   outline-offset: -3px;
 }
-.library-tabs :deep(.filter-count) {
+.library-tabs .filter-count {
   position: absolute;
   top: 50%;
   left: 100%;
@@ -251,7 +269,7 @@ onActivated(async () => {
     color 140ms ease,
     background-color 140ms ease;
 }
-.library-tabs :deep(.n-tabs-tab--active .filter-count) {
+.library-tabs :deep(.n-tabs-tab--active) .filter-count {
   background: var(--accent-soft);
   color: var(--accent);
 }

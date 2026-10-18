@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -25,7 +26,8 @@ fun StatePanel(
     loading: Boolean = false,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    retryLabel: String = "重试"
+    retryLabel: String = "重试",
+    icon: ImageVector = Icons.Outlined.LiveTv
 ) {
     Column(
         modifier.fillMaxWidth().padding(32.dp),
@@ -38,7 +40,7 @@ fun StatePanel(
             )
         } else {
             Icon(
-                Icons.Outlined.LiveTv,
+                icon,
                 null,
                 Modifier.size(40.dp),
                 tint = MaterialTheme.colorScheme.primary

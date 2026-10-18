@@ -1,15 +1,13 @@
 package dev.sctvdl.feature.player
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import dev.sctvdl.design.components.StatePanel
 import dev.sctvdl.domain.download.DownloadRequest
 import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.domain.media.videoVariants
+import dev.sctvdl.domain.programme.ProgrammeSelection
 import dev.sctvdl.feature.player.components.PlaybackContent
+import dev.sctvdl.feature.player.components.PlaybackLoadingContent
+import dev.sctvdl.player.model.PlaybackSource
 
 @Composable
 internal fun PlayerScreen(
@@ -19,45 +17,52 @@ internal fun PlayerScreen(
     onPosition: (Long) -> Unit,
     onDownload: (List<DownloadRequest>) -> Unit,
     wifiOnly: Boolean,
-    host: PlaybackHost
+    host: PlaybackHost,
+    previewSelection: ProgrammeSelection? = null
 ) {
-    val source = state.source
+    val selection = state.selection ?: previewSelection
+    val content = state.content ?: selection?.content
+    val broadcastDate = state.broadcastDate ?: selection?.broadcast?.date
+    val variants = content?.let(::videoVariants).orEmpty()
+    // Accepted list metadata renders the final page immediately, without a temporary loading destination.
+    val source = state.source ?: if (state.loading && content != null && variants.isNotEmpty()) {
+        PlaybackSource(content.id, content.title, variants)
+    } else {
+        null
+    }
     if (source != null) {
         PlaybackContent(
             source,
             state.initialQuality,
             onBack,
             onPosition,
-            state.content?.let { content ->
-                state.broadcastDate?.let { date ->
+            content?.let { content ->
+                broadcastDate?.let { date ->
                     { quality: Quality ->
                         onDownload(
                             listOf(
                                 DownloadRequest(
-                                    state.programmeName,
+                                    selection?.programme?.name ?: state.programmeName,
                                     date,
                                     content,
                                     quality,
-                                    wifiOnly
+                                    wifiOnly,
+                                    selection
                                 )
                             )
                         )
                     }
                 }
             },
-            programmeName = state.programmeName,
-            broadcastDate = state.broadcastDate,
-            host = host
+            programmeName = selection?.programme?.name ?: state.programmeName,
+            broadcastDate = broadcastDate,
+            host = host,
+            history = state.history,
+            coverUrl = content?.coverUrl ?: selection?.programme?.coverUrl,
+            coverReference = selection?.ref,
+            sourcePrepared = state.source != null
         )
     } else {
-        Column {
-            TextButton(onClick = onBack) { Text("返回节目单") }
-            StatePanel(
-                if (state.loading) "准备播放" else "暂时无法播放",
-                state.error?.message ?: "正在获取节目视频",
-                state.loading,
-                if (state.loading) null else onRetry
-            )
-        }
+        PlaybackLoadingContent(state, selection, onBack, onRetry)
     }
 }

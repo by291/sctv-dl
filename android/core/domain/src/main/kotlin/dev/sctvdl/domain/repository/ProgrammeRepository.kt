@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.Flow
  * Refreshes propagate coroutine cancellation and reject responses superseded by a newer request of the same key.
  */
 interface ProgrammeRepository {
+    suspend fun clearCache()
+
     fun observeProgrammes(): Flow<CachedResource<List<Programme>>>
 
     suspend fun refreshProgrammes()

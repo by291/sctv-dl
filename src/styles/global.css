@@ -11,8 +11,8 @@
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    /* Reserve scrollbar space during filtering and modal scroll locking. */
-    scrollbar-gutter: stable;
+    /* The viewport-sized shell keeps scrolling inside the workspace. */
+    overflow: hidden;
     --bg: #f6f7f9;
     --panel: #fff;
     --text: #242a33;
@@ -43,13 +43,6 @@
     --hero: #3c2e2b;
     --hero-label: #d69a88;
     --hero-link: #f09e8f;
-  }
-
-  @supports (scrollbar-gutter: stable) {
-    :root {
-      /* Naive UI must not add a second scrollbar-width compensation. */
-      margin-right: 0 !important;
-    }
   }
 
   body {

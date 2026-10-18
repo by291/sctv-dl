@@ -3,8 +3,46 @@ name: Desktop validation
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'public/**'
+      - 'src-tauri/**'
+      - 'tooling/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.gitattributes'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'vitest.config.*'
+      - 'tsconfig*.json'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/desktop-release.yml'
+      - '!**/*.md'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'public/**'
+      - 'src-tauri/**'
+      - 'tooling/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.gitattributes'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'vitest.config.*'
+      - 'tsconfig*.json'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/desktop-release.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +69,7 @@ jobs:
             bundles: app,dmg
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           runtime: node@26
           cache: true
@@ -50,12 +88,25 @@ jobs:
           node --version
           pnpm --version
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm test:desktop
+      - name: Check Rust 1.90 minimum
+        shell: bash
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --no-self-update
+          cargo +1.90.0 check --manifest-path src-tauri/Cargo.toml --all-targets --locked
       - run: pnpm desktop:check
+      - name: Check Windows signing lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tooling/windows-signing.test.ps1
       - name: Build validation packages
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Check Windows installer cleanup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tooling/check-windows-installer.ps1
       - name: Upload validation packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

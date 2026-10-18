@@ -13,12 +13,11 @@ import dev.sctvdl.feature.programmes.catalogue.CatalogueViewModel
 private const val CATALOGUE_VIEW_MODEL_KEY =
     "androidx.lifecycle.ViewModelProvider.DefaultKey:dev.sctvdl.app.features.catalogue.CatalogueViewModel"
 
-/** Retains accepted catalogue data and independent pane positions across programme and player destinations. */
+/** Retains accepted catalogue data and the library pane position across programme and player destinations. */
 class ProgrammeLibraryState internal constructor(
     internal val model: CatalogueViewModel,
     internal val state: State<CatalogueUiState>,
-    internal val cataloguePanePosition: CatalogueScrollPosition = CatalogueScrollPosition(),
-    internal val favouritesPanePosition: CatalogueScrollPosition = CatalogueScrollPosition()
+    internal val cataloguePanePosition: CatalogueScrollPosition = CatalogueScrollPosition()
 )
 
 @Composable
@@ -27,9 +26,8 @@ fun rememberProgrammeLibraryState(): ProgrammeLibraryState {
     val state = model.uiState.collectAsStateWithLifecycle()
 
     val cataloguePanePosition = rememberSaveable(saver = CatalogueScrollPosition.Saver) { CatalogueScrollPosition() }
-    val favouritesPanePosition = rememberSaveable(saver = CatalogueScrollPosition.Saver) { CatalogueScrollPosition() }
 
-    return remember(model, cataloguePanePosition, favouritesPanePosition) {
-        ProgrammeLibraryState(model, state, cataloguePanePosition, favouritesPanePosition)
+    return remember(model, cataloguePanePosition) {
+        ProgrammeLibraryState(model, state, cataloguePanePosition)
     }
 }

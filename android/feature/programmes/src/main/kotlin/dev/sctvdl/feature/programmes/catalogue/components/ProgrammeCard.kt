@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,14 +16,20 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.programme.Programme
 import dev.sctvdl.ui.media.CoverImage
@@ -40,6 +47,12 @@ internal fun ProgrammeCard(
     val colours = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
     val coverTransition = LocalProgrammeCoverTransitionState.current
+    val viewConfiguration = LocalViewConfiguration.current
+    val favouriteConfiguration = remember(viewConfiguration) {
+        object : ViewConfiguration by viewConfiguration {
+            override val minimumTouchTargetSize = DpSize(32.dp, 32.dp)
+        }
+    }
     val coverShape = RoundedCornerShape(
         topStart = MaterialTheme.shapes.large.topStart,
         topEnd = MaterialTheme.shapes.large.topEnd,
@@ -60,18 +73,24 @@ internal fun ProgrammeCard(
     ) {
         Box {
             CoverImage(programme.coverUrl, coverModifier.fillMaxWidth().aspectRatio(16f / 9f).clip(coverShape))
-            FilledTonalIconButton(
-                onClick = onFavourite,
-                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = colours.surface.copy(alpha = 0.94f)
-                )
+            CompositionLocalProvider(
+                LocalMinimumInteractiveComponentSize provides 0.dp,
+                LocalViewConfiguration provides favouriteConfiguration
             ) {
-                Icon(
-                    if (favourite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    "${if (favourite) "取消收藏" else "收藏"}${programme.name}",
-                    tint = if (favourite) colours.primary else colours.onSurfaceVariant
-                )
+                FilledTonalIconButton(
+                    onClick = onFavourite,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = colours.surface.copy(alpha = 0.94f)
+                    )
+                ) {
+                    Icon(
+                        if (favourite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        "${if (favourite) "取消收藏" else "收藏"}${programme.name}",
+                        modifier = Modifier.size(20.dp),
+                        tint = if (favourite) colours.primary else colours.onSurfaceVariant
+                    )
+                }
             }
         }
         Text(

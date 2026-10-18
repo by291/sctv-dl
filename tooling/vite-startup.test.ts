@@ -1,6 +1,5 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { once } from 'node:events'
 import { join, relative, sep } from 'node:path'
 import { createServer } from 'vite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +16,7 @@ beforeEach(async () => {
   const reportDirectories = [
     join(directory, 'android/app/build/reports'),
     join(directory, 'src-tauri/target/reports'),
+    join(directory, 'flutter/build/reports'),
   ]
 
   await mkdir(join(directory, 'src'))
@@ -33,7 +33,10 @@ beforeEach(async () => {
     )
   }
 
-  for (const name of ['web-fixture-dep', 'native-fixture-dep-0', 'native-fixture-dep-1']) {
+  for (const name of [
+    'web-fixture-dep',
+    ...reportDirectories.map((_, index) => `native-fixture-dep-${index}`),
+  ]) {
     const packageDirectory = join(directory, 'node_modules', name)
 
     await mkdir(packageDirectory, { recursive: true })
@@ -51,7 +54,6 @@ beforeEach(async () => {
     logLevel: 'silent',
     server: { ...config.server, middlewareMode: true, hmr: false },
   })
-  await once(server.watcher, 'ready')
 })
 
 afterEach(async () => {
@@ -75,6 +77,7 @@ describe('Web development scanning', () => {
     expect(dependencies).toHaveProperty('web-fixture-dep')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-0')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-1')
+    expect(dependencies).not.toHaveProperty('native-fixture-dep-2')
   })
 
   it('watches Web edits without crawling native build output', async () => {
@@ -83,6 +86,8 @@ describe('Web development scanning', () => {
     const sourceFile = join(sourceDirectory, 'main.js')
 
     server!.watcher.on('change', (file) => changes.push(file))
+
+    // Vite starts watching before createServer resolves, so its one-shot ready event may be past.
     await vi.waitFor(() => {
       expect(server!.watcher.getWatched()[sourceDirectory]).toContain('main.js')
     })
@@ -91,7 +96,7 @@ describe('Web development scanning', () => {
 
     const watchedDirectories = Object.keys(server!.watcher.getWatched())
 
-    for (const nativeRoot of ['android', 'src-tauri']) {
+    for (const nativeRoot of ['android', 'src-tauri', 'flutter']) {
       expect(
         watchedDirectories.some((path) => relative(directory, path).split(sep)[0] === nativeRoot),
       ).toBe(false)

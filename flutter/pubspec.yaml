@@ -28,9 +28,11 @@ dependencies:
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
   share_plus: ^13.3.1
+  sliver_tools: ^0.2.12
   uuid: ^4.6.0
 
 dev_dependencies:
+  analyzer: ^14.5.0
   flutter_test:
     sdk: flutter
   integration_test:

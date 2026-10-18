@@ -36,22 +36,35 @@ class DownloadTask {
     this.revision = 0,
   });
 
+  /// Stable record identity across explicit retries.
   final String id;
+
+  /// Native correlation and artifact identity, replaced for every retry.
   final String attemptId;
+
   final ProgrammeSelection selection;
   final VideoQuality requestedQuality;
   final VideoQuality quality;
   final String url;
   final String filename;
   final bool wifiOnly;
+
   final DownloadState state;
   final DateTime createdAt;
   final int receivedBytes;
   final int? totalBytes;
+
+  /// Verified published URI or relative Documents location for playback.
   final String? fileLocation;
+
+  /// App-owned recovery source, retained until publication commits and cleanup
+  /// succeeds. On iOS this may name the same file as [fileLocation].
   final String? privateLocation;
+
   final String? error;
   final bool canResume;
+
+  /// Durable transition revision within this record, including attempt changes.
   final int revision;
 
   bool get isActive => switch (state) {
@@ -120,6 +133,7 @@ const _unchanged = Object();
 
 class DownloadFailure {
   const DownloadFailure({required this.contentId, required this.message});
+
   final String contentId;
   final String message;
 }

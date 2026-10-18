@@ -45,6 +45,10 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
     public var preferredForwardBufferDuration: TimeInterval = 0
     public var lastAvPlayerTimeControlStatus: AVPlayer.TimeControlStatus? = nil
 
+    private var firstFrameObservation: NSKeyValueObservation?
+    private var firstFrameRendered = false
+    private var initialPositionReady = true
+
     private var pipController: AVPictureInPictureController?
     private var restoreUIOnPipStop: ((Bool) -> Void)?
     /// Invalidates a pending background-pause check when a newer one supersedes it.
@@ -96,9 +100,15 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
 
     public func view() -> UIView {
         let playerView = BetterPlayerView(frame: .zero)
-        playerView.player = player
+        playerView.player = initialPositionReady ? player : nil
         if let playerLayer = playerView.layer as? AVPlayerLayer {
             playerLayer.videoGravity = self.videoGravity
+            firstFrameObservation = playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] layer, _ in
+                guard let self, !self.disposed, self.initialPositionReady, layer.isReadyForDisplay,
+                      !self.firstFrameRendered else { return }
+                self.firstFrameRendered = true
+                self.eventSink?(["event": "firstFrameRendered", "key": self.key as Any])
+            }
         }
         
         if self.playerView !== playerView {
@@ -220,14 +230,14 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
         return transform
     }
 
-    public func setDataSourceAsset(_ assetPath: String, key: String?, certificateUrl: String?, licenseUrl: String?, cacheKey: String?, cacheManager: CacheManager, overriddenDuration: Int) {
+    public func setDataSourceAsset(_ assetPath: String, key: String?, certificateUrl: String?, licenseUrl: String?, cacheKey: String?, cacheManager: CacheManager, overriddenDuration: Int, initialPosition: Int = 0) {
         if let path = Bundle.main.path(forResource: assetPath, ofType: nil) {
             let url = URL(fileURLWithPath: path)
-            setDataSourceURL(url, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, headers: [:], useCache: false, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration, videoExtension: nil)
+            setDataSourceURL(url, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, headers: [:], useCache: false, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration, videoExtension: nil, initialPosition: initialPosition)
         }
     }
 
-    public func setDataSourceURL(_ url: URL, key: String?, certificateUrl: String?, licenseUrl: String?, headers: [AnyHashable: Any], useCache: Bool, cacheKey: String?, cacheManager: CacheManager, overriddenDuration: Int, videoExtension: String?) {
+    public func setDataSourceURL(_ url: URL, key: String?, certificateUrl: String?, licenseUrl: String?, headers: [AnyHashable: Any], useCache: Bool, cacheKey: String?, cacheManager: CacheManager, overriddenDuration: Int, videoExtension: String?, initialPosition: Int = 0) {
         strictMediaLoader?.invalidate()
         strictMediaLoader = nil
         self.overriddenDuration = 0
@@ -261,10 +271,15 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
         if #available(iOS 10.0, *), overriddenDuration > 0 {
             self.overriddenDuration = overriddenDuration
         }
-        setDataSourcePlayerItem(item, key: key)
+        setDataSourcePlayerItem(item, key: key, initialPosition: initialPosition)
     }
 
-    private func setDataSourcePlayerItem(_ item: AVPlayerItem, key: String?) {
+    private func setDataSourcePlayerItem(_ item: AVPlayerItem, key: String?, initialPosition: Int) {
+        self.firstFrameRendered = false
+        self.initialPositionReady = initialPosition <= 0
+        // A reused layer can remain ready while seeking. Disconnect it until
+        // the new item reaches its resume point so it cannot reveal preroll.
+        (self.playerView?.layer as? AVPlayerLayer)?.player = nil
         self.key = key
         self.stalledCount = 0
         self.isStalledCheckStarted = false
@@ -273,6 +288,14 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
             item.preferredForwardBufferDuration = preferredForwardBufferDuration
         }
         player.replaceCurrentItem(with: item)
+        if initialPosition > 0 {
+            player.seek(to: CMTime(value: Int64(initialPosition), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] finished in
+                guard let self, let item, finished else { return }
+                self.revealPreparedItem(item)
+            }
+        } else {
+            (playerView?.layer as? AVPlayerLayer)?.player = player
+        }
 
         let asset = item.asset
         asset.loadValuesAsynchronously(forKeys: ["tracks"]) {
@@ -305,6 +328,12 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
         if isStalledCheckStarted { return }
         isStalledCheckStarted = true
         startStalledCheck()
+    }
+
+    private func revealPreparedItem(_ item: AVPlayerItem) {
+        guard !disposed, player.currentItem === item else { return }
+        initialPositionReady = true
+        (playerView?.layer as? AVPlayerLayer)?.player = player
     }
 
     private func startStalledCheck() {
@@ -517,9 +546,12 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
     public func seekTo(_ location: Int) {
         let wasPlaying = isPlaying
         if wasPlaying { player.pause() }
-        player.seek(to: CMTimeMake(value: Int64(location), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-            guard let self = self else { return }
-            if wasPlaying { self.applyPlayerRate() }
+        let item = player.currentItem
+        player.seek(to: CMTimeMake(value: Int64(location), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak item] finished in
+            guard let self, let item, finished, !self.disposed,
+                  self.player.currentItem === item else { return }
+            self.revealPreparedItem(item)
+            if wasPlaying && self.isPlaying { self.applyPlayerRate() }
         }
     }
 
@@ -720,11 +752,13 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         eventSink = events
         onReadyToPlay()
+        if firstFrameRendered { events(["event": "firstFrameRendered", "key": key as Any]) }
         return nil
     }
 
     public func clear() {
         isInitialized = false
+        firstFrameRendered = false
         isPlaying = false
         disposed = false
         failedCount = 0
@@ -743,6 +777,8 @@ public class BetterPlayer: NSObject, FlutterPlatformView, FlutterStreamHandler, 
     }
 
     public func dispose() {
+        firstFrameObservation?.invalidate()
+        firstFrameObservation = nil
         NotificationCenter.default.removeObserver(self)
         backgroundPauseGeneration += 1
         pause()

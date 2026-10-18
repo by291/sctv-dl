@@ -26,6 +26,7 @@ pub async fn choose_download_directory<R: Runtime>(
     directories: State<'_, DesktopSettings<R>>,
 ) -> Result<Option<String>> {
     let operation = Arc::new(lifecycle.enter().await?);
+
     directories
         .choose_download_directory(&app, operation)
         .await
@@ -48,5 +49,6 @@ pub async fn save_settings<R: Runtime>(
     value: serde_json::Value,
 ) -> Result<()> {
     let operation = lifecycle.enter_save().await?;
+
     settings.save(value, operation).await
 }

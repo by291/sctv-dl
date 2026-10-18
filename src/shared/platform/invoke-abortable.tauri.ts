@@ -7,10 +7,10 @@ function nativeError(value: unknown): Error {
   if (parsed.success) {
     return parsed.data.code === 'cancelled'
       ? new DOMException(parsed.data.message, 'AbortError')
-      : new Error(parsed.data.message)
+      : new Error(parsed.data.message, { cause: value })
   }
 
-  return new Error('无法调用桌面服务，请重启应用后重试')
+  return new Error('无法调用桌面服务，请重启应用后重试', { cause: value })
 }
 
 // onLate releases resources returned after cancellation or in an invalid response.
@@ -58,7 +58,7 @@ export async function invokeAbortable<T>(
         settle(() =>
           result.success
             ? resolve(result.data)
-            : reject(new Error('桌面服务数据格式异常，请检查客户端版本')),
+            : reject(new Error('桌面服务数据格式异常，请检查客户端版本', { cause: result.error })),
         )
       },
       (error: unknown) => settle(() => reject(nativeError(error))),

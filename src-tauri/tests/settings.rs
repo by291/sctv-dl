@@ -30,6 +30,7 @@ fn propagates_identity_save_failures_without_overwriting_the_existing_store() {
 #[test]
 fn failed_directory_save_rolls_back_memory_and_preserves_persisted_identity() {
     use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
+
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("desktop.json");
     let app = mock_builder()
@@ -64,6 +65,7 @@ fn failed_directory_save_rolls_back_memory_and_preserves_persisted_identity() {
 #[test]
 fn stores_download_directories_privately_and_rejects_missing_locations() {
     use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
+
     let directory = tempfile::tempdir().unwrap();
     let destination = directory.path().join("downloads");
     std::fs::create_dir(&destination).unwrap();
@@ -125,8 +127,11 @@ fn repairs_invalid_identity_without_removing_other_settings() {
     let path = directory.path().join("desktop.json");
     std::fs::write(
         &path,
-        serde_json::to_vec(&json!({"installationId":"00000000-0000-4000-0000-000000000000", "preferences":{"theme":"dark"}}))
-            .unwrap(),
+        serde_json::to_vec(&json!({
+            "installationId": "00000000-0000-4000-0000-000000000000",
+            "preferences": { "theme": "dark" }
+        }))
+        .unwrap(),
     )
     .unwrap();
     let app = mock_builder()
@@ -167,6 +172,7 @@ fn surfaces_storage_read_errors_instead_of_using_an_ephemeral_identity() {
         ErrorCode::Storage
     );
     assert_eq!(std::fs::read(&corrupt_path).unwrap(), b"not-json");
+
     let blocking_file = directory.path().join("file");
     std::fs::write(&blocking_file, b"occupied").unwrap();
     let unwritable = app
@@ -212,6 +218,7 @@ fn preserves_corrupt_storage_after_the_application_exits() {
 #[test]
 fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
     use sctv_dl_desktop_lib::settings::{load_preferences, save_preferences};
+
     let root = tempfile::tempdir().unwrap();
     let app = mock_builder()
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -224,11 +231,27 @@ fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
         .unwrap();
     let identity = installation_id(&store).unwrap();
     store.set("downloadDirectory", json!(root.path().to_str().unwrap()));
-    store.set("preferences", json!({"theme":"dark", "quality":"invalid", "favourites":["1", 2, "../3", "1", "004"], "installationId":"leak"}));
+    store.set(
+        "preferences",
+        json!({
+            "theme": "dark",
+            "quality": "invalid",
+            "favourites": ["1", 2, "../3", "1", "004"],
+            "installationId": "leak"
+        }),
+    );
+
     let snapshot = serde_json::to_value(load_preferences(Ok(&store))).unwrap();
     assert_eq!(
         snapshot,
-        json!({"value":{"theme":"dark","quality":"standard","favourites":["1","004"]}, "persisted":true})
+        json!({
+            "value": {
+                "theme": "dark",
+                "quality": "standard",
+                "favourites": ["1", "004"]
+            },
+            "persisted": true
+        })
     );
     save_preferences(
         &store,
@@ -258,13 +281,21 @@ fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_value
         error::AppError,
         settings::{load_preferences, save_preferences},
     };
+
     let snapshot = serde_json::to_value(load_preferences::<tauri::test::MockRuntime>(Err(
         AppError::new(ErrorCode::Storage, "denied"),
     )))
     .unwrap();
     assert_eq!(
         snapshot,
-        json!({"value":{"theme":"system","quality":"standard","favourites":[]}, "persisted":false})
+        json!({
+            "value": {
+                "theme": "system",
+                "quality": "standard",
+                "favourites": []
+            },
+            "persisted": false
+        })
     );
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("desktop.json");

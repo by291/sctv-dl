@@ -7,9 +7,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -27,8 +29,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.sctvdl.app.navigation.AppDestinations
 import dev.sctvdl.app.navigation.AppNavigationShell
 import dev.sctvdl.app.platform.ActivityPlaybackHost
+import dev.sctvdl.app.platform.rememberDownloadFileConsentRequester
 import dev.sctvdl.feature.player.PlaybackSelection
 import dev.sctvdl.feature.programmes.presentation.rememberProgrammeLibraryState
+import dev.sctvdl.ui.media.LocalCoverImageLoader
 import dev.sctvdl.ui.theme.SctvAppTheme
 import kotlinx.coroutines.delay
 
@@ -43,7 +47,9 @@ internal fun SctvApp(activity: MainActivity) {
     val downloadsRequest by activity.downloadsRequest.collectAsStateWithLifecycle()
 
     var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
+    var feedbackDownloadsRequest by remember { mutableIntStateOf(0) }
 
+    val fileConsent = rememberDownloadFileConsentRequester(activity.downloadFileConsents)
     val library = rememberProgrammeLibraryState()
     val host = remember(activity) { ActivityPlaybackHost(activity) }
     val snackbar = remember { SnackbarHostState() }
@@ -58,27 +64,35 @@ internal fun SctvApp(activity: MainActivity) {
         }
     }
 
-    LaunchedEffect(state.downloadMessage) {
-        state.downloadMessage?.let {
-            snackbar.showSnackbar(it.text)
-            model.acknowledgeMessage(it.id)
-        }
-    }
+    DownloadFeedback(state.downloadMessage, snackbar, model::acknowledgeMessage) { feedbackDownloadsRequest++ }
 
-    SctvAppTheme(state.settings) {
-        val darkIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+    val imageLoader by (activity.application as SctvApplication).coverImages.loaders.collectAsStateWithLifecycle()
+    CompositionLocalProvider(LocalCoverImageLoader provides imageLoader) {
+        SctvAppTheme(state.settings) {
+            val darkIcons = MaterialTheme.colorScheme.surface.luminance() > 0.5f
 
-        SideEffect { activity.setSystemBarIcons(darkIcons) }
+            SideEffect { activity.setSystemBarIcons(darkIcons) }
 
-        Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-            AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) { route, navigator, bottomPadding ->
-                AppDestinations(route, navigator, library, state.settings, host, model::enqueue, {
-                    snackbar.showSnackbar(it)
-                }, playbackSelection, {
-                    playbackSelection = it
-                }, bottomContentPadding = bottomPadding)
+            Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+                AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest + feedbackDownloadsRequest) {
+                        route,
+                        navigator,
+                        bottomPadding
+                    ->
+                    AppDestinations(
+                        route, navigator, library, state.settings, host,
+                        { requests ->
+                            activity.requestDownloadNotifications()
+                            model.enqueue(requests)
+                        }, {
+                            snackbar.showSnackbar(it)
+                        }, playbackSelection, {
+                            playbackSelection = it
+                        }, bottomContentPadding = bottomPadding, requestFileConsent = fileConsent
+                    )
+                }
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
         }
     }
 }

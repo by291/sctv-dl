@@ -1,5 +1,6 @@
 package dev.sctvdl.feature.programmes.catalogue
 
+import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.CachedResource
 import dev.sctvdl.domain.programme.Programme
 import dev.sctvdl.domain.programme.sortProgrammes
@@ -12,6 +13,7 @@ internal data class CatalogueUiState(
     val byName: Boolean = false,
     val favouritesOnly: Boolean = false,
     val featuredId: String? = null,
+    val favouriteError: AppError? = null,
     val hasUpdate: Boolean = false
 ) {
     val featured: Programme? get() = resource.data.orEmpty().find { it.id == featuredId }

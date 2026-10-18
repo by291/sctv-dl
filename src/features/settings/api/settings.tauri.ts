@@ -1,27 +1,24 @@
-import { invoke } from '@tauri-apps/api/core'
 import { z } from 'zod'
 
-import { applicationErrorSchema } from '@shared/contracts/errors'
 import { settingsSchema } from '@shared/contracts/settings'
+import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { SettingsPort } from '@/shared/platform/ports'
 
 const snapshotSchema = z.object({ value: settingsSchema, persisted: z.boolean() })
 
-async function request(command: string, args: Record<string, unknown> = {}): Promise<unknown> {
-  try {
-    return await invoke(command, args)
-  } catch (cause) {
-    const error = applicationErrorSchema.safeParse(cause)
-    throw new Error(error.success ? error.data.message : '无法访问本地设置', { cause })
-  }
-}
+const messages = { failure: '无法访问本地设置', invalid: '本地设置数据格式异常，请检查客户端版本' }
 
 export function createTauriSettings(): SettingsPort {
   return {
-    load: async () => snapshotSchema.parse(await request('load_settings')),
+    load: () => invokeValidated('load_settings', {}, snapshotSchema, messages),
     async save(value) {
-      await request('save_settings', { value: settingsSchema.parse(value) })
+      await invokeValidated(
+        'save_settings',
+        { value: settingsSchema.parse(value) },
+        z.null(),
+        messages,
+      )
     },
     // One application window owns preferences; no independent native writer broadcasts changes.
     subscribe: async () => () => {},

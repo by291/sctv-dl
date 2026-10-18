@@ -7,7 +7,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.ErrorKind
 import dev.sctvdl.domain.download.DownloadState
+import dev.sctvdl.domain.history.ViewingTarget
 import dev.sctvdl.domain.repository.DownloadRepository
+import dev.sctvdl.domain.repository.HistoryRepository
+import dev.sctvdl.feature.player.PlaybackHistoryRecorder
 import dev.sctvdl.feature.player.PlayerUiState
 import dev.sctvdl.player.model.PlaybackSource
 import javax.inject.Inject
@@ -23,7 +26,8 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 internal class LocalPlayerViewModel @Inject constructor(
     private val repository: DownloadRepository,
-    private val saved: SavedStateHandle
+    private val saved: SavedStateHandle,
+    private val history: HistoryRepository
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(PlayerUiState())
     val uiState = mutableState.asStateFlow()
@@ -47,8 +51,24 @@ internal class LocalPlayerViewModel @Inject constructor(
                 // Recheck the completed URI before trusting a download record restored from disk.
                 repository.reconcile()
 
+                var recorder: PlaybackHistoryRecorder? = null
+                var resume = 0L
                 repository.observeTasks().collect { tasks ->
                     val task = tasks.firstOrNull { it.id == id }
+                    if (task != null && recorder == null) {
+                        recorder = PlaybackHistoryRecorder(
+                            history,
+                            task.selection?.let { ViewingTarget.Online(it) }
+                                ?: ViewingTarget.LegacyDownload(
+                                    task.id,
+                                    task.title,
+                                    task.programmeName,
+                                    task.broadcastDate
+                                ),
+                            viewModelScope
+                        )
+                        resume = requireNotNull(recorder).initialize()
+                    }
                     val source = task?.takeIf {
                         it.state == DownloadState.Completed &&
                             it.contentUri != null
@@ -58,7 +78,7 @@ internal class LocalPlayerViewModel @Inject constructor(
                             it.title,
                             emptyList(),
                             it.contentUri,
-                            saved["positionMs"] ?: 0L
+                            saved["positionMs"] ?: resume
                         )
                     }
                     if (taskId == id) {
@@ -66,6 +86,7 @@ internal class LocalPlayerViewModel @Inject constructor(
                             PlayerUiState(
                                 false,
                                 source,
+                                history = recorder,
                                 error = if (source == null) {
                                     AppError(ErrorKind.Storage, "下载文件已不可用，请返回下载页重新下载")
                                 } else {

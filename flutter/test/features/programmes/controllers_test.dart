@@ -36,34 +36,37 @@ void main() {
     },
   );
 
-  test('favourite changes do not reorder the retained catalogue and queries are independent', () async {
-    final repository = FakeProgrammeRepository()
-      ..catalogue = snapshot([
-        programme,
-        const Programme(id: '2', name: 'Music'),
-      ], 'one');
-    final user = FakeUserRepository()..favourites = {'2'};
-    final controller = LibraryController(
-      repository: repository,
-      user: user,
-      initialFavourites: {'2'},
-    );
-    addTearDown(controller.dispose);
-    addTearDown(user.close);
-    await controller.initialize();
-    expect(
-      controller.visibleProgrammes(LibraryTab.all).map((item) => item.id),
-      ['2', '1'],
-    );
-    await controller.toggleFavourite('1');
-    expect(
-      controller.visibleProgrammes(LibraryTab.all).map((item) => item.id),
-      ['2', '1'],
-    );
-    controller.setQuery(LibraryTab.all, 'News');
-    expect(controller.visibleProgrammes(LibraryTab.all), hasLength(1));
-    expect(controller.visibleProgrammes(LibraryTab.favourites), hasLength(2));
-  });
+  test(
+    'favourite filtering preserves catalogue ordering and the current query',
+    () async {
+      final repository = FakeProgrammeRepository()
+        ..catalogue = snapshot([
+          programme,
+          const Programme(id: '2', name: 'Music'),
+        ], 'one');
+      final user = FakeUserRepository()..favourites = {'2'};
+      final controller = LibraryController(
+        repository: repository,
+        user: user,
+        initialFavourites: {'2'},
+      );
+      addTearDown(controller.dispose);
+      addTearDown(user.close);
+      await controller.initialize();
+      expect(controller.visibleProgrammes().map((item) => item.id), ['2', '1']);
+      await controller.toggleFavourite('1');
+      expect(controller.visibleProgrammes().map((item) => item.id), ['2', '1']);
+      expect(
+        controller
+            .visibleProgrammes(favouritesOnly: true)
+            .map((item) => item.id),
+        ['2', '1'],
+      );
+      controller.setQuery('News');
+      expect(controller.visibleProgrammes(), hasLength(1));
+      expect(controller.visibleProgrammes(favouritesOnly: true), hasLength(1));
+    },
+  );
 
   test(
     'an old date response cannot replace a newer selected broadcast',

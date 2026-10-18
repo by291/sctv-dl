@@ -21,16 +21,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -86,12 +89,13 @@ internal fun CatalogueScreen(
     embedded: Boolean = false,
     onApplyUpdates: () -> Unit = {},
     catalogueScroll: LazyGridState = rememberLazyGridState(),
-    favouritesScroll: LazyGridState = rememberLazyGridState(),
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onHistory: (() -> Unit)? = null,
+    onRetryFavourites: () -> Unit = {}
 ) {
     val rows = state.rows(favouritesOnly)
     val initialLoading = state.resource.data == null && state.resource.error == null
-    val showExploration = !embedded && !favouritesOnly && state.query.isBlank()
+    val showExploration = !embedded && state.query.isBlank()
     val largeText = LocalDensity.current.fontScale >= 1.5f
 
     val scope = rememberCoroutineScope()
@@ -130,7 +134,7 @@ internal fun CatalogueScreen(
                         value = state.query,
                         onValueChange = onQuery,
                         singleLine = true,
-                        placeholder = { Text(if (favouritesOnly) "搜索收藏栏目" else "搜索栏目") },
+                        placeholder = { Text("搜索栏目") },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = {
                             focusManager.clearFocus()
@@ -157,10 +161,13 @@ internal fun CatalogueScreen(
                 }
             },
             actions = {
+                if (!searching && onHistory != null) {
+                    IconButton(onClick = onHistory) { Icon(Icons.Outlined.History, "观看记录") }
+                }
                 if (state.hasUpdate) {
                     ContentUpdateAction(onUpdate = {
                         onApplyUpdates()
-                        scope.launch { (if (favouritesOnly) favouritesScroll else catalogueScroll).scrollToItem(0) }
+                        scope.launch { catalogueScroll.scrollToItem(0) }
                     })
                 }
                 if (!searching) {
@@ -173,26 +180,10 @@ internal fun CatalogueScreen(
                 }
             }
         )
-        PrimaryTabRow(selectedTabIndex = if (favouritesOnly) 1 else 0) {
-            Tab(
-                selected = !favouritesOnly,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                onClick = { onFilter(false) },
-                text = { Text("全部栏目") },
-                modifier = Modifier.testTag("filter-all")
-            )
-            Tab(
-                selected = favouritesOnly,
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                onClick = { onFilter(true) },
-                text = { Text("我的收藏") },
-                modifier = Modifier.testTag("filter-favourites")
-            )
-        }
         Column(Modifier.weight(1f).fillMaxWidth()) {
             LazyVerticalGrid(
                 modifier = Modifier.weight(1f).fillMaxWidth().testTag("catalogue-grid"),
-                state = if (favouritesOnly) favouritesScroll else catalogueScroll,
+                state = catalogueScroll,
                 columns = GridCells.Adaptive(if (largeText) 280.dp else 156.dp),
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -244,6 +235,21 @@ internal fun CatalogueScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                IconToggleButton(
+                                    checked = favouritesOnly,
+                                    onCheckedChange = onFilter,
+                                    modifier = Modifier.testTag("favourites-filter"),
+                                    colors = IconButtonDefaults.iconToggleButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.primary,
+                                        checkedContentColor = MaterialTheme.colorScheme.primary,
+                                        checkedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                    )
+                                ) {
+                                    Icon(
+                                        if (favouritesOnly) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        if (favouritesOnly) "显示全部栏目" else "只看收藏"
+                                    )
+                                }
                                 Box {
                                     TextButton(onClick = { sortMenu = true }) {
                                         Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
@@ -262,6 +268,11 @@ internal fun CatalogueScreen(
                                 }
                             }
                         }
+                    }
+                }
+                state.favouriteError?.let { error ->
+                    item(key = "favourite-error") {
+                        CachedErrorBanner(error, false, onRetryFavourites, retryLabel = "重试")
                     }
                 }
                 state.resource.error?.let { error ->

@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../design/cover_image.dart';
+import '../../design/pending_update_notice.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
 import 'archive_controller.dart';
+import 'components/archive_content_card.dart';
+import 'components/archive_header.dart';
+import 'components/broadcast_date_sheet.dart';
+import 'components/broadcast_dates.dart';
 import 'library_controller.dart';
 
 class ArchivePage extends StatefulWidget {
@@ -18,10 +22,13 @@ class ArchivePage extends StatefulWidget {
     required this.onDownload,
     required this.onOpenProgramme,
     this.initialDateId,
+    this.coverTag,
   });
+
   final ArchiveController controller;
   final LibraryController library;
   final String? initialDateId;
+  final String? coverTag;
   final void Function(ProgrammeSelection) onPlay;
   final Future<void> Function(List<ProgrammeSelection>) onDownload;
   final void Function(Programme) onOpenProgramme;
@@ -33,11 +40,15 @@ class ArchivePage extends StatefulWidget {
 class _ArchivePageState extends State<ArchivePage>
     with WidgetsBindingObserver, RestorationMixin {
   ArchiveController get controller => widget.controller;
+
   final _scroll = ScrollController();
+  final _updateNoticeAnchor = LayerLink();
+
   final _restoredDate = RestorableStringN(null);
   final _restoredSelection = RestorableString('');
   final _restoredSelectionMode = RestorableBool(false);
   final _restoredAscending = RestorableBool(true);
+
   bool _initialized = false;
   bool _interacted = false;
   bool _observingRestoration = false;
@@ -51,23 +62,25 @@ class _ArchivePageState extends State<ArchivePage>
     registerForRestoration(_restoredSelection, 'selection');
     registerForRestoration(_restoredSelectionMode, 'selection-mode');
     registerForRestoration(_restoredAscending, 'clip-ascending');
+
     if (_initialized) return;
+
     _initialized = true;
     final restoredIds = _restoredSelection.value.split(',').toSet();
     final restoredMode = _restoredSelectionMode.value;
     final dateId = _restoredDate.value ?? widget.initialDateId;
-    controller.ascending = _restoredAscending.value;
+
+    controller.restoreSort(_restoredAscending.value);
     unawaited(
       controller.initialize(dateId: dateId).then((_) {
         if (!mounted) return;
+
         if (!_interacted &&
             restoredMode &&
             controller.selectedDate?.id == dateId) {
-          controller.enterSelection();
-          for (final item in controller.contents) {
-            if (restoredIds.contains(item.id)) controller.toggleSelection(item);
-          }
+          controller.restoreSelection(restoredIds);
         }
+
         controller.addListener(_saveRestorationState);
         _observingRestoration = true;
         _saveRestorationState();
@@ -110,12 +123,15 @@ class _ArchivePageState extends State<ArchivePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     if (_observingRestoration) controller.removeListener(_saveRestorationState);
+
     _restoredDate.dispose();
     _restoredSelection.dispose();
     _restoredSelectionMode.dispose();
     _restoredAscending.dispose();
+
     _scroll.dispose();
     controller.dispose();
+
     super.dispose();
   }
 
@@ -123,51 +139,16 @@ class _ArchivePageState extends State<ArchivePage>
     final picked = await showModalBottomSheet<BroadcastDate>(
       context: context,
       showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       useSafeArea: true,
       isScrollControlled: true,
-      builder: (context) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * .75,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                '选择播出日期',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-            ),
-            for (final month
-                in controller.dates
-                    .map((date) => date.date.substring(0, 7))
-                    .toSet()) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 20, 12, 8),
-                child: Text(
-                  '$month · ${controller.dates.where((date) => date.date.startsWith(month)).length} 期',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Card(
-                child: Column(
-                  children: [
-                    for (final date in controller.dates.where(
-                      (date) => date.date.startsWith(month),
-                    ))
-                      ListTile(
-                        title: Text(date.date),
-                        selected: date.id == controller.selectedDate?.id,
-                        trailing: date.id == controller.selectedDate?.id
-                            ? const Icon(Icons.check_circle)
-                            : null,
-                        onTap: () => Navigator.pop(context, date),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
+      builder: (context) => BroadcastDateSheet(
+        dates: controller.dates,
+        selectedId: controller.selectedDate?.id,
+        onSelected: (date) => Navigator.pop(context, date),
       ),
     );
     if (picked != null && mounted) await _selectDate(picked);
@@ -207,8 +188,6 @@ class _ArchivePageState extends State<ArchivePage>
                 : '往期回看',
           ),
           actions: [
-            if (!controller.selectionMode && controller.hasPendingUpdate)
-              PendingUpdateButton(onPressed: controller.acceptUpdates),
             if (!controller.selectionMode &&
                 controller.contents.any(
                   (item) => videoSources(item).isNotEmpty,
@@ -220,18 +199,35 @@ class _ArchivePageState extends State<ArchivePage>
               ),
           ],
         ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final content = _archive();
-            if (constraints.maxWidth < 1000) return content;
-            return Row(
-              children: [
-                SizedBox(width: 270, child: _libraryPane()),
-                const VerticalDivider(width: 1),
-                Expanded(child: content),
-              ],
-            );
-          },
+        body: PendingUpdateOverlay(
+          anchor: _updateNoticeAnchor,
+          targetAnchor: Alignment.topCenter,
+          // Compact clips start with text; keep the notice above that title.
+          // Full/large-text cards start with artwork and can host it inside.
+          anchorOffset: Offset(
+            0,
+            controller.fullEpisodes.isNotEmpty ||
+                    controller.contents.isEmpty ||
+                    MediaQuery.textScalerOf(context).scale(1) >= 1.5
+                ? 8
+                : -40,
+          ),
+          visible: !controller.selectionMode && controller.hasPendingUpdate,
+          onUpdate: _action(controller.acceptUpdates),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final content = _archive();
+              if (constraints.maxWidth < 1000) return content;
+
+              return Row(
+                children: [
+                  SizedBox(width: 270, child: _libraryPane()),
+                  const VerticalDivider(width: 1),
+                  Expanded(child: content),
+                ],
+              );
+            },
+          ),
         ),
         bottomNavigationBar: controller.selectionMode
             ? SafeArea(
@@ -258,6 +254,7 @@ class _ArchivePageState extends State<ArchivePage>
     itemCount: widget.library.programmes.length,
     itemBuilder: (context, index) {
       final programme = widget.library.programmes[index];
+
       return ListTile(
         selected: programme.id == controller.programme.id,
         title: Text(programme.name, maxLines: 2),
@@ -270,363 +267,218 @@ class _ArchivePageState extends State<ArchivePage>
   );
 
   Widget _archive() {
-    if (controller.loadingDates) return const PageSkeleton();
-    if (controller.dates.isEmpty && controller.error != null) {
-      return StatePanel(
-        title: '暂时无法加载回看',
-        message: controller.error!,
-        icon: Icons.cloud_off_outlined,
-        onAction: () => unawaited(controller.refresh()),
-      );
-    }
     final selected = controller.selectedDate;
-    final recent = controller.dates.take(7).toList();
-    if (selected != null && !recent.any((date) => date.id == selected.id)) {
-      recent.add(selected);
-    }
+
     return CustomScrollView(
       controller: _scroll,
       restorationId: 'broadcast-content',
       slivers: [
-        if (!controller.selectionMode)
-          SliverToBoxAdapter(
-            child: Padding(padding: const EdgeInsets.all(16), child: _header()),
-          ),
-        if (controller.error case final error?)
+        if (widget.library.favouriteError case final favouriteError?)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             sliver: SliverToBoxAdapter(
               child: CachedErrorBanner(
-                message: error,
-                onRetry: () => unawaited(controller.refresh()),
+                message: favouriteError,
+                onRetry: () => unawaited(widget.library.retryFavourites()),
               ),
             ),
           ),
-        SliverToBoxAdapter(
-          child: controller.selectionMode
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Wrap(
-                    spacing: 4,
-                    children: [
-                      TextButton(
-                        onPressed: _action(controller.selectAll),
-                        child: const Text('全选'),
-                      ),
-                      TextButton(
-                        onPressed: _action(controller.selectFullEpisodes),
-                        child: const Text('仅完整节目'),
-                      ),
-                    ],
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '播出日期',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final date in recent)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: ChoiceChip(
-                                  label: Text(date.date),
-                                  selected: date.id == selected?.id,
-                                  onSelected: (_) =>
-                                      unawaited(_selectDate(date)),
-                                ),
-                              ),
-                            if (controller.dates.isNotEmpty)
-                              TextButton.icon(
-                                onPressed: _chooseDate,
-                                icon: const Icon(Icons.calendar_month_outlined),
-                                label: const Text('更多日期'),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-        if (selected != null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                '${selected.date} · ${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-        if (controller.loadingContents &&
-            !controller.hasSnapshot &&
-            selected != null)
+        if (!controller.selectionMode)
           SliverToBoxAdapter(
-            child: SizedBox(height: 340, child: const PageSkeleton(count: 2)),
-          )
-        else if (controller.contents.isEmpty)
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ArchiveHeader(
+                programme: controller.programme,
+                favourite: widget.library.favourites.contains(
+                  controller.programme.id,
+                ),
+                onFavourite: () => unawaited(
+                  widget.library.toggleFavourite(controller.programme.id),
+                ),
+                scroll: _scroll,
+                coverTag: widget.coverTag,
+              ),
+            ),
+          ),
+        if (controller.loadingDates)
+          const SliverFillRemaining(child: PageSkeleton())
+        else if (controller.dates.isEmpty && controller.error != null)
           SliverFillRemaining(
             hasScrollBody: false,
             child: StatePanel(
-              title: '暂无节目内容',
-              message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
-              onAction: controller.error == null
-                  ? null
-                  : () => unawaited(controller.refresh()),
+              title: '暂时无法加载回看',
+              message: controller.error!,
+              icon: Icons.cloud_off_outlined,
+              onAction: () => unawaited(controller.refresh()),
             ),
           )
         else ...[
-          for (final item in controller.fullEpisodes)
+          if (controller.error case final error?)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               sliver: SliverToBoxAdapter(
-                child: _contentCard(item, fullEpisode: true),
+                child: CachedErrorBanner(
+                  message: error,
+                  onRetry: () => unawaited(controller.refresh()),
+                ),
               ),
             ),
-          if (controller.clips.isNotEmpty)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '节目片段',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+          SliverToBoxAdapter(
+            child: controller.selectionMode
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton(
+                          onPressed: _action(controller.selectAll),
+                          child: const Text('全选'),
+                        ),
+                        TextButton(
+                          onPressed: _action(controller.selectFullEpisodes),
+                          child: const Text('仅完整节目'),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      tooltip: controller.ascending
-                          ? '当前按时间升序，切换为降序'
-                          : '当前按时间降序，切换为升序',
-                      onPressed: controller.selectionMode
-                          ? null
-                          : _action(controller.toggleSort),
-                      icon: Icon(
-                        controller.ascending ? Icons.sort : Icons.sort_by_alpha,
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: BroadcastDates(
+                      dates: controller.dates,
+                      selected: selected,
+                      onSelected: (date) => unawaited(_selectDate(date)),
+                      onMore: _chooseDate,
+                    ),
+                  ),
+          ),
+          if (selected != null)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selected.date,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${controller.fullEpisodes.length} 个完整节目 · ${controller.clips.length} 个片段',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList.separated(
-              itemCount: controller.clips.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, index) =>
-                  _contentCard(controller.clips[index], fullEpisode: false),
+          if (controller.loadingContents &&
+              !controller.hasSnapshot &&
+              selected != null)
+            SliverToBoxAdapter(
+              child: SizedBox(height: 340, child: const PageSkeleton(count: 2)),
+            )
+          else if (controller.contents.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: CompositedTransformTarget(
+                link: _updateNoticeAnchor,
+                child: StatePanel(
+                  title: '暂无节目内容',
+                  message: selected == null ? '暂未提供播出日期。' : '这一天暂未提供节目内容。',
+                  onAction: controller.error == null
+                      ? null
+                      : () => unawaited(controller.refresh()),
+                ),
+              ),
+            )
+          else ...[
+            for (final item in controller.fullEpisodes)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                sliver: SliverToBoxAdapter(
+                  child: _contentCard(item, fullEpisode: true),
+                ),
+              ),
+            if (controller.clips.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '节目片段',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: controller.ascending
+                            ? '当前按时间升序，切换为降序'
+                            : '当前按时间降序，切换为升序',
+                        onPressed: controller.selectionMode
+                            ? null
+                            : _action(controller.toggleSort),
+                        icon: Transform.flip(
+                          flipY: controller.ascending,
+                          child: const Icon(Icons.sort),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList.separated(
+                itemCount: controller.clips.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (_, index) =>
+                    _contentCard(controller.clips[index], fullEpisode: false),
+              ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-          ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 24 + MediaQuery.paddingOf(context).bottom,
+              ),
+            ),
+          ],
         ],
       ],
     );
   }
 
-  Widget _header() {
-    final programme = controller.programme;
-    final favourite = widget.library.favourites.contains(programme.id);
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(programme.name, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: () => widget.library.toggleFavourite(programme.id),
-          icon: Icon(favourite ? Icons.favorite : Icons.favorite_border),
-          label: Text(favourite ? '已收藏' : '收藏栏目'),
-        ),
-      ],
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (MediaQuery.textScalerOf(context).scale(1) >= 1.5) return details;
-        final cover = ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: CoverImage(url: programme.cover),
-        );
-        if (constraints.maxWidth < 360) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [cover, const SizedBox(height: 16), details],
+  Widget _contentCard(ProgrammeContent item, {required bool fullEpisode}) {
+    final broadcast = controller.selectedDate!;
+    final card = ArchiveContentCard(
+      item: item,
+      programme: controller.programme,
+      broadcast: broadcast,
+      fullEpisode: fullEpisode,
+      selected: controller.selectedIds.contains(item.id),
+      selectionMode: controller.selectionMode,
+      onTap: () {
+        if (controller.selectionMode) {
+          _action(() => controller.toggleSelection(item))();
+        } else {
+          widget.onPlay(
+            ProgrammeSelection(
+              programme: controller.programme,
+              broadcast: broadcast,
+              content: item,
+            ),
           );
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: (constraints.maxWidth * .6).clamp(0, 360),
-              child: cover,
-            ),
-            const SizedBox(width: 20),
-            Expanded(child: details),
-          ],
-        );
       },
     );
-  }
 
-  Widget _contentCard(ProgrammeContent item, {required bool fullEpisode}) {
-    final playable = videoSources(item).isNotEmpty;
-    final selected = controller.selectedIds.contains(item.id);
-    final largeText = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (fullEpisode && !controller.selectionMode)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              '完整节目',
-              style: Theme.of(context).textTheme.labelMedium
-                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
-            ),
-          ),
-        Text(
-          item.title,
-          maxLines: largeText ? 6 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        if (!fullEpisode)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              publicationLabel(
-                item.publishedAt,
-                controller.selectedDate?.date ?? '',
-              ),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        if (!playable)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text('暂未提供视频'),
-          ),
-      ],
-    );
-    final content = controller.selectionMode || largeText
-        ? Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                if (controller.selectionMode)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: ExcludeSemantics(
-                      child: Icon(
-                        selected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: playable
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).disabledColor,
-                      ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Icon(
-                      playable
-                          ? Icons.play_circle_outline
-                          : Icons.videocam_off_outlined,
-                    ),
-                  ),
-                Expanded(child: details),
-              ],
-            ),
-          )
-        : fullEpisode
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _playArtwork(item.cover, playable),
-              Padding(padding: const EdgeInsets.all(16), child: details),
-            ],
-          )
-        : Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 112,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: _playArtwork(item.cover, playable),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: details),
-              ],
-            ),
-          );
-    return Semantics(
-      checked: controller.selectionMode ? selected : null,
-      enabled: playable,
-      label: controller.selectionMode ? item.title : null,
-      child: Card(
-        color: selected
-            ? Theme.of(context).colorScheme.secondaryContainer
-            : null,
-        child: InkWell(
-          onTap: !playable
-              ? null
-              : () {
-                  if (controller.selectionMode) {
-                    _action(() => controller.toggleSelection(item))();
-                    return;
-                  }
-                  widget.onPlay(
-                    ProgrammeSelection(
-                      programme: controller.programme,
-                      broadcast: controller.selectedDate!,
-                      content: item,
-                    ),
-                  );
-                },
-          child: content,
-        ),
-      ),
-    );
-  }
+    final first =
+        controller.fullEpisodes.firstOrNull ?? controller.clips.firstOrNull;
 
-  Widget _playArtwork(String? url, bool playable) => Stack(
-    alignment: Alignment.center,
-    children: [
-      CoverImage(url: url),
-      if (playable)
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.black45,
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(5),
-            child: Icon(
-              Icons.play_arrow_rounded,
-              color: Colors.white,
-              size: 30,
-            ),
-          ),
-        ),
-    ],
-  );
+    return item.id == first?.id
+        ? CompositedTransformTarget(link: _updateNoticeAnchor, child: card)
+        : card;
+  }
 }

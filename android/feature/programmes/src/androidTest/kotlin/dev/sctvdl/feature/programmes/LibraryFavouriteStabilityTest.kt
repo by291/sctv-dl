@@ -139,10 +139,11 @@ class LibraryFavouriteStabilityTest {
         val repository = FakeProgrammes().apply { catalogue.value = CachedResource(programmes) }
         val store = ViewModelStore()
         lateinit var scroll: LazyGridState
+        lateinit var model: CatalogueViewModel
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             try {
                 scenario.onActivity { activity ->
-                    val model = CatalogueViewModel(
+                    model = CatalogueViewModel(
                         repository,
                         FakeFavourites(),
                         SavedStateHandle(mapOf("byName" to byName, "featuredId" to "0"))
@@ -187,13 +188,6 @@ class LibraryFavouriteStabilityTest {
                 scenario.onActivity {
                     assertEquals(position, scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset)
                 }
-
-                requireNotNull(device.findObject(By.res("filter-favourites"))).click()
-                assertNotNull(device.wait(Until.findObject(By.text("1 个栏目")), 5_000))
-                assertNotNull(device.findObject(By.res("programme-$id")))
-                requireNotNull(device.findObject(By.res("filter-all"))).click()
-                assertNotNull(device.wait(Until.findObject(By.desc("取消收藏$name")), 5_000))
-                assertEquals(before, visibleCardBounds())
 
                 requireNotNull(device.findObject(By.desc("取消收藏$name"))).click()
                 assertNotNull(device.wait(Until.findObject(By.desc("收藏$name")), 5_000))

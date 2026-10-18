@@ -1,28 +1,33 @@
-use super::{
-    DownloadStart, DownloadTask, FileFailure, PreparedDownload, TaskState,
-    files::{DownloadDirectory, Reservation},
-    worker::{self, storage},
-};
-use crate::{
-    error::{AppError, ErrorCode, Result},
-    media::policy,
-};
-use futures_util::FutureExt;
-use reqwest::{Client, Url};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use futures_util::FutureExt;
+use reqwest::{Client, Url};
 use tokio::{
-    sync::{Semaphore, mpsc},
+    sync::{Semaphore, mpsc, watch},
     task::JoinHandle,
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use uuid::Uuid;
 
-const TRANSFER_CONCURRENCY: usize = 2;
+use super::{
+    errors::{storage, with_rollback},
+    files::{DownloadDirectory, Reservation},
+    records::{Admission, TaskRecords},
+    store::{DownloadDocument, DownloadStore, StoredTask},
+    worker, *,
+};
+use crate::{
+    error::{AppError, ErrorCode, Result},
+    lifecycle::OperationGuard,
+    media::policy,
+};
+
+pub(super) const TRANSFER_CONCURRENCY: usize = 2;
 
 pub struct DownloadConfig {
     pub upstream_origins: Vec<String>,
@@ -42,37 +47,59 @@ impl Default for DownloadConfig {
     }
 }
 
-struct Entry {
-    task: DownloadTask,
-    directory: PathBuf,
-    cancel: CancellationToken,
+pub(super) struct Control {
+    pub cancel: CancellationToken,
+    pub intent: Mutex<StopIntent>,
+    pub settled: watch::Sender<bool>,
+    pub checkpoint_failed: std::sync::atomic::AtomicBool,
 }
 
-struct State {
-    accepting: bool,
-    entries: Vec<Entry>,
+impl Control {
+    pub(super) fn new(settled: bool) -> Arc<Self> {
+        Arc::new(Self {
+            cancel: CancellationToken::new(),
+            intent: Mutex::new(StopIntent::Cancel),
+            settled: watch::channel(settled).0,
+            checkpoint_failed: std::sync::atomic::AtomicBool::new(false),
+        })
+    }
+
+    pub fn stop(&self, intent: StopIntent) {
+        *self.intent.lock().unwrap() = intent;
+        self.cancel.cancel();
+    }
+
+    pub async fn wait(&self) {
+        let mut settled = self.settled.subscribe();
+        while !*settled.borrow_and_update() {
+            if settled.changed().await.is_err() {
+                break;
+            }
+        }
+    }
 }
 
-type Listener = Arc<dyn Fn(DownloadTask) -> bool + Send + Sync>;
 pub(super) struct Inner {
-    state: Mutex<State>,
-    admission: Arc<tokio::sync::Mutex<()>>,
-    listeners: Mutex<HashMap<String, Listener>>,
-    directories: Mutex<HashMap<PathBuf, Arc<DownloadDirectory>>>,
-    send: mpsc::Sender<Job>,
-    pub(super) slots: Arc<Semaphore>,
+    pub records: Arc<TaskRecords>,
+    pub admission: Arc<tokio::sync::Mutex<()>>,
+    pub directories: Mutex<HashMap<PathBuf, Arc<DownloadDirectory>>>,
+    pub send: mpsc::Sender<Job>,
+    pub slots: Arc<Semaphore>,
     stop: CancellationToken,
     tracker: TaskTracker,
-    pub(super) config: DownloadConfig,
-    origins: Vec<Url>,
-    pub(super) client: Client,
+    pub config: DownloadConfig,
+    pub origins: Vec<Url>,
+    pub client: Client,
 }
 
 pub(super) struct Job {
-    pub(super) id: String,
-    pub(super) url: String,
-    pub(super) reservation: Reservation,
-    pub(super) cancel: CancellationToken,
+    pub id: String,
+    pub attempt: String,
+    pub url: String,
+    pub reservation: Reservation,
+    pub control: Arc<Control>,
+    pub checkpoint: journal::ResumeCheckpoint,
+    pub resume: bool,
 }
 
 pub struct DownloadManager {
@@ -84,19 +111,71 @@ impl DownloadManager {
     pub async fn prepare(
         &self,
         service: &crate::programmes::ProgrammeService,
-        request: super::DownloadRequest,
-    ) -> Result<super::PreparedBatch> {
+        request: DownloadRequest,
+    ) -> Result<PreparedBatch> {
+        self.inner.records.available()?;
+
         tokio::select! {
             biased;
-            _ = self.inner.stop.cancelled() => Err(AppError::new(ErrorCode::Cancelled, "应用正在退出")),
+            _ = self.inner.stop.cancelled() => Err(closing()),
             result = super::prepare::prepare_downloads(service, request, &self.inner.origins) => result,
         }
     }
 
+    /// Creates an ephemeral owner for embedding/tests. Desktop composition uses open.
     pub fn new(config: DownloadConfig) -> Result<Self> {
-        if config.queue_capacity == 0 || config.queue_capacity > 10_000 {
+        Self::build(
+            config,
+            Ok(None),
+            DownloadDocument {
+                version: 1,
+                ..Default::default()
+            },
+        )
+    }
+
+    /// A corrupt/locked index disables downloads without disabling the rest of the application.
+    pub async fn open(config: DownloadConfig, path: PathBuf) -> Result<Self> {
+        let loaded = tokio::task::spawn_blocking(move || {
+            let store = DownloadStore::open(path.clone())?;
+            let document = DownloadStore::load(&path)?;
+            Ok((store, document))
+        })
+        .await
+        .map_err(|error| {
+            AppError::with_source(ErrorCode::Storage, "下载记录读取异常终止", error)
+        })?;
+
+        match loaded {
+            Ok((store, document)) => {
+                let manager = Self::build(config, Ok(Some(store)), document)?;
+                manager.recover().await;
+                Ok(manager)
+            }
+            Err(error) => Self::unavailable(config, error),
+        }
+    }
+
+    pub fn unavailable(config: DownloadConfig, error: AppError) -> Result<Self> {
+        Self::build(
+            config,
+            Err(error.reported("open download index")),
+            DownloadDocument {
+                version: 1,
+                ..Default::default()
+            },
+        )
+    }
+
+    pub(super) fn build(
+        config: DownloadConfig,
+        store: Result<Option<DownloadStore>>,
+        document: DownloadDocument,
+    ) -> Result<Self> {
+        if config.queue_capacity == 0 || config.queue_capacity > 100 {
             return Err(AppError::new(ErrorCode::InvalidInput, "下载队列容量无效"));
         }
+
         let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
             .user_agent(crate::media::USER_AGENT)
@@ -111,14 +190,12 @@ impl DownloadManager {
                     error.without_url(),
                 )
             })?;
-        let (send, mut receive) = mpsc::channel::<Job>(config.queue_capacity);
+
+        let (send, mut receive) =
+            mpsc::channel::<Job>(config.queue_capacity + TRANSFER_CONCURRENCY);
         let inner = Arc::new(Inner {
-            state: Mutex::new(State {
-                accepting: true,
-                entries: Vec::new(),
-            }),
+            records: Arc::new(TaskRecords::new(store, document)),
             admission: Arc::default(),
-            listeners: Mutex::default(),
             directories: Mutex::default(),
             send,
             slots: Arc::new(Semaphore::new(TRANSFER_CONCURRENCY)),
@@ -128,82 +205,93 @@ impl DownloadManager {
             origins,
             client,
         });
+
         let owner = inner.clone();
         let dispatcher = tokio::spawn(async move {
-            // Accepted jobs are bounded separately, including futures waiting for a slot.
             loop {
                 let job = tokio::select! {
                     biased;
-                    _ = owner.stop.cancelled() => { receive.close(); receive.recv().await },
+                    _ = owner.stop.cancelled() => {
+                        receive.close();
+                        receive.recv().await
+                    }
                     job = receive.recv() => job,
                 };
                 let Some(job) = job else {
                     break;
                 };
+
                 let task_owner = owner.clone();
                 let id = job.id.clone();
+                let attempt = job.attempt.clone();
+                let control = job.control.clone();
                 owner.tracker.spawn(async move {
                     if std::panic::AssertUnwindSafe(worker::run(task_owner.clone(), job))
                         .catch_unwind()
                         .await
                         .is_err()
+                        && let Err(error) = task_owner
+                            .records
+                            .change(id.clone(), attempt.clone(), |record| {
+                                record.task.state = TaskState::Failed;
+                                record.task.error = Some("下载任务异常终止，请检查临时文件".into());
+                            })
+                            .await
                     {
-                        task_owner.update(&id, |task| {
-                            task.state = TaskState::Failed;
-                            task.error = Some("下载任务异常终止，请重试并检查临时文件".into());
-                        });
+                        task_owner.records.report_failure(&id, &attempt, error);
                     }
+
+                    control.settled.send_replace(true);
                 });
             }
         });
+
         Ok(Self {
             inner,
             dispatcher: tokio::sync::Mutex::new(Some(dispatcher)),
         })
     }
 
-    /// Reserves and queues each accepted file; transfer completion is reported through task state.
-    /// Blocking preparation retains its admission guard even if the caller drops this future.
     pub async fn start(
         &self,
         files: Vec<PreparedDownload>,
         directory: &Path,
     ) -> Result<DownloadStart> {
+        self.start_owned(files, directory, None).await
+    }
+
+    /// Admission and lifecycle guards stay in the blocking worker through durable acceptance.
+    pub async fn start_owned(
+        &self,
+        files: Vec<PreparedDownload>,
+        directory: &Path,
+        operation: Option<Arc<OperationGuard>>,
+    ) -> Result<DownloadStart> {
         let admission = self.inner.admission.clone().lock_owned().await;
         let owner = self.inner.clone();
-        let directory = directory.to_owned();
+        let path = directory.to_owned();
+
         tokio::task::spawn_blocking(move || {
-            // The blocking operation owns the guard even if its caller drops the future.
-            let _admission = admission;
-            if !owner.state.lock().unwrap().accepting || owner.stop.is_cancelled() {
-                return Err(AppError::new(ErrorCode::Cancelled, "应用正在退出"));
+            let _guards = (admission, operation);
+            owner.records.available()?;
+            if !owner.records.accepting() || owner.stop.is_cancelled() {
+                return Err(closing());
             }
-            let root = directory.canonicalize().map_err(storage)?;
-            let directory = {
-                let mut directories = owner.directories.lock().unwrap();
-                if let Some(directory) = directories.get(&root) {
-                    directory.clone()
-                } else {
-                    let directory = DownloadDirectory::open(&root).map_err(storage)?;
-                    directories.insert(root.clone(), directory.clone());
-                    directory
-                }
-            };
+
+            let directory = owner.directory(&path)?;
             let mut result = DownloadStart::default();
             for file in files {
                 let content_id = file.content.content_id.clone();
                 match owner.admit(file, &directory) {
                     Ok(id) => result.task_ids.push(id),
                     Err(error) if error.code == ErrorCode::Cancelled => return Err(error),
-                    Err(error) => {
-                        let error = error.reported("prepare download file");
-                        result.failures.push(FileFailure {
-                            content_id,
-                            message: error.message,
-                        });
-                    }
+                    Err(error) => result.failures.push(FileFailure {
+                        content_id,
+                        message: error.reported("admit download").message,
+                    }),
                 }
             }
+
             Ok(result)
         })
         .await
@@ -211,35 +299,22 @@ impl DownloadManager {
     }
 
     pub fn list(&self) -> Vec<DownloadTask> {
-        self.inner
-            .state
-            .lock()
-            .unwrap()
-            .entries
-            .iter()
-            .map(|entry| entry.task.clone())
-            .collect()
+        self.inner.records.list()
+    }
+
+    pub fn snapshot(&self) -> Result<DownloadSnapshot> {
+        self.inner.records.snapshot()
     }
 
     pub fn has_active(&self) -> bool {
-        let state = self.inner.state.lock().unwrap();
-        state
-            .entries
-            .iter()
-            .any(|entry| !entry.task.state.is_terminal())
+        !self.inner.records.active_controls().is_empty()
     }
 
     pub fn cancel(&self, id: &str) {
-        if let Some(entry) = self
-            .inner
-            .state
-            .lock()
-            .unwrap()
-            .entries
-            .iter()
-            .find(|entry| entry.task.id == id && !entry.task.state.is_terminal())
+        if let Some((stored, control)) = self.inner.records.find(id, None)
+            && stored.task.active()
         {
-            entry.cancel.cancel();
+            control.stop(StopIntent::Cancel);
         }
     }
 
@@ -247,24 +322,74 @@ impl DownloadManager {
         &self,
         listener: impl Fn(DownloadTask) -> bool + Send + Sync + 'static,
     ) -> String {
-        let id = Uuid::new_v4().to_string();
-        self.inner
-            .listeners
-            .lock()
-            .unwrap()
-            .insert(id.clone(), Arc::new(listener));
-        id
+        self.inner.records.subscribe(listener)
     }
 
     pub fn unsubscribe(&self, id: &str) {
-        self.inner.listeners.lock().unwrap().remove(id);
+        self.inner.records.unsubscribe(id);
     }
-    /// Cancels and awaits preparation and transfers before releasing the directory locks.
+
+    pub fn subscribe_events(
+        &self,
+        listener: impl Fn(DownloadEvent) -> bool + Send + Sync + 'static,
+    ) -> Result<String> {
+        self.inner.records.subscribe_events(listener)
+    }
+
+    pub fn unsubscribe_events(&self, id: &str) {
+        self.inner.records.unsubscribe_events(id);
+    }
+
+    /// Stops I/O and commits checkpoints. Failure leaves admission recoverable for a rejected quit.
+    pub async fn prepare_shutdown(&self) -> Result<()> {
+        if !self.inner.records.durable() {
+            return Ok(());
+        }
+
+        self.inner.records.set_accepting(false);
+        let admission = self.inner.admission.lock().await;
+        let active = self.inner.records.active_controls();
+        for control in &active {
+            control.stop(StopIntent::Exit);
+        }
+
+        for control in &active {
+            control.wait().await;
+        }
+
+        drop(admission);
+
+        let failure = self.inner.records.checkpoint_failed();
+        if failure {
+            self.inner.records.set_accepting(true);
+            return Err(AppError::new(
+                ErrorCode::Storage,
+                "部分下载进度未能安全保存，请重试或明确选择强制退出",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn reopen_admission(&self) {
+        if !self.inner.stop.is_cancelled() {
+            self.inner.records.set_accepting(true);
+        }
+    }
+
+    /// Final shutdown awaits every writer; durable owners preserve artifacts even on failure.
     pub async fn shutdown(&self) {
-        self.inner.state.lock().unwrap().accepting = false;
+        self.inner.records.set_accepting(false);
+        let durable = self.inner.records.durable();
+        for control in self.inner.records.active_controls() {
+            control.stop(if durable {
+                StopIntent::Exit
+            } else {
+                StopIntent::Cancel
+            });
+        }
+
         self.inner.stop.cancel();
         let _admission = self.inner.admission.lock().await;
-        // Hold the guard through waiting so concurrent shutdown callers cannot return early.
         let mut dispatcher = self.dispatcher.lock().await;
         if let Some(task) = dispatcher.take()
             && let Err(error) = task.await
@@ -272,117 +397,85 @@ impl DownloadManager {
             AppError::with_source(ErrorCode::Storage, "下载调度异常终止", error)
                 .reported("shutdown downloads");
         }
+
         self.inner.tracker.close();
         self.inner.tracker.wait().await;
+
         self.inner.directories.lock().unwrap().clear();
+    }
+
+    async fn recover(&self) {
+        let owner = self.inner.clone();
+        if let Err(error) =
+            tokio::task::spawn_blocking(move || super::recovery::recover(&owner)).await
+        {
+            AppError::with_source(ErrorCode::Storage, "下载恢复异常终止", error)
+                .reported("recover downloads");
+        }
     }
 }
 
 impl Drop for DownloadManager {
     fn drop(&mut self) {
-        self.inner.state.lock().unwrap().accepting = false;
+        self.inner.records.set_accepting(false);
+        for control in self.inner.records.active_controls() {
+            control.stop(StopIntent::Exit);
+        }
         self.inner.stop.cancel();
     }
 }
 
 impl Inner {
-    fn emit(&self, task: DownloadTask) {
-        let listeners: Vec<_> = self
-            .listeners
+    pub fn directory(&self, path: &Path) -> Result<Arc<DownloadDirectory>> {
+        let root = path.canonicalize().map_err(storage)?;
+        if let Some(directory) = self.directories.lock().unwrap().get(&root).cloned() {
+            return Ok(directory);
+        }
+
+        let directory = DownloadDirectory::open(&root).map_err(storage)?;
+        self.directories
             .lock()
             .unwrap()
-            .iter()
-            .map(|(id, listener)| (id.clone(), listener.clone()))
-            .collect();
-        for (id, listener) in listeners {
-            if !listener(task.clone()) {
-                self.listeners.lock().unwrap().remove(&id);
-            }
-        }
-    }
-
-    pub(super) fn update(&self, id: &str, update: impl FnOnce(&mut DownloadTask)) {
-        self.update_task(id, true, update);
-    }
-
-    pub(super) fn record_progress(&self, id: &str, received: u64, publish: bool) {
-        // Silent snapshots also advance revisions, so older emitted progress cannot replace them.
-        self.update_task(id, publish, |task| task.received_bytes = received);
-    }
-
-    fn update_task(&self, id: &str, publish: bool, update: impl FnOnce(&mut DownloadTask)) {
-        let task = {
-            let mut state = self.state.lock().unwrap();
-            let Some(entry) = state.entries.iter_mut().find(|entry| entry.task.id == id) else {
-                return;
-            };
-            if entry.task.state.is_terminal() {
-                return;
-            }
-            update(&mut entry.task);
-            entry.task.revision += 1;
-            publish.then(|| entry.task.clone())
-        };
-        if let Some(task) = task {
-            self.emit(task);
-        }
+            .insert(root, directory.clone());
+        Ok(directory)
     }
 
     fn admit(&self, file: PreparedDownload, directory: &Arc<DownloadDirectory>) -> Result<String> {
         policy::target(&file.url, &self.origins)?;
+        file.metadata.validate()?;
+        match self
+            .records
+            .admission(&file, directory.path(), None, self.config.queue_capacity)?
         {
-            let state = self.state.lock().unwrap();
-            if !state.accepting || self.stop.is_cancelled() {
-                return Err(AppError::new(
-                    ErrorCode::Cancelled,
-                    "应用正在退出，无法添加下载",
-                ));
-            }
-            if let Some(entry) = state.entries.iter().find(|entry| {
-                !entry.task.state.is_terminal()
-                    && entry.task.content == file.content
-                    && entry.task.quality == file.quality
-                    && entry.directory == directory.path()
-            }) {
-                return Ok(entry.task.id.clone());
-            }
-            if state
-                .entries
-                .iter()
-                .filter(|entry| !entry.task.state.is_terminal())
-                .count()
-                >= self.config.queue_capacity + TRANSFER_CONCURRENCY
-            {
-                return Err(AppError::new(
-                    ErrorCode::InvalidInput,
-                    "下载队列已满，请稍后重试",
-                ));
-            }
+            Admission::Duplicate(id) => return Ok(id),
+            Admission::Available => {}
         }
 
-        // Admission is serialized by the caller; keep slow reservation I/O outside task state.
         let permit = self
             .send
             .try_reserve()
             .map_err(|_| AppError::new(ErrorCode::InvalidInput, "下载队列已满，请稍后重试"))?;
-        let (writer, reservation) = directory.reserve(&file.filename).map_err(storage)?;
-        // Keep one identity handle per queued file; clone a writer only while executing.
+
+        let (writer, mut reservation) = directory.reserve(&file.filename).map_err(storage)?;
         drop(writer);
 
-        let mut state = self.state.lock().unwrap();
-        if !state.accepting || self.stop.is_cancelled() {
-            drop(state);
-            reservation.cleanup().map_err(storage)?;
-            return Err(AppError::new(
-                ErrorCode::Cancelled,
-                "应用正在退出，无法添加下载",
-            ));
-        }
         let id = Uuid::new_v4().to_string();
-        let cancel = self.stop.child_token();
+        let attempt = Uuid::new_v4().to_string();
+        let record = match reservation.upgrade(id.clone(), attempt.clone()) {
+            Ok(record) => record,
+            Err(error) => {
+                return Err(with_rollback(
+                    storage(error),
+                    reservation.cleanup().map_err(storage),
+                ));
+            }
+        };
+
         let task = DownloadTask {
             id: id.clone(),
+            attempt_id: attempt.clone(),
             content: file.content,
+            metadata: file.metadata,
             filename: reservation.filename().into(),
             quality: file.quality,
             state: TaskState::Queued,
@@ -390,95 +483,44 @@ impl Inner {
             total_bytes: None,
             error: None,
             revision: 1,
+            created_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            can_resume: false,
+            file_available: false,
+            has_partial: true,
         };
-        state.entries.push(Entry {
+        let stored = StoredTask {
             task: task.clone(),
             directory: directory.path().into(),
-            cancel: cancel.clone(),
-        });
-        drop(state);
-        self.emit(task);
+            reservation: Some(record.clone()),
+            completed_identity: None,
+        };
+
+        let control = match self.records.insert(stored) {
+            Ok(control) => control,
+            Err(error) => {
+                if store::replacement_committed(&error) {
+                    reservation.retain();
+                } else {
+                    return Err(with_rollback(error, reservation.cleanup().map_err(storage)));
+                }
+                return Err(error);
+            }
+        };
+
+        // Queue dispatch follows durable acceptance; a failed index commit never starts I/O.
         permit.send(Job {
             id: id.clone(),
+            attempt,
             url: file.url,
             reservation,
-            cancel,
+            control,
+            checkpoint: record.checkpoint,
+            resume: false,
         });
         Ok(id)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn filesystem_reservation_wait_does_not_block_task_observation_or_cancellation() {
-        let root = tempfile::tempdir().unwrap();
-        let manager = Arc::new(DownloadManager::new(DownloadConfig::default()).unwrap());
-        manager.start(Vec::new(), root.path()).await.unwrap();
-        let _slots = manager.inner.slots.acquire_many(2).await.unwrap();
-        let directory = manager
-            .inner
-            .directories
-            .lock()
-            .unwrap()
-            .values()
-            .next()
-            .unwrap()
-            .clone();
-        let (admission, observing, responsive, reservation_started) = {
-            let reservation_lock = super::super::files::hold_reservations(&directory);
-            let owner = manager.clone();
-            let target = root.path().to_owned();
-            let admission = tokio::spawn(async move {
-                owner
-                    .start(
-                        vec![PreparedDownload {
-                            content: super::super::ContentRef {
-                                programme_id: "1".into(),
-                                date_id: "2".into(),
-                                content_id: "3".into(),
-                            },
-                            filename: "clip.mp4".into(),
-                            quality: crate::media::Quality::Standard,
-                            url: "https://fscgc.scgchc.com/clip.mp4".into(),
-                        }],
-                        &target,
-                    )
-                    .await
-            });
-            let deadline = std::time::Instant::now() + Duration::from_secs(1);
-            while manager.inner.send.capacity() == manager.inner.config.queue_capacity
-                && std::time::Instant::now() < deadline
-            {
-                std::thread::yield_now();
-            }
-            let reservation_started =
-                manager.inner.send.capacity() < manager.inner.config.queue_capacity;
-            let observer = manager.clone();
-            let (observed, observation) = std::sync::mpsc::channel();
-            let observing = std::thread::spawn(move || {
-                observer.cancel("unknown");
-                observed.send(observer.list()).unwrap();
-            });
-
-            let responsive = observation.recv_timeout(Duration::from_millis(250));
-
-            drop(reservation_lock);
-            (admission, observing, responsive, reservation_started)
-        };
-        let admitted = admission.await.unwrap();
-        observing.join().unwrap();
-        manager.shutdown().await;
-        assert!(admitted.is_ok());
-        assert!(
-            reservation_started,
-            "admission never reached directory reservation"
-        );
-        assert!(
-            responsive.is_ok(),
-            "filesystem reservation held the task-state lock"
-        );
-    }
+fn closing() -> AppError {
+    AppError::new(ErrorCode::Cancelled, "应用正在退出，无法操作下载")
 }

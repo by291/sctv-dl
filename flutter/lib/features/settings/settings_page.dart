@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/programmes/programme.dart';
 import '../../domain/settings/preferences.dart';
+import 'settings_appearance_section.dart';
+import 'settings_playback_section.dart';
+import 'settings_section.dart';
+import 'settings_storage_section.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
@@ -13,8 +16,10 @@ class SettingsPage extends StatelessWidget {
     required this.version,
     this.supportsDynamicColour = false,
     this.persistenceError,
+    this.onRetrySave,
     this.wifiPolicyDescription = '仅影响之后创建的任务',
   });
+
   final Preferences preferences;
   final Future<void> Function(Preferences) onChanged;
   final Future<void> Function() onClearCache;
@@ -22,45 +27,8 @@ class SettingsPage extends StatelessWidget {
   final String version;
   final bool supportsDynamicColour;
   final String? persistenceError;
+  final Future<void> Function()? onRetrySave;
   final String wifiPolicyDescription;
-
-  Future<void> _clear(
-    BuildContext context,
-    String title,
-    String message,
-    Future<void> Function() action,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确认'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await action();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$title完成')));
-      }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -68,147 +36,90 @@ class SettingsPage extends StatelessWidget {
       toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 88 : 64,
       title: const Text('设置'),
     ),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      children: [
-        if (persistenceError case final error?)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              '设置暂未保存：$error',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+    body: SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ListTileTheme(
+            data: ListTileThemeData(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              minLeadingWidth: 24,
+              horizontalTitleGap: 12,
+              iconColor: Theme.of(context).iconTheme.color,
+              titleTextStyle: Theme.of(context).textTheme.bodyLarge,
+              subtitleTextStyle: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.5,
+                  ),
             ),
-          ),
-        _section(context, '外观', [
-          ListTile(
-            leading: const Icon(Icons.palette_outlined),
-            title: const Text('主题'),
-            subtitle: Text(switch (preferences.theme) {
-              AppThemeMode.system => '跟随系统',
-              AppThemeMode.light => '浅色',
-              AppThemeMode.dark => '深色',
-            }),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              final mode = await showModalBottomSheet<AppThemeMode>(
-                context: context,
-                showDragHandle: true,
-                useSafeArea: true,
-                builder: (context) => Column(
-                  mainAxisSize: MainAxisSize.min,
+            child: ListView(
+              key: const PageStorageKey('settings'),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              children: [
+                if (persistenceError case final error?)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '设置暂未保存：$error',
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onErrorContainer,
+                          ),
+                        ),
+                        if (onRetrySave != null)
+                          TextButton(
+                            onPressed: onRetrySave,
+                            child: const Text('重试保存'),
+                          ),
+                      ],
+                    ),
+                  ),
+                SettingsAppearanceSection(
+                  preferences: preferences,
+                  onChanged: onChanged,
+                  supportsDynamicColour: supportsDynamicColour,
+                ),
+                SettingsPlaybackSection(
+                  preferences: preferences,
+                  onChanged: onChanged,
+                ),
+                SettingsStorageSection(
+                  preferences: preferences,
+                  onChanged: onChanged,
+                  onClearCache: onClearCache,
+                  onClearHistory: onClearHistory,
+                  wifiPolicyDescription: wifiPolicyDescription,
+                ),
+                SettingsSection(
+                  label: '关于',
                   children: [
-                    for (final mode in AppThemeMode.values)
-                      ListTile(
-                        title: Text(switch (mode) {
-                          AppThemeMode.system => '跟随系统',
-                          AppThemeMode.light => '浅色',
-                          AppThemeMode.dark => '深色',
-                        }),
-                        trailing: preferences.theme == mode
-                            ? const Icon(Icons.check)
-                            : null,
-                        onTap: () => Navigator.pop(context, mode),
-                      ),
-                    const SizedBox(height: 16),
+                    ListTile(
+                      leading: settingsLeading(context, Icons.live_tv_rounded),
+                      title: const Text('蜀台回看'),
+                      subtitle: Text('版本 $version'),
+                    ),
                   ],
                 ),
-              );
-              if (mode != null) {
-                await onChanged(preferences.copyWith(theme: mode));
-              }
-            },
-          ),
-          if (supportsDynamicColour)
-            SwitchListTile(
-              title: const Text('系统动态配色'),
-              subtitle: const Text('使用系统壁纸提供的主题颜色'),
-              value: preferences.dynamicColour,
-              onChanged: (value) =>
-                  onChanged(preferences.copyWith(dynamicColour: value)),
+              ],
             ),
-        ]),
-        _section(context, '播放', [
-          ListTile(
-            leading: const Icon(Icons.high_quality_outlined),
-            title: const Text('默认清晰度'),
-            subtitle: Text(preferences.quality.label),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              final quality = await showModalBottomSheet<VideoQuality>(
-                context: context,
-                showDragHandle: true,
-                useSafeArea: true,
-                builder: (context) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final quality in VideoQuality.values)
-                      ListTile(
-                        title: Text(quality.label),
-                        trailing: preferences.quality == quality
-                            ? const Icon(Icons.check)
-                            : null,
-                        onTap: () => Navigator.pop(context, quality),
-                      ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              );
-              if (quality != null) {
-                await onChanged(preferences.copyWith(quality: quality));
-              }
-            },
           ),
-        ]),
-        _section(context, '下载与存储', [
-          SwitchListTile(
-            title: const Text('仅 Wi-Fi 下载'),
-            subtitle: Text(wifiPolicyDescription),
-            value: preferences.wifiOnly,
-            onChanged: (value) =>
-                onChanged(preferences.copyWith(wifiOnly: value)),
-          ),
-          ListTile(
-            leading: const Icon(Icons.cleaning_services_outlined),
-            title: const Text('清理缓存'),
-            subtitle: const Text('清理栏目和图片缓存，保留收藏、观看记录与下载文件'),
-            onTap: () =>
-                _clear(context, '清理缓存', '下次浏览时会重新获取栏目和图片。', onClearCache),
-          ),
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('清空观看记录'),
-            onTap: () =>
-                _clear(context, '清空观看记录', '所有本机观看记录和续播位置都会移除。', onClearHistory),
-          ),
-        ]),
-        _section(context, '关于', [
-          const ListTile(
-            leading: Icon(Icons.live_tv_rounded),
-            title: Text('蜀台回看'),
-            subtitle: Text('sctv-dl · Flutter'),
-          ),
-          ListTile(title: const Text('版本'), subtitle: Text(version)),
-        ]),
-      ],
+        ),
+      ),
     ),
   );
-
-  Widget _section(BuildContext context, String label, List<Widget> children) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge
-                    ?.copyWith(color: Theme.of(context).colorScheme.primary),
-              ),
-            ),
-            Card(child: Column(children: children)),
-          ],
-        ),
-      );
 }

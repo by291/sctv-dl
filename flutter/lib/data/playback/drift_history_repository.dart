@@ -7,11 +7,13 @@ class DriftHistoryRepository implements HistoryRepository {
   DriftHistoryRepository(this._database);
 
   final RecordDatabase _database;
+
   Future<void> _writes = Future<void>.value();
 
   Future<void> _serialize(Future<void> Function() action) {
     final saved = _writes.then((_) => _database.transaction(action));
     _writes = saved.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+
     return saved;
   }
 
@@ -28,12 +30,14 @@ class DriftHistoryRepository implements HistoryRepository {
     if (entry.position.isNegative || (entry.duration?.isNegative ?? false)) {
       throw const FormatException('Invalid viewing position');
     }
+
     final duration = entry.duration;
     final completed =
         entry.completed ||
         (duration != null &&
             duration > Duration.zero &&
             entry.position.inMicroseconds >= duration.inMicroseconds * .95);
+
     await _database.write('viewing_history', entry.selection.ref.key, {
       'version': 1,
       'selection': encodeSelection(entry.selection),
@@ -42,6 +46,7 @@ class DriftHistoryRepository implements HistoryRepository {
       'viewedAt': entry.viewedAt.toUtc().toIso8601String(),
       'completed': completed,
     });
+
     final all = await loadHistory();
     for (final stale in all.skip(500)) {
       await _database.remove('viewing_history', stale.selection.ref.key);
@@ -66,6 +71,7 @@ class DriftHistoryRepository implements HistoryRepository {
         final position = row['positionUs'] as int;
         final duration = row['durationUs'] as int?;
         if (position < 0 || (duration != null && duration < 0)) continue;
+
         entries.add(
           ViewingEntry(
             selection: selection,
@@ -84,12 +90,14 @@ class DriftHistoryRepository implements HistoryRepository {
         continue;
       }
     }
+
     entries.sort((a, b) {
       final time = b.viewedAt.compareTo(a.viewedAt);
       return time == 0
           ? a.selection.ref.key.compareTo(b.selection.ref.key)
           : time;
     });
+
     return List.unmodifiable(entries);
   }
 }

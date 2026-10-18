@@ -5,37 +5,35 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.sctvdl.domain.common.CachedResource
-import dev.sctvdl.domain.download.DownloadRequest
-import dev.sctvdl.domain.download.isActive
-import dev.sctvdl.domain.media.Quality
-import dev.sctvdl.domain.media.videoVariants
 import dev.sctvdl.domain.programme.BroadcastDate
 import dev.sctvdl.domain.programme.Programme
 import dev.sctvdl.domain.programme.ProgrammeContent
 import dev.sctvdl.domain.repository.FavouriteRepository
 import dev.sctvdl.domain.repository.ProgrammeRepository
 import dev.sctvdl.feature.programmes.presentation.AcceptedResourceState
+import dev.sctvdl.feature.programmes.presentation.FavouriteState
+import dev.sctvdl.feature.programmes.presentation.onReadFailure
 import javax.inject.Inject
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 internal class ArchiveViewModel @Inject constructor(
     private val repository: ProgrammeRepository,
-    private val favourites: FavouriteRepository,
+    favourites: FavouriteRepository,
     private val saved: SavedStateHandle
 ) : ViewModel() {
+    private val favouriteActions = FavouriteState(favourites, viewModelScope)
+
     private val mutableState = MutableStateFlow(ArchiveUiState())
     val uiState = mutableState.asStateFlow()
 
+    private var contextJob: Job? = null
     private var datesJob: Job? = null
     private var contentsJob: Job? = null
     private var datesRefreshJob: Job? = null
@@ -55,17 +53,29 @@ internal class ArchiveViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(repository.observeProgrammes(), favourites.observeIds()) { catalogue, ids ->
-                catalogue.data.orEmpty() to ids
-            }.collect { (rows, ids) ->
-                programmes = rows
+            favouriteActions.error.collect { error -> mutableState.update { it.copy(favouriteError = error) } }
+        }
+
+        viewModelScope.launch {
+            favouriteActions.ids.filterNotNull().collect { ids ->
                 favouriteIds = ids
-                mutableState.update {
-                    it.copy(
-                        programme = it.programme ?: rows.firstOrNull { row ->
-                            row.id == it.programmeId
-                        },
-                        favourite = it.programmeId in ids
+                mutableState.update { it.copy(favourite = it.programmeId in ids) }
+            }
+        }
+        observeProgrammeContext()
+    }
+
+    private fun observeProgrammeContext() {
+        if (contextJob?.isActive == true) return
+        contextJob = viewModelScope.launch {
+            repository.observeProgrammes().onReadFailure { error ->
+                mutableState.update { it.copy(contextError = error) }
+            }.collect { catalogue ->
+                programmes = catalogue.data.orEmpty()
+                mutableState.update { current ->
+                    current.copy(
+                        programme = current.programme ?: programmes.firstOrNull { it.id == current.programmeId },
+                        contextError = null
                     )
                 }
                 publishUpdateFlag()
@@ -109,18 +119,30 @@ internal class ArchiveViewModel @Inject constructor(
                 programme = initialProgramme?.takeIf { it.id == programmeId }
                     ?: programmes.firstOrNull { it.id == programmeId },
                 favourite = programmeId in favouriteIds,
-                clipSortAscending = clipSortAscending
+                clipSortAscending = clipSortAscending,
+                favouriteError = favouriteActions.error.value,
+                contextError = uiState.value.contextError
             )
 
+        observeDates(programmeId)
+        refreshDates(programmeId)
+    }
+
+    private fun observeDates(programmeId: String) {
+        if (datesJob?.isActive == true) return
         datesJob = viewModelScope.launch {
-            repository.observeDates(programmeId).collect { resource ->
+            repository.observeDates(programmeId).onReadFailure { error ->
+                if (uiState.value.programmeId == programmeId) {
+                    datesSnapshot.fail(error)
+                    presentDates(datesSnapshot.resource)
+                }
+            }.collect { resource ->
                 // Cancellation can race a final emission from the previous archive observer.
                 if (uiState.value.programmeId != programmeId) return@collect
 
                 presentDates(datesSnapshot.observe(resource))
             }
         }
-        refreshDates(programmeId)
     }
 
     private fun presentDates(resource: CachedResource<List<BroadcastDate>>) {
@@ -177,11 +199,23 @@ internal class ArchiveViewModel @Inject constructor(
 
         val programmeId = current.programmeId
 
+        observeContents(programmeId, date.id)
+        refreshContents(programmeId, date.id)
+        publishUpdateFlag()
+    }
+
+    private fun observeContents(programmeId: String, dateId: String) {
+        if (contentsJob?.isActive == true) return
         contentsJob = viewModelScope.launch {
-            repository.observeContents(programmeId, date.id).collect { resource ->
+            repository.observeContents(programmeId, dateId).onReadFailure { error ->
+                if (uiState.value.programmeId == programmeId && uiState.value.date?.id == dateId) {
+                    contentsSnapshot.fail(error)
+                    presentContents(contentsSnapshot.resource)
+                }
+            }.collect { resource ->
                 // Both identities must still match before an old request can publish its rows.
                 if (uiState.value.programmeId != programmeId ||
-                    uiState.value.date?.id != date.id
+                    uiState.value.date?.id != dateId
                 ) {
                     return@collect
                 }
@@ -189,8 +223,6 @@ internal class ArchiveViewModel @Inject constructor(
                 presentContents(contentsSnapshot.observe(resource))
             }
         }
-        refreshContents(programmeId, date.id)
-        publishUpdateFlag()
     }
 
     private fun presentContents(resource: CachedResource<List<ProgrammeContent>>) {
@@ -233,8 +265,13 @@ internal class ArchiveViewModel @Inject constructor(
         val current = uiState.value
         if (current.programmeId.isBlank()) return
 
+        observeProgrammeContext()
+        observeDates(current.programmeId)
         refreshDates(current.programmeId)
-        current.date?.let { refreshContents(current.programmeId, it.id) }
+        current.date?.let {
+            observeContents(current.programmeId, it.id)
+            refreshContents(current.programmeId, it.id)
+        }
     }
 
     private fun refreshDates(programmeId: String) {
@@ -250,8 +287,10 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     fun toggleFavourite() {
-        viewModelScope.launch { favourites.toggle(uiState.value.programmeId) }
+        favouriteActions.toggle(uiState.value.programmeId)
     }
+
+    fun retryFavourites() = favouriteActions.retry()
 
     fun toggleClipSort() {
         if (uiState.value.selectionMode) return
@@ -298,16 +337,6 @@ internal class ArchiveViewModel @Inject constructor(
     fun exitSelection() {
         mutableState.update { it.copy(selectionMode = false, selectedIds = emptySet()) }
         persistSelection()
-    }
-
-    fun downloadRequests(quality: Quality, wifiOnly: Boolean): List<DownloadRequest> {
-        val current = uiState.value
-        val date = current.date ?: return emptyList()
-
-        return current.contents.data.orEmpty().filter {
-            it.id in current.selectedIds &&
-                videoVariants(it).isNotEmpty()
-        }.map { DownloadRequest(current.programme?.name ?: "节目", date.date, it, quality, wifiOnly) }
     }
 
     private fun persistSelection() {

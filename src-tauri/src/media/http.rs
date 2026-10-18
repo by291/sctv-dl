@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, Weak},
     time::Duration,
 };
 
@@ -40,9 +40,36 @@ impl Default for MediaConfig {
     }
 }
 
+pub(super) enum SessionSource {
+    Upstream(Vec<MediaSource>),
+    Local(super::local::LocalSource),
+}
+
 pub(super) struct Session {
-    pub sources: Vec<MediaSource>,
+    pub source: SessionSource,
     pub cancellation: CancellationToken,
+}
+
+type LocalReaderRegistry = Arc<Mutex<HashMap<String, Weak<LocalReaders>>>>;
+
+pub(super) struct LocalReaders {
+    pub task_id: String,
+    pub producers: TaskTracker,
+    registry: LocalReaderRegistry,
+}
+
+impl Drop for LocalReaders {
+    fn drop(&mut self) {
+        let mut registry = self.registry.lock().unwrap();
+        if registry
+            .get(&self.task_id)
+            .is_some_and(|owner| std::ptr::eq(owner.as_ptr(), self))
+        {
+            // Only the final session/producer releases this owner. A new owner can be
+            // opened while this final drop waits for the lock; preserve that owner.
+            registry.remove(&self.task_id);
+        }
+    }
 }
 
 pub(super) struct Inner {
@@ -52,6 +79,7 @@ pub(super) struct Inner {
     pub address: SocketAddr,
     pub sessions: Mutex<HashMap<String, Arc<Session>>>,
     pub producers: TaskTracker,
+    local_readers: LocalReaderRegistry,
 }
 
 pub struct MediaServer {
@@ -95,6 +123,7 @@ impl MediaServer {
             address,
             sessions: Mutex::new(HashMap::new()),
             producers: TaskTracker::new(),
+            local_readers: Arc::default(),
         });
         let router = Router::new()
             .route("/media/{id}/{quality}", any(handler::handle))
@@ -139,10 +168,11 @@ impl MediaServer {
                 ),
             })
             .collect();
+
         self.inner.sessions.lock().unwrap().insert(
             id.clone(),
             Arc::new(Session {
-                sources,
+                source: SessionSource::Upstream(sources),
                 cancellation: CancellationToken::new(),
             }),
         );
@@ -154,6 +184,102 @@ impl MediaServer {
         })
     }
 
+    pub fn open_local(
+        &self,
+        task_id: String,
+        quality: Quality,
+        file: std::fs::File,
+    ) -> Result<PlaybackSession> {
+        let length = file
+            .metadata()
+            .map_err(|error| AppError::with_source(ErrorCode::Storage, "无法读取本机视频", error))?
+            .len();
+        let id = Uuid::new_v4().to_string();
+
+        // Session publication and task-owner registration share the admission lock
+        // used by the handler and close_task. No producer can escape a task close.
+        {
+            let mut sessions = self.inner.sessions.lock().unwrap();
+            let readers = {
+                let mut registry = self.inner.local_readers.lock().unwrap();
+                if let Some(readers) = registry.get(&task_id).and_then(Weak::upgrade) {
+                    readers
+                } else {
+                    let readers = Arc::new(LocalReaders {
+                        task_id: task_id.clone(),
+                        producers: TaskTracker::new(),
+                        registry: self.inner.local_readers.clone(),
+                    });
+                    registry.insert(task_id, Arc::downgrade(&readers));
+                    readers
+                }
+            };
+
+            sessions.insert(
+                id.clone(),
+                Arc::new(Session {
+                    source: SessionSource::Local(super::local::LocalSource {
+                        readers,
+                        quality,
+                        file: Arc::new(file),
+                        length,
+                        #[cfg(test)]
+                        read_gate: None,
+                    }),
+                    cancellation: CancellationToken::new(),
+                }),
+            );
+        }
+
+        Ok(PlaybackSession {
+            sources: vec![PlaybackSource {
+                quality,
+                url: format!(
+                    "http://{}/media/{id}/{}",
+                    self.inner.address,
+                    quality.as_str()
+                ),
+            }],
+            selected_quality: quality,
+            id,
+        })
+    }
+
+    /// Revokes task URLs and returns completion owners, including readers from URLs
+    /// already closed. Callers must await these before deleting the verified file.
+    pub fn close_task(&self, task_id: &str) -> Vec<TaskTracker> {
+        let mut sessions = self.inner.sessions.lock().unwrap();
+        let readers = {
+            self.inner
+                .local_readers
+                .lock()
+                .unwrap()
+                .get(task_id)
+                .and_then(Weak::upgrade)
+        };
+        let ids: Vec<_> = sessions
+            .iter()
+            .filter_map(|(id, session)| {
+                matches!(&session.source, SessionSource::Local(source) if source.readers.task_id == task_id)
+                    .then_some(id.clone())
+            })
+            .collect();
+
+        for id in ids {
+            if let Some(session) = sessions.remove(&id) {
+                session.cancellation.cancel();
+            }
+        }
+
+        readers
+            .map(|readers| {
+                readers.producers.close();
+                readers.producers.clone()
+            })
+            .into_iter()
+            .collect()
+    }
+
     pub fn close(&self, id: &str) {
         let session = { self.inner.sessions.lock().unwrap().remove(id) };
         if let Some(session) = session {
@@ -163,6 +289,7 @@ impl MediaServer {
 
     fn stop(&self) {
         self.shutdown.cancel();
+
         let sessions = {
             self.inner
                 .sessions
@@ -180,6 +307,7 @@ impl MediaServer {
     /// Stops admission, cancels sessions, and returns after all owned HTTP work has ended.
     pub async fn shutdown(mut self) {
         self.stop();
+
         if let Some(task) = self.task.take()
             && let Err(error) = task.await
         {
@@ -247,6 +375,7 @@ mod tests {
     };
 
     use axum::body::{Bytes, HttpBody};
+    use futures_util::StreamExt;
     use hyper::body::Frame;
 
     use super::*;
@@ -269,6 +398,157 @@ mod tests {
         fn drop(&mut self) {
             self.0.store(false, Ordering::SeqCst);
         }
+    }
+
+    #[tokio::test]
+    async fn closed_local_session_keeps_task_and_shutdown_waiting_for_blocked_read() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("clip.mp4");
+        std::fs::write(&path, b"local bytes").unwrap();
+        let mut server = MediaServer::bind(MediaConfig::default()).await.unwrap();
+        let session = server
+            .open_local(
+                "task".into(),
+                Quality::Standard,
+                std::fs::File::open(path).unwrap(),
+            )
+            .unwrap();
+        let (started, reading) = tokio::sync::oneshot::channel();
+        let (release, blocked) = std::sync::mpsc::channel();
+        let file = {
+            let mut sessions = server.inner.sessions.lock().unwrap();
+            let owned = Arc::get_mut(sessions.get_mut(&session.id).unwrap()).unwrap();
+            let SessionSource::Local(source) = &mut owned.source else {
+                panic!("expected local source");
+            };
+            source.read_gate = Some(Arc::new(super::super::local::ReadGate {
+                started: Mutex::new(Some(started)),
+                release: Mutex::new(blocked),
+            }));
+            Arc::downgrade(&source.file)
+        };
+
+        let response = handler::handle(
+            axum::extract::State(server.inner.clone()),
+            axum::extract::Path((session.id.clone(), "standard".into())),
+            axum::http::Request::builder()
+                .header("host", server.inner.address.to_string())
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        reading.await.unwrap();
+
+        server.close(&session.id);
+        let trackers = server.close_task("task");
+        let mut task_completion = Box::pin(async move {
+            for tracker in trackers {
+                tracker.wait().await;
+            }
+        });
+        let task_waited = futures_util::poll!(&mut task_completion).is_pending();
+        drop(task_completion);
+
+        // A caller cancelling its wait must not lose ownership for a later deletion.
+        let trackers = server.close_task("task");
+        let mut retried_completion = Box::pin(async move {
+            for tracker in trackers {
+                tracker.wait().await;
+            }
+        });
+        let retry_waited = futures_util::poll!(&mut retried_completion).is_pending();
+
+        server.shutdown.cancel();
+        server.task.take().unwrap().await.unwrap();
+        let inner = server.inner.clone();
+        let shutdown = server.shutdown();
+        tokio::pin!(shutdown);
+        let shutdown_waited = futures_util::poll!(&mut shutdown).is_pending();
+
+        // Always release the worker before asserting, including on the broken implementation.
+        release.send(()).unwrap();
+        if retry_waited {
+            retried_completion.await;
+        }
+        if shutdown_waited {
+            shutdown.await;
+        }
+        drop(response);
+
+        assert!(
+            task_waited,
+            "task close returned while its retired local read was blocked"
+        );
+        assert!(retry_waited, "a later task close lost its retiring reader");
+        assert!(
+            shutdown_waited,
+            "shutdown returned while its local read was blocked"
+        );
+        assert!(
+            file.upgrade().is_none(),
+            "retired reader kept its file open"
+        );
+        assert!(inner.local_readers.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn truncated_local_stream_yields_one_private_read_error_then_completes() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("private-clip.mp4");
+        std::fs::write(&path, b"0123456789").unwrap();
+        let server = MediaServer::bind(MediaConfig::default()).await.unwrap();
+        let session = server
+            .open_local(
+                "task".into(),
+                Quality::Standard,
+                std::fs::File::open(&path).unwrap(),
+            )
+            .unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(3)
+            .unwrap();
+
+        let response = handler::handle(
+            axum::extract::State(server.inner.clone()),
+            axum::extract::Path((session.id.clone(), "standard".into())),
+            axum::http::Request::builder()
+                .header("host", server.inner.address.to_string())
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(response.headers()["content-length"], "10");
+        let mut stream = response.into_body().into_data_stream();
+        assert_eq!(stream.next().await.unwrap().unwrap(), "012");
+        let error = stream.next().await.unwrap().unwrap_err();
+
+        assert!(
+            !error.to_string().contains("private-clip.mp4"),
+            "stream diagnostics exposed the local filename"
+        );
+        let mut cause = std::error::Error::source(&error);
+        let mut retained_truncation = false;
+        while let Some(error) = cause {
+            retained_truncation |= error
+                .downcast_ref::<io::Error>()
+                .is_some_and(|error| error.kind() == io::ErrorKind::UnexpectedEof);
+            cause = error.source();
+        }
+        assert!(
+            retained_truncation,
+            "stream error lost its private I/O cause"
+        );
+        assert!(stream.next().await.is_none());
+
+        server.close(&session.id);
+        let inner = server.inner.clone();
+        server.shutdown().await;
+        assert!(inner.local_readers.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

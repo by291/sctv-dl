@@ -31,12 +31,15 @@ import org.junit.Test
 class DownloadsViewModelTest {
     @get:Rule val main = MainDispatcherRule()
 
-    @Test fun failedTransfersStayInTheRecoverySectionAfterTheStateChanges() = runTest {
+    @Test fun failedTransfersMoveIntoTheUnfinishedFilterAfterTheStateChanges() = runTest {
         val repo = FakeDownloads().apply { tasks.value = listOf(fixtureTask(DownloadState.Running)) }
-        val model = DownloadsViewModel(repo, SavedStateHandle())
+        val model = DownloadsViewModel(repo, SavedStateHandle(mapOf("downloadTab" to DownloadTab.Active.name)))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
         runCurrent()
         repo.tasks.value = listOf(fixtureTask(DownloadState.Failed))
+        runCurrent()
+        assertTrue(model.uiState.value.visible.isEmpty())
+        model.tab(DownloadTab.Unfinished)
         runCurrent()
         assertEquals(listOf("task"), model.uiState.value.visible.map { it.id })
         assertEquals("下载失败", downloadStatus(model.uiState.value.visible.single()))
@@ -59,15 +62,18 @@ class DownloadsViewModelTest {
                 )
             )
         }
-        val model = DownloadsViewModel(repo, SavedStateHandle())
+        val model = DownloadsViewModel(repo, SavedStateHandle(mapOf("downloadTab" to DownloadTab.Active.name)))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
         runCurrent()
         assertEquals(listOf("task"), model.uiState.value.visible.map { it.id })
         assertEquals("正在下载", downloadStatus(model.uiState.value.visible.single()))
-        assertEquals("已下载 4.0 KiB", downloadProgress(model.uiState.value.visible.single()))
+        assertEquals("4.0 KiB · 大小未知", downloadProgress(model.uiState.value.visible.single()))
         model.tab(DownloadTab.Completed)
         runCurrent()
-        assertEquals(listOf("complete", "missing"), model.uiState.value.visible.map { it.id })
+        assertEquals(listOf("complete"), model.uiState.value.visible.map { it.id })
+        model.tab(DownloadTab.Removed)
+        runCurrent()
+        assertEquals(listOf("missing"), model.uiState.value.visible.map { it.id })
         model.cancel("task")
         model.retry("missing")
         model.remove("complete")
@@ -92,5 +98,62 @@ class DownloadsViewModelTest {
                 )
             ).contains("1 个使用可用清晰度")
         )
+    }
+
+    @Test fun firstVisitShowsCompletedAndRemovedTasksAlongsideActiveTransfers() = runTest {
+        val repo = FakeDownloads().apply {
+            tasks.value = listOf(
+                fixtureTask(DownloadState.Completed, "complete"),
+                fixtureTask(DownloadState.Missing, "missing"),
+                fixtureTask(DownloadState.Running, "active")
+            )
+        }
+        val model = DownloadsViewModel(repo, SavedStateHandle())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+
+        runCurrent()
+
+        assertEquals(listOf("active", "complete", "missing"), model.uiState.value.visible.map { it.id })
+    }
+
+    @Test fun savedUnfinishedFilterRestoresOnlyFailedTasks() = runTest {
+        val repo = FakeDownloads().apply {
+            tasks.value = listOf(
+                fixtureTask(DownloadState.Cancelled, "cancelled"),
+                fixtureTask(DownloadState.Failed, "failed")
+            )
+        }
+        val saved = SavedStateHandle(mapOf("downloadTab" to "Unfinished"))
+        val model = DownloadsViewModel(repo, saved)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+
+        runCurrent()
+
+        assertEquals(DownloadTab.Unfinished, model.uiState.value.tab)
+        assertEquals(listOf("failed"), model.uiState.value.visible.map { it.id })
+        assertEquals("Unfinished", saved.get<String>("downloadTab"))
+    }
+
+    @Test fun selectingAllAgainClearsOnlyTheCurrentSelection() = runTest {
+        val repo = FakeDownloads().apply {
+            tasks.value = listOf(
+                fixtureTask(DownloadState.Completed, "complete"),
+                fixtureTask(DownloadState.Missing, "missing")
+            )
+        }
+        val model = DownloadsViewModel(repo, SavedStateHandle(mapOf("downloadTab" to DownloadTab.Completed.name)))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect() }
+        runCurrent()
+
+        model.beginSelection()
+        model.selectAll()
+        runCurrent()
+        assertEquals(setOf("complete"), model.uiState.value.selection.keys)
+
+        model.selectAll()
+        runCurrent()
+        assertTrue(model.uiState.value.selection.isEmpty())
+        assertTrue(model.uiState.value.selecting)
+        assertEquals(listOf("complete", "missing"), repo.tasks.value.map { it.id })
     }
 }

@@ -11,15 +11,17 @@ pub fn request_exit<R: Runtime>(app: &AppHandle<R>) {
     let Some(request) = controller.begin() else {
         return;
     };
+
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let downloads = app.state::<DownloadManager>();
         let prepare = app.state::<ExitPreparation>();
         if request
-            .complete_prepared(
+            .complete_with_recovery(
                 &downloads,
                 prepare.prepare(Duration::from_secs(5)),
                 |saved| confirm_exit(&app, saved, downloads.has_active()),
+                |_| confirm_force_exit(&app),
             )
             .await
         {
@@ -32,20 +34,45 @@ async fn confirm_exit<R: Runtime>(app: &AppHandle<R>, saved: bool, active: bool)
     let Some(window) = app.get_webview_window("main") else {
         return false;
     };
+
     let message = match (saved, active) {
         (false, true) => {
-            "部分设置未能保存，且还有下载任务。退出将放弃未保存的设置并取消下载，是否继续？"
+            "部分设置或观看进度未能保存，且还有下载任务。退出将放弃未保存的数据并暂停下载，是否继续？"
         }
-        (false, false) => "部分设置未能保存。退出将放弃这些设置，是否继续？",
-        _ => "还有下载任务正在进行。退出将取消这些任务，是否继续？",
+        (false, false) => "部分设置或观看进度未能保存。退出将放弃这些数据，是否继续？",
+        _ => "还有下载任务正在进行。退出将保存进度并暂停下载，下次打开后可手动继续，是否退出？",
     };
+
+    confirm_dialog(app, &window, message, "仍然退出").await
+}
+
+async fn confirm_force_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let Some(window) = app.get_webview_window("main") else {
+        return false;
+    };
+
+    confirm_dialog(
+        app,
+        &window,
+        "部分下载进度未能安全保存。强制退出会保留现有临时文件，但下次可能需要重新下载，是否强制退出？",
+        "强制退出",
+    )
+    .await
+}
+
+async fn confirm_dialog<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &tauri::WebviewWindow<R>,
+    message: &str,
+    accept: &str,
+) -> bool {
     let (send, receive) = tokio::sync::oneshot::channel();
     app.dialog()
         .message(message)
         .title("退出 SCTV DL")
-        .parent(&window)
+        .parent(window)
         .buttons(MessageDialogButtons::OkCancelCustom(
-            "仍然退出".into(),
+            accept.into(),
             "返回应用".into(),
         ))
         .show(move |accepted| {
@@ -58,6 +85,7 @@ async fn confirm_exit<R: Runtime>(app: &AppHandle<R>, saved: bool, active: bool)
 
 pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem};
+
     let menu = Menu::default(app)?;
     let quit_text = PredefinedMenuItem::quit(app, None)?.text()?;
     let mut replaced = false;
@@ -79,14 +107,17 @@ pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             }
         }
     }
+
     if cfg!(any(target_os = "macos", target_os = "windows")) && !replaced {
         return Err(std::io::Error::other("default Quit menu was not found").into());
     }
+
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         if event.id().as_ref() == "quit" {
             request_exit(app);
         }
     });
+
     Ok(())
 }

@@ -1,15 +1,4 @@
-use sctv_dl_desktop_lib::downloads::files::{DownloadDirectory, download_filename};
-use sctv_dl_desktop_lib::media::Quality;
 use std::{io::Write, sync::Arc};
-
-use axum::{
-    Router,
-    body::Body,
-    http::{Request, Response},
-};
-use sctv_dl_desktop_lib::downloads::{
-    ContentRef, DownloadConfig, DownloadManager, PreparedDownload, TaskState,
-};
 use std::{
     sync::{
         Mutex,
@@ -18,15 +7,28 @@ use std::{
     time::Duration,
 };
 
+use axum::{
+    Router,
+    body::Body,
+    http::{Request, Response},
+};
+use sctv_dl_desktop_lib::downloads::files::{DownloadDirectory, download_filename};
+use sctv_dl_desktop_lib::downloads::{
+    ContentRef, DownloadConfig, DownloadManager, PreparedDownload, TaskState,
+};
+use sctv_dl_desktop_lib::media::Quality;
+
 struct Stub {
     origin: String,
     task: tokio::task::JoinHandle<()>,
 }
+
 impl Drop for Stub {
     fn drop(&mut self) {
         self.task.abort();
     }
 }
+
 async fn stub(router: Router) -> Stub {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
@@ -35,8 +37,21 @@ async fn stub(router: Router) -> Stub {
     });
     Stub { origin, task }
 }
+
 fn prepared(origin: &str, id: &str) -> PreparedDownload {
     PreparedDownload {
+        metadata: serde_json::from_value(serde_json::json!({
+            "content": {
+                "programmeId": "1",
+                "dateId": "2",
+                "contentId": id
+            },
+            "programmeName": "News",
+            "broadcastDate": "2026-10-17",
+            "title": "Clip",
+            "cover": null
+        }))
+        .unwrap(),
         content: ContentRef {
             programme_id: "1".into(),
             date_id: "2".into(),
@@ -47,10 +62,12 @@ fn prepared(origin: &str, id: &str) -> PreparedDownload {
         url: format!("{origin}/{id}.mp4"),
     }
 }
+
 async fn terminal(manager: &DownloadManager, count: usize) {
     tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             let tasks = manager.list();
+
             if tasks.len() == count && tasks.iter().all(|task| task.state.is_terminal()) {
                 break;
             }
@@ -140,7 +157,9 @@ fn finalization_preserves_a_regular_file_replacing_the_temporary_path() {
     let (mut file, reservation) = directory.reserve("clip.mp4").unwrap();
     file.write_all(b"downloaded bytes").unwrap();
     drop(file);
+
     let replacement = replace_temporary_file(root.path());
+
     assert!(reservation.finish().is_err());
     assert_eq!(
         std::fs::read(replacement).unwrap(),
@@ -155,7 +174,9 @@ fn cancellation_preserves_a_regular_file_replacing_the_temporary_path() {
     let directory = DownloadDirectory::open(root.path()).unwrap();
     let (file, reservation) = directory.reserve("clip.mp4").unwrap();
     drop(file);
+
     let replacement = replace_temporary_file(root.path());
+
     assert!(reservation.cleanup().is_err());
     assert_eq!(
         std::fs::read(&replacement).unwrap(),
@@ -206,6 +227,7 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
         capture.lock().unwrap().push(task);
         true
     });
+
     let result = manager
         .start(vec![prepared(&server.origin, "3")], root.path())
         .await
@@ -219,6 +241,7 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
         std::fs::read(root.path().join(&task.filename)).unwrap(),
         b"small mp4 fixture"
     );
+
     let revisions: Vec<_> = observed
         .lock()
         .unwrap()
@@ -256,11 +279,13 @@ async fn limits_concurrency_deduplicates_active_jobs_and_cancels_waiting_jobs() 
     })
     .await
     .unwrap();
+
     let duplicate = manager
         .start(vec![prepared(&server.origin, "3")], root.path())
         .await
         .unwrap();
     assert_eq!(duplicate.task_ids, vec![result.task_ids[0].clone()]);
+
     let queued = manager
         .list()
         .into_iter()
@@ -353,7 +378,9 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
         .await
         .unwrap();
     terminal(&manager, 4).await;
+
     let tasks = manager.list();
+
     assert_eq!(
         tasks
             .iter()
@@ -405,6 +432,7 @@ async fn bounds_outstanding_work_and_releases_a_cancelled_slot_for_waiting_downl
     })
     .await
     .unwrap();
+
     let second = manager
         .start(
             vec![
@@ -529,6 +557,7 @@ fn handles_windows_superscript_device_names_and_rejects_paths_without_tempfile_r
     assert_eq!(reservation.filename(), "_LPT².mp4");
     drop(file);
     reservation.cleanup().unwrap();
+
     let mut long = root.path().to_owned();
     while long.as_os_str().to_string_lossy().encode_utf16().count() < 190 {
         long.push("123456789012345678901234567890");
@@ -586,6 +615,7 @@ fn derives_portable_names_without_splitting_unicode() {
             row["filename"].as_str().unwrap()
         );
     }
+
     let name = download_filename("2026-10-16", &"🎥".repeat(200), Quality::Smooth);
     assert!(name.ends_with(".mp4"));
     assert!(name.encode_utf16().count() <= 154);
@@ -649,6 +679,7 @@ fn releases_cancelled_reservations_and_only_recovers_recognized_leftovers() {
     drop(file);
     reserved.cleanup().unwrap();
     drop(directory);
+
     let id = "11111111-1111-4111-8111-111111111111";
     let part = root.path().join(format!(".sctv-dl-{id}.part"));
     std::fs::write(&part, b"interrupted").unwrap();
@@ -714,10 +745,12 @@ fn simultaneous_reservations_are_unique_and_invalid_directories_fail() {
         .iter()
         .map(|(_, reserved)| reserved.filename().to_owned())
         .collect();
+
     names.sort();
     names.dedup();
     assert_eq!(names.len(), 8);
     assert!(names.iter().all(|name| name.starts_with("_CON")));
+
     for (file, reserved) in reservations {
         drop(file);
         reserved.cleanup().unwrap();

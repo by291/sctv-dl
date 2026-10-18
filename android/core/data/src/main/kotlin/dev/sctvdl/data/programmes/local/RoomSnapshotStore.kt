@@ -7,6 +7,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.map
 
 internal class RoomSnapshotStore @Inject constructor(private val database: SctvDatabase) : SnapshotStore {
+    override suspend fun clear() = database.snapshots().clear()
+
     override fun observe(key: String) = database.snapshots().observe(key).map { row ->
         row?.let { StoredSnapshot(it.key, it.payload, it.updatedAt) }
     }

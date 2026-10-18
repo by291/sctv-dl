@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A 48dp mark in the 108dp layer leaves room for circular launcher masks. -->
+<!-- Keep the 48dp mark, raised 3dp in the 108dp layer to optically align with the Flutter launcher. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_sctv_brand"
-    android:inset="27.777778%" />
+    android:insetLeft="27.777778%"
+    android:insetTop="25%"
+    android:insetRight="27.777778%"
+    android:insetBottom="30.555556%" />

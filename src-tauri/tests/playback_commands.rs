@@ -1,4 +1,9 @@
+#[path = "support/ipc.rs"]
+mod ipc;
+
 mod support;
+
+use std::sync::Arc;
 
 use axum::{Json, Router, http::Uri};
 use sctv_dl_desktop_lib::{
@@ -8,35 +13,10 @@ use sctv_dl_desktop_lib::{
     programmes::{Deadlines, ProgrammeService},
     state::{AppState, PlaybackState},
 };
-use serde_json::{Value, json};
-use std::sync::Arc;
-use tauri::{
-    Manager,
-    ipc::{CallbackFn, InvokeBody},
-    test::{INVOKE_KEY, get_ipc_response, mock_builder},
-    webview::InvokeRequest,
-};
+use serde_json::json;
+use tauri::{Manager, test::mock_builder};
 
-fn invoke(
-    window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
-    command: &str,
-    body: Value,
-    origin: &str,
-) -> Result<Value, Value> {
-    get_ipc_response(
-        window,
-        InvokeRequest {
-            cmd: command.into(),
-            callback: CallbackFn(0),
-            error: CallbackFn(1),
-            url: origin.parse().unwrap(),
-            body: InvokeBody::Json(body),
-            headers: Default::default(),
-            invoke_key: INVOKE_KEY.into(),
-        },
-    )
-    .map(|body| body.deserialize().unwrap())
-}
+use ipc::{invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn playback_commands_enforce_domain_references_acl_and_early_cancellation() {
@@ -77,11 +57,7 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
     let secondary = tauri::WebviewWindowBuilder::new(&app, "secondary", Default::default())
         .build()
         .unwrap();
-    let local = if cfg!(windows) {
-        "http://tauri.localhost"
-    } else {
-        "tauri://localhost"
-    };
+    let local = local_origin();
     let request = |id: &str| {
         json!({
             "requestId": id,
@@ -98,10 +74,11 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
     let session = invoke(&main, "open_playback", request(&id), local).unwrap();
 
     assert_eq!(session["selectedQuality"], "standard");
+
     invoke(
         &main,
         "close_playback",
-        json!({"sessionId":session["id"]}),
+        json!({ "sessionId": session["id"] }),
         local,
     )
     .unwrap();

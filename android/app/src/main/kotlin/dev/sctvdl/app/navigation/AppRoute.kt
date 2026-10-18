@@ -11,6 +11,8 @@ sealed interface AppRoute : NavKey {
 
     @Serializable data object Settings : AppRoute
 
+    @Serializable data object History : AppRoute
+
     @Serializable data class Archive(val programmeId: String) : AppRoute
 
     @Serializable

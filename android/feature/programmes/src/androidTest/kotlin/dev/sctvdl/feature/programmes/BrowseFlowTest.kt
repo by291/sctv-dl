@@ -3,7 +3,11 @@ package dev.sctvdl.feature.programmes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -51,7 +55,8 @@ class BrowseFlowTest {
             }
         }
         compose.onNodeWithText("更多日期").performClick()
-        compose.onNodeWithText("10月5日 星期一").performClick()
+        val dateOption = hasText("10月5日") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+        compose.onNode(dateOption).performClick()
         compose.runOnIdle { assertEquals("older", state.date?.id) }
         compose.onNodeWithText("批量下载").performScrollTo().performClick()
         compose.onNodeWithContentDescription("选择今日新闻片段").performScrollTo().performClick()

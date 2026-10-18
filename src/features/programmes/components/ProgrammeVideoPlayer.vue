@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
-import Artplayer from 'artplayer'
+import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
 
+import { createProgrammePlayerController } from '@/features/programmes/composables/programme-player-controller'
+
+import type {
+  PlaybackRestore,
+  PlaybackSampleReason,
+  PlaybackSnapshot,
+} from '@/features/programmes/model/playback-state'
 import type { PlaybackSession } from '@shared/contracts/media'
 
 const props = withDefaults(
@@ -10,87 +16,41 @@ const props = withDefaults(
     poster: string | null
     title: string
     variants?: PlaybackSession['sources']
+    restore?: PlaybackRestore
+    active?: boolean
   }>(),
-  { variants: () => [] },
+  { variants: () => [], active: true, restore: undefined },
 )
-const emit = defineEmits<{ error: []; ready: [] }>()
+const emit = defineEmits<{
+  error: []
+  ready: []
+  snapshot: [value: PlaybackSnapshot, reason: PlaybackSampleReason]
+}>()
 
 const container = useTemplateRef<HTMLDivElement>('container')
-let player: Artplayer | undefined
+const controller = createProgrammePlayerController(props, {
+  error: () => emit('error'),
+  ready: () => emit('ready'),
+  snapshot: (value, reason) => emit('snapshot', value, reason),
+})
 
-defineExpose({ pause: () => player?.pause() })
+watch(
+  () => props.active,
+  (active) => {
+    if (!active) {
+      controller.pause()
+    }
+  },
+)
+
+defineExpose({ pause: controller.pause, capture: controller.capture })
 
 onMounted(() => {
-  if (!container.value) {
-    return
-  }
-
-  try {
-    const video = document.createElement('video') as HTMLVideoElement & {
-      webkitSupportsPresentationMode?: (mode: string) => boolean
-      webkitSetPresentationMode?: (mode: string) => void
-    }
-    const pip =
-      (!!document.pictureInPictureEnabled && typeof video.requestPictureInPicture === 'function') ||
-      (!!video.webkitSupportsPresentationMode?.('picture-in-picture') &&
-        typeof video.webkitSetPresentationMode === 'function')
-
-    // The dialog keys this component by session so each preview owns one instance.
-    const instance = new Artplayer({
-      container: container.value,
-      url: props.url,
-      poster: props.poster || '',
-      type: 'mp4',
-      lang: 'zh-cn',
-      theme: '#dc4f41',
-      autoplay: false,
-      playsInline: true,
-      setting: true,
-      quality:
-        props.variants.length > 1
-          ? props.variants.map((variant) => ({
-              html: variant.quality === 'smooth' ? '流畅' : '标准',
-              url: variant.url,
-              default: variant.url === props.url,
-            }))
-          : [],
-      playbackRate: true,
-      pip,
-      fullscreen:
-        !!document.fullscreenEnabled ||
-        !!(document as Document & { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled,
-      hotkey: true,
-      moreVideoAttr: { controls: false, preload: 'metadata' },
-    })
-    player = instance
-
-    instance.on('video:error', () => emit('error'))
-    instance.on('video:loadedmetadata', () => {
-      // WebKit can defer canplay until a metadata-only preview is explicitly played.
-      if (instance.video.paused && !instance.video.seeking) {
-        instance.loading.show = false
-        instance.mask.show = true
-      }
-
-      emit('ready')
-    })
-    instance.on('video:playing', () => {
-      instance.loading.show = false
-    })
-  } catch {
-    emit('error')
+  if (container.value) {
+    controller.mount(container.value)
   }
 })
-
-onBeforeUnmount(() => {
-  if (player) {
-    try {
-      player.pause()
-    } finally {
-      player.destroy()
-    }
-  }
-})
+onBeforeUnmount(controller.dispose)
 </script>
 
 <template>

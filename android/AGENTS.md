@@ -1,6 +1,6 @@
 # Android Agent Instructions
 
-These instructions apply inside `android/`. Read [README](README.md) and the relevant section of [Client Design](../docs/android-client-design.md) before changing native behaviour.
+These instructions apply inside `android/`. Read [README](README.md) and the relevant section of [Android Architecture](../docs/android.md) before changing native behaviour.
 
 ## Ownership
 
@@ -8,7 +8,7 @@ These instructions apply inside `android/`. Read [README](README.md) and the rel
 - `feature:programmes` owns catalogue, favourites, broadcast archives, accepted resource state, and their presentation components.
 - `feature:downloads`, `feature:settings`, and `feature:player` own their destination state, Route entry points, screens, and actions.
 - `core:domain` contains Kotlin-only models, repository contracts, and programme/download policies, grouped by subject. It has no Android dependencies.
-- `core:data` owns HTTP validation, Room, DataStore, DownloadManager, and restart reconciliation. Implementation packages follow the owning feature and remain internal; public qualifiers and the manifest receiver are platform integration contracts.
+- `core:data` owns HTTP validation, Room, DataStore, Media3 transfers, legacy DownloadManager, public-file publication, and restart reconciliation. Implementation packages follow the owning feature and remain internal; public qualifiers and the manifest receiver are platform integration contracts.
 - `core:design` owns generic theme tokens and stateless Compose primitives, without domain or feature dependencies. Keep the module name `design`.
 - `core:ui` owns shared application presentation: covers/transitions, download quality/outcome text, cached errors, and the settings-to-theme adapter.
 - `core:player` owns Media3 sessions, playback models/controller, surface, and native controls. `feature:player` owns destination lifetime; `app` implements its `PlaybackHost` contract.
@@ -53,9 +53,13 @@ Follow the [Kotlin conventions](https://kotlinlang.org/docs/coding-conventions.h
 - Application-controlled HTTP clients disable redirects and validate upstream URLs. Media requests use the required Referer.
 - Cache a validated successful empty response. Preserve cached data on refresh failures.
 - Persist download preparation before system submission. Reserve active content/quality identity transactionally. Reconcile interrupted submissions by the planned unique destination; ambiguous matches require explicit user resolution.
-- System byte/status queries determine progress. Unknown total length is indeterminate. No pause/resume action is exposed for platform downloads.
-- Removing a history record preserves files. Cancelling an active platform job removes that job and its partial file. Validate completed content URIs before playback/open/share.
-- Player startup is paused. Quality changes retain playback intent and position. Ordinary backgrounding pauses; explicit picture-in-picture may continue. Release only after the destination leave transition disposes the entry.
+- Native byte/status queries determine progress. Unknown total length is indeterminate. Manual pause/resume belongs only to managed Media3 tasks; legacy platform tasks retain their original capabilities.
+- Media3 execution requires a live service/job lease and a permitted network. Restored index entries start stopped; private cleanup must also work without an in-memory network context. Cancel actual streaming Calls when leases/networks are withdrawn.
+- Persist publication intent and its pending URI before copying. Finalize and verify the public file before reporting completion or removing private cache spans. Record removal preserves public media but must clean private resources first.
+- Batch/file-consent operations revalidate the attempt and URI. A stale selection cannot mutate a replacement attempt.
+- Removing a download or viewing-history record preserves public files. Cancelling an active platform job removes that job and its partial file. Validate completed content URIs before playback/open/share.
+- Player startup is paused. Quality selection commits only after readiness, with one rollback to the last usable source. Preserve position, speed and the latest user/external play intent. Ordinary backgrounding pauses; explicit picture-in-picture may continue. Release only after the destination leave transition disposes the entry.
+- Back up only the user database/journals and existing settings. Keep the destination import marker authoritative after restore; history keys use exact content IDs or a legacy task identity. Clearing history invalidates queued writes, and paused seeks flush after readiness.
 - Exclude cached metadata and runtime download IDs from backup. Keep machine paths, signing material, generated caches, and temporary memory limits out of tracked configuration.
 
 ## Verification

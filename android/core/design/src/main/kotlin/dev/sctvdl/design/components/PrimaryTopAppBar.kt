@@ -1,10 +1,14 @@
 package dev.sctvdl.design.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
@@ -21,7 +25,12 @@ fun PrimaryTopAppBar(
 
     TopAppBar(
         title = title,
-        modifier = modifier,
+        // The theme already animates this surface; the app bar's own colour animation would lag behind it.
+        modifier = modifier.background(MaterialTheme.colorScheme.surface),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent
+        ),
         expandedHeight = height,
         navigationIcon = navigationIcon,
         actions = actions

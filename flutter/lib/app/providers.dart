@@ -9,6 +9,7 @@ final servicesProvider = Provider<AppServices>(
 
 class PreferenceState {
   const PreferenceState(this.value, {this.error});
+
   final Preferences value;
   final String? error;
 }
@@ -20,13 +21,32 @@ final preferencesProvider =
 
 class PreferencesController extends Notifier<PreferenceState> {
   int _editRevision = 0;
+  Future<void>? _saving;
+
   @override
   PreferenceState build() =>
       PreferenceState(ref.watch(servicesProvider).initialPreferences);
 
-  Future<void> save(Preferences preferences) async {
+  Future<void> retry() {
+    if (_saving case final pending?) return pending;
+    if (state.error == null) return Future.value();
+
+    return save(state.value);
+  }
+
+  Future<void> save(Preferences preferences) {
+    final saving = _save(preferences);
+    _saving = saving;
+
+    return saving.whenComplete(() {
+      if (identical(_saving, saving)) _saving = null;
+    });
+  }
+
+  Future<void> _save(Preferences preferences) async {
     final revision = ++_editRevision;
     state = PreferenceState(preferences);
+
     try {
       await ref.read(servicesProvider).user.savePreferences(preferences);
     } catch (error) {

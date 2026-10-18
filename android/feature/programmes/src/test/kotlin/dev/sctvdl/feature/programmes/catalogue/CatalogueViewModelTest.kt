@@ -290,7 +290,7 @@ class CatalogueViewModelTest {
         assertEquals("", saved.get<String>("query"))
     }
 
-    @Test fun restoredFavouriteFilterUsesItsOwnSearchAndSort() = runTest {
+    @Test fun favouriteToggleRetainsTheActiveSearchAndSortIncludingRestoredLegacyValues() = runTest {
         val repo = FakeProgrammes().apply { catalogue.value = CachedResource(rows) }
         val favourites = FakeFavourites().apply { ids.value = setOf("2", "3") }
         val saved = SavedStateHandle(
@@ -318,7 +318,8 @@ class CatalogueViewModelTest {
         assertEquals(false, saved.get<Boolean>("favouritesByName"))
         model.filter(false)
         runCurrent()
-        assertEquals("Zulu", model.uiState.value.query)
+        assertEquals("Alpha", model.uiState.value.query)
+        assertEquals(false, model.uiState.value.byName)
         assertEquals(false, model.uiState.value.favouritesOnly)
         model.filter(true)
         runCurrent()

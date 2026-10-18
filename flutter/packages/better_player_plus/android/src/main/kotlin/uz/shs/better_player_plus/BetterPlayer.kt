@@ -133,7 +133,8 @@ internal class BetterPlayer(
         licenseUrl: String?,
         drmHeaders: Map<String, String>?,
         cacheKey: String?,
-        clearKey: String?
+        clearKey: String?,
+        initialPosition: Long = 0
     ) {
         this.key = key
         isInitialized = false
@@ -194,9 +195,9 @@ internal class BetterPlayer(
                 .setStartPositionMs(0)
                 .setEndPositionMs(overriddenDuration * 1000)
                 .build()
-            exoPlayer?.setMediaSource(clippingMediaSource)
+            exoPlayer?.setMediaSource(clippingMediaSource, initialPosition.coerceAtLeast(0))
         } else {
-            exoPlayer?.setMediaSource(mediaSource)
+            exoPlayer?.setMediaSource(mediaSource, initialPosition.coerceAtLeast(0))
         }
         exoPlayer?.prepare()
         result.success(null)
@@ -470,6 +471,11 @@ internal class BetterPlayer(
         exoPlayer?.setVideoSurface(surfaceProducer.surface)
         setAudioAttributes(exoPlayer, true)
         exoPlayer?.addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                // Metadata readiness can precede visible texture output.
+                eventSink.success(mapOf("event" to "firstFrameRendered", "key" to key))
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {

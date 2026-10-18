@@ -17,45 +17,37 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.domain.programme.ContentRef
+import dev.sctvdl.feature.player.PlaybackHistoryRecorder
 import dev.sctvdl.feature.player.PlaybackHost
-import dev.sctvdl.player.media3.PlayerSession
 import dev.sctvdl.player.model.PlaybackSource
 import dev.sctvdl.player.ui.PlayerVideo
 import dev.sctvdl.ui.downloads.DownloadQualitySheet
+import dev.sctvdl.ui.programme.PlaybackCover
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.delay
 
 private val PlayerDateLabel = DateTimeFormatter.ofPattern("yyyy年M月d日", Locale.SIMPLIFIED_CHINESE)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlaybackContent(
     source: PlaybackSource,
@@ -65,45 +57,21 @@ internal fun PlaybackContent(
     onDownload: ((Quality) -> Unit)? = null,
     programmeName: String? = null,
     broadcastDate: LocalDate? = null,
-    host: PlaybackHost
+    host: PlaybackHost,
+    history: PlaybackHistoryRecorder? = null,
+    coverUrl: String? = null,
+    coverReference: ContentRef? = null,
+    sourcePrepared: Boolean = true
 ) {
-    val context = LocalContext.current
-    val session = remember(source.id) { PlayerSession(context, initialQuality) }
-    val playback by session.controller.state.collectAsStateWithLifecycle()
-    val pip by host.pictureInPicture.collectAsStateWithLifecycle()
-
+    val currentHistory by rememberUpdatedState(history)
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var downloadSheet by rememberSaveable(source.id) { mutableStateOf(false) }
 
+    val session = rememberPlaybackSession(source, initialQuality, sourcePrepared, fullscreen, host, history, onPosition)
+    val playback by session.controller.state.collectAsStateWithLifecycle()
+    val pip by host.pictureInPicture.collectAsStateWithLifecycle()
+
     val canDownload = onDownload != null && source.localUri == null && source.variants.isNotEmpty()
-
-    LaunchedEffect(source.id, source.variants, source.localUri) { session.controller.setSource(source) }
-
-    LaunchedEffect(session) {
-        while (true) {
-            session.controller.tick()
-            onPosition(session.controller.state.value.positionMs)
-            delay(500)
-        }
-    }
-
-    LifecycleResumeEffect(fullscreen) {
-        // Predictive previews are STARTED; only a committed destination may change the Activity window.
-        host.fullscreen(fullscreen)
-        // Keep the outgoing window intact through the leave animation; disposal below restores it.
-        onPauseOrDispose { }
-    }
-
-    // Disposal happens after the leave animation; releasing on Back would tear down the outgoing video surface.
-    DisposableEffect(session) {
-        host.bindPlayer(session)
-        onDispose {
-            onPosition(session.controller.state.value.positionMs)
-            host.unbindPlayer(session)
-            host.fullscreen(false)
-            session.release()
-        }
-    }
 
     BackHandler(fullscreen && !pip) { fullscreen = false }
 
@@ -117,28 +85,16 @@ internal fun PlaybackContent(
     }
 
     val scroll = rememberScrollState()
-    val minimumVideoHeight = if (LocalDensity.current.fontScale >= 1.5f) 208.dp else 176.dp
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val videoHeight = minOf(maxWidth * (9f / 16f), if (maxWidth > maxHeight) maxHeight * 0.4f else maxHeight)
-            .coerceAtLeast(minimumVideoHeight).coerceAtMost(maxHeight)
+        val videoHeight = inlinePlayerHeight(maxWidth, maxHeight, LocalDensity.current.fontScale)
         Column(
             Modifier.fillMaxSize().then(
                 if (!fullscreen && !pip) Modifier.verticalScroll(scroll) else Modifier
             )
         ) {
             if (!fullscreen && !pip) {
-                TopAppBar(
-                    title = { Text("节目播放") },
-                    navigationIcon = {
-                        IconButton(onClick = back) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.ArrowBack,
-                                "返回节目单"
-                            )
-                        }
-                    }
-                )
+                PlaybackTopBar(back)
             }
             PlayerVideo(
                 player = session.player,
@@ -146,18 +102,49 @@ internal fun PlaybackContent(
                 onQuality = session.controller::selectQuality,
                 onSpeed = session.controller::setSpeed,
                 fullscreen = fullscreen,
-                onFullscreen = { fullscreen = !fullscreen },
+                onFullscreen = {
+                    session.controller.endTemporarySpeed()
+                    fullscreen = !fullscreen
+                },
                 onPip = if (host.supportsPictureInPicture) {
                     { host.enterPictureInPicture() }
                 } else {
                     null
                 },
                 onRetry = session.controller::retry,
+                onTogglePlay = {
+                    session.controller.togglePlay()
+                    currentHistory?.onProgress(session.controller.state.value)
+                },
+                onSeek = {
+                    session.controller.seekTo(it)
+                    currentHistory?.onSeekCompleted(session.controller.state.value)
+                },
                 modifier = Modifier.fillMaxWidth().then(
                     if (fullscreen || pip) Modifier.weight(1f) else Modifier.height(videoHeight)
                 ),
-                controlsEnabled = !pip
+                controlsEnabled = !pip && sourcePrepared,
+                onTemporarySpeed = { active ->
+                    if (active) session.controller.beginTemporarySpeed() else session.controller.endTemporarySpeed()
+                },
+                gestureEnvironment = host.gestureEnvironment,
+                artwork = {
+                    PlaybackCover(
+                        reference = if (fullscreen || pip) null else coverReference,
+                        url = coverUrl,
+                        modifier = Modifier.fillMaxSize(),
+                        videoReady = playback.firstFrameRendered
+                    )
+                }
             )
+            if (history != null) {
+                val historyError by history.error.collectAsStateWithLifecycle()
+                historyError?.let { message ->
+                    androidx.compose.material3.TextButton(onClick = {
+                        history.retry(session.controller.state.value)
+                    }) { Text(message) }
+                }
+            }
             if (!pip) {
                 if (!fullscreen) {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {

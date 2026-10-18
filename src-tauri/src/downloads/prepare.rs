@@ -1,5 +1,6 @@
-use reqwest::Url;
 use std::collections::HashSet;
+
+use reqwest::Url;
 
 use super::{
     ContentRef, DownloadRequest, FileFailure, PreparedBatch, PreparedDownload, download_filename,
@@ -45,6 +46,14 @@ pub async fn prepare_downloads(
         .broadcast(&request.programme_id, &request.date_id)
         .await?;
 
+    let programme_name = service
+        .programmes()
+        .await?
+        .into_iter()
+        .find(|programme| programme.id == request.programme_id)
+        .map(|programme| programme.name)
+        .unwrap_or_default();
+
     let mut batch = PreparedBatch::default();
     for id in ids {
         let prepared = broadcast
@@ -55,6 +64,17 @@ pub async fn prepare_downloads(
                 let (quality, url) = preferred_source(content, request.quality)?;
                 policy::target(url, origins).ok()?;
                 Some(PreparedDownload {
+                    metadata: crate::history::HistoryMetadata {
+                        content: ContentRef {
+                            programme_id: request.programme_id.clone(),
+                            date_id: request.date_id.clone(),
+                            content_id: id.clone(),
+                        },
+                        programme_name: programme_name.clone(),
+                        broadcast_date: broadcast.date.date.clone(),
+                        title: content.title.clone(),
+                        cover: content.cover.clone(),
+                    },
                     content: ContentRef {
                         programme_id: request.programme_id.clone(),
                         date_id: request.date_id.clone(),

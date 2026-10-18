@@ -12,11 +12,13 @@ class RequestScope {
     } else {
       _listeners.add(listener);
     }
+
     return () => _listeners.remove(listener);
   }
 
   void cancel() {
     if (_cancelled) return;
+
     _cancelled = true;
     for (final listener in _listeners) {
       listener();
@@ -39,6 +41,7 @@ class ProgrammeSnapshot<T> {
     required this.revision,
     required this.fetchedAt,
   });
+
   final List<T> items;
   final String revision;
   final DateTime fetchedAt;
@@ -47,11 +50,13 @@ class ProgrammeSnapshot<T> {
 abstract interface class ProgrammeRepository {
   Future<ProgrammeSnapshot<Programme>?> cachedProgrammes();
   Future<ProgrammeSnapshot<Programme>> refreshProgrammes({RequestScope? scope});
+
   Future<ProgrammeSnapshot<BroadcastDate>?> cachedDates(String programmeId);
   Future<ProgrammeSnapshot<BroadcastDate>> refreshDates(
     String programmeId, {
     RequestScope? scope,
   });
+
   Future<ProgrammeSnapshot<ProgrammeContent>?> cachedContents(
     String programmeId,
     String dateId,
@@ -61,5 +66,6 @@ abstract interface class ProgrammeRepository {
     String dateId, {
     RequestScope? scope,
   });
+
   Future<void> clearCache();
 }

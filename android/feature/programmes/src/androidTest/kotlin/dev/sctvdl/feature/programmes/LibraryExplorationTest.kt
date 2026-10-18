@@ -62,8 +62,8 @@ class LibraryExplorationTest {
             scenario.onActivity { state = state.copy(featuredId = "one") }
             val exploration = device.wait(Until.findObject(By.desc("查看栏目Alpha")), 5_000)
             assertNotNull("The first loaded exploration action must be visible without scrolling", exploration)
-            val tabs = requireNotNull(device.findObject(By.text("全部栏目")))
-            assertTrue(exploration!!.visibleBounds.top >= tabs.visibleBounds.bottom)
+            val filter = requireNotNull(device.findObject(By.desc("只看收藏")))
+            assertTrue(exploration!!.visibleBounds.bottom <= filter.visibleBounds.top)
         }
     }
 
@@ -86,8 +86,10 @@ class LibraryExplorationTest {
         }
     }
 
-    @Test fun searchingAndFavouritesKeepTheExplorationOutOfFilteredResults() {
-        var state by mutableStateOf(CatalogueUiState(resource = CachedResource(programmes), featuredId = "one"))
+    @Test fun favouriteToggleOnlyFiltersCardsAndKeepsTheExplorationAndHeaderInPlace() {
+        var state by mutableStateOf(
+            CatalogueUiState(resource = CachedResource(programmes), featuredId = "one", favourites = setOf("one"))
+        )
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.setContent {
@@ -114,9 +116,17 @@ class LibraryExplorationTest {
             assertNull(device.findObject(By.res("programme-spotlight")))
             requireNotNull(device.findObject(By.desc("清除搜索"))).click()
             assertNotNull(device.wait(Until.findObject(By.res("programme-spotlight")), 5_000))
-            requireNotNull(device.wait(Until.findObject(By.res("filter-favourites")), 5_000)).click()
-            device.wait(Until.gone(By.res("programme-spotlight")), 5_000)
-            assertNull(device.findObject(By.res("programme-spotlight")))
+            val before = requireNotNull(device.findObject(By.res("programme-spotlight"))).visibleBounds
+            val filterBefore = requireNotNull(device.findObject(By.desc("只看收藏"))).visibleBounds
+            requireNotNull(device.wait(Until.findObject(By.desc("只看收藏")), 5_000)).click()
+            assertNotNull(device.wait(Until.findObject(By.text("1 个栏目")), 5_000))
+            assertEquals(before, requireNotNull(device.findObject(By.res("programme-spotlight"))).visibleBounds)
+            assertEquals(filterBefore, requireNotNull(device.findObject(By.desc("显示全部栏目"))).visibleBounds)
+            assertNotNull(device.findObject(By.res("programme-one")))
+            assertNull(device.findObject(By.res("programme-two")))
+            requireNotNull(device.findObject(By.desc("显示全部栏目"))).click()
+            assertNotNull(device.wait(Until.findObject(By.res("programme-two")), 5_000))
+            assertEquals(before, requireNotNull(device.findObject(By.res("programme-spotlight"))).visibleBounds)
         }
     }
 

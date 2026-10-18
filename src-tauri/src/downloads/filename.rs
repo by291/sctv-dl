@@ -20,10 +20,12 @@ pub(super) fn portable_stem(value: &str, units: usize) -> String {
         used += character.len_utf16();
         result.push(character);
     }
+
     let mut result = result.trim_end_matches(['.', ' ']).to_owned();
     if result.is_empty() {
         result.push_str("video");
     }
+
     let device = result
         .split('.')
         .next()
@@ -40,6 +42,7 @@ pub(super) fn portable_stem(value: &str, units: usize) -> String {
     {
         result.insert(0, '_');
     }
+
     result
 }
 

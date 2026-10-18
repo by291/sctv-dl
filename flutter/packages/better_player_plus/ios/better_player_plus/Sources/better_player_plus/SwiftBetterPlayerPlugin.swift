@@ -254,6 +254,7 @@ extension BetterPlayerPlugin {
             let maxCacheSize = dataSource["maxCacheSize"] as? NSNumber
             let videoExtension = dataSource["videoExtension"] as? String
             let overriddenDuration = (dataSource["overriddenDuration"] as? NSNumber)?.intValue ?? 0
+            let initialPosition = (dataSource["initialPosition"] as? NSNumber)?.intValue ?? 0
 
             let useCache = (dataSource["useCache"] as? NSNumber)?.boolValue ?? false
             if useCache { cacheManager.setMaxCacheSize(maxCacheSize) }
@@ -265,9 +266,9 @@ extension BetterPlayerPlugin {
                 } else {
                     assetPath = registrar.lookupKey(forAsset: assetArg)
                 }
-                player.setDataSourceAsset(assetPath, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration)
+                player.setDataSourceAsset(assetPath, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration, initialPosition: initialPosition)
             } else if let uriArg = uriArg, let url = URL(string: uriArg) {
-                player.setDataSourceURL(url, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, headers: headers, useCache: useCache, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration, videoExtension: videoExtension)
+                player.setDataSourceURL(url, key: key, certificateUrl: certificateUrl, licenseUrl: licenseUrl, headers: headers, useCache: useCache, cacheKey: cacheKey, cacheManager: cacheManager, overriddenDuration: overriddenDuration, videoExtension: videoExtension, initialPosition: initialPosition)
             } else {
                 result(FlutterMethodNotImplemented)
                 return

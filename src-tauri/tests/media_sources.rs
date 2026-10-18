@@ -18,6 +18,8 @@ async fn prepares_playback_and_downloads_from_each_verified_cdn() {
             async move {
                 let data = if uri.path().contains("contents") {
                     json!([{ "id": 3, "title": "Archive", "video": video }])
+                } else if uri.path() == "/app/v1/programs" {
+                    json!({ "records": [{ "id": 1, "name": "News" }] })
                 } else {
                     json!([{ "id": 2, "date": "2021-02-05" }])
                 };

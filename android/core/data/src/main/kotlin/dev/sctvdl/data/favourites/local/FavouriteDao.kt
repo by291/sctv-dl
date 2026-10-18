@@ -11,6 +11,9 @@ internal interface FavouriteDao {
     @Query("SELECT id FROM favourites")
     fun observeFavourites(): Flow<List<String>>
 
+    @Query("SELECT id FROM favourites")
+    suspend fun allIds(): List<String>
+
     @Query("SELECT EXISTS(SELECT 1 FROM favourites WHERE id = :id)")
     suspend fun isFavourite(id: String): Boolean
 

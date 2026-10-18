@@ -486,6 +486,7 @@ class BetterPlayerController {
               ?.notificationConfiguration
               ?.notificationChannelName,
           overriddenDuration: _betterPlayerDataSource!.overriddenDuration,
+          initialPosition: _betterPlayerDataSource!.initialPosition,
           formatHint: _getVideoFormat(_betterPlayerDataSource!.videoFormat),
           licenseUrl: _betterPlayerDataSource?.drmConfiguration?.licenseUrl,
           certificateUrl:
@@ -521,6 +522,7 @@ class BetterPlayerController {
               ?.notificationConfiguration
               ?.notificationChannelName,
           overriddenDuration: _betterPlayerDataSource!.overriddenDuration,
+          initialPosition: _betterPlayerDataSource!.initialPosition,
           activityName:
               _betterPlayerDataSource?.notificationConfiguration?.activityName,
           clearKey: _betterPlayerDataSource?.drmConfiguration?.clearKey,
@@ -545,6 +547,7 @@ class BetterPlayerController {
                 ?.notificationConfiguration
                 ?.notificationChannelName,
             overriddenDuration: _betterPlayerDataSource!.overriddenDuration,
+            initialPosition: _betterPlayerDataSource!.initialPosition,
             activityName: _betterPlayerDataSource
                 ?.notificationConfiguration
                 ?.activityName,

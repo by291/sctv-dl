@@ -1,8 +1,9 @@
-use super::*;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
+
+use super::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn waiting_for_a_settings_write_keeps_the_async_runtime_responsive() {
@@ -109,6 +110,7 @@ async fn dropping_directory_persistence_keeps_exit_waiting_for_the_owned_worker(
     })
     .await
     .unwrap();
+
     assert!(
         exit_waited,
         "exit committed before its persistence worker completed"

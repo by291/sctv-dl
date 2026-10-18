@@ -1,4 +1,4 @@
-import { HttpInputError } from './http-errors.ts'
+import { HttpInputError } from './input-error.ts'
 
 import type { IncomingMessage } from 'node:http'
 
@@ -8,7 +8,7 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
   }
 
   const raw = await new Promise<string>((resolve, reject) => {
-    let length = 0
+    let receivedBytes = 0
     const chunks: Buffer[] = []
 
     const abort = () => {
@@ -17,8 +17,10 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
     }
 
     const data = (chunk: Buffer) => {
-      length += chunk.length
-      if (length <= 16_384) {
+      receivedBytes += chunk.length
+
+      // Continue draining oversized bodies, but never retain more than the payload limit.
+      if (receivedBytes <= 16_384) {
         chunks.push(chunk)
       }
     }
@@ -31,7 +33,7 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
     const end = () => {
       cleanup()
 
-      if (length > 16_384) {
+      if (receivedBytes > 16_384) {
         reject(new HttpInputError('请求内容过大'))
       } else {
         resolve(Buffer.concat(chunks).toString('utf8'))
@@ -39,7 +41,7 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
     }
 
     const cleanup = () => {
-      clearTimeout(bodyTimer)
+      clearTimeout(bodyDeadline)
       request.off('data', data)
       request.off('end', end)
       request.off('error', error)
@@ -47,7 +49,7 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
     }
 
     // Body reception has its own deadline, separate from each upstream header deadline.
-    const bodyTimer = setTimeout(() => {
+    const bodyDeadline = setTimeout(() => {
       cleanup()
       request.resume()
       reject(new HttpInputError('请求内容接收超时', 504))
@@ -55,6 +57,7 @@ export async function readJson(request: IncomingMessage, signal: AbortSignal): P
 
     request.on('data', data).once('end', end).once('error', error)
     signal.addEventListener('abort', abort, { once: true })
+
     if (signal.aborted) {
       abort()
     }

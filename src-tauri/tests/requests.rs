@@ -1,14 +1,16 @@
+use std::{sync::Arc, time::Duration};
+
 use sctv_dl_desktop_lib::{
     error::{AppError, ErrorCode},
     requests::RequestRegistry,
 };
-use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
 #[tokio::test(start_paused = true)]
 async fn early_cancellation_expires_and_consumed_markers_do_not_poison_reuse() {
     let registry = Arc::new(RequestRegistry::default());
     let id = Uuid::new_v4().to_string();
+
     registry.cancel(&id).unwrap();
     let mut executed = false;
     let result = registry
@@ -27,6 +29,7 @@ async fn early_cancellation_expires_and_consumed_markers_do_not_poison_reuse() {
         .run(async { Ok(()) })
         .await
         .unwrap();
+
     registry.cancel(&id).unwrap();
     tokio::time::advance(Duration::from_secs(60)).await;
     registry
@@ -82,9 +85,11 @@ async fn validates_request_ids_rejects_duplicates_and_cleans_up_on_drop_or_failu
             .register("00000000-0000-4000-0000-000000000000")
             .is_err()
     );
+
     let id = Uuid::new_v4().to_string();
     let guard = registry.register(&id).unwrap();
     assert!(registry.register(&id).is_err());
+
     drop(guard);
     registry
         .register(&id)

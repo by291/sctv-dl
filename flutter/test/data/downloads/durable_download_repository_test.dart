@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/data/database/record_database.dart';
 import 'package:sctv_dl_mobile/data/downloads/durable_download_repository.dart';
 import 'package:sctv_dl_mobile/data/downloads/sqlite_download_task_store.dart';
-import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
+import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/downloads/file_gateway.dart';
 import 'package:sctv_dl_mobile/domain/downloads/transfer_gateway.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
@@ -78,6 +78,17 @@ void main() {
       ),
     );
     await repository.loadTasks();
+    if (state == DownloadState.finalizing) {
+      await repository.watchTasks().firstWhere((tasks) {
+        final current = tasks.singleWhere((value) => value.id == task.id);
+        return current.attemptId != task.attemptId ||
+            current.state != DownloadState.finalizing &&
+                (current.privateLocation == null || current.error != null) ||
+            current.state == DownloadState.finalizing && current.error != null;
+      });
+      // Observe claim release after the final durable state notification.
+      await repository.loadTasks();
+    }
   }
 
   test(
@@ -539,6 +550,419 @@ void main() {
     },
   );
 
+  test(
+    'explicit reconciliation joins an outstanding file inspection',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      final entered = Completer<void>();
+      final gate = Completer<FileDetails>();
+      addTearDown(() {
+        if (!gate.isCompleted) gate.complete(const FileDetails(exists: false));
+      });
+      files.onInspect = (_) {
+        if (!entered.isCompleted) entered.complete();
+        return gate.future;
+      };
+
+      final first = repository.reconcile();
+      await entered.future;
+      var secondFinished = false;
+      final second = repository.reconcile().then((_) => secondFinished = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(secondFinished, isFalse);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.completed,
+      );
+
+      gate.complete(const FileDetails(exists: false));
+      await Future.wait([first, second]);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.missing,
+      );
+    },
+  );
+
+  test(
+    'concurrent reconciliations share file work without stream errors',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      final errors = <Object>[];
+      final observation = repository.watchTasks().listen(
+        (_) {},
+        onError: errors.add,
+      );
+      addTearDown(observation.cancel);
+      final entered = Completer<void>();
+      final gate = Completer<FileDetails>();
+      addTearDown(() {
+        if (!gate.isCompleted) {
+          gate.complete(const FileDetails(exists: true, bytes: 120));
+        }
+      });
+      var inspections = 0;
+      files.onInspect = (_) {
+        inspections++;
+        if (!entered.isCompleted) entered.complete();
+        return gate.future;
+      };
+      transfers.pendingQuery = Completer<Map<String, TransferSnapshot>>();
+
+      final first = repository.reconcile();
+      final second = repository.reconcile();
+      final joined = Future.wait([first, second]);
+      unawaited(joined.catchError((Object _) => <void>[]));
+      await Future<void>.delayed(Duration.zero);
+      transfers.pendingQuery!.complete(Map.of(transfers.snapshots));
+      await entered.future;
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, isEmpty);
+      gate.complete(const FileDetails(exists: true, bytes: 120));
+      await joined;
+      expect(inspections, 1);
+    },
+  );
+
+  test('export picker does not block task observation', () async {
+    final task = await start();
+    await event(task, DownloadState.finalizing);
+    files.exportEntered = Completer<void>();
+    files.exportGate = Completer<bool>();
+    addTearDown(() {
+      if (!files.exportGate!.isCompleted) files.exportGate!.complete(false);
+    });
+    final exporting = repository.exportFile(task.id);
+    await files.exportEntered!.future;
+    var observed = false;
+    final loading = repository.loadTasks().then((_) => observed = true);
+    await Future<void>.delayed(Duration.zero);
+    final observedWhileExporting = observed;
+    files.exportGate!.complete(false);
+    expect(await exporting, isFalse);
+    await loading;
+    expect(observedWhileExporting, isTrue);
+  });
+
+  test('publication does not block task observation', () async {
+    final task = await start();
+    files.publicationEntered = Completer<void>();
+    files.publicationGate = Completer<void>();
+    addTearDown(() {
+      if (!files.publicationGate!.isCompleted) {
+        files.publicationGate!.complete();
+      }
+    });
+    transfers.emit(
+      TransferSnapshot(
+        attemptId: task.attemptId,
+        state: DownloadState.finalizing,
+        fileLocation: 'support:downloads/${task.filename}',
+      ),
+    );
+    await files.publicationEntered!.future;
+    var observed = false;
+    final loading = repository.loadTasks().then((tasks) {
+      observed = true;
+      return tasks;
+    });
+    await Future<void>.delayed(Duration.zero);
+    final observedWhilePublishing = observed;
+    files.publicationGate!.complete();
+    final tasks = await loading;
+    expect(observedWhilePublishing, isTrue);
+    expect(tasks.single.state, DownloadState.finalizing);
+  });
+
+  test(
+    'file claims reject removal and conflicting actions until export ends',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      files.exportEntered = Completer<void>();
+      files.exportGate = Completer<bool>();
+      addTearDown(() {
+        if (!files.exportGate!.isCompleted) files.exportGate!.complete(false);
+      });
+      final exporting = repository.exportFile(task.id);
+      await files.exportEntered!.future;
+      var removalRejected = false;
+      final removing = repository.remove(task.id).catchError((Object _) {
+        removalRejected = true;
+      });
+      var deletionRejected = false;
+      final deleting = repository.deleteFile(task.id).catchError((Object _) {
+        deletionRejected = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+      final rejectedWhileExporting = removalRejected && deletionRejected;
+      files.exportGate!.complete(false);
+      await exporting;
+      await Future.wait([removing, deleting]);
+      expect(rejectedWhileExporting, isTrue);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.completed,
+      );
+      await repository.remove(task.id);
+      expect(await repository.loadTasks(), isEmpty);
+    },
+  );
+
+  test(
+    'disposal drains native export effects before dependencies close',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      files.exportEntered = Completer<void>();
+      files.exportGate = Completer<bool>();
+      addTearDown(() {
+        if (!files.exportGate!.isCompleted) files.exportGate!.complete(false);
+      });
+      final exporting = repository.exportFile(task.id);
+      await files.exportEntered!.future;
+      var disposed = false;
+      final disposal = repository.dispose().then((_) => disposed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(disposed, isFalse);
+      files.exportGate!.complete(false);
+      await exporting;
+      await disposal;
+      expect(disposed, isTrue);
+    },
+  );
+
+  test(
+    'a stalled publication leaves unrelated native progress observable',
+    () async {
+      final publishing = await start();
+      const other = ProgrammeSelection(
+        programme: Programme(id: '1', name: 'Test'),
+        broadcast: BroadcastDate(id: '2', date: '2026-10-16'),
+        content: ProgrammeContent(
+          id: '4',
+          title: 'Other',
+          video: 'https://fscgc.scgchc.com/other.mp4',
+        ),
+      );
+      await repository.start([other], VideoQuality.standard, wifiOnly: false);
+      final running = (await repository.loadTasks()).singleWhere(
+        (task) => task.id != publishing.id,
+      );
+      files.publicationEntered = Completer<void>();
+      files.publicationGate = Completer<void>();
+      addTearDown(() {
+        if (!files.publicationGate!.isCompleted) {
+          files.publicationGate!.complete();
+        }
+      });
+      transfers.emit(
+        TransferSnapshot(
+          attemptId: publishing.attemptId,
+          state: DownloadState.finalizing,
+          fileLocation: 'support:downloads/${publishing.filename}',
+        ),
+      );
+      await files.publicationEntered!.future;
+      final observation = repository.watchTasks().firstWhere(
+        (tasks) => tasks.any(
+          (task) => task.id == running.id && task.receivedBytes == 48,
+        ),
+      );
+      transfers.emit(
+        TransferSnapshot(
+          attemptId: running.attemptId,
+          state: DownloadState.running,
+          receivedBytes: 48,
+        ),
+      );
+      final observed = await observation.timeout(const Duration(seconds: 2));
+      expect(
+        observed.singleWhere((task) => task.id == publishing.id).state,
+        DownloadState.finalizing,
+      );
+      await expectLater(repository.publish(publishing.id), throwsStateError);
+      files.publicationGate!.complete();
+    },
+  );
+
+  test(
+    'bootstrap exposes persisted finalization while publication is stalled',
+    () async {
+      final task = await start();
+      files.publicationFailure = StateError('disk full');
+      await event(task, DownloadState.finalizing);
+      await repository.dispose();
+      files.publicationFailure = null;
+      files.publicationEntered = Completer<void>();
+      files.publicationGate = Completer<void>();
+      addTearDown(() {
+        if (!files.publicationGate!.isCompleted) {
+          files.publicationGate!.complete();
+        }
+      });
+      repository = DurableDownloadRepository(
+        store: store,
+        transfers: transfers,
+        files: files,
+      );
+      await files.publicationEntered!.future;
+      final tasks = await repository.loadTasks().timeout(
+        const Duration(seconds: 2),
+      );
+      expect(tasks.single.state, DownloadState.finalizing);
+      files.publicationGate!.complete();
+    },
+  );
+
+  test('retry cleanup claims prevent removal and a second retry', () async {
+    final task = await start();
+    await event(task, DownloadState.failed);
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    files.onCleanPartial = (_) async {
+      entered.complete();
+      await release.future;
+    };
+    final retrying = repository.retry(task.id);
+    await entered.future;
+    await expectLater(repository.remove(task.id), throwsStateError);
+    await expectLater(repository.retry(task.id), throwsStateError);
+    expect((await repository.loadTasks()).single.attemptId, task.attemptId);
+    release.complete();
+    await retrying;
+    final replacement = (await repository.loadTasks()).single;
+    expect(replacement.attemptId, isNot(task.attemptId));
+    await event(task, DownloadState.finalizing);
+    expect(
+      (await repository.loadTasks()).single.attemptId,
+      replacement.attemptId,
+    );
+  });
+
+  test(
+    'cancellation cleanup claims prevent retry from reusing owned artifacts',
+    () async {
+      final task = await start();
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      files.onCleanPartial = (_) async {
+        entered.complete();
+        await release.future;
+      };
+      final cancelling = repository.cancel(task.id);
+      await entered.future;
+      await expectLater(repository.retry(task.id), throwsStateError);
+      await expectLater(repository.remove(task.id), throwsStateError);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.cancelled,
+      );
+      release.complete();
+      await cancelling;
+      files.onCleanPartial = null;
+      await repository.retry(task.id);
+      expect(
+        (await repository.loadTasks()).single.attemptId,
+        isNot(task.attemptId),
+      );
+    },
+  );
+
+  test(
+    'delete claims keep the record stable and release after failure',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      files.onDelete = (_) async {
+        entered.complete();
+        await release.future;
+        throw StateError('permission denied');
+      };
+      final deleting = repository.deleteFile(task.id);
+      final failure = expectLater(deleting, throwsStateError);
+      await entered.future;
+      await expectLater(repository.remove(task.id), throwsStateError);
+      await expectLater(repository.shareFile(task.id), throwsStateError);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.completed,
+      );
+      release.complete();
+      await failure;
+      expect(
+        (await repository.loadTasks()).single.error,
+        contains('permission denied'),
+      );
+      files.onDelete = null;
+      await repository.deleteFile(task.id);
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.missing,
+      );
+    },
+  );
+
+  test(
+    'disposal drains publication and durable cleanup before returning',
+    () async {
+      final task = await start();
+      files.publicationEntered = Completer<void>();
+      files.publicationGate = Completer<void>();
+      addTearDown(() {
+        if (!files.publicationGate!.isCompleted) {
+          files.publicationGate!.complete();
+        }
+      });
+      transfers.emit(
+        TransferSnapshot(
+          attemptId: task.attemptId,
+          state: DownloadState.finalizing,
+          fileLocation: 'support:downloads/${task.filename}',
+        ),
+      );
+      await files.publicationEntered!.future;
+      var disposed = false;
+      final disposal = repository.dispose().then((_) => disposed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(disposed, isFalse);
+      files.publicationGate!.complete();
+      await disposal;
+      final saved = (await store.load()).single;
+      expect(saved.state, DownloadState.completed);
+      expect(saved.privateLocation, isNull);
+      expect(files.deletedLocations, ['support:downloads/${task.filename}']);
+    },
+  );
+
+  test(
+    'cancellation commits intent before a callback can revise its claimed task',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.running, received: 1);
+      final cancelling = repository.cancel(task.id);
+      scheduleMicrotask(
+        () => transfers.emit(
+          TransferSnapshot(
+            attemptId: task.attemptId,
+            state: DownloadState.running,
+            receivedBytes: 20,
+          ),
+        ),
+      );
+      await cancelling;
+      expect(
+        (await repository.loadTasks()).single.state,
+        DownloadState.cancelled,
+      );
+      expect(transfers.cancelled, contains(task.attemptId));
+    },
+  );
+
   test('export cancellation keeps the local file and returns false', () async {
     final task = await start();
     await event(task, DownloadState.finalizing);
@@ -618,6 +1042,13 @@ class FakeTransfers implements TransferGateway {
 }
 
 class FakeFiles implements DownloadFileGateway {
+  Future<void> Function(DownloadTask)? onCleanPartial;
+  Future<void> Function(String)? onDelete;
+  Completer<void>? exportEntered;
+  Completer<bool>? exportGate;
+  Completer<void>? publicationEntered;
+  Completer<void>? publicationGate;
+  Future<FileDetails> Function(String)? onInspect;
   bool exists = true;
   bool publishInPlace = false;
   final deletedLocations = <String>[];
@@ -628,12 +1059,16 @@ class FakeFiles implements DownloadFileGateway {
   @override
   bool get supportsExport => true;
   @override
-  Future<FileDetails> inspect(String location) async => FileDetails(
-    exists: exists && !missingLocations.contains(location),
-    bytes: exists && !missingLocations.contains(location) ? 120 : null,
-  );
+  Future<FileDetails> inspect(String location) async =>
+      await onInspect?.call(location) ??
+      FileDetails(
+        exists: exists && !missingLocations.contains(location),
+        bytes: exists && !missingLocations.contains(location) ? 120 : null,
+      );
   @override
   Future<String> publish(DownloadTask task, String privateLocation) async {
+    publicationEntered?.complete();
+    await publicationGate?.future;
     if (publicationFailure != null) throw publicationFailure!;
     return publishInPlace
         ? privateLocation
@@ -642,11 +1077,13 @@ class FakeFiles implements DownloadFileGateway {
 
   @override
   Future<void> cleanPartial(DownloadTask task) async {
+    await onCleanPartial?.call(task);
     if (cleanupFailure != null) throw cleanupFailure!;
   }
 
   @override
   Future<void> delete(String location) async {
+    await onDelete?.call(location);
     if (deletionFailure != null) throw deletionFailure!;
     deletedLocations.add(location);
     missingLocations.add(location);
@@ -658,7 +1095,10 @@ class FakeFiles implements DownloadFileGateway {
   @override
   Future<void> share(String location, String filename) async {}
   @override
-  Future<bool> export(String location, String filename) async => false;
+  Future<bool> export(String location, String filename) async {
+    exportEntered?.complete();
+    return exportGate?.future ?? false;
+  }
 }
 
 class FailOnceStore implements DownloadTaskStore {

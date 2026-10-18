@@ -5,13 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final coverCacheProvider = Provider<BaseCacheManager?>((ref) => null);
 
-class CoverImage extends ConsumerWidget {
+class CoverImage extends StatelessWidget {
   const CoverImage({super.key, this.url, this.aspectRatio = 16 / 9});
+
   final String? url;
   final double aspectRatio;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final colours = Theme.of(context).colorScheme;
     final fallback = ColoredBox(
       color: colours.surfaceContainerHighest,
@@ -23,18 +24,23 @@ class CoverImage extends ConsumerWidget {
         ),
       ),
     );
+
     return ExcludeSemantics(
       child: AspectRatio(
         aspectRatio: aspectRatio,
         child: url == null || url!.isEmpty
             ? fallback
-            : CachedNetworkImage(
-                imageUrl: url!,
-                cacheManager: ref.watch(coverCacheProvider),
-                fit: BoxFit.cover,
-                memCacheWidth: 900,
-                placeholder: (_, _) => fallback,
-                errorWidget: (_, _, _) => fallback,
+            : Consumer(
+                builder: (context, ref, _) => CachedNetworkImage(
+                  imageUrl: url!,
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  cacheManager: ref.watch(coverCacheProvider),
+                  fit: BoxFit.cover,
+                  memCacheWidth: 900,
+                  placeholder: (_, _) => fallback,
+                  errorWidget: (_, _, _) => fallback,
+                ),
               ),
       ),
     );

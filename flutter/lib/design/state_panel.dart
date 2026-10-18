@@ -9,6 +9,7 @@ class StatePanel extends StatelessWidget {
     this.onAction,
     this.actionLabel = '重试',
   });
+
   final String title;
   final String message;
   final IconData icon;
@@ -50,6 +51,7 @@ class CachedErrorBanner extends StatelessWidget {
     required this.message,
     required this.onRetry,
   });
+
   final String message;
   final VoidCallback onRetry;
 
@@ -73,6 +75,7 @@ class CachedErrorBanner extends StatelessWidget {
 
 class PageSkeleton extends StatelessWidget {
   const PageSkeleton({super.key, this.count = 4});
+
   final int count;
 
   @override
@@ -92,21 +95,6 @@ class PageSkeleton extends StatelessWidget {
           ),
         ),
       ),
-    ),
-  );
-}
-
-class PendingUpdateButton extends StatelessWidget {
-  const PendingUpdateButton({super.key, required this.onPressed});
-  final VoidCallback onPressed;
-  @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: '有新内容，点击更新',
-    onPressed: onPressed,
-    icon: Badge(
-      smallSize: 7,
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      child: const Icon(Icons.update_rounded),
     ),
   );
 }

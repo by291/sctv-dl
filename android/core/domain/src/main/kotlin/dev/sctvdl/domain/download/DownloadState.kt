@@ -8,7 +8,9 @@ enum class DownloadState {
     Failed,
     Completed,
     Cancelled,
-    Missing
+    Missing,
+    Paused,
+    Finalizing
 }
 
 enum class DownloadReason {
@@ -22,12 +24,17 @@ enum class DownloadReason {
     Interrupted,
     Ambiguous,
     Cancelled,
-    Unknown
+    Unknown,
+    ResumeRequired,
+    Publication,
+    BackgroundLimit
 }
 
 val DownloadState.isActive: Boolean get() = this in setOf(
     DownloadState.Preparing,
     DownloadState.Pending,
     DownloadState.Running,
-    DownloadState.Waiting
+    DownloadState.Waiting,
+    DownloadState.Paused,
+    DownloadState.Finalizing
 )

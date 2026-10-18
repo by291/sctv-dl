@@ -13,6 +13,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+
 use tokio::sync::{OwnedRwLockReadGuard, RwLock};
 
 use crate::{
@@ -40,10 +41,12 @@ impl ExitController {
         if self.closing.load(Ordering::SeqCst) {
             return Err(closing());
         }
+
         let guard = self.operations.clone().read_owned().await;
         if self.closing.load(Ordering::SeqCst) {
             return Err(closing());
         }
+
         Ok(OperationGuard { _admission: guard })
     }
 
@@ -52,10 +55,12 @@ impl ExitController {
         if self.frozen.load(Ordering::SeqCst) || self.committed() {
             return Err(closing());
         }
+
         let guard = self.operations.clone().read_owned().await;
         if self.frozen.load(Ordering::SeqCst) || self.committed() {
             return Err(closing());
         }
+
         Ok(OperationGuard { _admission: guard })
     }
 
@@ -93,7 +98,7 @@ impl ExitRequest {
     }
 
     /// Drains frontend saves, freezes admission, and waits for existing work.
-    /// A successful return follows download cancellation and awaited cleanup.
+    /// A successful return follows durable download checkpoints and awaited cleanup.
     /// Rejecting confirmation restores admission when this attempt is dropped.
     pub async fn complete_prepared<P, F, Fut>(
         self,
@@ -106,17 +111,54 @@ impl ExitRequest {
         F: FnOnce(bool) -> Fut,
         Fut: Future<Output = bool>,
     {
+        self.complete_with_recovery(downloads, prepare, confirm, |_| async { false })
+            .await
+    }
+
+    /// Failed checkpoints need a separate decision after writers have settled.
+    pub async fn complete_with_recovery<P, F, Fut, G, Force>(
+        self,
+        downloads: &DownloadManager,
+        prepare: P,
+        confirm: F,
+        force: G,
+    ) -> bool
+    where
+        P: Future<Output = bool>,
+        F: FnOnce(bool) -> Fut,
+        Fut: Future<Output = bool>,
+        G: FnOnce(AppError) -> Force,
+        Force: Future<Output = bool>,
+    {
         // Drain frontend save queues before refusing new preference writes.
         let saved = prepare.await;
         self.controller.frozen.store(true, Ordering::SeqCst);
+
         // Existing picker/prepare/save work must settle before the final task snapshot.
         let _operations = self.controller.operations.clone().write_owned().await;
         if (!saved || downloads.has_active()) && !confirm(saved).await {
             return false;
         }
+
+        let _admission = DownloadAdmission(downloads);
+        if let Err(error) = downloads.prepare_shutdown().await
+            && !force(error.reported("prepare downloads for exit")).await
+        {
+            return false;
+        }
+
         downloads.shutdown().await;
         self.controller.committed.store(true, Ordering::SeqCst);
         true
+    }
+}
+
+/// Also reopens admission when an exit future is cancelled during checkpointing.
+struct DownloadAdmission<'a>(&'a DownloadManager);
+
+impl Drop for DownloadAdmission<'_> {
+    fn drop(&mut self) {
+        self.0.reopen_admission();
     }
 }
 

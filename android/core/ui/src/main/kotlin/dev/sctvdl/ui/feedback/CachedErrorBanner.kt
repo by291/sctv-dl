@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import dev.sctvdl.domain.common.AppError
 
 @Composable
-fun CachedErrorBanner(error: AppError, hasCache: Boolean, onRetry: () -> Unit) {
+fun CachedErrorBanner(error: AppError, hasCache: Boolean, onRetry: () -> Unit, retryLabel: String = "重新连接") {
     Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Text(
@@ -28,7 +28,7 @@ fun CachedErrorBanner(error: AppError, hasCache: Boolean, onRetry: () -> Unit) {
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
-            TextButton(onClick = onRetry) { Text("重新连接") }
+            TextButton(onClick = onRetry) { Text(retryLabel) }
         }
     }
 }

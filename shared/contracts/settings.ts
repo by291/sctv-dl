@@ -4,6 +4,7 @@ import { qualitySchema } from './programmes.ts'
 
 export const themeSchema = z.enum(['light', 'dark', 'system'])
 
+// Recover individual saved fields without discarding other valid preferences.
 export const settingsSchema = z.object({
   quality: qualitySchema.catch('standard'),
   theme: themeSchema.catch('system'),

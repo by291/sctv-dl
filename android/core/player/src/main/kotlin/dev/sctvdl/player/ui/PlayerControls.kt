@@ -5,20 +5,24 @@
 
 package dev.sctvdl.player.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Fullscreen
@@ -45,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -56,8 +61,9 @@ import dev.sctvdl.player.model.PlaybackState
 
 @Composable
 internal fun PlayerControls(
-    player: Player,
     state: PlaybackState,
+    onTogglePlay: () -> Unit,
+    onSeek: (Long) -> Unit,
     onQuality: (Quality) -> Unit,
     onSpeed: (Float) -> Unit,
     fullscreen: Boolean,
@@ -69,63 +75,89 @@ internal fun PlayerControls(
     val speedOptions = remember {
         listOf(0.75f, 1f, 1.25f, 1.5f, 2f).associateWith { "${it.toString().removeSuffix(".0")}×" }
     }
-    val labelStyle = MaterialTheme.typography.labelLarge
+    val labelStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    // Reserve the widest label, horizontal padding, and chevron so the popup anchor stays fixed.
+    val controlSize = 48.dp
+    // Reserve each widest label so elapsed time and menu changes do not move adjacent controls.
     val speedControlWidth = remember(speedOptions, labelStyle, textMeasurer, density) {
         val labelWidth = speedOptions.values.maxOf { textMeasurer.measure(it, labelStyle).size.width }
-        (with(density) { labelWidth.toDp() } + 36.dp).coerceAtLeast(64.dp)
+        (with(density) { labelWidth.toDp() } + 8.dp).coerceAtLeast(controlSize)
     }
 
     val seekInteraction = remember { MutableInteractionSource() }
     val dragging by seekInteraction.collectIsDraggedAsState()
     val pressing by seekInteraction.collectIsPressedAsState()
+    val rowScroll = rememberScrollState()
     var speedMenu by remember { mutableStateOf(false) }
     var qualityMenu by remember { mutableStateOf(false) }
 
-    LaunchedEffect(dragging, pressing, speedMenu, qualityMenu) {
-        onInteractingChanged(dragging || pressing || speedMenu || qualityMenu)
+    LaunchedEffect(dragging, pressing, speedMenu, qualityMenu, rowScroll.isScrollInProgress) {
+        onInteractingChanged(dragging || pressing || speedMenu || qualityMenu || rowScroll.isScrollInProgress)
     }
 
-    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+    val timeStyle = labelStyle
+    val timeWidth = with(density) { textMeasurer.measure("00:00:00", timeStyle).size.width.toDp() } + 4.dp
+    val qualityLabels = state.variants.map { it.quality.label } + "画质"
+    val qualityWidth = (
+        with(density) {
+            qualityLabels.maxOf { textMeasurer.measure(it, labelStyle).size.width }.toDp()
+        } + 8.dp
+        ).coerceAtLeast(controlSize)
+    val rowMinimum = 48.dp + controlSize + timeWidth * 2 + speedControlWidth + 64.dp +
+        if (state.variants.isNotEmpty()) qualityWidth else 0.dp
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val rowWidth = maxOf(maxWidth, rowMinimum)
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.horizontalScroll(rowScroll).width(rowWidth).heightIn(min = 48.dp)
+                .semantics { contentDescription = "播放控制栏" },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PositionText(player, color = Color.White)
+            IconButton(
+                onClick = {
+                    onTogglePlay()
+                    onInteraction()
+                },
+                modifier = Modifier.size(48.dp).semantics {
+                    contentDescription = if (state.playWhenReady && !state.ended) "暂停播放" else "开始播放"
+                }
+            ) {
+                Icon(
+                    if (state.playWhenReady && !state.ended) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    null,
+                    tint = Color.White
+                )
+            }
+            Text(
+                playbackTime(state.positionMs),
+                Modifier.width(timeWidth),
+                color = Color.White,
+                style = timeStyle,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
             PlayerProgressSlider(
-                player,
+                state = state,
+                onSeek = onSeek,
                 modifier = Modifier.weight(1f).semantics { contentDescription = "播放进度" },
                 interactionSource = seekInteraction,
                 onInteraction = onInteraction
             )
-            if (state.durationMs == null) {
-                Text("--:--", color = Color.White, style = TextStyle(fontFeatureSettings = "tnum"))
-            } else {
-                DurationText(player, color = Color.White)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            PlayPauseButton(
-                player,
-                imageVector = { if (showPlay) Icons.Outlined.PlayArrow else Icons.Outlined.Pause },
-                contentDescription = { if (showPlay) "开始播放" else "暂停播放" },
-                iconSize = 24.dp,
-                tint = Color.White,
-                onClick = {
-                    this.onClick()
-                    onInteraction()
-                }
+            Text(
+                playbackTime(state.durationMs),
+                Modifier.width(timeWidth),
+                color = Color.White,
+                style = timeStyle,
+                textAlign = TextAlign.Center,
+                maxLines = 1
             )
-            Spacer(Modifier.weight(1f))
             Box {
                 PlayerMenuButton(
                     "${state.speed.toString().removeSuffix(".0")}×",
                     "播放速度",
                     true,
-                    modifier = Modifier.width(speedControlWidth)
+                    modifier = Modifier.width(speedControlWidth).height(controlSize)
                 ) {
                     onInteraction()
                     speedMenu = true
@@ -150,9 +182,10 @@ internal fun PlayerControls(
             if (state.variants.isNotEmpty()) {
                 Box {
                     PlayerMenuButton(
-                        state.quality?.label ?: "清晰度",
+                        state.quality?.label ?: "画质",
                         "清晰度",
-                        state.variants.size > 1
+                        true,
+                        modifier = Modifier.width(qualityWidth).height(controlSize)
                     ) {
                         onInteraction()
                         qualityMenu = true
@@ -166,7 +199,7 @@ internal fun PlayerControls(
                                 label = variant.quality.label,
                                 selected = variant.quality == state.quality,
                                 onClick = {
-                                    onQuality(variant.quality)
+                                    if (variant.quality != state.quality) onQuality(variant.quality)
                                     qualityMenu = false
                                     onInteraction()
                                 }
@@ -175,13 +208,18 @@ internal fun PlayerControls(
                     }
                 }
             }
-            IconButton(onClick = {
-                onInteraction()
-                onFullscreen()
-            }) {
+            IconButton(
+                onClick = {
+                    onInteraction()
+                    onFullscreen()
+                },
+                modifier = Modifier.size(controlSize).semantics {
+                    contentDescription = if (fullscreen) "退出全屏" else "全屏播放"
+                }
+            ) {
                 Icon(
                     if (fullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                    if (fullscreen) "退出全屏" else "全屏播放",
+                    null,
                     tint = Color.White
                 )
             }
@@ -200,11 +238,10 @@ private fun PlayerMenuButton(
     TextButton(
         onClick = onClick,
         enabled = switchable,
-        modifier = modifier.heightIn(min = 48.dp).semantics { contentDescription = description },
-        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = modifier.semantics { contentDescription = description },
+        contentPadding = PaddingValues(horizontal = 4.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = Color.White, disabledContentColor = Color.White)
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
-        if (switchable) Icon(Icons.Outlined.ExpandMore, null, Modifier.padding(start = 4.dp).size(16.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), maxLines = 1)
     }
 }

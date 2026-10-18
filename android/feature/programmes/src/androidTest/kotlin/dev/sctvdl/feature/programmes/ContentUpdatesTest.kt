@@ -87,7 +87,7 @@ class ContentUpdatesTest {
             )
             assertTrue(
                 "The update action belongs in the toolbar",
-                notice!!.visibleBounds.bottom <= requireNotNull(device.findObject(By.text("全部栏目"))).visibleBounds.top
+                notice!!.visibleBounds.bottom <= requireNotNull(device.findObject(By.text("栏目探索"))).visibleBounds.top
             )
             assertNull(device.findObject(By.text("Beta")))
             assertNull(device.findObject(By.clazz("android.widget.ProgressBar")))
@@ -190,6 +190,8 @@ class ContentUpdatesTest {
 }
 
 private class UpdateRepository : ProgrammeRepository {
+    override suspend fun clearCache() = Unit
+
     val programmes = MutableStateFlow(CachedResource(listOf(Programme("one", "Alpha", null, 0))))
     val dates = MutableStateFlow(CachedResource<List<BroadcastDate>>())
     val contents = MutableStateFlow(CachedResource<List<ProgrammeContent>>())

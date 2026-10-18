@@ -65,3 +65,28 @@ describe('content selection', () => {
     scope.stop()
   })
 })
+
+it('preserves surviving selections across accepted content snapshots', async () => {
+  const contents = ref([full])
+  const scope = effectScope()
+  const selection = scope.run(() => useContentSelection(contents, ref('栏目'), ref('2026-10-06')))!
+  selection.selectAll(true)
+  contents.value = [{ ...full }, { ...full, id: 'new' }]
+  await nextTick()
+  expect(selection.selected.value).toEqual(['1'])
+  expect(selection.allSelected.value).toBe(false)
+  scope.stop()
+})
+
+it('clears selection on explicit date navigation even when the new date reuses IDs', async () => {
+  const date = ref<string | null>('2026-10-06')
+  const contents = ref([full])
+  const scope = effectScope()
+  const selection = scope.run(() => useContentSelection(contents, ref('栏目'), date))!
+  selection.selectAll(true)
+  date.value = '2026-10-05'
+  contents.value = [{ ...full }]
+  await nextTick()
+  expect(selection.selected.value).toEqual([])
+  scope.stop()
+})

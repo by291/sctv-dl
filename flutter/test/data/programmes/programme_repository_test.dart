@@ -8,8 +8,8 @@ import 'package:sctv_dl_mobile/data/database/record_database.dart';
 import 'package:sctv_dl_mobile/data/programmes/cached_programme_repository.dart';
 import 'package:sctv_dl_mobile/data/programmes/dio_programme_client.dart';
 import 'package:sctv_dl_mobile/data/settings/installation_identity.dart';
-import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
+import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 
 void main() {
   late RecordDatabase database;
@@ -227,6 +227,121 @@ void main() {
     expect((await repository.cachedContents('1', '2'))?.items.single.id, '20');
     expect((await repository.cachedContents('1', '3'))?.items.single.id, '30');
   });
+
+  for (final fixture in [
+    (
+      key: 'catalogue',
+      rows: <Map<String, Object?>>[
+        {
+          'id': '1',
+          'name': 'Programme',
+          'cover': 'https://kscgc.sctv.com/a.jpg',
+        },
+        {'id': '2', 'name': 'Second'},
+      ],
+      refresh: () => repository.refreshProgrammes(),
+    ),
+    (
+      key: 'dates/1',
+      rows: <Map<String, Object?>>[
+        {'id': '1', 'date': '2026-10-17'},
+        {'id': '2', 'date': '2026-10-16'},
+      ],
+      refresh: () => repository.refreshDates('1'),
+    ),
+    (
+      key: 'contents/1/2',
+      rows: <Map<String, Object?>>[
+        {
+          'id': '1',
+          'title': 'Clip',
+          'cover': 'https://kscgc.sctv.com/a.jpg',
+          'video': 'https://fscgc.scgchc.com/a.mp4',
+          'videoStandard': 'https://fscgc.scgchc.com/b.mp4',
+          'pubTime': '18:30:00',
+        },
+        {'id': '2', 'title': 'Second'},
+      ],
+      refresh: () => repository.refreshContents('1', '2'),
+    ),
+  ]) {
+    test(
+      '${fixture.key} compares effective fields rather than JSON encoding',
+      () async {
+        var rows = fixture.rows;
+        respond = (request) async {
+          request.response.write(
+            jsonEncode({
+              'rs': 200,
+              'data': fixture.key == 'catalogue' ? {'records': rows} : rows,
+            }),
+          );
+          await request.response.close();
+        };
+        final first = await fixture.refresh();
+        final saved = (await database.read(
+          'programme_snapshots',
+          fixture.key,
+        ))!;
+        // Older writers may omit nulls, use numeric IDs or order keys differently.
+        await database.write('programme_snapshots', fixture.key, {
+          ...saved,
+          'items': [
+            for (final row in fixture.rows)
+              <String, Object?>{
+                'ignoredMetadata': 'old',
+                for (final entry in row.entries.toList().reversed)
+                  entry.key: entry.key == 'id'
+                      ? int.parse(entry.value! as String)
+                      : entry.value,
+              },
+          ],
+        });
+        expect((await fixture.refresh()).revision, first.revision);
+
+        for (final field in fixture.rows.first.keys) {
+          final before = await fixture.refresh();
+          final original = fixture.rows.first[field]! as String;
+          final changed = field == 'id'
+              ? '3'
+              : field == 'date'
+              ? '2026-10-18'
+              : '$original-changed';
+          rows = [
+            {...fixture.rows.first, field: changed},
+            fixture.rows.last,
+          ];
+          final update = await fixture.refresh();
+          expect(update.revision, isNot(before.revision), reason: field);
+          rows = fixture.rows;
+          final restored = await fixture.refresh();
+          expect(restored.revision, isNot(update.revision), reason: field);
+        }
+        final beforeReorder = await fixture.refresh();
+        rows = fixture.rows.reversed.toList();
+        final reordered = await fixture.refresh();
+        // Dates are normalized into descending display order before comparison.
+        expect(
+          reordered.revision,
+          fixture.key.startsWith('dates/')
+              ? beforeReorder.revision
+              : isNot(beforeReorder.revision),
+        );
+        rows = [fixture.rows.first];
+        final removed = await fixture.refresh();
+        expect(removed.revision, isNot(reordered.revision));
+        rows = fixture.rows;
+        expect((await fixture.refresh()).revision, isNot(removed.revision));
+
+        // A successful refresh must still repair an unreadable old snapshot.
+        await database.write('programme_snapshots', fixture.key, {
+          ...saved,
+          'items': 'corrupt',
+        });
+        expect((await fixture.refresh()).items, hasLength(2));
+      },
+    );
+  }
 
   test(
     'stale results are rejected even when the transport ignores cancellation',
