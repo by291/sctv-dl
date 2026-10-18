@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { UpstreamError, UpstreamTimeoutError } from '../programmes/programme-client.ts'
-import { describeClientApiError, HttpInputError } from './http-errors.ts'
+import { describeClientApiError } from './http-errors.ts'
+import { HttpInputError } from './input-error.ts'
 
 describe('client API error responses', () => {
   it.each([new Error('Private implementation detail'), { private: 'detail' }, undefined])(

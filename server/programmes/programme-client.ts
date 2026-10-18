@@ -63,12 +63,12 @@ export function createProgrammeApi(
     signal?.throwIfAborted()
 
     const controller = new AbortController()
-    let timedOut = false
+    let headersTimedOut = false
     const abort = () => controller.abort(signal?.reason)
     signal?.addEventListener('abort', abort, { once: true })
 
-    const timer = setTimeout(() => {
-      timedOut = true
+    const headerDeadline = setTimeout(() => {
+      headersTimedOut = true
       controller.abort()
     }, 20_000)
 
@@ -81,14 +81,14 @@ export function createProgrammeApi(
           redirect: 'manual',
         })
       } catch (cause) {
-        if (timedOut) {
+        if (headersTimedOut) {
           throw new UpstreamTimeoutError('节目服务响应超时，请稍后重试', { cause })
         }
 
         throw new UpstreamError('无法连接节目服务，请稍后重试', { cause })
       } finally {
         // This deadline covers headers only; the parent signal still owns disconnect cancellation.
-        clearTimeout(timer)
+        clearTimeout(headerDeadline)
       }
 
       if (!response.ok) {
@@ -110,7 +110,7 @@ export function createProgrammeApi(
 
       return envelope.data
     } finally {
-      clearTimeout(timer)
+      clearTimeout(headerDeadline)
       signal?.removeEventListener('abort', abort)
     }
   }

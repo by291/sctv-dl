@@ -60,6 +60,7 @@ export function createProgrammeService(
       const { date, contents } = await loadBroadcast(request)
       const result: PreparedDownloads = { files: [], failures: [], usedFallback: false }
 
+      // One unavailable file must not discard other files prepared successfully in this batch.
       for (const contentId of request.contentIds) {
         try {
           const content = contents.find((item) => item.id === contentId)

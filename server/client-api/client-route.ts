@@ -1,7 +1,7 @@
 import { downloadRequestSchema } from '../../shared/contracts/downloads.ts'
 import { playbackRequestSchema } from '../../shared/contracts/media.ts'
 import { idSchema } from '../../shared/contracts/programmes.ts'
-import { HttpInputError } from './http-errors.ts'
+import { HttpInputError } from './input-error.ts'
 import { readJson } from './request-body.ts'
 
 import type { IncomingMessage } from 'node:http'
