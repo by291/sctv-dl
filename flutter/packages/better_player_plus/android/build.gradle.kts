@@ -12,9 +12,9 @@ group = "uz.shs.better_player_plus"
 version = "2.0.0"
 
 val lifecycleVersion = "2.9.4"
-val annotationVersion = "1.9.1"
+val annotationVersion = "1.11.0"
 val media3Version = "1.11.1"
-val workVersion = "2.10.5"
+val workVersion = "2.12.0"
 
 buildscript {
     repositories {
@@ -60,7 +60,7 @@ if (agpMajor < 9) {
 }
 
 dependencies {
-    implementation("androidx.media:media:1.7.1")
+    implementation("androidx.media:media:1.8.0")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
