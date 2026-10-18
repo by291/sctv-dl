@@ -11,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,7 @@ internal fun SctvApp(activity: MainActivity) {
     val downloadsRequest by activity.downloadsRequest.collectAsStateWithLifecycle()
 
     var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
+    var feedbackDownloadsRequest by remember { mutableIntStateOf(0) }
 
     val fileConsent = rememberDownloadFileConsentRequester(activity.downloadFileConsents)
     val library = rememberProgrammeLibraryState()
@@ -62,12 +64,7 @@ internal fun SctvApp(activity: MainActivity) {
         }
     }
 
-    LaunchedEffect(state.downloadMessage) {
-        state.downloadMessage?.let {
-            snackbar.showSnackbar(it.text)
-            model.acknowledgeMessage(it.id)
-        }
-    }
+    DownloadFeedback(state.downloadMessage, snackbar, model::acknowledgeMessage) { feedbackDownloadsRequest++ }
 
     val imageLoader by (activity.application as SctvApplication).coverImages.loaders.collectAsStateWithLifecycle()
     CompositionLocalProvider(LocalCoverImageLoader provides imageLoader) {
@@ -77,7 +74,7 @@ internal fun SctvApp(activity: MainActivity) {
             SideEffect { activity.setSystemBarIcons(darkIcons) }
 
             Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-                AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest) {
+                AppNavigationShell(activity::pausePlayerForDismissal, downloadsRequest + feedbackDownloadsRequest) {
                         route,
                         navigator,
                         bottomPadding

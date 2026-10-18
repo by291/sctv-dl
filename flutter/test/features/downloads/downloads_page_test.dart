@@ -23,6 +23,7 @@ void main() {
     DownloadState state, {
     bool resume = false,
     String id = '1',
+    DateTime? createdAt,
   }) => DownloadTask(
     id: id,
     attemptId: 'a1',
@@ -33,12 +34,125 @@ void main() {
     filename: 'video-a1.mp4',
     wifiOnly: true,
     state: state,
-    createdAt: DateTime(2026),
+    createdAt: createdAt ?? DateTime(2026),
     canResume: resume,
     fileLocation: state == DownloadState.completed
         ? 'documents:Downloads/video.mp4'
         : null,
   );
+
+  testWidgets('filters and task groups follow the same management order', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = PageRepository([
+      task(DownloadState.missing, id: 'removed'),
+      task(DownloadState.cancelled, id: 'cancelled'),
+      task(DownloadState.failed, id: 'failed'),
+      task(DownloadState.paused, id: 'active').copyWith(totalBytes: 100),
+      task(DownloadState.completed, id: 'completed'),
+    ]);
+    addTearDown(repository.close);
+
+    await tester.pumpWidget(
+      host(
+        home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+          .map((chip) => (chip.label as Text).data),
+      ['全部 5', '下载中 1', '已完成 1', '下载失败 1', '已取消 1', '已移除 1'],
+    );
+    final sectionLabels = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .where((text) => text?.contains(' · 1') ?? false);
+    expect(sectionLabels, [
+      '下载中 · 1',
+      '已完成 · 1',
+      '下载失败 · 1',
+      '已取消 · 1',
+      '已移除 · 1',
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('creation order survives shuffled records and progress updates', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    DownloadTask transfer(String id, DateTime createdAt, int receivedBytes) =>
+        task(DownloadState.running, id: id, createdAt: createdAt).copyWith(
+          totalBytes: 100,
+          receivedBytes: receivedBytes,
+          selection: ProgrammeSelection(
+            programme: selection.programme,
+            broadcast: selection.broadcast,
+            content: ProgrammeContent(id: id, title: 'Transfer $id'),
+          ),
+        );
+    final oldest = transfer('oldest', DateTime(2026, 10, 16), 90);
+    final sameTimeB = transfer('b', DateTime(2026, 10, 17), 60);
+    final newest = transfer('newest', DateTime(2026, 10, 18), 10);
+    final sameTimeA = transfer('a', DateTime(2026, 10, 17), 20);
+    final repository = PageRepository([oldest, sameTimeB, newest, sameTimeA]);
+    addTearDown(repository.close);
+    Iterable<String?> visibleTitles() => tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data)
+        .where((text) => text?.startsWith('Transfer ') ?? false);
+    const expected = [
+      'Transfer newest',
+      'Transfer a',
+      'Transfer b',
+      'Transfer oldest',
+    ];
+
+    await tester.pumpWidget(
+      host(
+        home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(visibleTitles(), expected);
+    expect(repository.tasks.map((task) => task.id), [
+      'oldest',
+      'b',
+      'newest',
+      'a',
+    ]);
+
+    repository.changes.add([
+      sameTimeB.copyWith(receivedBytes: 70, revision: 7),
+      sameTimeA.copyWith(receivedBytes: 95, revision: 50),
+      oldest.copyWith(receivedBytes: 98, revision: 100),
+      newest.copyWith(receivedBytes: 15, revision: 1),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(visibleTitles(), expected);
+    await tester.tap(find.byKey(const ValueKey('download-filter-active')));
+    await tester.pumpAndSettle();
+    expect(visibleTitles(), expected);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('filter selection removes only visible records and keeps files', (
     tester,
@@ -54,7 +168,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('download-filter-removed')));
+    final removed = find.byKey(const ValueKey('download-filter-removed'));
+    await tester.ensureVisible(removed);
+    await tester.tap(removed);
     await tester.pumpAndSettle();
     expect(find.byType(Card), findsOneWidget);
     await tester.tap(find.byTooltip('批量管理'));
@@ -128,7 +244,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('已移除 · 1'), findsOneWidget);
-    expect(find.text('未完成 · 1'), findsNothing);
+    expect(find.text('下载失败 · 1'), findsNothing);
     expect(find.text('文件已删除'), findsNothing);
     expect(find.text('重新下载'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());

@@ -214,7 +214,12 @@ class _DownloadsPageState extends State<DownloadsPage> {
     stream: _tasks,
     builder: (context, snapshot) {
       final tasks = snapshot.data ?? const <DownloadTask>[];
-      final visible = tasks.where(_filter.includes).toList();
+      // Creation order stays stable when progress or native revisions change.
+      final visible = tasks.where(_filter.includes).toList()
+        ..sort((a, b) {
+          final creationOrder = b.createdAt.compareTo(a.createdAt);
+          return creationOrder != 0 ? creationOrder : a.id.compareTo(b.id);
+        });
       if (snapshot.hasData && !snapshot.hasError) {
         _selected.retainAll(visible.map((task) => task.id));
       }
@@ -432,10 +437,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
             (value) => value != DownloadFilter.all,
           ))
             if (visible.any(filter.includes)) ...[
-              _section(
-                filter == DownloadFilter.active ? '进行中' : filter.label,
-                visible.where(filter.includes).length,
-              ),
+              _section(filter.label, visible.where(filter.includes).length),
               ...visible.where(filter.includes).map(_tile),
             ],
         ],

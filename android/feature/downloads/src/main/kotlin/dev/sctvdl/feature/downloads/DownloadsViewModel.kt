@@ -29,7 +29,7 @@ internal class DownloadsViewModel @Inject constructor(
     private val repository: DownloadRepository,
     private val saved: SavedStateHandle
 ) : ViewModel() {
-    private val selectedTab = saved.getStateFlow("downloadTab", DownloadTab.Active.name)
+    private val selectedTab = saved.getStateFlow("downloadTab", DownloadTab.All.name)
 
     private val selection = saved.getStateFlow("downloadSelection", hashMapOf<String, String>())
     private val selecting = saved.getStateFlow("downloadSelecting", false)
@@ -48,7 +48,7 @@ internal class DownloadsViewModel @Inject constructor(
             ->
             DownloadsUiState(
                 tasks,
-                DownloadFilter.entries.firstOrNull { it.name == selected } ?: DownloadFilter.Active,
+                DownloadFilter.entries.firstOrNull { it.name == selected } ?: DownloadFilter.All,
                 false,
                 selectedItems.toMap(),
                 selectionMode,
@@ -86,7 +86,13 @@ internal class DownloadsViewModel @Inject constructor(
     }
 
     fun selectAll() {
-        saved["downloadSelection"] = HashMap(uiState.value.visible.associate { it.id to it.attemptId })
+        val visible = uiState.value.visible
+        val allSelected = visible.isNotEmpty() && visible.all { it.id in selection.value }
+        saved["downloadSelection"] = if (allSelected) {
+            hashMapOf<String, String>()
+        } else {
+            HashMap(visible.associate { it.id to it.attemptId })
+        }
     }
 
     suspend fun perform(

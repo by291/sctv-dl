@@ -24,26 +24,54 @@ DownloadTask task(String id, DownloadState state, {bool resumable = false}) =>
     );
 
 void main() {
-  test(
-    'filters keep paused transfers active and publication errors unfinished',
-    () {
-      expect(
-        DownloadFilter.active.includes(task('1', DownloadState.paused)),
-        isTrue,
+  test('each transfer state belongs to exactly one management category', () {
+    const categories = {
+      DownloadState.preparing: 'active',
+      DownloadState.queued: 'active',
+      DownloadState.running: 'active',
+      DownloadState.waiting: 'active',
+      DownloadState.paused: 'active',
+      DownloadState.retrying: 'active',
+      DownloadState.finalizing: 'active',
+      DownloadState.completed: 'completed',
+      DownloadState.failed: 'unfinished',
+      DownloadState.cancelled: 'cancelled',
+      DownloadState.interrupted: 'unfinished',
+      DownloadState.missing: 'removed',
+    };
+
+    for (final entry in categories.entries) {
+      final download = task(entry.key.name, entry.key);
+      final matches = DownloadFilter.values.where(
+        (filter) => filter != DownloadFilter.all && filter.includes(download),
       );
+
+      expect(DownloadFilter.all.includes(download), isTrue);
+      expect(matches.map((filter) => filter.name), [entry.value]);
+    }
+  });
+
+  test(
+    'publication failure belongs only to failed downloads until retried',
+    () {
       final publication = task(
         '2',
         DownloadState.finalizing,
       ).copyWith(error: 'full');
-      expect(DownloadFilter.active.includes(publication), isFalse);
-      expect(DownloadFilter.unfinished.includes(publication), isTrue);
+
       expect(
-        DownloadFilter.unfinished.includes(task('3', DownloadState.missing)),
-        isFalse,
+        DownloadFilter.values.where(
+          (filter) =>
+              filter != DownloadFilter.all && filter.includes(publication),
+        ),
+        [DownloadFilter.unfinished],
       );
+      final retrying = publication.copyWith(error: null);
       expect(
-        DownloadFilter.removed.includes(task('3', DownloadState.missing)),
-        isTrue,
+        DownloadFilter.values.where(
+          (filter) => filter != DownloadFilter.all && filter.includes(retrying),
+        ),
+        [DownloadFilter.active],
       );
     },
   );

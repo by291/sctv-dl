@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
@@ -46,9 +47,10 @@ class DownloadManagementTest {
                 }
             }
         }
-        compose.onNodeWithText("批量管理").performClick()
+        compose.onNodeWithContentDescription("批量管理").performClick()
         compose.onNodeWithText("全选当前列表").performClick()
-        compose.onNodeWithText("取消下载").performClick()
+        compose.onNodeWithText("批量操作").performClick()
+        compose.onNodeWithText("取消下载 · 1").performClick()
         compose.runOnIdle {
             assertEquals(0, mutations.size)
             state.value = state.value.copy(tasks = listOf(task.copy(attemptId = "replacement")))

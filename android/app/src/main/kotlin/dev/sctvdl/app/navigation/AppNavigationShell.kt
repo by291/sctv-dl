@@ -122,25 +122,28 @@ internal fun AppNavigationShell(
     val current = stack.last() as AppRoute
     val isPlayer = current is AppRoute.Playback || current is AppRoute.LocalPlayback
     val back: () -> Unit = {
-        if (stack.size > 1) {
+        val activeStack = stacks[selected]
+        if (activeStack.size > 1) {
             onBackCommitted()
-            stack.removeLastOrNull()
+            activeStack.removeLastOrNull()
         } else if (selected != 0) {
             selected = 0
         }
     }
     val navigator = AppNavigator({ route ->
+        // Retained entries can keep callbacks created before a tab switch. Resolve the active stack at invocation.
+        val activeStack = stacks[selected]
         val primaryIndex = tabs.indexOf(route)
         if (primaryIndex >= 0) {
             onBackCommitted()
             selected = primaryIndex
-        } else if (stack.last() != route) {
-            if (stack.last() is AppRoute.Archive &&
+        } else if (activeStack.last() != route) {
+            if (activeStack.last() is AppRoute.Archive &&
                 route is AppRoute.Archive
             ) {
-                stack[stack.lastIndex] = route
+                activeStack[activeStack.lastIndex] = route
             } else {
-                stack.add(route)
+                activeStack.add(route)
             }
         }
     }, back)

@@ -55,7 +55,7 @@ class DownloadFlowTest {
                 )
             }
         }
-        compose.onNodeWithText("已下载 4.0 KiB").assertIsDisplayed()
+        compose.onNodeWithText("4.0 KiB · 大小未知").assertIsDisplayed()
         compose.onNodeWithText("暂停").assertDoesNotExist()
         compose.onNodeWithText("取消下载").performClick()
         compose.runOnIdle { assertEquals(null, cancelled) }
@@ -74,7 +74,7 @@ class DownloadFlowTest {
             }
         }
         compose.onNodeWithText("下载失败").assertIsDisplayed()
-        compose.onNodeWithText("重试").performClick()
+        compose.onNodeWithText("重新下载").performClick()
         compose.runOnIdle { assertEquals("task", retried) }
     }
 
@@ -97,9 +97,9 @@ class DownloadFlowTest {
             }
         }
         compose.onNodeWithText("文件已移除").assertIsDisplayed()
-        compose.onNodeWithText("本地播放").assertDoesNotExist()
+        compose.onNodeWithText("播放").assertDoesNotExist()
         compose.onNodeWithText("重新下载").performClick()
-        compose.onNodeWithContentDescription("更多下载操作").performClick()
+        compose.onNodeWithContentDescription("文件操作").performClick()
         compose.onNodeWithText("移除记录").performClick()
         compose.onNodeWithText("确认移除记录").performClick()
         compose.runOnIdle {

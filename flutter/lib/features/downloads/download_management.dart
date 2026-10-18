@@ -4,8 +4,9 @@ import '../../domain/downloads/download_task.dart';
 enum DownloadFilter {
   all('全部'),
   active('下载中'),
-  unfinished('未完成'),
   completed('已完成'),
+  unfinished('下载失败'),
+  cancelled('已取消'),
   removed('已移除');
 
   const DownloadFilter(this.label);
@@ -14,12 +15,13 @@ enum DownloadFilter {
   bool includes(DownloadTask task) => switch (this) {
     all => true,
     active => task.isActive && !unfinished.includes(task),
-    unfinished =>
-      (!task.isActive &&
-              task.state != DownloadState.completed &&
-              task.state != DownloadState.missing) ||
-          (task.state == DownloadState.finalizing && task.error != null),
     completed => task.state == DownloadState.completed,
+    // Interrupted transfers require an explicit retry after native recovery fails.
+    unfinished =>
+      task.state == DownloadState.failed ||
+          task.state == DownloadState.interrupted ||
+          (task.state == DownloadState.finalizing && task.error != null),
+    cancelled => task.state == DownloadState.cancelled,
     removed => task.state == DownloadState.missing,
   };
 }
