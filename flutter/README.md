@@ -1,6 +1,6 @@
 # 蜀台回看 — Flutter
 
-The standalone Android/iOS client for browsing Sichuan TV programmes, favourites and viewing history, playing online or downloaded MP4s, and managing native background downloads. Its package is `sctv_dl_mobile`; both native hosts use `dev.sctvdl.flutter`. The existing [Web](../README.md), [Kotlin Android](../android/README.md) and [Tauri desktop](../docs/desktop.md) clients remain separate applications.
+The standalone Android/iOS client for browsing Sichuan TV programmes, favourites and viewing history, playing online or downloaded MP4s, and managing native background downloads. Its package is `sctv_dl_mobile`; both native hosts use `dev.sctvdl.flutter` for Release/Profile and `dev.sctvdl.flutter.debug` for Debug. The existing [Web](../README.md), [Kotlin Android](../android/README.md) and [Tauri desktop](../docs/desktop.md) clients remain separate applications.
 
 ## Setup
 
@@ -100,6 +100,8 @@ flutter build ios --release --no-codesign
 ```
 
 When `integration_test/` is present, also run `dart format --output=none --set-exit-if-changed integration_test`. The formatter scopes deliberately exclude the vendored player's upstream Dart. After generation, inspect the diff and commit generated application sources with the source change. The old `build_runner --delete-conflicting-outputs` option is no longer needed by the resolved generator version.
+
+Debug builds on Android and iOS display `蜀台回看 Debug` and use the `.debug` application/bundle ID suffix, so they can coexist with Release/Profile (`蜀台回看`). Their private settings, history and download records are separate; changing the application identity does not migrate existing data. Android Kotlin namespaces and platform-channel names remain stable. iOS debug signing must target the debug Bundle ID.
 
 Release APKs are split into `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`, `app-arm64-v8a-release.apk`, and `app-x86_64-release.apk`. Choose the APK matching the device architecture; modern ARM phones generally use `arm64-v8a`. Omit `--split-per-abi` when a universal APK is needed. The AAB remains a single upload artifact for store-managed device delivery. iOS builds are unchanged and do not use Android ABI splitting.
 
