@@ -1,6 +1,6 @@
 # Android Agent Instructions
 
-These instructions apply inside `android/`. Read [README](README.md) and the relevant section of [Client Design](../docs/android-client-design.md) before changing native behaviour.
+These instructions apply inside `android/`. Read [README](README.md) and the relevant section of [Android Architecture](../docs/android.md) before changing native behaviour.
 
 ## Ownership
 

@@ -1,6 +1,6 @@
-# Architecture
+# Web and Shared Frontend Architecture
 
-This document describes the current implementation. Development conventions are in [AGENTS.md](../AGENTS.md), commands in [README](../README.md), hosting instructions in [Deployment](deployment.md), and external contracts in [Upstream API](upstream-api.md).
+This document owns the shared Vue frontend and Web/Node implementation. Native internals belong to the [desktop](desktop.md), [Kotlin Android](android.md), and [Flutter](flutter.md) guides. Development conventions are in [AGENTS.md](../AGENTS.md), commands in [README](../README.md), hosting instructions in [Deployment](deployment.md), and external contracts in [Upstream API](upstream-api.md).
 
 ## Runtime
 

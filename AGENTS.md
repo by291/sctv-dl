@@ -10,6 +10,10 @@ Read only the documents relevant to the change:
 - [Architecture](docs/architecture.md): module ownership, request and storage lifecycles, downloads, and player behaviour.
 - [Deployment](docs/deployment.md): server configuration, hosting, and operations.
 - [Upstream API](docs/upstream-api.md): response schemas, IDs, video variants, and proxy contracts.
+- [Repository Maintenance](docs/maintenance.md): verification scope, CI, dependencies, and documentation ownership.
+- [Android Architecture](docs/android.md): native product, data, and lifecycle contracts.
+- [Flutter Architecture](docs/flutter.md): Flutter product, boundaries, and resource ownership.
+- [Flutter Instructions](flutter/AGENTS.md): Dart/native-host conventions and checks.
 - [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
 - [Desktop Development](docs/desktop.md): Tauri scaffold, shared contracts, native commands, and current integration limits.
 - [Desktop Instructions](src-tauri/AGENTS.md): Rust ownership, readability, blocking work, and resource completion rules.

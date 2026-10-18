@@ -50,7 +50,7 @@ The health route does not contact upstream services, so it confirms the app serv
 
 Use a host that permits long-lived Node processes, outbound HTTPS, streaming responses, and large transfers. Any HTTPS gateway or reverse proxy must preserve Range and If-Range requests, partial-response headers, and long download connections. Media consumes the host's outgoing bandwidth; the app server does not store downloaded videos.
 
-Static hosting such as GitHub Pages alone cannot supply the Referer required by the tested video CDN. It can host the frontend only if a separate compatible media service is provided. See [Upstream API](upstream-api.md) for the recorded restriction and proxy contract.
+Static hosting such as GitHub Pages alone cannot supply the Referer required by the video CDN. It can host the frontend only if a separate compatible media service is provided. See [Upstream API](upstream-api.md) for compatibility constraints and the proxy contract.
 
 ## Operations
 

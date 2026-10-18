@@ -4,11 +4,20 @@ A shared Web/Tauri desktop app, Kotlin Android client, and Flutter Android/iOS c
 
 Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Web preferences, viewing history, and programme metadata are saved locally. Web downloads go directly to the browser's download manager; Tauri keeps a durable task queue with pause/resume and local playback.
 
+## Clients
+
+| Client                  | Source                         | Setup                                            |
+| ----------------------- | ------------------------------ | ------------------------------------------------ |
+| Web                     | `src/`, `server/`, `shared/`   | Commands below; production uses one Node service |
+| Desktop (Windows/macOS) | Shared Vue UI and `src-tauri/` | [Desktop Development](docs/desktop.md)           |
+| Kotlin Android          | `android/`                     | [Android README](android/README.md)              |
+| Flutter Android/iOS     | `flutter/`                     | [Flutter README](flutter/README.md)              |
+
+Native clients connect directly to upstream services and require no Node deployment. Each installation keeps its own local state; cross-client synchronization or automatic data import is not provided.
+
 ## Run Locally
 
-For the Kotlin and Jetpack Compose client, open `android/` in Android Studio and follow the [Android README](android/README.md). It connects directly to upstream services and needs no Node deployment. The commands below run the Web app.
-
-For the Flutter Android/iOS client, follow the [Flutter README](flutter/README.md). It includes online/local playback, native background downloads, favourites and viewing history, with its own local data and application ID.
+The following commands run the Web app.
 
 Use Node.js 24.15 or newer and the pnpm version pinned in `package.json`. Run commands from the repository root.
 
@@ -56,28 +65,22 @@ The development and preview ports are strict. If 5180 is occupied, choose a free
 
 ## CI and Dependency Updates
 
-[GitHub Actions](.github/workflows/ci.yml) runs on pull requests and pushes to `main`, and can also be started manually. It installs the pnpm version from `package.json` with a frozen lockfile, then runs `pnpm check` and `pnpm build` on Ubuntu with Node.js 24.15.0 and 26. Superseded runs are cancelled, and the shared pnpm store is cached between runs.
-
-[Dependabot](.github/dependabot.yml) checks npm dependencies, Android Gradle dependencies and the Gradle Wrapper, Flutter pub dependencies, and GitHub Actions every Monday at 09:00 Asia/Shanghai. The `/android` entry includes the version catalogue, declared modules, and included `build-logic` build. Minor and patch updates are grouped by production dependencies, development dependencies, Android dependencies, Flutter dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
-
-[Android CI](.github/workflows/android.yml) also submits the resolved Gradle dependency graph in a separate job on pushes to `main` and manual runs on `main`. Release app dependencies are labelled `runtime`; other dependencies are labelled `development`. See [Android Dependency Security](android/README.md#dependency-security) for scope rules and alert handling. Only that job has `contents: write`; pull-request checks keep read-only permissions. Dependabot alerts and security updates are repository settings enabled separately from the YAML configuration. Security updates open reviewable pull requests and do not enable automatic merging.
-
-Both configurations take effect after they reach the default branch on GitHub. Dependabot's update parser handles multi-document pnpm lockfiles, but GitHub's dependency graph and security alerts still have a [reported pnpm 12 limitation](https://github.com/dependabot/dependabot-core/issues/15904). Do not rely on an empty dependency graph as evidence that dependencies are secure.
+See [Repository Maintenance](docs/maintenance.md) for verification by change, CI workflows and dependency updates. Platform guides document their native build and release checks.
 
 ## Documentation
 
-| Document                                                                            | Purpose                                                            |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Agent Instructions](AGENTS.md)                                                     | Project constraints, coding conventions, and verification          |
-| [Architecture](docs/architecture.md)                                                | Module ownership, data flow, and important behaviour               |
-| [Web Styling](docs/styling.md)                                                      | Native CSS conventions, theme ownership, and UI verification       |
-| [Deployment](docs/deployment.md)                                                    | Production service, configuration, and operations                  |
-| [Upstream API](docs/upstream-api.md)                                                | Programme endpoints, video fields, and proxy contracts             |
-| [Android Client Design](docs/android-client-design.md)                              | Native Compose product, architecture, and acceptance criteria      |
-| [Feature Validation](docs/web-desktop-feature-validation.md)                        | History, durable downloads, cache, and current acceptance evidence |
-| [Android Client](android/README.md)                                                 | Native setup, modules, downloads, playback, and verification       |
-| [Flutter Client](flutter/README.md)                                                 | Android/iOS setup, ownership, downloads, playback and checks       |
-| [Flutter Mobile Design](docs/superpowers/specs/2026-10-16-flutter-mobile-design.md) | Approved Android/iOS scope, architecture, and acceptance criteria  |
-| [Flutter Validation](docs/flutter-validation.md)                                    | Actual runtime/build evidence and remaining device acceptance      |
+| Document                                      | Responsibility                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [Web Architecture](docs/architecture.md)      | Shared Vue frontend, Node services, module ownership, storage and player lifecycles |
+| [Web Styling](docs/styling.md)                | CSS ownership, themes, responsive layout and motion                                 |
+| [Upstream API](docs/upstream-api.md)          | Shared endpoint, ID, quality, header and proxy contracts                            |
+| [Deployment](docs/deployment.md)              | Node production service, configuration, hosting and operations                      |
+| [Desktop Development](docs/desktop.md)        | Tauri architecture, native commands/resources, installers and release checks        |
+| [Android Architecture](docs/android.md)       | Kotlin/Compose product, module boundaries, persistence and native lifecycles        |
+| [Flutter Architecture](docs/flutter.md)       | Flutter product, data boundaries, navigation, native transfers and playback         |
+| [Repository Maintenance](docs/maintenance.md) | Verification scope, CI, dependency updates and documentation ownership              |
+| [Android Setup](android/README.md)            | Toolchain, builds, device tests and performance tooling                             |
+| [Flutter Setup](flutter/README.md)            | Toolchain, builds, native fixtures and platform limitations                         |
+| [Agent Instructions](AGENTS.md)               | Contribution rules and links to platform-specific coding conventions                |
 
-The [Desktop Development guide](docs/desktop.md) describes the integrated Tauri client, native commands, CI, and platform validation limits. Windows and macOS work is tracked in the [implementation plan](docs/superpowers/plans/2026-10-16-tauri-desktop.md) and its [design brief](docs/superpowers/specs/2026-10-16-tauri-desktop-design.md); [media validation](docs/desktop-media-validation.md) records actual evidence and pending platform checks.
+Each subject has one maintained owner. Completed plans and one-time verification logs are kept in Git history rather than duplicated in `docs/`.

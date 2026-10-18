@@ -2,7 +2,7 @@
 
 These instructions apply to this Flutter application, including its native hosts. Root Android sources belong to a separate Kotlin client.
 
-- Preserve the approved specification and plan under ../docs/superpowers/. Use English documentation, comments and test names, with Chinese product copy.
+- Preserve the product and resource contracts in [Flutter Architecture](../docs/flutter.md); setup and verification commands belong to [README](README.md). Use English documentation, comments and test names, with Chinese product copy.
 - Organize by domain/data/platform/features/app/design ownership. Features consume pure domain contracts, never sibling features or concrete data/platform adapters.
 - Keep platform handles and effects with their lifecycle owner. Cancellation and stale-result rejection are separate safeguards. Player disposal waits for committed route exit, and PiP retains ownership.
 - Validate unknown upstream data before constructing domain models. Keep IDs as decimal strings and preserve the shared quality, date, URL and filename contracts.

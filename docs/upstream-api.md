@@ -55,24 +55,19 @@ Missing optional video and cover fields normalize to `null`. Relative media path
 
 `resolveVideo` falls back to an available variant. `getVideoVariants` omits duplicate URLs so the player exposes only distinct choices.
 
-## Browser Access: Recorded Observations
+## Browser and Media Compatibility
 
-Verification on **2026-10-06** recorded:
+The default Web deployment proxies metadata and media through one origin, so it does not depend on upstream CORS headers. MP4 access can require `Referer: https://scgc.video.play/`; a browser cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to assign an arbitrary foreign-origin Referer. The media proxy supplies the player origin.
 
-- Programme metadata responses supplied `Access-Control-Allow-Origin: *`.
-- A tested MP4 returned HTTP 403 without a Referer and HTTP 200 with `Referer: https://scgc.video.play/`.
+Native playback and download clients also send `sctv-dl/<package-version>` as their User-Agent because the historical CDN can reject requests without a client identifier. These compatibility rules do not guarantee every upstream object is available. When diagnosing a 403, compare HEAD or a small Range response with the required headers; do not download an entire episode.
 
-These are dated observations, not a guarantee for every current response. Recheck them when troubleshooting upstream behaviour. The default deployment proxies metadata as well as media for one consistent origin.
-
-Verification on **2026-10-16** of the 2021-02-05 音你而来 video on `fscgc.sctv-tf.com` also found that HEAD requests without a User-Agent returned 403, while the application's `sctv-dl/<package-version>` identifier returned 200 with the same media Referer. Native playback and download clients therefore send that identifier explicitly.
-
-A browser cannot use [Fetch's referrer option](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit#referrer) to assign an arbitrary foreign-origin Referer. The media proxy supplies the required player origin.
+Flutter Android uses native device values for the guest profile. Flutter iOS uses the fixed Android-compatible `google`/`Pixel 8`/`14` values, not an independently observed official iOS profile. Metadata identity headers never belong on covers or media. Application-controlled metadata, image, playback and media-preflight transports reject redirects. System-owned legacy DownloadManager and Flutter background transfers retain their native redirect-policy exception; initial URL validation still applies.
 
 ## Proxy Contracts
 
 `/api` accepts only the three programme path shapes above. It forwards GET or HEAD, requests JSON, and rejects unsupported paths. Redirects are not followed.
 
-`/media` accepts an encoded `url` query parameter targeting an HTTPS MP4 on `fscgc.scgchc.com` or `fscgc.sctv-tf.com`. The latter also serves historical programme videos, including the 2021-02-05 broadcast of 音你而来. Credentials, nondefault ports, other hosts/protocols, and non-MP4 paths are rejected. Redirects are rejected rather than followed. The Web preparation service and native playback/download services enforce the same allowlist, covered by `shared/fixtures/media-policy.json`.
+`/media` accepts an encoded `url` query parameter targeting an HTTPS MP4 on `fscgc.scgchc.com` or `fscgc.sctv-tf.com`. The latter serves historical programme videos. Credentials, nondefault ports, other hosts/protocols, and non-MP4 paths are rejected. Redirects are rejected rather than followed. The Web preparation service and native playback/download services enforce the same allowlist, covered by `shared/fixtures/media-policy.json`.
 
 For preview, use `/media?url=<encoded-upstream-url>`. For browser download, add `download=1` and `filename=<encoded-filename>`; the response supplies a sanitized RFC 5987 Content-Disposition attachment filename. `src/shared/media/media-proxy-url.ts` builds these query parameters with `URLSearchParams`.
 

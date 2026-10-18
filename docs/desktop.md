@@ -1,12 +1,12 @@
 # Desktop Development
 
-One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. The macOS arm64 application and a Windows x64 production executable have been checked with bundled assets and no project Node service. See [feature validation](web-desktop-feature-validation.md) for host-specific evidence and remaining acceptance limits. Minimum OS versions and public signed distribution still need their own acceptance evidence.
+One Vue frontend runs as a Web application and a Tauri 2 desktop client. Startup selects one complete platform: Web uses the Node service; Tauri uses Rust for programme APIs, playback sessions, downloads, directories, and preferences. Production bundles frontend assets and uses native services without a project Node process. This guide owns Tauri integration, native resource contracts, packaging and release checks.
 
 Desktop targets are Windows x64 and macOS arm64 (Apple Silicon). Intel Macs are outside the supported build and release matrix.
 
 ## Commands and Prerequisites
 
-Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). The generated Cargo manifest declares Rust 1.90; the native phases were built with Rust 1.98.0. The declared minimum compiler has not been separately tested.
+Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). Use `src-tauri/Cargo.toml` and `Cargo.lock` for the compiler requirement and resolved Rust dependencies. The declared Rust 1.90 minimum needs an explicit compatibility check before claiming MSRV support.
 
 Run from the repository root:
 
@@ -23,7 +23,7 @@ To build only a local macOS application bundle:
 pnpm desktop:build --bundles app
 ```
 
-The output is under `src-tauri/target/release/bundle/`. macOS builds use an ad-hoc signature for local validation; they are not notarized public releases. The proposed macOS minimum is 13.0. Windows configuration selects the NSIS installer. An unsigned x64 installer was built and installed on Windows build 26300.9711, and the installed executable passed the recorded runtime checks. The customized installer subsequently passed program-file and shortcut removal in an ordinary-user-context run; see [feature validation](web-desktop-feature-validation.md) for the initial packaged-host failure and the remaining registry-observation limitation.
+The output is under `src-tauri/target/release/bundle/`. macOS builds use an ad-hoc signature for local validation; they are not notarized public releases. Windows configuration selects the per-user NSIS installer. Windows 10/11 x64 and macOS 13+ on Apple Silicon are release targets; verify the minimum OS versions separately.
 
 ### Windows Installer Customization
 
@@ -100,7 +100,7 @@ The service handles GET, HEAD, and OPTIONS, validates Host and any supplied Orig
 
 The shared preview opens sessions through `PlaybackPort`, shows loading/error/retry states, and cancels superseded work. A session arriving after cancellation or malformed IPC validation is closed. Closing pauses immediately and releases the player/session after the modal leave animation; reopening cannot be cleared by an old callback. Artplayer's quality switch retains playback time. PiP checks both the standard and WebKit APIs; fullscreen checks the active WebView's support.
 
-The current custom-protocol response API requires complete response bodies, so the implementation selects streaming loopback HTTP. Windows WebView2 has passed short online/local playback, seeking, and quality-switch checks; sustained playback and comparative process-memory measurements remain unverified. CSP permits loopback URLs only for media; metadata and player controls remain IPC. Frontend assets use the normal Tauri protocol, without the Localhost plugin.
+The current custom-protocol response API requires complete response bodies, so the implementation selects streaming loopback HTTP. CSP permits loopback URLs only for media; metadata and player controls remain IPC. Frontend assets use the normal Tauri protocol, without the Localhost plugin.
 
 ## Native Downloads
 
@@ -138,13 +138,13 @@ The native settings adapter validates snapshots. The shared settings store subsc
 
 The native exit controller first stops new download/picker/playback preparation, then requests a frontend acknowledgement through a Tauri Channel. The frontend captures current playback progress and drains both history and settings queues, including writes issued while a save is pending. Rust permits those saves during preparation, then freezes admission and waits for existing native operations before taking the final task snapshot. A failed acknowledgement or a five-second timeout asks before discarding unsaved settings or viewing progress. Active downloads also require confirmation. Rejecting reopens admission; accepting pauses downloads and awaits durable checkpoints before exiting. Failed checkpoints require a separate force-exit confirmation. Repeated requests share one attempt. Blocking writes retain their operation guard even if an IPC future is dropped.
 
-Menus retain Tauri's standard application/edit/window structure and ordinary decorations. The predefined Quit item is replaced through the official menu API because macOS otherwise invokes `terminate:` without cancellable `ExitRequested`. The replacement retains the platform label and shortcut. A small macOS-only bridge through `objc2` and AppKit adds the missing `applicationShouldTerminate:` delegate method and forwards Dock/system Quit to the same controller. It preserves the existing TAO delegate and refuses to replace an existing method. Unit coverage checks installation; interactive Dock verification was unavailable because the UI automation server timed out inspecting Dock. Main-window close and menu/shortcut confirmation passed installed-app checks. Confirmation is parented to the main window. Force/process termination relies on recognized-leftover recovery.
+Menus retain Tauri's standard application/edit/window structure and ordinary decorations. The predefined Quit item is replaced through the official menu API because macOS otherwise invokes `terminate:` without cancellable `ExitRequested`. The replacement retains the platform label and shortcut. A small macOS-only bridge through `objc2` and AppKit adds the missing `applicationShouldTerminate:` delegate method and forwards Dock/system Quit to the same controller. It preserves the existing TAO delegate and refuses to replace an existing method. Confirmation is parented to the main window. Force/process termination relies on recognized-leftover recovery.
 
 ## CI and Distribution
 
-[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025` and Apple Silicon on `macos-15`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs. These workflows were prepared locally; no remote CI run is claimed.
+[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025` and Apple Silicon on `macos-15`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs.
 
-[Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. A source job resolves the fully qualified tag once, checks its commit against HEAD, and pins every platform build to that SHA. A same-named branch cannot substitute for the tag; the tag is rechecked before building and public promotion. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. A default run stays draft. No workflow was dispatched or release published in this implementation session.
+[Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. A source job resolves the fully qualified tag once, checks its commit against HEAD, and pins every platform build to that SHA. A same-named branch cannot substitute for the tag; the tag is rechecked before building and public promotion. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. A default run stays draft.
 
 `tooling/desktop-release.ts` keeps source/version checks dependency-free because CI runs them before `pnpm install`. It validates JSON version fields and reads Cargo's explicit `[package]` version independently of dependency table order. Configuration failures identify the source file.
 
@@ -152,4 +152,22 @@ Windows secrets are `WINDOWS_CERTIFICATE` (base64 PFX) and `WINDOWS_CERTIFICATE_
 
 Run `pwsh -NoProfile -File tooling/windows-signing.test.ps1` to exercise setup, credential rejection, configuration writes, and failure cleanup with disposable files and a stubbed certificate store. Both Windows validation and release jobs run this check before packaging. It can also run in a portable PowerShell session; it does not prove real Windows certificate import or signed output.
 
-Keep build evidence, interactive OS/architecture acceptance, signing, and publication separate. Proposed Windows 10/11 x64 and macOS 13+ on Apple Silicon support remains a target until tested on those systems. See [media validation](desktop-media-validation.md) and [feature validation](web-desktop-feature-validation.md) for the actual hosts, checks, and remaining limits.
+## Platform Diagnostics and Release Checks
+
+- Windows MSVC executables, including Rust test harnesses, need Common Controls v6 for native dialogs. `src-tauri/build.rs` embeds the dependency through the linker and disables Tauri's duplicate application manifest. A harness failure before tests with `0xc0000139` warrants checking that manifest, not changing test assertions.
+- Installer hooks must not change `$OUTDIR` or the process working directory for temporary icon extraction; use `$PLUGINSDIR` so uninstallation can remove its own directory. If Explorer shows a stale icon despite correct executable resources, compare a fresh copy and the Shell icon cache before regenerating assets.
+- Validate installation/uninstallation from an ordinary user context. Packaged automation hosts can expose virtualized paths or registry views. Check actual program files, both shortcuts, registration and both data-checkbox choices; never add broad registry deletion to compensate for an observation mismatch.
+
+Release acceptance must cover the following on each advertised OS/architecture. Automated checks and an isolated fixture cover narrower contracts than an installed application.
+
+| Area                           | Required check                                                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Startup and routing            | Bundled assets and hash-route reloads without Node; metadata and recoverable startup failures.                                                                       |
+| Playback                       | Online/local playback, forward/backward seek, quality retention, fullscreen/PiP where available, close/reopen and release of connections/readers.                    |
+| Memory                         | Compare idle, sustained playback, seek/switch and post-close memory across Rust and all WebView processes; a single RSS sample is insufficient.                      |
+| Downloads                      | Picker cancellation, Unicode paths, real file bytes, pause/restart/resume, failure recovery, open/reveal/delete and replacement-file protection.                     |
+| Exit and persistence           | Rejected/accepted active-task exit, queued settings/history writes, failed checkpoints, native menu and macOS Dock/system Quit.                                      |
+| Window state and accessibility | Normal/maximized bounds, minimized exit, removed monitors, corrupt/missing state, narrow/large-text layouts, both themes, keyboard and native back/scroll behaviour. |
+| Installer and release          | Program/shortcut/registry ownership, data retention/deletion without video loss, display scaling, real signing/notarization and minimum-OS installation.             |
+
+Repeat installed macOS durable-download recovery/local-file actions and Windows external-file/failure-state journeys after relevant changes. Minimum OS coverage, sustained memory behaviour, Dock termination, complete window restoration and signed distribution remain acceptance work rather than implied guarantees from compilation. Keep per-run screenshots, hashes, process samples and logs with the test or release artifacts, outside this guide.
