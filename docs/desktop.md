@@ -6,7 +6,7 @@ Desktop targets are Windows x64 and macOS arm64 (Apple Silicon). Intel Macs are 
 
 ## Commands and Prerequisites
 
-Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). Use `src-tauri/Cargo.toml` and `Cargo.lock` for the compiler requirement and resolved Rust dependencies. The declared Rust 1.90 minimum needs an explicit compatibility check before claiming MSRV support.
+Use the Node/pnpm versions from [README](../README.md), Rust with Cargo, and the [official platform prerequisites](https://v2.tauri.app/start/prerequisites/). Use `src-tauri/Cargo.toml` and `Cargo.lock` for the compiler requirement and resolved Rust dependencies. CI checks the declared Rust 1.90 minimum on both desktop hosts with locked dependencies and all Rust targets. The main formatting, Clippy, test and packaging toolchain remains pinned separately. Locally, install the minimum with `rustup toolchain install 1.90.0 --profile minimal`, then run `cargo +1.90.0 check --manifest-path src-tauri/Cargo.toml --all-targets --locked` from the repository root. Compiler checks do not establish minimum-OS runtime support.
 
 Run from the repository root:
 
@@ -142,9 +142,9 @@ Menus retain Tauri's standard application/edit/window structure and ordinary dec
 
 ## CI and Distribution
 
-[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025` and Apple Silicon on `macos-15`. It runs Web and Cargo checks, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs.
+[Desktop validation](../.github/workflows/desktop.yml) builds Windows x64 on `windows-2025` and Apple Silicon on `macos-15`. It runs focused platform/IPC/release-source tests, Cargo checks and frontend compilation, uses frozen lockfiles and shared pnpm/Rust caches, and uploads NSIS/DMG validation artifacts for 14 days with read-only repository permissions. macOS DMGs contain the application bundle. Actions are pinned to commit SHAs. Documentation-only and mobile-only changes skip desktop builds; the common Ubuntu workflow owns repository lint/format/link checks and the complete Web/server test suite. See [Repository Maintenance](maintenance.md) for trigger ownership.
 
-[Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. A source job resolves the fully qualified tag once, checks its commit against HEAD, and pins every platform build to that SHA. A same-named branch cannot substitute for the tag; the tag is rechecked before building and public promotion. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. A default run stays draft.
+[Desktop release](../.github/workflows/desktop-release.yml) is manually triggered with an existing tag matching the package, Tauri, and Cargo versions. A source job resolves the fully qualified tag once, checks its commit against HEAD, and pins every platform build to that SHA. A same-named branch cannot substitute for the tag; the tag is rechecked before building and public promotion. It requires signing credentials, builds every target into a draft release through the official Tauri action, and publishes only when the explicit `publish` input is true and all builds succeed. The Windows matrix runs the installer-cleanup regression after packaging; any failure prevents the publish job. A default run stays draft.
 
 `tooling/desktop-release.ts` keeps source/version checks dependency-free because CI runs them before `pnpm install`. It validates JSON version fields and reads Cargo's explicit `[package]` version independently of dependency table order. Configuration failures identify the source file.
 

@@ -3,8 +3,46 @@ name: Desktop validation
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'public/**'
+      - 'src-tauri/**'
+      - 'tooling/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.gitattributes'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'vitest.config.*'
+      - 'tsconfig*.json'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/desktop-release.yml'
+      - '!**/*.md'
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'public/**'
+      - 'src-tauri/**'
+      - 'tooling/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.gitattributes'
+      - 'index.html'
+      - 'vite.config.*'
+      - 'vitest.config.*'
+      - 'tsconfig*.json'
+      - '.github/workflows/desktop.yml'
+      - '.github/workflows/desktop-release.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -50,7 +88,12 @@ jobs:
           node --version
           pnpm --version
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm test:desktop
+      - name: Check Rust 1.90 minimum
+        shell: bash
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --no-self-update
+          cargo +1.90.0 check --manifest-path src-tauri/Cargo.toml --all-targets --locked
       - run: pnpm desktop:check
       - name: Check Windows signing lifecycle
         if: runner.os == 'Windows'

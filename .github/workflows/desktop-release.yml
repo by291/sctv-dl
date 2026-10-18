@@ -83,6 +83,11 @@ jobs:
           node tooling/desktop-release.ts version
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - name: Check Rust 1.90 minimum
+        shell: bash
+        run: |
+          rustup toolchain install 1.90.0 --profile minimal --no-self-update
+          cargo +1.90.0 check --manifest-path src-tauri/Cargo.toml --all-targets --locked
       - run: pnpm desktop:check
       - name: Check Windows signing lifecycle
         if: runner.os == 'Windows'
@@ -119,6 +124,10 @@ jobs:
           releaseName: SCTV DL ${{ inputs.tag }}
           releaseDraft: true
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} --config src-tauri/tauri.release.conf.json
+      - name: Check Windows installer cleanup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tooling/check-windows-installer.ps1
       - name: Remove Windows certificate
         if: always() && runner.os == 'Windows'
         shell: pwsh

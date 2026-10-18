@@ -23,6 +23,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "desktop:check": "node tooling/desktop-check.ts",
+    "test:desktop": "vitest run .tauri.test.ts src/platform src/shared/platform shared/contracts tooling/desktop-release.test.ts",
     "docs:check": "remark --use remark-gfm --use remark-validate-links --frail --no-stdout --quiet \"*.md\" \"docs/**/*.md\" \"android/*.md\" \"flutter/*.md\" \"src-tauri/*.md\"",
     "ci:lint": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12"
   },

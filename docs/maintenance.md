@@ -4,14 +4,14 @@ This guide owns repository-wide verification, CI and dependency updates. Runtime
 
 ## Verification by Change
 
-| Change                  | Checks                                                                                                                             |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Documentation only      | `pnpm format:check`, `pnpm docs:check`, referenced scripts/configuration and `git diff --check`; no application build is needed.   |
-| Web or Node behaviour   | `pnpm check` and `pnpm build`; meaningful regression tests beside their owner.                                                     |
-| Web UI                  | The above plus desktop/narrow browser checks, themes, keyboard and loading/empty/error states.                                     |
-| Tauri Rust              | `pnpm desktop:check`; add Web checks for adapters, shared contracts or integration changes. See [Desktop Development](desktop.md). |
-| Kotlin Android          | Follow [Android build and device checks](../android/README.md); shared Web/tooling changes also require Web checks.                |
-| Flutter or native hosts | Follow [Flutter checks](../flutter/README.md); native plugin/host changes need relevant compilation and disposable-runtime checks. |
+| Change                  | Checks                                                                                                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Documentation only      | `pnpm format:check`, `pnpm docs:check`, referenced scripts/configuration and `git diff --check`; no application build is needed.                           |
+| Web or Node behaviour   | `pnpm check` and `pnpm build`; meaningful regression tests beside their owner.                                                                             |
+| Web UI                  | The above plus desktop/narrow browser checks, themes, keyboard and loading/empty/error states.                                                             |
+| Tauri Rust              | `pnpm desktop:check` and `pnpm test:desktop`; add Web checks for adapters, shared contracts or integration changes. See [Desktop Development](desktop.md). |
+| Kotlin Android          | Follow [Android build and device checks](../android/README.md); shared Web/tooling changes also require Web checks.                                        |
+| Flutter or native hosts | Follow [Flutter checks](../flutter/README.md); native plugin/host changes need relevant compilation and disposable-runtime checks.                         |
 
 Use controlled upstream/media fixtures and disposable devices. HEAD or a small Range request is enough to check live media transport. Test results, compiler success, device acceptance and signed distribution are separate evidence. Keep machine-specific paths, run logs, screenshots and build products out of tracked source.
 
@@ -24,6 +24,10 @@ Use controlled upstream/media fixtures and disposable devices. HEAD or a small R
 [Android CI](../.github/workflows/android.yml) also submits the resolved Gradle dependency graph in a separate job on pushes to `main` and manual runs on `main`. Release app dependencies are labelled `runtime`; other dependencies are labelled `development`. See [Android Dependency Security](../android/README.md#dependency-security) for scope rules and alert handling. Only that job has `contents: write`; pull-request checks keep read-only permissions. Dependabot alerts and security updates are repository settings enabled separately from the YAML configuration. Security updates open reviewable pull requests and do not enable automatic merging.
 
 Scheduled configuration takes effect from the default branch. Check dependency submission/parser results when updating lockfile formats; an empty dependency graph is not evidence that dependencies are secure.
+
+Desktop validation runs for shared frontend/server/contracts, native Rust/assets, tooling and build-configuration changes. Documentation-only and Android/Flutter-only changes skip that workflow. Windows/macOS run `pnpm test:desktop` for native adapters, shared IPC contracts and release-source rules; the Ubuntu matrix owns the complete Web/server suite. Native formatting, Clippy, tests, signing-script fixtures, frontend compilation and installer packaging stay on their owning OS. Both validation and signed release builds also run a locked `cargo +1.90.0 check --all-targets` against the declared Rust minimum. Keep that command aligned with `rust-version` when changing the supported compiler floor.
+
+Workflow-level path filtering is not a required-check aggregator. If branch protection is added later, use an always-reported gate that distinguishes irrelevant jobs from failures; do not require a workflow that can be skipped by paths.
 
 Desktop and Flutter have their own workflows and native prerequisites; their platform guides describe packaging and signing. A workflow definition or local command passing does not establish a successful hosted run. Review job results and artifacts for the exact commit being released.
 

@@ -55,6 +55,7 @@ Commands and dependency versions are defined in `package.json`. Run commands fro
 | `pnpm format` / `pnpm format:check` | Format or check source and documentation                       |
 | `pnpm docs:check`                   | Check local Markdown file and heading links                    |
 | `pnpm ci:lint`                      | Validate GitHub Actions with pinned actionlint (requires Go)   |
+| `pnpm test:desktop`                 | Test native adapters, IPC contracts and release-source rules   |
 | `pnpm check`                        | Type checking, tests, lint, formatting and documentation links |
 | `pnpm build`                        | Type checking and production frontend build                    |
 | `pnpm preview`                      | Built app and local proxies at port 4173                       |
