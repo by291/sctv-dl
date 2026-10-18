@@ -17,6 +17,7 @@ beforeEach(async () => {
   const reportDirectories = [
     join(directory, 'android/app/build/reports'),
     join(directory, 'src-tauri/target/reports'),
+    join(directory, 'flutter/build/reports'),
   ]
 
   await mkdir(join(directory, 'src'))
@@ -33,7 +34,10 @@ beforeEach(async () => {
     )
   }
 
-  for (const name of ['web-fixture-dep', 'native-fixture-dep-0', 'native-fixture-dep-1']) {
+  for (const name of [
+    'web-fixture-dep',
+    ...reportDirectories.map((_, index) => `native-fixture-dep-${index}`),
+  ]) {
     const packageDirectory = join(directory, 'node_modules', name)
 
     await mkdir(packageDirectory, { recursive: true })
@@ -75,6 +79,7 @@ describe('Web development scanning', () => {
     expect(dependencies).toHaveProperty('web-fixture-dep')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-0')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-1')
+    expect(dependencies).not.toHaveProperty('native-fixture-dep-2')
   })
 
   it('watches Web edits without crawling native build output', async () => {
@@ -91,7 +96,7 @@ describe('Web development scanning', () => {
 
     const watchedDirectories = Object.keys(server!.watcher.getWatched())
 
-    for (const nativeRoot of ['android', 'src-tauri']) {
+    for (const nativeRoot of ['android', 'src-tauri', 'flutter']) {
       expect(
         watchedDirectories.some((path) => relative(directory, path).split(sep)[0] === nativeRoot),
       ).toBe(false)

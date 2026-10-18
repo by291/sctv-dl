@@ -13,6 +13,8 @@ flowchart LR
     Server -->|"Referer and streamed MP4"| CDN["fscgc.scgchc.com / fscgc.sctv-tf.com"]
 ```
 
+The proxy transport owns response-header deadlines, disconnect cancellation, stream backpressure, and listener cleanup. Header construction and selection live in a separate module; headers arriving before the deadline permit the body to continue streaming.
+
 The service streams video with backpressure. It does not save videos or maintain download jobs. The Tauri client under `src-tauri/` bundles the same frontend and selects native adapters at startup. Rust owns its metadata, opaque playback sessions and streaming media listener, file downloads, and persistence. Desktop routing uses hash history; Web retains ordinary history routes. See [Desktop Development](desktop.md) for the current boundary.
 
 ## Module Ownership
@@ -54,12 +56,16 @@ The service streams video with backpressure. It does not save videos or maintain
 | `server/client-api/client-api-middleware.ts`    | Normalized request lifecycle, dependency assembly, dispatch, and replies                                        |
 | `server/client-api/client-route.ts`             | Typed route matching, method/ID checks, and preparation input validation                                        |
 | `server/client-api/request-body.ts`             | Bounded JSON request reception and body deadline cleanup                                                        |
-| `server/client-api/http-errors.ts`              | HTTP input errors and centralized application-error mapping                                                     |
+| `server/client-api/input-error.ts`              | Transport input errors independent of programme service and response mapping                                    |
+| `server/client-api/http-errors.ts`              | Centralized mapping of input and application errors to HTTP responses                                           |
 | `server/client-api/programme-service.ts`        | Reference-based playback and download preparation                                                               |
 | `server/proxy/proxy-middleware.ts`              | Route dispatch, method handling, and invalid-target responses                                                   |
 | `server/proxy/proxy-policy.ts`                  | API allowlist/pagination, media target validation, and attachment filenames                                     |
 | `server/proxy/programme-headers.ts`             | Android guest request profile and browser-scoped upstream device identity                                       |
+| `server/proxy/proxy-headers.ts`                 | Guest/media request headers, downstream header selection, and attachment metadata                               |
 | `server/proxy/stream-upstream.ts`               | Upstream fetch, headers, timeout, disconnect cancellation, and streaming                                        |
+| `tooling/desktop-release.ts`                    | Dependency-free release source/version checks and macOS signing configuration                                   |
+| `tooling/windows-signing.ps1`                   | Windows signing certificate preparation, failure rollback, and post-build cleanup                               |
 | `tooling/upstream-proxy-plugin.ts`              | Vite development and preview adapter for the same proxy middleware                                              |
 
 `shared/contracts/` owns platform-neutral application DTO schemas/types and `shared/fixtures/` owns cross-language contract examples. `src/shared/platform/` owns injectable ports and validated IPC helpers; `src/platform/` composes their concrete adapters. `server/programmes/` owns upstream validation, normalization, quality resolution, and filenames. `server/client-api/` owns normalized routes and reference-based preparation. These sources are shared by production and Vite middleware without importing browser modules into Node.
@@ -110,7 +116,7 @@ Owners establish clear notifications before reading. Clearing changes the cache 
 
 The Node programme client validates and normalizes upstream records. The browser validates the resulting application DTOs before they enter feature state. The catalogue/archive consume the injected programme port, keeping transport selection outside their stores and views. See [Upstream API](upstream-api.md) for schemas, IDs, and field mapping.
 
-Normalized client requests parse into a discriminated route before creating an upstream identity or contacting a service. HTTP input errors belong to the transport layer; unavailable programme records use a business error. The middleware maps both into the existing status/error contract, owns disconnect cancellation, and removes request listeners on completion. Upstream wrappers retain their causes; HTTP boundaries report server failures while keeping client responses localized.
+Normalized client requests parse into a discriminated route before creating an upstream identity or contacting a service. HTTP input errors are defined independently of response mapping and programme services; unavailable programme records use a business error. The middleware maps both into the existing status/error contract, owns disconnect cancellation, and removes request listeners on completion. Upstream wrappers retain their causes; HTTP boundaries report server failures while keeping client responses localized.
 
 Browser JSON/DTO validation and native IPC validation preserve underlying error causes while presenting localized messages. Non-cancellable native commands share `invokeValidated`; cancellable requests retain their separate abort protocol and `AbortError` semantics.
 

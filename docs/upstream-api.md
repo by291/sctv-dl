@@ -104,4 +104,4 @@ Normalized metadata and preparation requests use a separate 20-second response-h
 
 Invalid input returns 400, missing records/routes 404, unsupported methods 405, upstream failure 502, timeout 504, and unexpected server failure 500. Client API errors never fall through to frontend HTML. Preparation returns HTTP 200 when individual files fail but the batch itself can be evaluated; inspect `failures` alongside `files`.
 
-Web playback adapters wrap the validated source URLs with the existing media proxy. Web playback preparation owns no server-side session resource, so closing that adapter does not make another HTTP request. The current preview component retains its existing direct media-proxy integration until the native playback-session phase.
+Web playback adapters wrap the validated source URLs with the existing media proxy. Web playback preparation owns no server-side session resource, so closing that adapter does not make another HTTP request. The shared preview consumes the injected playback port; the Web adapter owns media-proxy URL construction, while the native adapter owns its backend session lifecycle.

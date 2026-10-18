@@ -44,6 +44,14 @@ Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.j
 - Keep side effects with their lifecycle owner. Requests, listeners, subscriptions, and player sessions need a visible cleanup path. Handle asynchronous failures at the owning boundary, preserve useful causes, and explain intentional best-effort cleanup when errors are ignored.
 - Organize tests into setup, action, and observable assertions. Cover business boundaries and lifecycle races; do not test source spelling, formatting, or private decomposition.
 
+### Server, Shared Contracts, and Tooling
+
+- Keep HTTP input errors independent of business services and response mapping. Handlers coordinate validation, service execution, and replies; header policies and business decisions have named owners.
+- Keep request listeners, deadlines, cancellation, and stream cleanup with their lifecycle owner. Distinguish response-header deadlines from body reception limits and long-lived media streaming; preserve backpressure and disconnect cancellation.
+- Shared contracts must not depend on build/test tooling. Keep schema types and protocol semantics together, including nullable fields, epoch/revision/attempt guards, and saved-data defaults. Keep tests beside the contract they exercise.
+- Release bootstrap commands that run before dependency installation use Node-only APIs and explicit guards for unknown JSON input. Do not replace runtime validation with type assertions or add a dependency to these entrypoints.
+- Workflows orchestrate commands; platform signing scripts own credential validation, temporary files, and certificate cleanup. Document ownership transfer between setup and post-build cleanup, preserve original failures during rollback, and never print credentials.
+
 ### CSS and UI
 
 - Use descriptive classes in templates and native CSS in the owning component's scoped stylesheet. Keep responsive rules in the same file with native `@media` conditions.
