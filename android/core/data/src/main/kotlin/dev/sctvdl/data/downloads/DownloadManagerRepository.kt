@@ -44,7 +44,8 @@ internal class DownloadManagerRepository(
     private val preflight: MediaPreflight,
     private val clock: Clock,
     private val dispatcher: CoroutineDispatcher
-) : DownloadRepository {
+) : DownloadRepository,
+    LegacyDownloadRecovery {
     override fun observeTasks() = store.observe()
 
     private val submissions = Mutex()

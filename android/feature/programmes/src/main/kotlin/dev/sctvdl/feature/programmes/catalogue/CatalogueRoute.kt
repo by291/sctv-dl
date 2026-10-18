@@ -36,6 +36,7 @@ fun CatalogueRoute(
         onApplyUpdates = model::applyUpdates,
         catalogueScroll = catalogueScroll,
         bottomContentPadding = bottomContentPadding,
-        onHistory = onHistory
+        onHistory = onHistory,
+        onRetryFavourites = model::retryFavourites
     )
 }

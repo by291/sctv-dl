@@ -90,7 +90,8 @@ internal fun CatalogueScreen(
     onApplyUpdates: () -> Unit = {},
     catalogueScroll: LazyGridState = rememberLazyGridState(),
     bottomContentPadding: Dp = 0.dp,
-    onHistory: (() -> Unit)? = null
+    onHistory: (() -> Unit)? = null,
+    onRetryFavourites: () -> Unit = {}
 ) {
     val rows = state.rows(favouritesOnly)
     val initialLoading = state.resource.data == null && state.resource.error == null
@@ -267,6 +268,11 @@ internal fun CatalogueScreen(
                                 }
                             }
                         }
+                    }
+                }
+                state.favouriteError?.let { error ->
+                    item(key = "favourite-error") {
+                        CachedErrorBanner(error, false, onRetryFavourites, retryLabel = "重试")
                     }
                 }
                 state.resource.error?.let { error ->

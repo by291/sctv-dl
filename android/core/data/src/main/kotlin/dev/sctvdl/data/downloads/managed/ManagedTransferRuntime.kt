@@ -100,142 +100,23 @@ internal class ManagedTransferRuntime @Inject constructor(
     override suspend fun reconcile() = reconciliation.withLock {
         val tasks = store.all().filter { it.owner == DownloadOwner.Media3 }
         if (tasks.isEmpty()) return@withLock
+
         val snapshots = gateway.snapshots().associateBy { it.attemptId }
         for (original in tasks) {
             var task = store.get(original.id)?.takeIf { it.attemptId == original.attemptId } ?: continue
             try {
-                if (task.cleanupPending && access.hasLocalLease() && task.attemptId !in deferredCleanup) {
-                    if (task.state == DownloadState.Cancelled) {
-                        task.publicationUri?.let { check(files.delete(it) !is FileDeleteResult.ConsentRequired) }
-                        if (task.publicationStarted && task.publicationUri == null) {
-                            val candidates = files.findPlanned(task)
-                            check(candidates.size <= 1)
-                            candidates.forEach { check(files.delete(it) !is FileDeleteResult.ConsentRequired) }
-                        }
-                    }
-                    remove(task)
-                    update(task) { it.copy(cleanupPending = false, cacheComplete = false, cacheKey = null) }
-                    continue
-                }
-                if (task.state == DownloadState.Completed) {
-                    if (task.contentUri?.let { files.isReadable(it) } != true) {
-                        update(task) {
-                            it.copy(
-                                state = DownloadState.Missing,
-                                reason = "文件已移除或无法访问",
-                                reasonCode = DownloadReason.FileMissing
-                            )
-                        }
-                    }
-                    continue
-                }
-                if (task.cacheComplete && task.state == DownloadState.Finalizing) {
-                    if (access.hasLocalLease()) publication.publish(task.target)
-                    continue
-                }
+                if (reconcileLocalResources(task)) continue
                 if (!task.state.isActive || task.attemptId in deferredTransfers) continue
-                val allowed = transitions.mutex.withLock {
-                    val latest = store.get(task.id)
-                    if (latest?.attemptId != task.attemptId || latest.revision != task.revision) return@withLock false
-                    if (latest.userPaused) access.block(latest.attemptId) else access.unblock(latest.attemptId)
-                    access.permits(latest)
-                }
-                if (!allowed) {
-                    if (task.mediaChecked) {
-                        gateway.enqueue(task)
-                        gateway.allow(task, false)
-                    }
-                    update(task) {
-                        it.copy(
-                            state = if (it.userPaused) DownloadState.Paused else DownloadState.Waiting,
-                            reasonCode = when {
-                                it.userPaused -> null
-                                !access.status().connected -> DownloadReason.Network
-                                it.wifiOnly && (!access.status().wifi || access.status().vpn) -> DownloadReason.Wifi
-                                else -> DownloadReason.BackgroundLimit
-                            },
-                            reason = if (it.userPaused) null else "等待允许的网络或系统调度"
-                        )
-                    }
+
+                if (!permitsExecution(task)) {
+                    waitForExecution(task)
                     continue
                 }
-                if (!task.mediaChecked) {
-                    val identity = MediaPreflight(OkHttpMediaProbe(access.client(task))).inspect(task.url)
-                    task = update(task) {
-                        it.copy(
-                            mediaChecked = true,
-                            totalBytes = identity.totalBytes,
-                            mediaEtag = identity.etag,
-                            mediaLastModified = identity.lastModified,
-                            acceptsRanges = identity.acceptsRanges
-                        )
-                    } ?: continue
-                }
+
+                task = checkMedia(task) ?: continue
                 gateway.enqueue(task)
                 gateway.allow(task, true)
-                val snapshot = snapshots[task.attemptId]
-                if (snapshot?.phase == ManagedTransferPhase.Complete) {
-                    if (task.totalBytes != null && snapshot.bytes != task.totalBytes) {
-                        update(task) {
-                            it.copy(
-                                state = DownloadState.Failed,
-                                reasonCode = DownloadReason.ResumeRequired,
-                                reason = "视频长度已变化，请重新下载"
-                            )
-                        }
-                    } else {
-                        update(task) {
-                            it.copy(
-                                state = DownloadState.Finalizing,
-                                cacheComplete = true,
-                                bytes = snapshot.bytes,
-                                totalBytes = snapshot.total ?: snapshot.bytes,
-                                reason = null,
-                                reasonCode = null
-                            )
-                        }
-                    }
-                } else if (snapshot?.phase == ManagedTransferPhase.Failed) {
-                    val failure = snapshot.failure ?: DownloadReason.Network
-                    if (failure == DownloadReason.ResumeRequired) {
-                        update(task) {
-                            it.copy(
-                                state = DownloadState.Failed,
-                                bytes = snapshot.bytes,
-                                reasonCode = failure,
-                                reason = "源视频已变化或不支持安全续传，请重新下载"
-                            )
-                        }
-                    } else {
-                        // Withdraw execution until a later scheduled lease; retain the request and verified cache spans.
-                        gateway.resume(task.attemptId)
-                        deferredTransfers += task.attemptId
-                        update(task) {
-                            it.copy(
-                                state = DownloadState.Waiting,
-                                bytes = snapshot.bytes,
-                                reasonCode = DownloadReason.Network,
-                                reason = "网络中断，等待系统重试"
-                            )
-                        }
-                    }
-                } else {
-                    update(task) {
-                        it.copy(
-                            state = if (snapshot?.phase ==
-                                ManagedTransferPhase.Running
-                            ) {
-                                DownloadState.Running
-                            } else {
-                                DownloadState.Pending
-                            },
-                            bytes = snapshot?.bytes ?: it.bytes,
-                            totalBytes = snapshot?.total ?: it.totalBytes,
-                            reason = null,
-                            reasonCode = null
-                        )
-                    }
-                }
+                recordTransfer(task, snapshots[task.attemptId])
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: Exception) {
@@ -254,6 +135,148 @@ internal class ManagedTransferRuntime @Inject constructor(
             }
         }
         scheduler.reconcile()
+    }
+
+    /** Local cleanup/publication needs a host lease but never a network lease. */
+    private suspend fun reconcileLocalResources(task: DownloadTask): Boolean {
+        if (task.cleanupPending && access.hasLocalLease() && task.attemptId !in deferredCleanup) {
+            if (task.state == DownloadState.Cancelled) {
+                task.publicationUri?.let { check(files.delete(it) !is FileDeleteResult.ConsentRequired) }
+                if (task.publicationStarted && task.publicationUri == null) {
+                    val candidates = files.findPlanned(task)
+                    check(candidates.size <= 1)
+                    candidates.forEach { check(files.delete(it) !is FileDeleteResult.ConsentRequired) }
+                }
+            }
+            remove(task)
+            update(task) { it.copy(cleanupPending = false, cacheComplete = false, cacheKey = null) }
+            return true
+        }
+
+        if (task.state == DownloadState.Completed) {
+            if (task.contentUri?.let { files.isReadable(it) } != true) {
+                update(task) {
+                    it.copy(
+                        state = DownloadState.Missing,
+                        reason = "文件已移除或无法访问",
+                        reasonCode = DownloadReason.FileMissing
+                    )
+                }
+            }
+            return true
+        }
+
+        if (task.cacheComplete && task.state == DownloadState.Finalizing) {
+            if (access.hasLocalLease()) publication.publish(task.target)
+            return true
+        }
+
+        return false
+    }
+
+    private suspend fun permitsExecution(task: DownloadTask): Boolean = transitions.mutex.withLock {
+        val latest = store.get(task.id)
+        if (latest?.attemptId != task.attemptId || latest.revision != task.revision) return@withLock false
+        if (latest.userPaused) access.block(latest.attemptId) else access.unblock(latest.attemptId)
+        access.permits(latest)
+    }
+
+    private suspend fun waitForExecution(task: DownloadTask) {
+        if (task.mediaChecked) {
+            gateway.enqueue(task)
+            gateway.allow(task, false)
+        }
+
+        update(task) {
+            it.copy(
+                state = if (it.userPaused) DownloadState.Paused else DownloadState.Waiting,
+                reasonCode = when {
+                    it.userPaused -> null
+                    !access.status().connected -> DownloadReason.Network
+                    it.wifiOnly && (!access.status().wifi || access.status().vpn) -> DownloadReason.Wifi
+                    else -> DownloadReason.BackgroundLimit
+                },
+                reason = if (it.userPaused) null else "等待允许的网络或系统调度"
+            )
+        }
+    }
+
+    private suspend fun checkMedia(task: DownloadTask): DownloadTask? {
+        if (task.mediaChecked) return task
+
+        val identity = MediaPreflight(OkHttpMediaProbe(access.client(task))).inspect(task.url)
+        return update(task) {
+            it.copy(
+                mediaChecked = true,
+                totalBytes = identity.totalBytes,
+                mediaEtag = identity.etag,
+                mediaLastModified = identity.lastModified,
+                acceptsRanges = identity.acceptsRanges
+            )
+        }
+    }
+
+    private suspend fun recordTransfer(task: DownloadTask, snapshot: ManagedTransferSnapshot?) {
+        if (snapshot?.phase == ManagedTransferPhase.Complete) {
+            if (task.totalBytes != null && snapshot.bytes != task.totalBytes) {
+                update(task) {
+                    it.copy(
+                        state = DownloadState.Failed,
+                        reasonCode = DownloadReason.ResumeRequired,
+                        reason = "视频长度已变化，请重新下载"
+                    )
+                }
+            } else {
+                update(task) {
+                    it.copy(
+                        state = DownloadState.Finalizing,
+                        cacheComplete = true,
+                        bytes = snapshot.bytes,
+                        totalBytes = snapshot.total ?: snapshot.bytes,
+                        reason = null,
+                        reasonCode = null
+                    )
+                }
+            }
+        } else if (snapshot?.phase == ManagedTransferPhase.Failed) {
+            val failure = snapshot.failure ?: DownloadReason.Network
+            if (failure == DownloadReason.ResumeRequired) {
+                update(task) {
+                    it.copy(
+                        state = DownloadState.Failed,
+                        bytes = snapshot.bytes,
+                        reasonCode = failure,
+                        reason = "源视频已变化或不支持安全续传，请重新下载"
+                    )
+                }
+            } else {
+                // Withdraw execution until a later scheduled lease; retain the request and verified cache spans.
+                gateway.resume(task.attemptId)
+                deferredTransfers += task.attemptId
+                update(task) {
+                    it.copy(
+                        state = DownloadState.Waiting,
+                        bytes = snapshot.bytes,
+                        reasonCode = DownloadReason.Network,
+                        reason = "网络中断，等待系统重试"
+                    )
+                }
+            }
+        } else {
+            update(task) {
+                it.copy(
+                    state = if (snapshot?.phase == ManagedTransferPhase.Running) {
+                        DownloadState.Running
+                    } else {
+                        DownloadState.Pending
+                    },
+                    bytes = snapshot?.bytes ?: it.bytes,
+                    totalBytes = snapshot?.total ?: it.totalBytes,
+                    reason = null,
+                    reasonCode = null
+                )
+            }
+        }
     }
 
     private suspend fun update(task: DownloadTask, change: (DownloadTask) -> DownloadTask): DownloadTask? =

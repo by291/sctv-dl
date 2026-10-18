@@ -2,8 +2,6 @@
 
 package dev.sctvdl.player.ui
 
-import android.content.Context
-import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -24,8 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,9 +34,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -53,7 +47,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.Player
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.player.model.PlaybackState
-import kotlinx.coroutines.delay
 
 @Composable
 fun PlayerVideo(
@@ -75,24 +68,11 @@ fun PlayerVideo(
 ) {
     val pointers = remember(player) { PlayerGesturePointers() }
     val configuration = LocalConfiguration.current
-    val context = LocalContext.current
-    val exploration = remember(context) {
-        context.getSystemService(
-            Context.ACCESSIBILITY_SERVICE
-        ) as AccessibilityManager
-    }
-    var touchExploration by remember { mutableStateOf(exploration.isTouchExplorationEnabled) }
+    val touchExploration = rememberTouchExploration()
     var gestureEpoch by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         gestureEpoch++
         onTemporarySpeed(false)
-    }
-    DisposableEffect(exploration) {
-        val listener = AccessibilityManager.TouchExplorationStateChangeListener {
-            touchExploration = it
-        }
-        exploration.addTouchExplorationStateChangeListener(listener)
-        onDispose { exploration.removeTouchExplorationStateChangeListener(listener) }
     }
     val latestState by rememberUpdatedState(state)
     var hintEligible by remember(player, gestureEnvironment) {
@@ -104,31 +84,9 @@ fun PlayerVideo(
         lifecycleState.isAtLeast(Lifecycle.State.RESUMED) && windowFocused
     var gestureInteracting by remember(player) { mutableStateOf(false) }
     var hud by remember(player) { mutableStateOf<String?>(null) }
-    var controlsVisible by remember(player) { mutableStateOf(true) }
-    var interacting by remember(player) { mutableStateOf(false) }
-    var focused by remember(player) { mutableStateOf(false) }
-    var interactionCount by remember(player) { mutableIntStateOf(0) }
-    val accessibility = LocalAccessibilityManager.current
-    val interact: () -> Unit = {
-        controlsVisible = true
-        interactionCount++
-    }
-    val controlsTimeout = accessibility?.calculateRecommendedTimeoutMillis(
-        originalTimeoutMillis = 3_500,
-        containsIcons = true,
-        containsText = true,
-        containsControls = true
-    ) ?: 3_500
-    val keepControls =
-        !state.playing || state.buffering || state.error != null || interacting || gestureInteracting || focused
-    val showControls = controlsEnabled && (controlsVisible || keepControls)
-
-    LaunchedEffect(controlsVisible, keepControls, interactionCount, controlsEnabled, controlsTimeout) {
-        if (controlsEnabled && controlsVisible && !keepControls) {
-            delay(controlsTimeout)
-            controlsVisible = false
-        }
-    }
+    val controls = rememberPlayerControls(player, state, controlsEnabled, gestureInteracting)
+    val showControls = controls.shouldShow(state, controlsEnabled, gestureInteracting)
+    val interact = controls::interact
 
     BoxWithConstraints(
         modifier.background(Color.Black).observePlayerPointers(pointers).then(
@@ -142,7 +100,7 @@ fun PlayerVideo(
                     interact()
                     false
                 }.onFocusChanged {
-                    focused = it.hasFocus
+                    controls.focused = it.hasFocus
                     if (it.hasFocus) interact()
                 }.focusable()
             } else {
@@ -174,12 +132,11 @@ fun PlayerVideo(
                         latestState.positionMs
                     }, { latestState.durationMs }, { latestState.playing },
                     {
-                        controlsVisible = !controlsVisible
-                        interactionCount++
+                        controls.toggle()
                     }, onTogglePlay, onSeek,
                     onTemporarySpeed, gestureEnvironment, {
                         gestureInteracting = it
-                        if (it) interactionCount++
+                        if (it) controls.registerInteraction()
                     }, { hud = it }
                 )
             )
@@ -242,7 +199,7 @@ fun PlayerVideo(
                         fullscreen,
                         onFullscreen,
                         interact,
-                        { interacting = it },
+                        { controls.interacting = it },
                         menuMaxHeight
                     )
                 }

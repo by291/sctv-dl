@@ -88,12 +88,13 @@ internal fun ArchiveScreen(
     onDownload: (List<DownloadRequest>) -> Unit,
     onApplyUpdates: () -> Unit = {},
     onToggleClipSort: () -> Unit = {},
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onRetryFavourites: () -> Unit = {}
 ) {
     var showDates by rememberSaveable { mutableStateOf(false) }
     var downloadIds by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
 
-    val errors = listOfNotNull(state.dates.error, state.contents.error).distinctBy { it.message }
+    val errors = listOfNotNull(state.dates.error, state.contents.error, state.contextError).distinctBy { it.message }
     val loadingDates = state.dates.data == null && state.dates.error == null
     val loadingContents = state.date != null && state.contents.data == null && state.contents.error == null
     val largeText = LocalDensity.current.fontScale >= 1.5f
@@ -162,6 +163,11 @@ internal fun ArchiveScreen(
                         item(key = "dates") {
                             BroadcastDates(state.dates.data.orEmpty(), state.date, onDate, { showDates = true })
                         }
+                    }
+                }
+                state.favouriteError?.let { error ->
+                    item(key = "favourite-error") {
+                        CachedErrorBanner(error, false, onRetryFavourites, retryLabel = "重试")
                     }
                 }
                 if (errors.isNotEmpty()) {
@@ -327,20 +333,7 @@ internal fun ArchiveScreen(
             selected.flatMap(::videoVariants).distinctBy { it.quality }
         }
         DownloadQualitySheet(variants, selected.size, { quality ->
-            val date = state.date
-            if (date != null) {
-                onDownload(
-                    selected.map {
-                        DownloadRequest(
-                            state.programme?.name ?: "节目",
-                            date.date,
-                            it,
-                            quality,
-                            wifiOnly
-                        )
-                    }
-                )
-            }
+            onDownload(archiveDownloadRequests(state, downloadIds.toSet(), quality, wifiOnly))
             downloadIds = arrayListOf()
         }, { downloadIds = arrayListOf() })
     }

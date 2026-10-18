@@ -10,6 +10,7 @@ fun SettingsRoute() {
     val model: SettingsViewModel = hiltViewModel()
     val settings by model.uiState.collectAsStateWithLifecycle()
 
+    val error by model.error.collectAsStateWithLifecycle()
     val maintenance by model.maintenance.collectAsStateWithLifecycle()
     SettingsScreen(
         settings,
@@ -19,6 +20,8 @@ fun SettingsRoute() {
         model::setWifiOnly,
         maintenance,
         model::clearCache,
-        model::clearHistory
+        model::clearHistory,
+        error = error,
+        onRetry = model::retry
     )
 }

@@ -26,12 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.PrimaryTopAppBar
+import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.settings.AppSettings
 import dev.sctvdl.domain.settings.ThemeMode
 import dev.sctvdl.feature.settings.components.PreferenceContent
 import dev.sctvdl.feature.settings.components.PreferenceGroup
 import dev.sctvdl.feature.settings.components.SettingSwitch
+import dev.sctvdl.ui.feedback.CachedErrorBanner
 
 @Composable
 internal fun SettingsScreen(
@@ -42,7 +44,9 @@ internal fun SettingsScreen(
     onWifi: (Boolean) -> Unit,
     maintenance: StorageSettingsState = StorageSettingsState(),
     onClearCache: () -> Unit = {},
-    onClearHistory: () -> Unit = {}
+    onClearHistory: () -> Unit = {},
+    error: AppError? = null,
+    onRetry: () -> Unit = {}
 ) {
     var confirmation by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -57,6 +61,11 @@ internal fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            error?.let {
+                item(key = "settings-error") {
+                    CachedErrorBanner(it, false, onRetry, retryLabel = "重试")
+                }
+            }
             item(key = "appearance") {
                 PreferenceGroup("外观") {
                     PreferenceContent {

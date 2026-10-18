@@ -1,5 +1,6 @@
 package dev.sctvdl.feature.programmes.archive
 
+import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.CachedResource
 import dev.sctvdl.domain.programme.BroadcastDate
 import dev.sctvdl.domain.programme.Programme
@@ -17,7 +18,9 @@ internal data class ArchiveUiState(
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
     val hasUpdate: Boolean = false,
-    val clipSortAscending: Boolean = true
+    val clipSortAscending: Boolean = true,
+    val contextError: AppError? = null,
+    val favouriteError: AppError? = null
 ) {
     val fullEpisodes: List<ProgrammeContent> get() = contents.data.orEmpty().filter { item ->
         date?.let { isFullEpisode(item, programme?.name.orEmpty(), it.date) } == true

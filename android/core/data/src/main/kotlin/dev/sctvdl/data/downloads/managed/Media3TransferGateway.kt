@@ -28,8 +28,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,60 +50,45 @@ internal class Media3TransferGateway(
     private val initialization = Mutex()
     private val tasks = ConcurrentHashMap<String, DownloadTask>()
     private val failures = ConcurrentHashMap<String, DownloadReason>()
+
     private val executor = Executors.newFixedThreadPool(3)
-    private val initialized = CompletableDeferred<Unit>()
-    private var cache: SimpleCache? = null
-    private var manager: DownloadManager? = null
-    private var index: DefaultDownloadIndex? = null
+    private var resources: TransferResources? = null
     private var closed = false
+
     override val updates =
         MutableSharedFlow<ManagedTransferSnapshot>(
             extraBufferCapacity = 64,
             onBufferOverflow = BufferOverflow.DROP_OLDEST
         )
 
-    private suspend fun initialize() {
-        initialization.withLock {
+    private suspend fun initialize(): TransferResources {
+        val engine = initialization.withLock {
             check(!closed) { "Transfer engine is closed" }
-            if (manager != null) return@withLock
-            val ownedCache = withContext(Dispatchers.IO) { SimpleCache(cacheDirectory, NoOpCacheEvictor(), database) }
-            cache = ownedCache
-            val ownedIndex = DefaultDownloadIndex(database, indexName)
-            index = ownedIndex
+            resources ?: createResources().also { resources = it }
+        }
+        engine.ready.await()
+        return engine
+    }
+
+    private suspend fun createResources(): TransferResources {
+        var acquiredCache: SimpleCache? = null
+        var acquiredManager: DownloadManager? = null
+        val initialized = CompletableDeferred<Unit>()
+
+        try {
+            // Assign within the dispatcher block: cancellation may discard its returned value.
             withContext(Dispatchers.IO) {
-                // Global resume must never start a restored entry before its policy/context has been checked.
-                ownedIndex.getDownloads().use { cursor ->
-                    val restored = buildList { while (cursor.moveToNext()) add(cursor.download) }
-                    restored.filter { !it.isTerminalState }.forEach { download ->
-                        val removing =
-                            download.state == Download.STATE_REMOVING || download.state == Download.STATE_RESTARTING
-                        val stop = if (download.stopReason == USER_PAUSED) USER_PAUSED else NO_EXECUTION
-                        val progress = androidx.media3.exoplayer.offline.DownloadProgress().apply {
-                            bytesDownloaded = download.bytesDownloaded
-                            percentDownloaded = download.percentDownloaded
-                        }
-                        ownedIndex.putDownload(
-                            Download(
-                                download.request,
-                                if (removing) download.state else Download.STATE_STOPPED,
-                                download.startTimeMs,
-                                download.updateTimeMs,
-                                download.contentLength,
-                                stop,
-                                Download.FAILURE_REASON_NONE,
-                                progress
-                            )
-                        )
-                    }
-                }
+                acquiredCache = SimpleCache(cacheDirectory, NoOpCacheEvictor(), database)
             }
+            val ownedCache = requireNotNull(acquiredCache)
+            val ownedIndex = DefaultDownloadIndex(database, indexName)
+            restoreStoppedDownloads(ownedIndex)
+
             withContext(Dispatchers.Main.immediate) {
                 val factory = DownloaderFactory { request ->
                     ProgressiveDownloader(
                         MediaItem.Builder().setUri(request.uri).setCustomCacheKey(request.customCacheKey).build(),
-                        CacheDataSource.Factory().setCache(
-                            ownedCache
-                        ).setUpstreamDataSourceFactory(
+                        CacheDataSource.Factory().setCache(ownedCache).setUpstreamDataSourceFactory(
                             DataSource.Factory {
                                 DeferredTransferSource {
                                     val task =
@@ -112,7 +100,9 @@ internal class Media3TransferGateway(
                         executor
                     )
                 }
-                manager = DownloadManager(context, ownedIndex, factory).apply {
+                val manager = DownloadManager(context, ownedIndex, factory)
+                acquiredManager = manager
+                manager.apply {
                     setRequirements(Requirements(0))
                     maxParallelDownloads = 3
                     minRetryCount = 1
@@ -143,26 +133,69 @@ internal class Media3TransferGateway(
                     if (isInitialized) initialized.complete(Unit)
                 }
             }
+            currentCoroutineContext().ensureActive()
+            return TransferResources(ownedCache, ownedIndex, requireNotNull(acquiredManager), initialized)
+        } catch (failure: Throwable) {
+            try {
+                releaseResources(acquiredManager, acquiredCache)
+            } catch (cleanup: Throwable) {
+                failure.addSuppressed(cleanup)
+            }
+            throw failure
         }
-        initialized.await()
     }
+
+    private suspend fun restoreStoppedDownloads(ownedIndex: DefaultDownloadIndex) = withContext(Dispatchers.IO) {
+        // Global resume must never start a restored entry before its policy/context has been checked.
+        ownedIndex.getDownloads().use { cursor ->
+            val restored = buildList { while (cursor.moveToNext()) add(cursor.download) }
+            restored.filter { !it.isTerminalState }.forEach { download ->
+                val removing =
+                    download.state == Download.STATE_REMOVING || download.state == Download.STATE_RESTARTING
+                val stop = if (download.stopReason == USER_PAUSED) USER_PAUSED else NO_EXECUTION
+                val progress = androidx.media3.exoplayer.offline.DownloadProgress().apply {
+                    bytesDownloaded = download.bytesDownloaded
+                    percentDownloaded = download.percentDownloaded
+                }
+                ownedIndex.putDownload(
+                    Download(
+                        download.request,
+                        if (removing) download.state else Download.STATE_STOPPED,
+                        download.startTimeMs,
+                        download.updateTimeMs,
+                        download.contentLength,
+                        stop,
+                        Download.FAILURE_REASON_NONE,
+                        progress
+                    )
+                )
+            }
+        }
+    }
+
+    private class TransferResources(
+        val cache: SimpleCache,
+        val index: DefaultDownloadIndex,
+        val manager: DownloadManager,
+        val ready: CompletableDeferred<Unit>
+    )
 
     override suspend fun enqueue(task: DownloadTask) {
         tasks[task.attemptId] = task
-        initialize()
-        val exists = withContext(Dispatchers.IO) { requireNotNull(index).getDownload(task.attemptId) != null }
+        val engine = initialize()
+        val exists = withContext(Dispatchers.IO) { engine.index.getDownload(task.attemptId) != null }
         if (!exists) {
             withContext(Dispatchers.Main.immediate) {
-                requireNotNull(manager).addDownload(request(task), if (task.userPaused) USER_PAUSED else NO_EXECUTION)
+                engine.manager.addDownload(request(task), if (task.userPaused) USER_PAUSED else NO_EXECUTION)
             }
         }
     }
 
     override suspend fun allow(task: DownloadTask, permitted: Boolean) {
         tasks[task.attemptId] = task
-        initialize()
+        val engine = initialize()
         withContext(Dispatchers.Main.immediate) {
-            requireNotNull(manager).setStopReason(
+            engine.manager.setStopReason(
                 task.attemptId,
                 when {
                     task.userPaused -> USER_PAUSED
@@ -171,51 +204,50 @@ internal class Media3TransferGateway(
                 }
             )
             // Per-task stop reasons have been queued first. Global resume is only an execution mechanism.
-            requireNotNull(manager).resumeDownloads()
+            engine.manager.resumeDownloads()
         }
     }
 
     override suspend fun pause(attemptId: String) {
-        initialize()
-        withContext(Dispatchers.Main.immediate) { requireNotNull(manager).setStopReason(attemptId, USER_PAUSED) }
+        val engine = initialize()
+        withContext(Dispatchers.Main.immediate) { engine.manager.setStopReason(attemptId, USER_PAUSED) }
     }
 
     override suspend fun resume(attemptId: String) {
-        initialize()
+        val engine = initialize()
         // User intent alone does not grant a network/host lease. The runtime will call allow after checking both.
         val failed = withContext(Dispatchers.IO) {
-            requireNotNull(index).getDownload(attemptId)?.state ==
-                Download.STATE_FAILED
+            engine.index.getDownload(attemptId)?.state == Download.STATE_FAILED
         }
         withContext(Dispatchers.Main.immediate) {
             if (failed) {
                 // Re-add the same request/cache key so a transient failure resumes its verified spans.
-                tasks[attemptId]?.let { requireNotNull(manager).addDownload(request(it), NO_EXECUTION) }
+                tasks[attemptId]?.let { engine.manager.addDownload(request(it), NO_EXECUTION) }
                 failures.remove(attemptId)
             } else {
-                requireNotNull(manager).setStopReason(attemptId, NO_EXECUTION)
+                engine.manager.setStopReason(attemptId, NO_EXECUTION)
             }
         }
     }
 
     override suspend fun remove(attemptId: String) {
-        initialize()
-        withContext(Dispatchers.Main.immediate) { requireNotNull(manager).removeDownload(attemptId) }
+        val engine = initialize()
+        withContext(Dispatchers.Main.immediate) { engine.manager.removeDownload(attemptId) }
         withTimeout(30_000) {
-            while (withContext(Dispatchers.IO) { requireNotNull(index).getDownload(attemptId) != null }) delay(50)
+            while (withContext(Dispatchers.IO) { engine.index.getDownload(attemptId) != null }) delay(50)
         }
         tasks.remove(attemptId)
         failures.remove(attemptId)
     }
 
     override suspend fun snapshots(): List<ManagedTransferSnapshot> {
-        initialize()
+        val engine = initialize()
         val current =
             withContext(Dispatchers.Main.immediate) {
-                requireNotNull(manager).currentDownloads.associateBy { it.request.id }
+                engine.manager.currentDownloads.associateBy { it.request.id }
             }
         return withContext(Dispatchers.IO) {
-            requireNotNull(index).getDownloads().use { cursor ->
+            engine.index.getDownloads().use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) {
                         add(snapshot(current[cursor.download.request.id] ?: cursor.download))
@@ -229,34 +261,32 @@ internal class Media3TransferGateway(
         val key = download.request.customCacheKey ?: download.request.id
         val task = tasks[download.request.id]
         return ManagedTransferSnapshot(
-            download.request.id,
-            when (download.state) {
+            attemptId = download.request.id,
+            phase = when (download.state) {
                 Download.STATE_COMPLETED -> ManagedTransferPhase.Complete
                 Download.STATE_FAILED -> ManagedTransferPhase.Failed
                 Download.STATE_DOWNLOADING -> ManagedTransferPhase.Running
-                Download.STATE_STOPPED -> if (download.stopReason ==
-                    USER_PAUSED
-                ) {
+                Download.STATE_STOPPED -> if (download.stopReason == USER_PAUSED) {
                     ManagedTransferPhase.Paused
                 } else {
                     ManagedTransferPhase.Waiting
                 }
                 else -> ManagedTransferPhase.Pending
             },
-            download.bytesDownloaded,
-            download.contentLength.takeIf { it != C.LENGTH_UNSET.toLong() && it > 0 },
-            key,
-            task?.acceptsRanges == true && (task.mediaEtag != null || task.mediaLastModified != null),
-            failures[download.request.id]
+            bytes = download.bytesDownloaded,
+            total = download.contentLength.takeIf { it != C.LENGTH_UNSET.toLong() && it > 0 },
+            cacheKey = key,
+            resumable = task?.acceptsRanges == true && (task.mediaEtag != null || task.mediaLastModified != null),
+            failure = failures[download.request.id]
         )
     }
 
     override suspend fun openCached(task: DownloadTask): InputStream {
         tasks[task.attemptId] = task
-        initialize()
+        val engine = initialize()
         return withContext(Dispatchers.IO) {
             // A missing cache span must fail publication; no upstream factory is configured here.
-            val source = CacheDataSource.Factory().setCache(requireNotNull(cache)).createDataSource()
+            val source = CacheDataSource.Factory().setCache(engine.cache).createDataSource()
             DataSourceInputStream(
                 source,
                 DataSpec.Builder().setUri(task.url).setKey(task.cacheKey ?: task.attemptId).build()
@@ -265,14 +295,35 @@ internal class Media3TransferGateway(
         }
     }
 
-    override suspend fun shutdown() {
+    override suspend fun shutdown() = withContext(NonCancellable) {
         initialization.withLock {
             if (closed) return@withLock
             closed = true
-            withContext(Dispatchers.Main.immediate) { manager?.release() }
-            withContext(Dispatchers.IO) { cache?.release() }
-            executor.shutdownNow()
+            val owned = resources
+            resources = null
+
+            try {
+                releaseResources(owned?.manager, owned?.cache)
+            } finally {
+                executor.shutdownNow()
+            }
         }
+    }
+
+    /** Cleanup owns both resources even when one release fails or the caller has been cancelled. */
+    private suspend fun releaseResources(manager: DownloadManager?, cache: SimpleCache?) = withContext(NonCancellable) {
+        var failure: Throwable? = null
+        try {
+            withContext(Dispatchers.Main.immediate) { manager?.release() }
+        } catch (cause: Throwable) {
+            failure = cause
+        }
+        try {
+            withContext(Dispatchers.IO) { cache?.release() }
+        } catch (cause: Throwable) {
+            if (failure == null) failure = cause else failure.addSuppressed(cause)
+        }
+        failure?.let { throw it }
     }
 
     private fun request(task: DownloadTask): DownloadRequest =
@@ -291,8 +342,7 @@ private class DeferredTransferSource(private val factory: () -> DataSource) : Da
     private val listeners = mutableListOf<androidx.media3.datasource.TransferListener>()
 
     override fun addTransferListener(transferListener: androidx.media3.datasource.TransferListener) {
-        listeners +=
-            transferListener
+        listeners += transferListener
     }
 
     override fun open(dataSpec: DataSpec): Long {

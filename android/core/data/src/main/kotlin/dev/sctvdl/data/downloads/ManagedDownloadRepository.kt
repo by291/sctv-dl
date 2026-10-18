@@ -31,7 +31,7 @@ import kotlinx.coroutines.sync.withLock
 /** Mutations validate attempt identity and capability inside the same boundary as reconciliation/publication. */
 internal class ManagedDownloadRepository(
     private val store: DownloadStore,
-    private val legacy: DownloadRepository,
+    private val legacy: LegacyDownloadRecovery,
     private val control: ManagedDownloadControl,
     private val files: PublicDownloadFiles,
     private val consents: DownloadFileConsentRegistry,
@@ -53,10 +53,21 @@ internal class ManagedDownloadRepository(
             }
             val id = UUID.randomUUID().toString()
             val task = DownloadTask(
-                id, request.content.id, request.content.title, request.programmeName, request.broadcastDate,
-                request.requestedQuality, variant.quality, url,
-                safeDownloadFilename(request.broadcastDate, request.content.title, variant.quality, id.take(12)),
-                request.wifiOnly,
+                id = id,
+                contentId = request.content.id,
+                title = request.content.title,
+                programmeName = request.programmeName,
+                broadcastDate = request.broadcastDate,
+                requestedQuality = request.requestedQuality,
+                actualQuality = variant.quality,
+                url = url,
+                filename = safeDownloadFilename(
+                    request.broadcastDate,
+                    request.content.title,
+                    variant.quality,
+                    id.take(12)
+                ),
+                wifiOnly = request.wifiOnly,
                 createdAt = clock.instant(),
                 owner = DownloadOwner.Media3,
                 attemptId = id,
@@ -81,116 +92,112 @@ internal class ManagedDownloadRepository(
     }
 
     override suspend fun perform(target: DownloadTarget, action: DownloadAction): DownloadActionResult {
-        var paused: DownloadTask? = null
-        var start = false
-        val result = transitions.mutex.withLock {
-            var task = store.get(target.id) ?: return@withLock DownloadActionResult.Skipped
-            if (task.attemptId != target.attemptId) return@withLock DownloadActionResult.Skipped
-            if (task.owner == DownloadOwner.LegacySystem) {
-                legacy.reconcile()
-                task = store.get(target.id) ?: return@withLock DownloadActionResult.Skipped
-            }
-            if (task.attemptId != target.attemptId || action !in supportedActions(task)) {
-                return@withLock DownloadActionResult.Skipped
-            }
-            when (action) {
-                DownloadAction.Pause -> {
-                    val next = task.copy(
-                        userPaused = true,
-                        state = DownloadState.Paused,
-                        reason = null,
-                        reasonCode = null,
-                        revision = task.revision + 1
-                    )
-                    store.update(next)
-                    paused = next
-                }
-                DownloadAction.Resume -> {
-                    store.update(
-                        task.copy(
-                            userPaused = false,
-                            state = DownloadState.Pending,
-                            revision = task.revision + 1
-                        )
-                    )
-                    start = true
-                }
-                DownloadAction.Retry -> {
-                    if (UpstreamUrlPolicy.media(task.url) == null) return@withLock DownloadActionResult.Skipped
-                    if (task.owner == DownloadOwner.Media3) control.remove(task)
-                    val attempt = UUID.randomUUID().toString()
-                    val filename = safeDownloadFilename(
-                        task.broadcastDate,
-                        task.title,
-                        task.actualQuality,
-                        attempt.take(12)
-                    )
-                    val replacement = task.copy(
-                        owner = DownloadOwner.Media3,
-                        attemptId = attempt,
-                        cacheKey = attempt,
-                        filename = filename,
-                        systemId = null,
-                        contentUri = null,
-                        bytes = 0,
-                        totalBytes = null,
-                        state = DownloadState.Preparing,
-                        reason = null,
-                        reasonCode = null,
-                        userPaused = false,
-                        publicationUri = null,
-                        publicationStarted = false,
-                        cacheComplete = false,
-                        cleanupPending = false,
-                        mediaEtag = null,
-                        mediaLastModified = null,
-                        acceptsRanges = false,
-                        mediaChecked = false,
-                        revision = task.revision + 1
-                    )
-                    if (!store.reserve(replacement)) {
-                        return@withLock DownloadActionResult.Skipped
-                    }
-                    start = true
-                }
-                DownloadAction.Publish -> {
-                    store.update(
-                        task.copy(
-                            state = DownloadState.Finalizing,
-                            revision = task.revision + 1
-                        )
-                    )
-                    start = true
-                }
-                DownloadAction.Cancel -> {
-                    if (task.owner == DownloadOwner.LegacySystem) {
-                        legacy.cancel(task.id)
-                    } else {
-                        val next = task.copy(
-                            state = DownloadState.Cancelled,
-                            userPaused = true,
-                            cleanupPending = true,
-                            reason = "已取消下载",
-                            reasonCode = DownloadReason.Cancelled,
-                            revision = task.revision + 1
-                        )
-                        store.update(next)
-                        paused = next
-                        start = true
-                    }
-                }
-                DownloadAction.DeleteFile -> return@withLock deleteFile(task)
-                DownloadAction.RemoveRecord -> {
-                    // Keep the durable row until private-cache removal succeeds. Public files are independent.
-                    if (task.owner == DownloadOwner.Media3) control.remove(task)
-                    store.remove(task.id)
-                }
-            }
-            DownloadActionResult.Applied
+        val transition = transitions.mutex.withLock { applyAction(target, action) }
+
+        // Native stop/start runs after persistence and outside the mutation lock, which stop also acquires.
+        transition.stopTask?.let { control.stop(it) }
+        if (transition.start) control.start()
+        return transition.result
+    }
+
+    private suspend fun applyAction(target: DownloadTarget, action: DownloadAction): ActionTransition {
+        var task = store.get(target.id) ?: return ActionTransition.skipped
+        if (task.attemptId != target.attemptId) return ActionTransition.skipped
+        if (task.owner == DownloadOwner.LegacySystem) {
+            legacy.reconcile()
+            task = store.get(target.id) ?: return ActionTransition.skipped
         }
-        paused?.let { control.stop(it) }
-        if (start) control.start()
-        return result
+        if (task.attemptId != target.attemptId || action !in supportedActions(task)) return ActionTransition.skipped
+
+        return when (action) {
+            DownloadAction.Pause -> {
+                val paused = task.copy(
+                    userPaused = true,
+                    state = DownloadState.Paused,
+                    reason = null,
+                    reasonCode = null,
+                    revision = task.revision + 1
+                )
+                store.update(paused)
+                ActionTransition(stopTask = paused)
+            }
+            DownloadAction.Resume -> {
+                store.update(task.copy(userPaused = false, state = DownloadState.Pending, revision = task.revision + 1))
+                ActionTransition(start = true)
+            }
+            DownloadAction.Retry -> replaceAttempt(task)
+            DownloadAction.Publish -> {
+                store.update(task.copy(state = DownloadState.Finalizing, revision = task.revision + 1))
+                ActionTransition(start = true)
+            }
+            DownloadAction.Cancel -> cancelAttempt(task)
+            DownloadAction.DeleteFile -> ActionTransition(result = deleteFile(task))
+            DownloadAction.RemoveRecord -> {
+                // Keep the durable row until private-cache removal succeeds. Public files are independent.
+                if (task.owner == DownloadOwner.Media3) control.remove(task)
+                store.remove(task.id)
+                ActionTransition()
+            }
+        }
+    }
+
+    private suspend fun replaceAttempt(task: DownloadTask): ActionTransition {
+        if (UpstreamUrlPolicy.media(task.url) == null) return ActionTransition.skipped
+        if (task.owner == DownloadOwner.Media3) control.remove(task)
+
+        val attempt = UUID.randomUUID().toString()
+        val replacement = task.copy(
+            owner = DownloadOwner.Media3,
+            attemptId = attempt,
+            cacheKey = attempt,
+            filename = safeDownloadFilename(task.broadcastDate, task.title, task.actualQuality, attempt.take(12)),
+            systemId = null,
+            contentUri = null,
+            bytes = 0,
+            totalBytes = null,
+            state = DownloadState.Preparing,
+            reason = null,
+            reasonCode = null,
+            userPaused = false,
+            publicationUri = null,
+            publicationStarted = false,
+            cacheComplete = false,
+            cleanupPending = false,
+            mediaEtag = null,
+            mediaLastModified = null,
+            acceptsRanges = false,
+            mediaChecked = false,
+            revision = task.revision + 1
+        )
+        return if (store.reserve(replacement)) ActionTransition(start = true) else ActionTransition.skipped
+    }
+
+    private suspend fun cancelAttempt(task: DownloadTask): ActionTransition {
+        if (task.owner == DownloadOwner.LegacySystem) {
+            legacy.cancel(task.id)
+            return ActionTransition()
+        }
+
+        val cancelled = task.copy(
+            state = DownloadState.Cancelled,
+            userPaused = true,
+            cleanupPending = true,
+            reason = "已取消下载",
+            reasonCode = DownloadReason.Cancelled,
+            revision = task.revision + 1
+        )
+        store.update(cancelled)
+        return ActionTransition(stopTask = cancelled, start = true)
+    }
+
+    private data class ActionTransition(
+        val result: DownloadActionResult = DownloadActionResult.Applied,
+        val stopTask: DownloadTask? = null,
+        val start: Boolean = false
+    ) {
+        companion object {
+            val skipped = ActionTransition(result = DownloadActionResult.Skipped)
+        }
     }
 
     private suspend fun deleteFile(task: DownloadTask): DownloadActionResult {

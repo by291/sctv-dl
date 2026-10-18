@@ -5,6 +5,15 @@ import dev.sctvdl.domain.programme.ProgrammeSelection
 import java.time.Instant
 import java.time.LocalDate
 
+/**
+ * Durable record identity [id] survives explicit retries; [attemptId] identifies one transfer/cache lifecycle.
+ * [revision] rejects work that finished after a user action or another persisted transition.
+ * [selection] captures accepted programme metadata for later playback/history, independently of refreshes.
+ *
+ * [publicationStarted] and [publicationUri] journal public-file creation before copying. [cacheComplete]
+ * means private bytes can be published again; [cleanupPending] keeps the row until private removal succeeds.
+ * Only [contentUri] represents a verified public result, which record removal must preserve.
+ */
 data class DownloadTask(
     val id: String,
     val contentId: String,

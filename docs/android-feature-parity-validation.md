@@ -2,6 +2,25 @@
 
 Evidence recorded on 2026-10-17 for the native Android implementation. The maintained product contracts are in [Client Design](android-client-design.md) and the [Android README](../android/README.md). The approved design and implementation plan were committed as `026b639`; implementation commits are grouped by responsibility in the original checkout.
 
+## Responsibility Review Follow-up (2026-10-18)
+
+The Android responsibility/readability review is implemented without changing module edges, persistent schemas, preference keys or route names. Archive confirmation now retains accepted download/history context; settings/favourite writes and programme observations expose recoverable errors. Media3 initialization releases partial resources after failure or cancellation. Download reconciliation/action stages, network access, player session binding, control visibility and navigation state/motion have explicit owners. Persistence mappings use named fields, and contract comments explain acceptance, revision, lease and cleanup boundaries.
+
+`spotlessCheck check :app:assembleDebug :app:assembleRelease` passed, including 141 JVM cases, Android lint and dependency-boundary checks. Documentation formatting, local links and diff whitespace passed. The independent whole-diff review reported no production findings; its coverage suggestions were added for invalid selections, failed membership/context/content observations, cancellation and stale errors. The new native cache tests reproduced locked-cache retries before the fix and passed afterward.
+
+| Module               | API 29 follow-up                                              | API 37 follow-up                                   |
+| -------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| `core:data`          | 20/20 passed                                                  | Not repeated                                       |
+| `core:ui`            | 2/2 passed                                                    | Not repeated                                       |
+| `core:player`        | 15/16 passed; decoded-frame pixel assertion fails             | All four native session cases passed               |
+| `feature:player`     | 14/14 passed                                                  | Not repeated                                       |
+| `feature:programmes` | 54/54 passed                                                  | Not repeated                                       |
+| `feature:downloads`  | 10/10 passed                                                  | Not repeated                                       |
+| `feature:settings`   | Four applicable cases passed; dynamic colour requires API 31+ | Dynamic colour and new retry-feedback cases passed |
+| `app`                | 24/25 passed; existing fullscreen status-bar assertion fails  | Fullscreen/exit/disposal case passed               |
+
+The two API 29 failures were also reproduced against an isolated copy of committed baseline `b80d3d4`, with the same assertions (including decoded pixel `ff008800`). Their original fixtures/assertions remain unchanged. Complementary runs cover 147 distinct device cases successfully, but neither a green unfiltered API 29 suite nor a full API 37 run is claimed. Both AVDs were disposable and explicitly selected; no user emulator or whole upstream episode was used. New retry feedback was inspected at 320 dp and 200% text in light/dark themes, including keyboard activation. Existing suites covered adaptive layout, loading/empty/error states, restoration, predictive navigation, gestures, artwork and destination lifetime. Physical-device performance, OS backup, signing and publication were outside this review.
+
 ## Implemented Scope
 
 - Exact-identity viewing history, paused resume, online/local shared progress, legacy local fallback, search, removal, and a deterministic 500-entry limit.

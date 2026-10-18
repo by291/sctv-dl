@@ -90,6 +90,7 @@ fun ArchiveRoute(
                     onDownload,
                     onApplyUpdates = model::applyUpdates,
                     onToggleClipSort = model::toggleClipSort,
+                    onRetryFavourites = model::retryFavourites,
                     bottomContentPadding = bottomContentPadding
                 )
             }
