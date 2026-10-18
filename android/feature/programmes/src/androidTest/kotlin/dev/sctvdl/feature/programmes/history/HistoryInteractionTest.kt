@@ -41,14 +41,14 @@ class HistoryInteractionTest {
             }
         }
         compose.onNodeWithContentDescription("搜索观看记录").performClick()
-        compose.onNodeWithText("搜索节目、栏目或日期").performTextInput("Programme")
+        compose.onNodeWithText("搜索观看记录").performTextInput("Programme")
         compose.onNodeWithContentDescription("退出搜索").performClick()
         compose.runOnIdle {
             assertEquals(0, backs)
             assertEquals("", state.value.query)
         }
         compose.onNodeWithText("Full episode title").assertIsDisplayed()
-        compose.onNodeWithText("继续播放").performClick()
+        compose.onNodeWithText("继续观看").performClick()
         compose.runOnIdle { assertEquals(target, opened) }
     }
 }
