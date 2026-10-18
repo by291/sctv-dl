@@ -13,8 +13,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,6 +66,11 @@ internal fun inlinePlayerHeight(width: Dp, height: Dp, fontScale: Float): Dp =
 @Composable
 internal fun PlaybackTopBar(onBack: () -> Unit) {
     TopAppBar(
+        modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent
+        ),
         title = { Text("节目播放") },
         navigationIcon = {
             IconButton(onClick = onBack) {

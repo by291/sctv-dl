@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +48,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.sctvdl.design.components.ContentUpdateAction
+import dev.sctvdl.design.components.PrimaryTopAppBar
 import dev.sctvdl.design.components.StatePanel
 import dev.sctvdl.design.theme.TouchTarget
 import dev.sctvdl.domain.download.DownloadRequest
@@ -109,9 +109,8 @@ internal fun ArchiveScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
+        PrimaryTopAppBar(
             modifier = Modifier.testTag("archive-toolbar"),
-            expandedHeight = if (largeText) 88.dp else 64.dp,
             title = { Text(if (state.selectionMode) "已选 ${state.selectedIds.size} 个" else "栏目详情") },
             navigationIcon = {
                 IconButton(onClick = if (state.selectionMode) onExitSelection else onBack) {

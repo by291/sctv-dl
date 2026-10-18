@@ -119,7 +119,7 @@ Use a primary settings page with separate surface groups for appearance, playbac
 
 Switch rows span the card width, including their horizontal content insets, and retain a single accessible switch action. Their ripple is clipped by the enclosing card shape. Noninteractive preference content owns its own padding.
 
-Changes to light/dark mode or dynamic colour interpolate all Material colour roles over 300 ms through Compose's native colour animation. Keep the current destination, scroll position, focus, and playback content in composition. Interrupted changes continue from the currently displayed colours, and the system animator duration scale controls or disables the transition.
+Changes to light/dark mode or dynamic colour interpolate all Material colour roles over 300 ms through Compose's native colour animation. Toolbars draw the current animated surface directly behind a transparent Material app bar, avoiding a second container-colour animation that would trail the page. Keep the current destination, scroll position, focus, and playback content in composition. Interrupted changes continue from the currently displayed colours, and the system animator duration scale controls or disables the transition.
 
 Do not require onboarding, account registration, notification permission, or broad storage permissions merely to browse programmes. Request any future capability-specific permission at the action that needs it.
 
