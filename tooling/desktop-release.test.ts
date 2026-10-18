@@ -12,11 +12,11 @@ const gitEnv = {
   GIT_CONFIG_NOSYSTEM: '1',
 }
 
-function gitAt(root: string, ...args: string[]) {
+function gitAt(root: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd: root, env: gitEnv, encoding: 'utf8' }).trim()
 }
 
-function fixture() {
+function createReleaseRepository(): string {
   const root = mkdtempSync(join(tmpdir(), 'sctv-release-'))
   roots.push(root)
   mkdirSync(join(root, 'src-tauri'))
@@ -51,7 +51,7 @@ afterEach(() => {
 })
 
 it('rejects mismatched release tags and inconsistent application versions', () => {
-  const root = fixture()
+  const root = createReleaseRepository()
   const run = (tag: string) =>
     spawnSync(process.execPath, [script, 'version'], {
       cwd: root,
@@ -64,7 +64,7 @@ it('rejects mismatched release tags and inconsistent application versions', () =
 })
 
 it('refuses unsigned macOS release preparation without exposing credentials', () => {
-  const root = fixture()
+  const root = createReleaseRepository()
   const result = spawnSync(process.execPath, [script, 'macos'], {
     cwd: root,
     env: { ...process.env, ...credentials, APPLE_PASSWORD: '' },
@@ -77,7 +77,7 @@ it('refuses unsigned macOS release preparation without exposing credentials', ()
 })
 
 it('overrides ad-hoc signing only after all macOS release credentials are present', () => {
-  const root = fixture()
+  const root = createReleaseRepository()
   const result = spawnSync(process.execPath, [script, 'macos'], {
     cwd: root,
     env: { ...process.env, ...credentials },
@@ -89,7 +89,7 @@ it('overrides ad-hoc signing only after all macOS release credentials are presen
 })
 
 it('resolves only an existing tag and rejects a shadow branch or mismatched checkout', () => {
-  const root = fixture()
+  const root = createReleaseRepository()
   const env = { ...gitEnv, RELEASE_TAG: 'v0.1.0', GITHUB_OUTPUT: join(root, 'output') }
   const git = (...args: string[]) => gitAt(root, ...args)
   const revision = git('rev-parse', 'HEAD')
@@ -104,4 +104,42 @@ it('resolves only an existing tag and rejects a shadow branch or mismatched chec
   expect(readFileSync(join(root, 'output'), 'utf8')).toContain(`commit=${revision}\n`)
   git('tag', '-d', 'v0.1.0')
   expect(run().status).toBe(1)
+})
+
+it.each([
+  ['package.json', null],
+  ['package.json', { version: 1 }],
+  ['src-tauri/tauri.conf.json', { version: '' }],
+  ['src-tauri/tauri.conf.json', []],
+] as const)(
+  'identifies invalid version metadata in %s before release preparation',
+  (file, metadata) => {
+    const root = createReleaseRepository()
+    writeFileSync(join(root, file), JSON.stringify(metadata))
+
+    const result = spawnSync(process.execPath, [script, 'version'], {
+      cwd: root,
+      env: { ...gitEnv, RELEASE_TAG: 'v0.1.0' },
+      encoding: 'utf8',
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr.split('\n').find((line) => line.startsWith('Error:'))).toContain(file)
+    expect(existsSync(join(root, 'src-tauri/tauri.release.conf.json'))).toBe(false)
+  },
+)
+
+it('reads the Cargo package version independently of dependency table order', () => {
+  const root = createReleaseRepository()
+  writeFileSync(
+    join(root, 'src-tauri/Cargo.toml'),
+    '[dependencies.example]\nversion = "9.9.9"\n\n[package]\nversion = "0.1.0"\n',
+  )
+
+  const result = spawnSync(process.execPath, [script, 'version'], {
+    cwd: root,
+    env: { ...gitEnv, RELEASE_TAG: 'v0.1.0' },
+  })
+
+  expect(result.status).toBe(0)
 })

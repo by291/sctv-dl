@@ -52,6 +52,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm desktop:check
+      - name: Check Windows signing lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tooling/windows-signing.test.ps1
       - name: Build validation packages
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:

@@ -84,6 +84,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm desktop:check
+      - name: Check Windows signing lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tooling/windows-signing.test.ps1
       - name: Prepare macOS signing
         if: runner.os == 'macOS'
         env:
@@ -100,22 +104,7 @@ jobs:
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          if (!$env:WINDOWS_CERTIFICATE -or !$env:WINDOWS_CERTIFICATE_PASSWORD) {
-            throw 'Windows signing credentials are required.'
-          }
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'desktop-signing.pfx'
-          try {
-            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
-            $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-            $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
-            if (!$certificate.Thumbprint -or !$certificate.HasPrivateKey) { throw 'No signing private key was imported.' }
-            "DESKTOP_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
-            $config = @{ bundle = @{ windows = @{ certificateThumbprint = $certificate.Thumbprint; digestAlgorithm = 'sha256'; timestampUrl = 'http://timestamp.digicert.com' } } }
-            $config | ConvertTo-Json -Depth 5 | Set-Content src-tauri/tauri.release.conf.json
-          } finally {
-            Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
-          }
+        run: ./tooling/windows-signing.ps1 -Mode Prepare
       - name: Build and upload signed draft packages
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
@@ -133,10 +122,7 @@ jobs:
       - name: Remove Windows certificate
         if: always() && runner.os == 'Windows'
         shell: pwsh
-        run: |
-          if ($env:DESKTOP_CERTIFICATE_THUMBPRINT) {
-            Remove-Item "Cert:\CurrentUser\My\$env:DESKTOP_CERTIFICATE_THUMBPRINT" -Force -ErrorAction SilentlyContinue
-          }
+        run: ./tooling/windows-signing.ps1 -Mode Cleanup
       - name: Remove temporary configuration
         if: always()
         shell: bash
