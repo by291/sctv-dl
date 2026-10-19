@@ -45,6 +45,8 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D w
 cargo test --manifest-path src-tauri/Cargo.toml --locked
 ```
 
+`pnpm desktop:check` supplies `CARGO_BUILD_JOBS` only to its Cargo child processes, defaulting to four jobs or the available parallelism when lower. This limits concurrent Clippy compilation and test linking on high-core machines. An existing `CARGO_BUILD_JOBS` is preserved unchanged; Cargo owns value parsing and validation. The environment setting takes precedence over `build.jobs` in Cargo configuration files. The script does not change the parent environment or the defaults for `desktop:dev`, `desktop:build`, or standalone Cargo commands.
+
 Native tests cover programme normalization/HTTP, cancellation, command permissions, installation-identity/directory persistence, media streaming/lifecycle, and downloads. HTTP tests use disposable local Axum stubs. Axum and Hyper implement the media-only HTTP transport described below; normal native startup binds its private loopback listener. Native build products and generated schemas are ignored. Application icons are generated from `public/favicon.svg` with `pnpm tauri icon public/favicon.svg`; keep only the desktop icon outputs when regenerating them.
 
 ## Native Module Ownership
