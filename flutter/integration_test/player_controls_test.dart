@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -12,7 +11,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/platform/playback/better_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/playback_picture_in_picture.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:video_player/video_player.dart';
 
 import '../test/features/player/playback_controller_test.dart'
     show MemoryHistory;
@@ -22,7 +23,9 @@ import '../test/features/player/playback_controller_test.dart'
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const encoded = String.fromEnvironment('PLAYBACK_FIXTURE_BASE64');
-  const verifyPip = bool.fromEnvironment('VERIFY_ANDROID_PIP');
+  const verifyPip =
+      bool.fromEnvironment('VERIFY_PIP') ||
+      bool.fromEnvironment('VERIFY_ANDROID_PIP');
 
   testWidgets(
     'native player controls retain the decoder across fullscreen and PiP',
@@ -53,6 +56,7 @@ void main() {
             builder: (context, value, child) => MaterialApp(
               debugShowCheckedModeBanner: false,
               theme: buildAppTheme(value),
+              builder: (context, child) => PlaybackPipHost(child: child!),
               home: child,
             ),
             child: PlayerPage(
@@ -103,10 +107,9 @@ void main() {
       await tester.pumpAndSettle();
       final session = backend.session!;
       final native = tester
-          .widget<BetterPlayer>(find.byType(BetterPlayer))
-          .controller
-          .videoPlayerController!;
-      final texture = native.textureId;
+          .widget<VideoPlayer>(find.byType(VideoPlayer).first)
+          .controller;
+      final texture = native.playerId;
       final before = tester.getRect(find.byType(PlaybackSurface));
       expect(session.value.playing, isFalse);
       await capture('paused');
@@ -119,13 +122,13 @@ void main() {
       await tester.tapAt(tester.getCenter(find.byType(PlaybackSurface)));
       await waitFor(() => find.byTooltip('暂停').evaluate().isNotEmpty);
       await tester.tap(find.byTooltip('播放速度'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       await capture('speed-menu');
       await tester.tap(find.text('1.25×').last);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(session.value.speed, 1.25);
       await tester.tap(find.byTooltip('暂停'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       final slider = tester.getRect(find.byType(Slider));
       await tester.tapAt(
         Offset(slider.left + slider.width * .6, slider.center.dy),
@@ -140,18 +143,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Player interaction fixture'), findsNothing);
       expect(
-        tester
-            .widget<BetterPlayer>(find.byType(BetterPlayer))
-            .controller
-            .videoPlayerController,
+        tester.widget<VideoPlayer>(find.byType(VideoPlayer).first).controller,
         same(native),
       );
       expect(
         tester
-            .widget<BetterPlayer>(find.byType(BetterPlayer))
+            .widget<VideoPlayer>(find.byType(VideoPlayer).first)
             .controller
-            .videoPlayerController!
-            .textureId,
+            .playerId,
         texture,
       );
       expect(backend.opens, 1);
@@ -192,37 +191,33 @@ void main() {
         expect(find.byType(Slider), findsNothing);
         expect(find.byType(CircularProgressIndicator), findsNothing);
         expect(
-          tester
-              .widget<BetterPlayer>(find.byType(BetterPlayer))
-              .controller
-              .videoPlayerController,
+          tester.widget<VideoPlayer>(find.byType(VideoPlayer).first).controller,
           same(native),
         );
         expect(
           tester
-              .widget<BetterPlayer>(find.byType(BetterPlayer))
+              .widget<VideoPlayer>(find.byType(VideoPlayer).first)
               .controller
-              .videoPlayerController!
-              .textureId,
+              .playerId,
           texture,
         );
         debugPrint('PLAYER_PARITY_PIP_READY');
+        if (Platform.isIOS) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          await PlaybackPictureInPicture.exit();
+        }
         await waitFor(() => !session.value.inPip);
         await tester.pumpAndSettle();
         expect(find.byType(AppBar), findsOneWidget);
         expect(
-          tester
-              .widget<BetterPlayer>(find.byType(BetterPlayer))
-              .controller
-              .videoPlayerController,
+          tester.widget<VideoPlayer>(find.byType(VideoPlayer).first).controller,
           same(native),
         );
         expect(
           tester
-              .widget<BetterPlayer>(find.byType(BetterPlayer))
+              .widget<VideoPlayer>(find.byType(VideoPlayer).first)
               .controller
-              .videoPlayerController!
-              .textureId,
+              .playerId,
           texture,
         );
         expect(backend.opens, 1);
@@ -255,7 +250,7 @@ class _RecordingBackend implements PlaybackBackend {
   @override
   Future<PlaybackSession> open(PlaybackInput input) async {
     opens++;
-    return session = await BetterPlayerBackend(userAgent: 'sctv-dl/integration')
+    return session = await VideoPlayerBackend(userAgent: 'sctv-dl/integration')
         .open(input);
   }
 }

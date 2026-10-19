@@ -7,8 +7,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/platform/playback/better_player_backend.dart';
 import 'package:sctv_dl_mobile/platform/playback/native_player_environment.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
 
 import '../test/features/player/playback_controller_test.dart'
     show MemoryHistory;
@@ -93,7 +93,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
       expect(find.byTooltip('暂停'), findsOneWidget);
       await tester.tap(find.byTooltip('播放速度'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('1.25×').last);
       await waitFor(() => session.value.speed == 1.25);
       await tester.pump(const Duration(milliseconds: 600));
@@ -205,7 +205,7 @@ class RecordingBackend implements PlaybackBackend {
   @override
   Future<PlaybackSession> open(PlaybackInput input) async {
     opens++;
-    return session = await BetterPlayerBackend(userAgent: 'sctv-dl/integration')
+    return session = await VideoPlayerBackend(userAgent: 'sctv-dl/integration')
         .open(input);
   }
 }

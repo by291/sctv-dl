@@ -20,7 +20,7 @@ import '../domain/programmes/programme.dart';
 import '../platform/downloads/background_transfer_gateway.dart';
 import '../platform/files/native_download_files.dart';
 import '../platform/images/strict_cover_client.dart';
-import '../platform/playback/better_player_backend.dart';
+import '../platform/playback/video_player_backend.dart';
 import '../platform/storage/runtime_backup_policy.dart';
 import 'resource_cleanup.dart';
 import 'services.dart';
@@ -118,7 +118,7 @@ Future<AppServices> bootstrapServices() async {
       user: user,
       history: history,
       downloads: downloads,
-      playback: BetterPlayerBackend(userAgent: 'sctv-dl/${package.version}'),
+      playback: VideoPlayerBackend(userAgent: 'sctv-dl/${package.version}'),
       initialPreferences: preferences,
       initialFavourites: favourites,
       version: '${package.version} (${package.buildNumber})',

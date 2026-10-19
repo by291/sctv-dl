@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -12,7 +11,8 @@ import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme_policy.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/platform/playback/better_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:video_player/video_player.dart';
 
 /// Run on disposable Android/iOS runtimes while the host samples memory.
 /// Android uses a 192 MiB app heap; iOS simulator results do not establish
@@ -94,6 +94,17 @@ void main() {
         tester.element(find.byType(Scaffold).first),
       );
 
+      if (fixtureServer != null) {
+        // The official controller has an immutable source. Exercise its network
+        // buffer directly without relaxing the production CDN allowlist.
+        await _verifyNetworkMemory(tester, navigator, fixtureServer.port);
+        await tester.pumpWidget(const SizedBox());
+        debugPrint('PLAYER_MEMORY_RELEASED');
+        await Future<void>.delayed(const Duration(seconds: 10));
+        debugPrint('PLAYER_MEMORY_PASS');
+        return;
+      }
+
       Future<void> hold(
         PlaybackSession session,
         String phase,
@@ -136,23 +147,6 @@ void main() {
           () => backend.session != null && backend.session != previous,
         );
         final session = backend.session!;
-        if (fixtureServer != null) {
-          // The controlled server uses the same public network API as the
-          // production adapter. Keep URL-policy exceptions inside this test.
-          await tester.pump();
-          final engine = tester
-              .widget<BetterPlayer>(find.byType(BetterPlayer))
-              .controller;
-          await engine.setupDataSource(
-            BetterPlayerDataSource.network(
-              'http://127.0.0.1:${fixtureServer.port}/stress.mp4',
-              videoFormat: BetterPlayerVideoFormat.other,
-            ),
-          );
-          await session.seek(Duration(seconds: cycle * 30));
-          await session.pause();
-          debugPrint('PLAYER_MEMORY_STREAM $cycle');
-        }
         expect(
           session.value.duration,
           greaterThan(Duration(minutes: localLocation.isEmpty ? 15 : 2)),
@@ -255,4 +249,73 @@ Future<HttpServer> _serveFixture(File file) async {
     }
   });
   return server;
+}
+
+Future<void> _verifyNetworkMemory(
+  WidgetTester tester,
+  NavigatorState navigator,
+  int port,
+) async {
+  for (var cycle = 0; cycle < 3; cycle++) {
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse('http://127.0.0.1:$port/stress.mp4'),
+      formatHint: VideoFormat.other,
+      videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
+      viewType: Platform.isIOS
+          ? VideoViewType.platformView
+          : VideoViewType.textureView,
+    );
+    try {
+      await controller.initialize();
+      await controller.seekTo(Duration(seconds: cycle * 30));
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              body: Center(
+                child: AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      debugPrint('PLAYER_MEMORY_STREAM $cycle');
+      Future<void> hold(String phase, int seconds) async {
+        debugPrint('PLAYER_MEMORY_PHASE $phase ${controller.value.position}');
+        final deadline = DateTime.now().add(Duration(seconds: seconds));
+        while (DateTime.now().isBefore(deadline)) {
+          await tester.pump(const Duration(milliseconds: 100));
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          expect(controller.value.errorDescription, isNull);
+        }
+      }
+
+      await hold('paused-$cycle', cycle == 0 ? 90 : 15);
+      final before = controller.value.position;
+      await controller.play();
+      await hold('playing-$cycle', cycle == 0 ? 90 : 15);
+      expect(
+        controller.value.position,
+        greaterThan(before + const Duration(seconds: 5)),
+      );
+      if (cycle == 0) {
+        await controller.seekTo(const Duration(seconds: 90));
+        await hold('seek', 30);
+        expect(
+          controller.value.position,
+          greaterThan(const Duration(seconds: 90)),
+        );
+      }
+      await controller.pause();
+      navigator.pop();
+      await tester.pumpAndSettle();
+    } finally {
+      await controller.dispose();
+    }
+    debugPrint('PLAYER_MEMORY_CLOSED $cycle');
+  }
 }

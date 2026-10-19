@@ -56,7 +56,10 @@ String? _violation(Uri root, Uri source, List<String> owner, String target) {
       return 'Domain must not depend on framework or adapter packages';
     }
     const nativePackages = {
-      'better_player_plus',
+      'audio_session',
+      'video_player',
+      'pip_kit',
+      'wakelock_plus',
       'background_downloader',
       'dio',
       'drift',

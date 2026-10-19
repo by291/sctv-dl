@@ -1,16 +1,16 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart' as transfers;
-import 'package:better_player_plus/better_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
-import 'package:sctv_dl_mobile/platform/playback/better_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/playback_picture_in_picture.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:video_player/video_player.dart';
 
 /// Supply a small, independently generated H264 MP4 through PLAYBACK_FIXTURE_BASE64.
 /// The fixture is neither a full live video download nor a packaged product asset.
@@ -67,35 +67,33 @@ void main() {
   testWidgets('native fixture decodes with media headers seek and speed', (
     tester,
   ) async {
-    final controller = _createController();
-    final opening = controller.setupDataSource(
-      BetterPlayerDataSource.network(
-        'http://127.0.0.1:${server.port}/video.mp4',
-        videoFormat: BetterPlayerVideoFormat.other,
-        headers: {
+    final controller = _trackController(
+      VideoPlayerController.networkUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/video.mp4'),
+        formatHint: VideoFormat.other,
+        httpHeaders: {
           'Referer': 'https://scgc.video.play/',
           'User-Agent': 'sctv-dl/integration',
         },
       ),
     );
+    final opening = controller.initialize();
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: BetterPlayer(controller: controller)),
-      ),
+      MaterialApp(home: Scaffold(body: VideoPlayer(controller))),
     );
     await tester.runAsync(() => opening.timeout(const Duration(seconds: 30)));
-    expect(controller.videoPlayerController!.value.initialized, isTrue);
-    expect(controller.videoPlayerController!.value.isPlaying, isFalse);
+    expect(controller.value.isInitialized, isTrue);
+    expect(controller.value.isPlaying, isFalse);
     await tester.runAsync(() async {
       await controller.seekTo(const Duration(seconds: 1));
-      await controller.setSpeed(1.5);
+      await controller.setPlaybackSpeed(1.5);
       await controller.play();
       // Native rendering can fail after initialization; require sustained play.
       await Future<void>.delayed(const Duration(seconds: 3));
       await controller.pause();
     });
-    expect(controller.videoPlayerController!.value.errorDescription, isNull);
-    expect(controller.videoPlayerController!.value.speed, 1.5);
+    expect(controller.value.errorDescription, isNull);
+    expect(controller.value.playbackSpeed, 1.5);
     expect(headers, isNotEmpty);
     expect(
       headers.every(
@@ -105,10 +103,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(
-      controller.videoPlayerController!.value.position,
-      greaterThan(const Duration(seconds: 2)),
-    );
+    expect(controller.value.position, greaterThan(const Duration(seconds: 2)));
     await tester.pumpWidget(const SizedBox());
   }, skip: encoded.isEmpty);
 
@@ -116,25 +111,23 @@ void main() {
     tester,
   ) async {
     final before = headers.length;
-    final controller = _createController();
-    final opening = controller
-        .setupDataSource(
-          BetterPlayerDataSource.network(
-            'http://127.0.0.1:${server.port}/redirect.mp4',
-            videoFormat: BetterPlayerVideoFormat.other,
-          ),
-        )
-        .timeout(const Duration(seconds: 30));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: BetterPlayer(controller: controller)),
+    final controller = _trackController(
+      VideoPlayerController.networkUrl(
+        Uri.parse('http://127.0.0.1:${server.port}/redirect.mp4'),
+        formatHint: VideoFormat.other,
       ),
+    );
+    final opening = controller.initialize().timeout(
+      const Duration(seconds: 30),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: VideoPlayer(controller))),
     );
     await tester.runAsync(() async {
       await opening;
     });
     expect(headers.length, greaterThan(before));
-    expect(controller.videoPlayerController!.value.initialized, isTrue);
+    expect(controller.value.isInitialized, isTrue);
     await tester.pumpWidget(const SizedBox());
   }, skip: encoded.isEmpty);
 
@@ -149,7 +142,7 @@ void main() {
         if (await file.exists()) await file.delete();
       });
       final session = await tester.runAsync(
-        () => BetterPlayerBackend(userAgent: 'test').open(
+        () => VideoPlayerBackend(userAgent: 'test').open(
           const PlaybackInput(
             title: 'Fixture',
             sources: [],
@@ -198,7 +191,7 @@ void main() {
       if (await file.exists()) await file.delete();
     });
     final session = await tester.runAsync(
-      () => BetterPlayerBackend(userAgent: 'test').open(
+      () => VideoPlayerBackend(userAgent: 'test').open(
         PlaybackInput(
           title: 'Public fixture',
           sources: const [],
@@ -229,7 +222,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   }, skip: encoded.isEmpty || !Platform.isAndroid);
 
-  testWidgets('explicit iOS PiP enters and exits on the same native player', (
+  testWidgets('system PiP enters and exits on the same native player', (
     tester,
   ) async {
     final directory = await getApplicationDocumentsDirectory();
@@ -239,76 +232,60 @@ void main() {
     addTearDown(() async {
       if (await file.exists()) await file.delete();
     });
-    final controller = _createController();
-    final opening = controller.setupDataSource(
-      BetterPlayerDataSource.file(file.path),
-    );
+    final session = (await tester.runAsync(
+      () => VideoPlayerBackend(userAgent: 'test').open(
+        const PlaybackInput(
+          title: 'PiP fixture',
+          sources: [],
+          localLocation: 'documents:Downloads/pip-fixture.mp4',
+        ),
+      ),
+    ))!;
+    addTearDown(session.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: BetterPlayer(controller: controller)),
+        builder: (context, child) => PlaybackPipHost(child: child!),
+        home: Scaffold(body: PlaybackSurface(session: session)),
       ),
     );
-    await tester.runAsync(() => opening);
-    if (await controller.isPictureInPictureSupported() != true) {
+    await tester.pumpAndSettle();
+    if (!session.value.supportsPip) {
+      markTestSkipped('Picture in picture is unavailable on this runtime');
       await tester.pumpWidget(const SizedBox());
-      markTestSkipped('Picture in picture is unavailable on this simulator');
       return;
     }
-    final native = controller.videoPlayerController!;
-    final identity = native.textureId;
-    Future<void> waitForPip(bool expected) {
-      final ready = Completer<void>();
-      void changed() {
-        if (native.value.isPip == expected && !ready.isCompleted) {
-          ready.complete();
-        }
-      }
-
-      native.addListener(changed);
-      changed();
-      return ready.future
-          .timeout(const Duration(seconds: 8))
-          .whenComplete(() => native.removeListener(changed));
-    }
-
+    final native = tester
+        .widget<VideoPlayer>(find.byType(VideoPlayer))
+        .controller;
     await tester.runAsync(() async {
-      await controller.setLooping(true);
-      await controller.play();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      final entered = waitForPip(true);
-      await native.enablePictureInPicture(
-        left: 0,
-        top: 0,
-        width: 320,
-        height: 180,
-      );
-      await entered;
-      expect(native.textureId, identity);
-      final exited = waitForPip(false);
-      await native.disablePictureInPicture();
-      await exited;
-      await controller.pause();
+      await session.play();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await session.enterPictureInPicture();
     });
+    await tester.pump();
+    expect(session.value.inPip, isTrue);
+    expect(
+      tester
+          .widgetList<VideoPlayer>(find.byType(VideoPlayer))
+          .every((view) => identical(view.controller, native)),
+      isTrue,
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await PlaybackPictureInPicture.exit();
+      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      while (session.value.inPip && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    });
+    expect(session.value.inPip, isFalse);
+    expect(session.value.playing, isTrue);
+    await session.pause();
     await tester.pumpWidget(const SizedBox());
-  }, skip: encoded.isEmpty || !Platform.isIOS);
+  }, skip: encoded.isEmpty);
 }
 
-BetterPlayerController _createController() {
-  final controller = BetterPlayerController(
-    const BetterPlayerConfiguration(
-      autoDispose: false,
-      handleLifecycle: false,
-      fit: BoxFit.contain,
-      controlsConfiguration: BetterPlayerControlsConfiguration(
-        showControls: false,
-      ),
-    ),
-  );
-  addTearDown(() async {
-    final native = controller.videoPlayerController;
-    controller.videoPlayerController = null;
-    controller.dispose(forceDispose: true);
-    await native?.dispose();
-  });
+VideoPlayerController _trackController(VideoPlayerController controller) {
+  addTearDown(controller.dispose);
   return controller;
 }

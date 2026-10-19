@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../design/cover_image.dart';
 import '../design/theme.dart';
 import '../domain/settings/preferences.dart';
+import '../platform/playback/playback_picture_in_picture.dart';
 import 'providers.dart';
 import 'router.dart';
 import 'services.dart';
@@ -81,6 +82,7 @@ class _ApplicationState extends ConsumerState<_Application> {
           title: '蜀台回看',
           debugShowCheckedModeBanner: false,
           restorationScopeId: 'sctv-mobile',
+          builder: (context, child) => PlaybackPipHost(child: child!),
           routerConfig: router,
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           supportedLocales: const [Locale('zh', 'CN')],

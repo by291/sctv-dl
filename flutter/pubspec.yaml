@@ -8,8 +8,8 @@ environment:
   flutter: '>=3.47.6'
 
 dependencies:
+  audio_session: ^0.2.4
   background_downloader: ^9.6.4
-  better_player_plus: 2.0.0
   cached_network_image: ^4.0.4
   cupertino_icons: ^1.0.9
   device_info_plus: ^13.3.0
@@ -27,9 +27,12 @@ dependencies:
   intl: ^0.20.3
   package_info_plus: ^10.2.2
   path_provider: ^2.1.6
+  pip_kit: 1.0.2
   share_plus: ^13.3.1
   sliver_tools: ^0.2.12
   uuid: ^4.6.0
+  video_player: ^2.14.1
+  wakelock_plus: ^1.8.1
 
 dev_dependencies:
   analyzer: ^14.5.0
@@ -40,6 +43,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   build_runner: ^2.16.2
   drift_dev: ^2.35.1
+  video_player_platform_interface: ^6.9.0
+  wakelock_plus_platform_interface: ^1.7.0
 
 flutter:
   uses-material-design: true

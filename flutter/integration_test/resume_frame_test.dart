@@ -12,7 +12,7 @@ import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/platform/playback/better_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
 
 import '../test/features/player/playback_controller_test.dart'
     show MemoryHistory, selection;
@@ -164,7 +164,7 @@ void main() {
 }
 
 class _RecordingBackend implements PlaybackBackend {
-  final delegate = BetterPlayerBackend(userAgent: 'sctv-dl/resume-test');
+  final delegate = VideoPlayerBackend(userAgent: 'sctv-dl/resume-test');
   PlaybackSession? session;
   int opens = 0;
   @override
