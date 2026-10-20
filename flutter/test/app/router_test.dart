@@ -6,6 +6,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sctv_dl_mobile/app/providers.dart';
 import 'package:sctv_dl_mobile/app/router.dart';
 import 'package:sctv_dl_mobile/app/services.dart';
@@ -114,6 +115,136 @@ void registerDownloadNoticeTests() {
 }
 
 void main() {
+  testWidgets(
+    'iOS library remains interactive after leaving playback for downloads',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      final harness = RouteHarness();
+      await harness.mount(tester, '/', platform: TargetPlatform.iOS);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ProgrammeCard));
+      await tester.pumpAndSettle();
+      tester.widget<ArchivePage>(find.byType(ArchivePage)).onPlay(selection);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      harness.router.go('/downloads');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('节目库').hitTestable().last);
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, '/');
+      expect(find.byType(ProgrammeCard), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await harness.close(tester);
+    },
+  );
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('primary chrome preserves navigation and search on $platform', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      final harness = RouteHarness();
+      await harness.mount(tester, '/', platform: platform);
+      await tester.pumpAndSettle();
+
+      final ios = platform == TargetPlatform.iOS;
+      expect(find.byType(GlassTabBar), ios ? findsOneWidget : findsNothing);
+      expect(find.byType(GlassAppBar), ios ? findsOneWidget : findsNothing);
+      expect(find.byType(NavigationBar), ios ? findsNothing : findsOneWidget);
+      if (ios) {
+        expect(
+          tester.getRect(find.byType(GlassTabBar)).bottom,
+          lessThanOrEqualTo(844 - 34),
+        );
+      }
+      await tester.tap(find.byTooltip('搜索栏目'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'missing catalogue');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('设置').last);
+      await tester.pumpAndSettle();
+      expect(harness.router.state.uri.path, '/settings');
+      await tester.tap(find.text('节目库').last);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'missing catalogue',
+      );
+      expect(find.text('没有找到相关栏目'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await harness.close(tester);
+    });
+  }
+
+  for (final width in [390.0, 1024.0]) {
+    for (final brightness in Brightness.values) {
+      testWidgets(
+        'iOS chrome supports large text at width $width in $brightness',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          try {
+            tester.view.physicalSize = Size(width, 844);
+            tester.view.devicePixelRatio = 1;
+            tester.view.padding = FakeViewPadding(top: 59, bottom: 34);
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            addTearDown(tester.view.resetPadding);
+            final harness = RouteHarness();
+            harness.downloads.tasks = [
+              localTask().copyWith(
+                state: DownloadState.running,
+                totalBytes: 100,
+                receivedBytes: 25,
+              ),
+            ];
+            await harness.mount(
+              tester,
+              '/',
+              platform: TargetPlatform.iOS,
+              brightness: brightness,
+              textScale: 2,
+              reducedMotion: true,
+            );
+            await tester.pumpAndSettle();
+
+            await tester.tap(find.text('下载').hitTestable().last);
+            await tester.pumpAndSettle();
+            expect(find.bySemanticsLabel('下载，1 项进行中'), findsOneWidget);
+            await tester.tap(find.byTooltip('批量管理'));
+            await tester.pumpAndSettle();
+            expect(find.byTooltip('退出批量管理'), findsOneWidget);
+            await tester.tap(find.byTooltip('退出批量管理'));
+            await tester.pumpAndSettle();
+
+            await tester.tap(find.text('设置').hitTestable().last);
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('主题'));
+            await tester.pumpAndSettle();
+            expect(find.text('选择主题'), findsOneWidget);
+            expect(tester.takeException(), isNull);
+            await harness.close(tester);
+          } finally {
+            semantics.dispose();
+          }
+        },
+      );
+    }
+  }
+
   testWidgets('a clipped content cover stays clipped when entering playback', (
     tester,
   ) async {
@@ -1253,6 +1384,8 @@ class RouteHarness {
     String location, {
     TargetPlatform platform = TargetPlatform.android,
     bool reducedMotion = false,
+    Brightness brightness = Brightness.light,
+    double textScale = 1,
   }) async {
     addTearDown(() => close(tester));
     router.go(location);
@@ -1261,10 +1394,12 @@ class RouteHarness {
         container: container,
         child: MaterialApp.router(
           restorationScopeId: 'route-tests',
-          theme: ThemeData(platform: platform),
+          theme: ThemeData(platform: platform, brightness: brightness),
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(disableAnimations: reducedMotion),
+            data: MediaQuery.of(context).copyWith(
+              disableAnimations: reducedMotion,
+              textScaler: TextScaler.linear(textScale),
+            ),
             child: child!,
           ),
           routerConfig: router,

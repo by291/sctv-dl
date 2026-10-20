@@ -95,6 +95,19 @@ void main() {
     await waitFor(() => services.library.hasSnapshot);
     expect(services.library.programmes, isNotEmpty);
     await capture('library');
+    if (Platform.isIOS) {
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -600),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await capture('library-scrolled-light');
+      tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView).first)
+          .controller!
+          .jumpTo(0);
+      await tester.pump();
+    }
     expect(find.byType(TabBar), findsNothing);
     final explorationBounds = tester.getRect(find.text('栏目探索'));
     await tester.tap(find.byTooltip('只看收藏'));
@@ -307,8 +320,11 @@ void main() {
     await waitFor(() => find.byType(PlayerPage).evaluate().isNotEmpty);
     await tester.pump(const Duration(milliseconds: 500));
     GoRouter.of(tester.element(find.byType(PlayerPage))).go('/downloads');
+    // Commit the route change before advancing its transition clock.
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('节目库').last);
+    await capture('download-shortcut-before-library');
+    await tester.tap(find.text('节目库').hitTestable().last);
     await tester.pump(const Duration(milliseconds: 500));
     expect(
       find.descendant(
@@ -319,12 +335,12 @@ void main() {
     );
     expect(tester.getRect(find.byType(ProgrammeCard)), libraryBounds);
     await capture('download-shortcut-cover-return');
-    await tester.tap(find.text('下载').last);
+    await tester.tap(find.text('下载').hitTestable().last);
     await tester.pump(const Duration(milliseconds: 60));
     await capture('navigation-transition', settle: false);
     await tester.pump(const Duration(milliseconds: 500));
     await capture('downloads');
-    await tester.tap(find.text('设置').last);
+    await tester.tap(find.text('设置').hitTestable().last);
     await tester.pump(const Duration(milliseconds: 500));
     await capture('settings');
     await tester.tap(find.text('主题'));
@@ -333,11 +349,24 @@ void main() {
     await tester.tap(find.text('深色').last);
     await tester.pump(const Duration(milliseconds: 500));
     await capture('settings-dark');
-    await tester.tap(find.text('节目库').last);
+    await tester.tap(find.text('节目库').hitTestable().last);
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byTooltip('关闭搜索'));
     await tester.pump(const Duration(milliseconds: 300));
     await capture('library-dark');
+    if (Platform.isIOS) {
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -600),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await capture('library-scrolled-dark');
+      tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView).first)
+          .controller!
+          .jumpTo(0);
+      await tester.pump();
+    }
     await tester.tap(find.byTooltip('观看历史'));
     await tester.pump(const Duration(milliseconds: 500));
     await capture('history-dark');

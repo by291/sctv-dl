@@ -5,6 +5,7 @@ import 'package:sliver_tools/sliver_tools.dart';
 
 import '../../design/content_transition.dart';
 import '../../design/pending_update_notice.dart';
+import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import 'components/programme_card.dart';
@@ -124,7 +125,8 @@ class _LibraryPageState extends State<LibraryPage>
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop && searching) _closeSearch();
         },
-        child: Scaffold(
+        child: PrimaryPageScaffold(
+          scrollBehindToolbar: true,
           appBar: AppBar(
             toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5
                 ? 88
@@ -136,6 +138,7 @@ class _LibraryPageState extends State<LibraryPage>
               child: RetainedFadeStack(
                 index: searching ? 1 : 0,
                 milliseconds: 120,
+                background: usesIosGlass(context) ? Colors.transparent : null,
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
@@ -229,27 +232,30 @@ class _LibraryPageState extends State<LibraryPage>
               ),
             ],
           ),
-          body: PendingUpdateOverlay(
+          bodyBuilder: (context, insets) => PendingUpdateOverlay(
             anchor: _updateNoticeAnchor,
             visible: widget.active && controller.hasPendingUpdate,
             onUpdate: controller.acceptUpdate,
-            child: _catalogue(),
+            child: _catalogue(insets),
           ),
         ),
       );
     },
   );
 
-  Widget _catalogue() {
+  Widget _catalogue(EdgeInsets insets) {
     if (controller.loading && !controller.hasSnapshot) {
-      return const PageSkeleton();
+      return Padding(padding: insets, child: const PageSkeleton());
     }
     if (!controller.hasSnapshot && controller.error != null) {
-      return StatePanel(
-        title: '暂时无法加载节目库',
-        message: controller.error!,
-        icon: Icons.cloud_off_outlined,
-        onAction: () => unawaited(controller.refresh()),
+      return Padding(
+        padding: insets,
+        child: StatePanel(
+          title: '暂时无法加载节目库',
+          message: controller.error!,
+          icon: Icons.cloud_off_outlined,
+          onAction: () => unawaited(controller.refresh()),
+        ),
       );
     }
 
@@ -274,6 +280,8 @@ class _LibraryPageState extends State<LibraryPage>
           restorationId: 'catalogue-all',
           key: const PageStorageKey('catalogue-all'),
           slivers: [
+            if (insets.top > 0)
+              SliverToBoxAdapter(child: SizedBox(height: insets.top)),
             if (controller.favouriteError case final favouriteError?)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -413,6 +421,8 @@ class _LibraryPageState extends State<LibraryPage>
                 ],
               ),
             ),
+            if (insets.bottom > 0)
+              SliverToBoxAdapter(child: SizedBox(height: insets.bottom)),
           ],
         );
       },

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
@@ -88,7 +89,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) _controller.leaveSelection();
           },
-          child: Scaffold(
+          child: PrimaryPageScaffold(
             appBar: AppBar(
               toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5
                   ? 88
@@ -117,7 +118,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                   ),
               ],
             ),
-            body: SafeArea(
+            bodyBuilder: (context, insets) => SafeArea(
               top: false,
               child: Align(
                 alignment: Alignment.topCenter,

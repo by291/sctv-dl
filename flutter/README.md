@@ -110,6 +110,15 @@ flutter drive --driver=test_driver/integration_test.dart \
 
 This journey writes screenshots into ignored `build/qa/` and creates no live download. Its final `downloads-fixture-*` and `downloads-completed-*` screenshots use presentation-only task data; they establish card layout rather than native transfer or file availability. Use the controlled fixture commands above for native transfer and file behaviour.
 
+For controlled iOS glass contrast checks, scroll white and black content beneath the navigation while keeping the application theme fixed:
+
+```sh
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/ios_glass_test.dart -d <disposable-ios-device-id>
+```
+
+This checks automatic background sampling, foreground/tint changes and navigation taps, and writes contrast screenshots into `build/qa/`. The live UI journey also captures the scrolled programme library in both themes.
+
 For controlled native player interaction checks, pass a generated local H264 MP4 as base64 in a temporary JSON file with a `PLAYBACK_FIXTURE_BASE64` key:
 
 ```sh

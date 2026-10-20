@@ -6,6 +6,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../design/cover_image.dart';
 import '../design/theme.dart';
@@ -82,7 +83,16 @@ class _ApplicationState extends ConsumerState<_Application> {
           title: '蜀台回看',
           debugShowCheckedModeBanner: false,
           restorationScopeId: 'sctv-mobile',
-          builder: (context, child) => PlaybackPipHost(child: child!),
+          builder: (context, child) {
+            final content = PlaybackPipHost(child: child!);
+
+            return Platform.isIOS
+                ? LiquidGlassWidgets.wrap(
+                    brightnessResolver: Theme.maybeBrightnessOf,
+                    child: content,
+                  )
+                : content;
+          },
           routerConfig: router,
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           supportedLocales: const [Locale('zh', 'CN')],

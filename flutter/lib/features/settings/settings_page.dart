@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../design/primary_page_scaffold.dart';
 import '../../domain/settings/preferences.dart';
 import 'settings_appearance_section.dart';
 import 'settings_playback_section.dart';
@@ -31,13 +32,15 @@ class SettingsPage extends StatelessWidget {
   final String wifiPolicyDescription;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => PrimaryPageScaffold(
+    scrollBehindToolbar: true,
     appBar: AppBar(
       toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 88 : 64,
       title: const Text('设置'),
     ),
-    body: SafeArea(
+    bodyBuilder: (context, insets) => SafeArea(
       top: false,
+      bottom: !usesIosGlass(context),
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -60,7 +63,12 @@ class SettingsPage extends StatelessWidget {
             ),
             child: ListView(
               key: const PageStorageKey('settings'),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                insets.top,
+                16,
+                24 + insets.bottom,
+              ),
               children: [
                 if (persistenceError case final error?)
                   Container(

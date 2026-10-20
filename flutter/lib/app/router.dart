@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../design/archive_transition.dart';
 import '../design/content_transition.dart';
@@ -33,6 +34,8 @@ GoRouter createAppRouter(AppServices services) {
             RetainedFadeStack(
               index: shell.currentIndex,
               travelDistance: 20,
+              onSettled: () =>
+                  GlassContentAwareScope.maybeOf(context)?.requestSample(),
               children: [
                 for (var i = 0; i < children.length; i++)
                   SharedCoverScope(

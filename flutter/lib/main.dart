@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'app/app.dart';
 import 'app/bootstrap.dart';
@@ -14,6 +16,10 @@ Future<void> main() async {
 
 Future<void> _start() async {
   try {
+    if (Platform.isIOS) {
+      await LiquidGlassWidgets.initialize(enablePerformanceMonitor: false);
+    }
+
     final services = await bootstrapServices();
 
     runApp(SctvApp(services: services));

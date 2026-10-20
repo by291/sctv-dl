@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import '../../design/ios_primary_navigation.dart';
+import '../../design/primary_page_scaffold.dart';
 import '../../domain/downloads/download_task.dart';
 import '../services.dart';
 
@@ -23,6 +26,7 @@ class NavigationShell extends StatefulWidget {
 class _NavigationShellState extends State<NavigationShell>
     with WidgetsBindingObserver {
   late Stream<List<DownloadTask>> _tasks;
+  final _glassScope = GlobalKey<GlassContentAwareScopeState>();
 
   @override
   void initState() {
@@ -99,6 +103,31 @@ class _NavigationShellState extends State<NavigationShell>
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
+            if (usesIosGlass(context)) {
+              // Includes restored and programmatic navigation. The retained
+              // transition requests a final sample when its fade settles.
+              _glassScope.currentState?.requestSample();
+              return MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(platformBrightness: Theme.of(context).brightness),
+                child: GlassContentAwareScope(
+                  key: _glassScope,
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  child: Scaffold(
+                    extendBody: true,
+                    // One boundary survives branch changes. The floating bar stays
+                    // outside the capture so its own tint cannot affect the vote.
+                    body: GlassContentAwareContent(child: widget.shell),
+                    bottomNavigationBar: IosPrimaryNavigation(
+                      selectedIndex: widget.shell.currentIndex,
+                      activeDownloads: active,
+                      onSelected: _select,
+                    ),
+                  ),
+                ),
+              );
+            }
+
             final wide = constraints.maxWidth >= 720;
 
             return Scaffold(
