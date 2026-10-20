@@ -11,16 +11,7 @@ const cargoEnv = {
 
 for (const args of [
   ['fmt', '--manifest-path', manifestPath, '--', '--check'],
-  [
-    'clippy',
-    '--manifest-path',
-    manifestPath,
-    '--all-targets',
-    '--locked',
-    '--',
-    '-D',
-    'warnings',
-  ],
+  ['clippy', '--manifest-path', manifestPath, '--all-targets', '--locked', '--', '-D', 'warnings'],
   ['test', '--manifest-path', manifestPath, '--locked'],
 ]) {
   const result = spawnSync('cargo', args, { stdio: 'inherit', env: cargoEnv })
