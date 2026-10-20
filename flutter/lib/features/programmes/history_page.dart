@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/playback/history_repository.dart';
 import 'components/history_card.dart';
@@ -82,7 +83,8 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) => PrimaryPageScaffold(
+    scrollBehindToolbar: true,
     appBar: AppBar(
       toolbarHeight: MediaQuery.textScalerOf(context).scale(1) >= 1.5 ? 88 : 64,
       title: _searchOpen.value
@@ -120,7 +122,11 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
         ),
       ],
     ),
-    body: SafeArea(top: false, child: _history()),
+    bodyBuilder: (context, insets) => SafeArea(
+      top: false,
+      bottom: !usesIosGlass(context),
+      child: _history(insets),
+    ),
   );
 
   Future<void> _removeHistory(ViewingEntry entry) async {
@@ -141,19 +147,25 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
     }
   }
 
-  Widget _emptyState(Widget child) => CustomScrollView(
-    slivers: [SliverFillRemaining(hasScrollBody: false, child: child)],
+  Widget _emptyState(Widget child, EdgeInsets insets) => Padding(
+    padding: insets,
+    child: CustomScrollView(
+      slivers: [SliverFillRemaining(hasScrollBody: false, child: child)],
+    ),
   );
 
-  Widget _history() => StreamBuilder<List<ViewingEntry>>(
+  Widget _history(EdgeInsets insets) => StreamBuilder<List<ViewingEntry>>(
     stream: _historyChanges,
     builder: (context, snapshot) {
       if (snapshot.hasError) {
         return _emptyState(
           StatePanel(title: '观看记录读取失败', message: '${snapshot.error}'),
+          insets,
         );
       }
-      if (!snapshot.hasData) return const PageSkeleton();
+      if (!snapshot.hasData) {
+        return Padding(padding: insets, child: const PageSkeleton());
+      }
 
       final query = _query.value.trim().toLowerCase();
       final items = snapshot.data!
@@ -174,6 +186,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
             actionLabel: '清除搜索',
             onAction: _closeSearch,
           ),
+          insets,
         );
       }
       if (items.isEmpty) {
@@ -183,6 +196,7 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
             message: '观看节目后，可以在这里继续播放。',
             icon: Icons.history,
           ),
+          insets,
         );
       }
 
@@ -195,7 +209,12 @@ class _HistoryPageState extends State<HistoryPage> with RestorationMixin {
       return ListView.separated(
         controller: _scroll,
         restorationId: 'viewing-history',
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16 + insets.top,
+          16,
+          16 + insets.bottom,
+        ),
         itemCount: rows.length,
         findItemIndexCallback: (key) =>
             key is ValueKey<String> ? rowIndices[key.value] : null,

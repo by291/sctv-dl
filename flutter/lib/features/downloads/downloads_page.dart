@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/adaptive_action_bar.dart';
 import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/downloads/download_repository.dart';
@@ -120,6 +121,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
             ),
             bodyBuilder: (context, insets) => SafeArea(
               top: false,
+              bottom: !usesIosGlass(context),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
@@ -180,73 +182,71 @@ class _DownloadsPageState extends State<DownloadsPage> {
                             ),
                           ),
                         ),
-                      Expanded(child: _taskList(snapshot, visible)),
+                      Expanded(
+                        child: _taskList(
+                          snapshot,
+                          visible,
+                          bottomInset: usesIosGlass(context)
+                              ? MediaQuery.paddingOf(context).bottom
+                              : 0,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
             bottomNavigationBar: _controller.selecting
-                ? SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _controller.batchPhase ==
-                                      DownloadBatchPhase.running
-                                  ? '正在处理…'
-                                  : '仅操作所选任务',
-                              style: Theme.of(context).textTheme.bodySmall,
+                ? AdaptiveActionBar(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _controller.batchPhase == DownloadBatchPhase.running
+                                ? '正在处理…'
+                                : '仅操作所选任务',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        if (_controller.batchPhase ==
+                            DownloadBatchPhase.running)
+                          const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        PopupMenuButton<DownloadAction>(
+                          tooltip: '批量操作',
+                          enabled: batchEnabled,
+                          onSelected: (action) =>
+                              unawaited(_actions.runBatch(action, selected)),
+                          itemBuilder: (context) => [
+                            for (final action in DownloadAction.values)
+                              if (selected.any(action.supports))
+                                PopupMenuItem(
+                                  value: action,
+                                  child: Text(
+                                    '${action.label} · ${selected.where(action.supports).length}',
+                                  ),
+                                ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.tune_rounded, color: batchColour),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '批量操作',
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(color: batchColour),
+                                ),
+                              ],
                             ),
                           ),
-                          if (_controller.batchPhase ==
-                              DownloadBatchPhase.running)
-                            const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          PopupMenuButton<DownloadAction>(
-                            tooltip: '批量操作',
-                            enabled: batchEnabled,
-                            onSelected: (action) =>
-                                unawaited(_actions.runBatch(action, selected)),
-                            itemBuilder: (context) => [
-                              for (final action in DownloadAction.values)
-                                if (selected.any(action.supports))
-                                  PopupMenuItem(
-                                    value: action,
-                                    child: Text(
-                                      '${action.label} · ${selected.where(action.supports).length}',
-                                    ),
-                                  ),
-                            ],
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.tune_rounded, color: batchColour),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '批量操作',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(color: batchColour),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   )
                 : null,
@@ -258,8 +258,9 @@ class _DownloadsPageState extends State<DownloadsPage> {
 
   Widget _taskList(
     AsyncSnapshot<List<DownloadTask>> snapshot,
-    List<DownloadTask> visible,
-  ) {
+    List<DownloadTask> visible, {
+    double bottomInset = 0,
+  }) {
     if (snapshot.hasError) {
       return _state(
         StatePanel(
@@ -280,7 +281,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
       child: ListView(
         key: PageStorageKey('downloads-${_controller.filter.name}'),
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 32 + bottomInset),
         children: [
           if (visible.isEmpty)
             StatePanel(

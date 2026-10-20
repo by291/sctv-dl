@@ -245,46 +245,54 @@ void main() {
     }
   }
 
-  testWidgets('a clipped content cover stays clipped when entering playback', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 500);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final harness = RouteHarness();
-    harness.programmes.contents['2'] = snapshot([
-      content,
-      for (var i = 4; i < 14; i++)
-        ProgrammeContent(id: '$i', title: 'Clip $i', video: content.video),
-    ], 'contents');
-    await harness.mount(tester, '/programme/1');
-    await tester.pumpAndSettle();
-    final artwork = find.byWidgetPredicate(
-      (widget) => widget is SharedCover && widget.tag == 'playback-1/2/3',
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets(
+      'a clipped content cover stays clipped when entering playback on $platform',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 500);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final harness = RouteHarness();
+        harness.programmes.contents['2'] = snapshot([
+          content,
+          for (var i = 4; i < 14; i++)
+            ProgrammeContent(id: '$i', title: 'Clip $i', video: content.video),
+        ], 'contents');
+        await harness.mount(tester, '/programme/1', platform: platform);
+        await tester.pumpAndSettle();
+        final artwork = find.byWidgetPredicate(
+          (widget) => widget is SharedCover && widget.tag == 'playback-1/2/3',
+        );
+        final scrollable = find.byType(CustomScrollView);
+        final scroll = tester.widget<CustomScrollView>(scrollable).controller!;
+        scroll.jumpTo(
+          scroll.offset +
+              tester.getRect(artwork).top -
+              (platform == TargetPlatform.iOS
+                  ? tester.getRect(find.byType(GlassAppBar)).bottom
+                  : tester.getRect(scrollable).top) +
+              2,
+        );
+        await tester.pumpAndSettle();
+        final offset = scroll.offset;
+        await tester.tap(find.text(content.title));
+        for (var i = 0; i < 5; i++) {
+          await tester.pump();
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          find.byKey(const ValueKey('programme-cover-flight')),
+          findsNothing,
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+        harness.router.pop();
+        await tester.pumpAndSettle();
+        expect(scroll.offset, offset);
+        await harness.close(tester);
+      },
     );
-    final scrollable = find.byType(CustomScrollView);
-    final scroll = tester.widget<CustomScrollView>(scrollable).controller!;
-    scroll.jumpTo(
-      scroll.offset +
-          tester.getRect(artwork).top -
-          tester.getRect(scrollable).top +
-          2,
-    );
-    await tester.pumpAndSettle();
-    final offset = scroll.offset;
-    await tester.tap(find.text(content.title));
-    for (var i = 0; i < 5; i++) {
-      await tester.pump();
-    }
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byKey(const ValueKey('programme-cover-flight')), findsNothing);
-    await tester.pump(const Duration(milliseconds: 400));
-    harness.router.pop();
-    await tester.pumpAndSettle();
-    expect(scroll.offset, offset);
-    await harness.close(tester);
-  });
+  }
 
   testWidgets('history uses the same outgoing fade as archive entry', (
     tester,
@@ -409,51 +417,58 @@ void main() {
     );
   }
 
-  for (final player in [false, true]) {
-    testWidgets('download chooser uses the active route player=$player', (
-      tester,
-    ) async {
-      final harness = RouteHarness();
-      await harness.mount(tester, player ? '/play/1/2/3' : '/programme/1');
-      // Native initialization stays pending; download actions are independent
-      // of decoder readiness and no platform texture is needed in this test.
-      Future<void> settle() async {
-        await tester.pump();
-        await tester.pump(const Duration(seconds: 1));
-      }
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final player in [false, true]) {
+      testWidgets(
+        'download chooser uses the active route player=$player platform=$platform',
+        (tester) async {
+          final harness = RouteHarness();
+          await harness.mount(
+            tester,
+            player ? '/play/1/2/3' : '/programme/1',
+            platform: platform,
+          );
+          // Native initialization stays pending; download actions are independent
+          // of decoder readiness and no platform texture is needed in this test.
+          Future<void> settle() async {
+            await tester.pump();
+            await tester.pump(const Duration(seconds: 1));
+          }
 
-      await settle();
-      if (!player) {
-        await tester.tap(find.byTooltip('批量下载'));
-        await settle();
-        await tester.tap(find.text(content.title));
-        await settle();
-      }
-      final downloadButton = find.text(player ? '下载节目' : '下载所选 1 项');
-      await tester.tap(downloadButton);
-      await settle();
-      expect(find.text('下载清晰度'), findsOneWidget);
+          await settle();
+          if (!player) {
+            await tester.tap(find.byTooltip('批量下载'));
+            await settle();
+            await tester.tap(find.text(content.title));
+            await settle();
+          }
+          final downloadButton = find.text(player ? '下载节目' : '下载所选 1 项');
+          await tester.tap(downloadButton);
+          await settle();
+          expect(find.text('下载清晰度'), findsOneWidget);
 
-      await tester.binding.handlePopRoute();
-      await settle();
-      expect(harness.downloads.requests, isEmpty);
-      expect(downloadButton, findsOneWidget);
+          await tester.binding.handlePopRoute();
+          await settle();
+          expect(harness.downloads.requests, isEmpty);
+          expect(downloadButton, findsOneWidget);
 
-      await tester.tap(downloadButton);
-      await settle();
-      await tester.tap(find.widgetWithText(ListTile, '流畅'));
-      await settle();
-      expect(harness.downloads.requests, hasLength(1));
-      final request = harness.downloads.requests.single;
-      expect(request.selections.single.ref, selection.ref);
-      expect(request.quality, VideoQuality.smooth);
-      expect(request.wifiOnly, const Preferences().wifiOnly);
-      expect(find.text('已加入 1 项'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('查看下载'));
-      await settle();
-      expect(find.byType(DownloadsPage), findsOneWidget);
-    });
+          await tester.tap(downloadButton);
+          await settle();
+          await tester.tap(find.widgetWithText(ListTile, '流畅'));
+          await settle();
+          expect(harness.downloads.requests, hasLength(1));
+          final request = harness.downloads.requests.single;
+          expect(request.selections.single.ref, selection.ref);
+          expect(request.quality, VideoQuality.smooth);
+          expect(request.wifiOnly, const Preferences().wifiOnly);
+          expect(find.text('已加入 1 项'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.text('查看下载'));
+          await settle();
+          expect(find.byType(DownloadsPage), findsOneWidget);
+        },
+      );
+    }
   }
 
   for (final local in [false, true]) {
@@ -1039,71 +1054,73 @@ void main() {
     });
   }
 
-  testWidgets(
-    'history search and scroll survive leaving and reopening the route',
-    (tester) async {
-      final harness = RouteHarness();
-      for (var i = 0; i < 30; i++) {
-        harness.history.entries.add(
-          ViewingEntry(
-            selection: ProgrammeSelection(
-              programme: programme,
-              broadcast: broadcast,
-              content: ProgrammeContent(id: '$i', title: 'News episode $i'),
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets(
+      'history search and scroll survive leaving and reopening on $platform',
+      (tester) async {
+        final harness = RouteHarness();
+        for (var i = 0; i < 30; i++) {
+          harness.history.entries.add(
+            ViewingEntry(
+              selection: ProgrammeSelection(
+                programme: programme,
+                broadcast: broadcast,
+                content: ProgrammeContent(id: '$i', title: 'News episode $i'),
+              ),
+              position: const Duration(seconds: 38),
+              viewedAt: DateTime.utc(2026),
             ),
-            position: const Duration(seconds: 38),
-            viewedAt: DateTime.utc(2026),
-          ),
-        );
-      }
-      await harness.mount(tester, '/');
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('观看历史'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('搜索观看记录'));
-      await tester.pump();
-      await tester.enterText(find.byType(TextField), 'News episode');
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView), const Offset(0, -700));
-      await tester.pumpAndSettle();
-      final offset = tester
-          .widget<ListView>(find.byType(ListView))
-          .controller!
-          .offset;
-      expect(offset, greaterThan(0));
-      await tester.tap(
-        find.textContaining('News episode ').hitTestable().first,
-      );
-      // The capturing backend intentionally leaves source preparation pending.
-      for (var i = 0; i < 5; i++) {
+          );
+        }
+        await harness.mount(tester, '/', platform: platform);
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('观看历史'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('搜索观看记录'));
         await tester.pump();
-      }
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(harness.backend.inputs, isNotEmpty);
-      harness.router.pop();
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<ListView>(find.byType(ListView)).controller!.offset,
-        closeTo(offset, 1),
-      );
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(harness.router.state.uri.path, '/');
-      await tester.tap(find.byTooltip('观看历史'));
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'News episode',
-      );
-      expect(
-        tester.widget<ListView>(find.byType(ListView)).controller!.offset,
-        closeTo(offset, 1),
-      );
-      expect(tester.testTextInput.isVisible, isFalse);
-      await harness.close(tester);
-    },
-  );
+        await tester.enterText(find.byType(TextField), 'News episode');
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        await tester.drag(find.byType(ListView), const Offset(0, -700));
+        await tester.pumpAndSettle();
+        final offset = tester
+            .widget<ListView>(find.byType(ListView))
+            .controller!
+            .offset;
+        expect(offset, greaterThan(0));
+        await tester.tap(
+          find.textContaining('News episode ').hitTestable().first,
+        );
+        // The capturing backend intentionally leaves source preparation pending.
+        for (var i = 0; i < 5; i++) {
+          await tester.pump();
+        }
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(harness.backend.inputs, isNotEmpty);
+        harness.router.pop();
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset,
+          closeTo(offset, 1),
+        );
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(harness.router.state.uri.path, '/');
+        await tester.tap(find.byTooltip('观看历史'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'News episode',
+        );
+        expect(
+          tester.widget<ListView>(find.byType(ListView)).controller!.offset,
+          closeTo(offset, 1),
+        );
+        expect(tester.testTextInput.isVisible, isFalse);
+        await harness.close(tester);
+      },
+    );
+  }
 
   testWidgets('leaving an archive cancels its metadata resolution', (
     tester,

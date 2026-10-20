@@ -7,41 +7,44 @@ import 'package:sctv_dl_mobile/features/programmes/components/broadcast_date_she
 import '../../support/date_sheet_host.dart';
 
 void main() {
-  for (final size in [const Size(320, 640), const Size(840, 800)]) {
-    for (final brightness in Brightness.values) {
-      testWidgets(
-        'selected date opens in place at $size $brightness with large text',
-        (tester) async {
-          tester.view.physicalSize = size;
-          tester.view.devicePixelRatio = 1;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
-          BroadcastDate? picked;
-          await tester.pumpWidget(
-            dateSheetHost(
-              dates: dateSheetDates(),
-              scale: 2,
-              brightness: brightness,
-              onSelected: (date) => picked = date,
-            ),
-          );
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('更多日期'));
-          await tester.pump();
-          final list = tester.widget<ListView>(find.byType(ListView));
-          final initialOffset = list.controller!.offset;
-          expect(initialOffset, greaterThan(3000));
-          await tester.pumpAndSettle();
-          expect(list.controller!.offset, initialOffset);
-          final selected = find.text('7月29日').hitTestable();
-          expect(selected, findsOneWidget);
-          expect(tester.takeException(), isNull);
-          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-          await tester.pumpAndSettle();
-          expect(picked?.id, '80');
-          expect(find.byType(BroadcastDateSheet), findsNothing);
-        },
-      );
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final size in [const Size(320, 640), const Size(840, 800)]) {
+      for (final brightness in Brightness.values) {
+        testWidgets(
+          'selected date opens in place at $size $brightness on $platform with large text',
+          (tester) async {
+            tester.view.physicalSize = size;
+            tester.view.devicePixelRatio = 1;
+            addTearDown(tester.view.resetPhysicalSize);
+            addTearDown(tester.view.resetDevicePixelRatio);
+            BroadcastDate? picked;
+            await tester.pumpWidget(
+              dateSheetHost(
+                dates: dateSheetDates(),
+                scale: 2,
+                platform: platform,
+                brightness: brightness,
+                onSelected: (date) => picked = date,
+              ),
+            );
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('更多日期'));
+            await tester.pump();
+            final list = tester.widget<ListView>(find.byType(ListView));
+            final initialOffset = list.controller!.offset;
+            expect(initialOffset, greaterThan(3000));
+            await tester.pumpAndSettle();
+            expect(list.controller!.offset, initialOffset);
+            final selected = find.text('7月29日').hitTestable();
+            expect(selected, findsOneWidget);
+            expect(tester.takeException(), isNull);
+            await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+            await tester.pumpAndSettle();
+            expect(picked?.id, '80');
+            expect(find.byType(BroadcastDateSheet), findsNothing);
+          },
+        );
+      }
     }
   }
 

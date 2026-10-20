@@ -20,11 +20,12 @@ Widget dateSheetHost({
   required List<BroadcastDate> dates,
   String? selectedId = '80',
   double scale = 1,
+  TargetPlatform? platform,
   Brightness brightness = Brightness.light,
   ValueChanged<BroadcastDate>? onSelected,
   GlobalKey? capture,
 }) => MaterialApp(
-  theme: buildAppTheme(brightness),
+  theme: buildAppTheme(brightness).copyWith(platform: platform),
   localizationsDelegates: GlobalMaterialLocalizations.delegates,
   supportedLocales: const [Locale('zh', 'CN')],
   locale: const Locale('zh', 'CN'),

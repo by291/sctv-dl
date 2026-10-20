@@ -201,6 +201,11 @@ void main() {
     await tester.tap(find.text('全选'));
     await tester.pump(const Duration(milliseconds: 300));
     await capture('archive-selected');
+    await tester.tap(find.textContaining('下载所选 ').hitTestable().last);
+    await tester.pump(const Duration(milliseconds: 400));
+    await capture('download-quality');
+    await tester.tapAt(const Offset(10, 80));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byTooltip('退出批量选择'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('更多日期'));
@@ -383,6 +388,21 @@ void main() {
     await tester.tap(find.byTooltip('批量下载'));
     await tester.pump(const Duration(milliseconds: 300));
     await capture('archive-selection-dark');
+    await tester.tap(find.text('全选'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await capture('archive-selected-dark');
+    await tester.tap(find.textContaining('下载所选 ').hitTestable().last);
+    await tester.pump(const Duration(milliseconds: 400));
+    await capture('download-quality-dark');
+    await tester.tapAt(const Offset(10, 80));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byTooltip('退出批量选择'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('更多日期'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await capture('dates-dark');
+    await tester.tapAt(const Offset(10, 80));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(tester.takeException(), isNull);
 
     // Presentation-only fixtures exercise populated download cards without

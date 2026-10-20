@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../design/adaptive_action_bar.dart';
 import '../../design/pending_update_notice.dart';
+import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
@@ -139,8 +141,8 @@ class _ArchivePageState extends State<ArchivePage>
     final picked = await showModalBottomSheet<BroadcastDate>(
       context: context,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
       useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       isScrollControlled: true,
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * .85,
@@ -173,7 +175,8 @@ class _ArchivePageState extends State<ArchivePage>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && controller.selectionMode) controller.exitSelection();
       },
-      child: Scaffold(
+      child: PrimaryPageScaffold(
+        scrollBehindToolbar: true,
         appBar: AppBar(
           leading: controller.selectionMode
               ? IconButton(
@@ -199,7 +202,7 @@ class _ArchivePageState extends State<ArchivePage>
               ),
           ],
         ),
-        body: PendingUpdateOverlay(
+        bodyBuilder: (context, insets) => PendingUpdateOverlay(
           anchor: _updateNoticeAnchor,
           targetAnchor: Alignment.topCenter,
           // Compact clips start with text; keep the notice above that title.
@@ -216,12 +219,12 @@ class _ArchivePageState extends State<ArchivePage>
           onUpdate: _action(controller.acceptUpdates),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final content = _archive();
+              final content = _archive(insets);
               if (constraints.maxWidth < 1000) return content;
 
               return Row(
                 children: [
-                  SizedBox(width: 270, child: _libraryPane()),
+                  SizedBox(width: 270, child: _libraryPane(insets)),
                   const VerticalDivider(width: 1),
                   Expanded(child: content),
                 ],
@@ -230,17 +233,23 @@ class _ArchivePageState extends State<ArchivePage>
           ),
         ),
         bottomNavigationBar: controller.selectionMode
-            ? SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: FilledButton.icon(
-                    onPressed: controller.selectedIds.isEmpty
-                        ? null
-                        : () => _download(controller.selectedItems),
-                    icon: const Icon(Icons.download_outlined),
-                    label: Text('下载所选 ${controller.selectedIds.length} 项'),
-                  ),
+            ? AdaptiveActionBar(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton.icon(
+                  style: usesIosGlass(context)
+                      ? FilledButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          disabledBackgroundColor: Colors.transparent,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary,
+                        )
+                      : null,
+                  onPressed: controller.selectedIds.isEmpty
+                      ? null
+                      : () => _download(controller.selectedItems),
+                  icon: const Icon(Icons.download_outlined),
+                  label: Text('下载所选 ${controller.selectedIds.length} 项'),
                 ),
               )
             : null,
@@ -248,9 +257,9 @@ class _ArchivePageState extends State<ArchivePage>
     ),
   );
 
-  Widget _libraryPane() => ListView.builder(
+  Widget _libraryPane(EdgeInsets insets) => ListView.builder(
     key: const PageStorageKey('archive-library'),
-    padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+    padding: EdgeInsets.fromLTRB(8, insets.top, 8, 24 + insets.bottom),
     itemCount: widget.library.programmes.length,
     itemBuilder: (context, index) {
       final programme = widget.library.programmes[index];
@@ -266,13 +275,15 @@ class _ArchivePageState extends State<ArchivePage>
     },
   );
 
-  Widget _archive() {
+  Widget _archive(EdgeInsets insets) {
     final selected = controller.selectedDate;
 
     return CustomScrollView(
       controller: _scroll,
       restorationId: 'broadcast-content',
       slivers: [
+        if (insets.top > 0)
+          SliverToBoxAdapter(child: SizedBox(height: insets.top)),
         if (widget.library.favouriteError case final favouriteError?)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -441,7 +452,11 @@ class _ArchivePageState extends State<ArchivePage>
             ),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 24 + MediaQuery.paddingOf(context).bottom,
+                height:
+                    24 +
+                    (usesIosGlass(context)
+                        ? insets.bottom
+                        : MediaQuery.paddingOf(context).bottom),
               ),
             ),
           ],
