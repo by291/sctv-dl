@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import 'theme.dart';
+
 class IosPrimaryNavigation extends StatelessWidget {
   const IosPrimaryNavigation({
     super.key,
@@ -28,8 +30,8 @@ class IosPrimaryNavigation extends StatelessWidget {
           child: GlassContentAwareBrightness(
             builder: (context, brightness, darkAmount) {
               final selected = Color.lerp(
-                const Color(0xFF005B83),
-                const Color(0xFF9DDFFF),
+                appPrimaryBlue,
+                appPrimaryBlueOnDark,
                 darkAmount,
               )!;
               final foreground = Color.lerp(
@@ -60,7 +62,7 @@ class IosPrimaryNavigation extends StatelessWidget {
                   lightIntensity: 0.6,
                 ),
                 magnification: 1.08,
-                indicatorColor: selected.withValues(alpha: 0.12),
+                indicatorColor: selected.withValues(alpha: 0.16),
                 selectedIconColor: selected,
                 selectedLabelColor: selected,
                 unselectedIconColor: foreground,

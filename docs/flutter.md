@@ -39,7 +39,7 @@ User preferences, favourites and viewing history belong to a user database, sepa
 
 ## Appearance
 
-The Flutter client uses neutral surfaces with its own soft blue accents, pale blue action surfaces and light blue launcher icon, distinct from the Kotlin Android client's vermilion palette. The default light and dark themes use coordinated blue roles; the optional system dynamic-colour preference still follows the device wallpaper.
+The Flutter client uses neutral surfaces with blue accents and blue-tinted action surfaces, distinct from the Kotlin Android client's vermilion palette. The launcher icon matches the default light primary blue; the brand, functional icons, text actions, selected navigation and progress indicators share the primary palette. Tonal buttons and selected dates retain contrasting text over their pale blue surfaces. The default light and dark themes use coordinated blue roles; the optional system dynamic-colour preference still follows the device wallpaper.
 
 iOS primary browsing pages use `liquid_glass_widgets` for the floating Programme Library/Downloads/Settings navigation. The toolbar and status area share one full-width backdrop blur, without separate glass capsules around the brand or actions. Shader initialization and application glass setup run only on iOS; Android retains its Material navigation and toolbars. The retained navigators, search state, download badge and business controllers remain shared. Glass follows the selected application theme and reduced-motion preference. The package approximates Reduce Transparency using Increase Contrast; it does not independently observe the iOS Reduce Transparency setting.
 

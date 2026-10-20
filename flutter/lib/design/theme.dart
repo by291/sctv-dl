@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
 
+const appPrimaryBlue = Color(0xFF238DC3);
+const appPrimaryBlueOnDark = Color(0xFF79B8E8);
+
 ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
   final dark = brightness == Brightness.dark;
   final scheme =
       dynamicScheme ??
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6BAAD9),
+        seedColor: appPrimaryBlue,
         brightness: brightness,
       ).copyWith(
-        primary: dark ? const Color(0xFFA8CEEC) : const Color(0xFF326C96),
+        primary: dark ? appPrimaryBlueOnDark : appPrimaryBlue,
         onPrimary: dark ? const Color(0xFF15374E) : Colors.white,
         primaryContainer: dark
-            ? const Color(0xFF22455F)
-            : const Color(0xFFD3E9FA),
+            ? const Color(0xFF234D6C)
+            : const Color(0xFFC1DFF5),
         onPrimaryContainer: dark
-            ? const Color(0xFFD3E9FA)
-            : const Color(0xFF1E4866),
-        secondary: dark ? const Color(0xFFA9AEB8) : const Color(0xFF667080),
+            ? const Color(0xFFC5E4FA)
+            : const Color(0xFF173F5D),
+        secondary: dark ? const Color(0xFFB7C0CD) : const Color(0xFF515D6D),
         onSecondary: dark ? const Color(0xFF242A33) : Colors.white,
         secondaryContainer: dark
-            ? const Color(0xFF293F50)
-            : const Color(0xFFDDECF7),
+            ? const Color(0xFF2A485E)
+            : const Color(0xFFCDE2F2),
         onSecondaryContainer: dark
             ? const Color(0xFFE7E9EE)
             : const Color(0xFF242A33),
@@ -38,16 +41,14 @@ ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
             ? const Color(0xFF343A45)
             : const Color(0xFFEFF1F4),
         onSurfaceVariant: dark
-            ? const Color(0xFFA9AEB8)
-            : const Color(0xFF667080),
+            ? const Color(0xFFB7C0CD)
+            : const Color(0xFF515D6D),
         outline: const Color(0xFF858C99),
         outlineVariant: dark
             ? const Color(0xFF343A45)
             : const Color(0xFFE1E5EB),
       );
-  final iconColour =
-      dynamicScheme?.primary ??
-      (dark ? const Color(0xFFA8CEEC) : const Color(0xFF4C87B3));
+  final iconColour = scheme.primary;
 
   return ThemeData(
     useMaterial3: true,
@@ -91,7 +92,7 @@ ThemeData buildAppTheme(Brightness brightness, {ColorScheme? dynamicScheme}) {
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: states.contains(WidgetState.selected)
-              ? scheme.onSurface
+              ? scheme.primary
               : scheme.onSurfaceVariant,
         ),
       ),

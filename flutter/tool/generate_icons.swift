@@ -21,7 +21,8 @@ for (destination, size) in destinations {
                           bytesPerRow: size * 4, space: space,
                           bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
   context.scaleBy(x: CGFloat(size) / 108, y: CGFloat(size) / 108)
-  context.setFillColor(CGColor(colorSpace: space, components: [107.0 / 255, 170.0 / 255, 217.0 / 255, 1])!)
+  // Match appPrimaryBlue in lib/design/theme.dart and launcher_background.
+  context.setFillColor(CGColor(colorSpace: space, components: [35.0 / 255, 141.0 / 255, 195.0 / 255, 1])!)
   context.fill(CGRect(x: 0, y: 0, width: 108, height: 108))
   context.setStrokeColor(CGColor(gray: 1, alpha: 1))
   context.setLineWidth(5)
