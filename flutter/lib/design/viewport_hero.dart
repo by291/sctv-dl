@@ -1,6 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+/// Parts of a scroll viewport covered by floating navigation or toolbars.
+class ViewportHeroInsets extends InheritedWidget {
+  const ViewportHeroInsets({
+    super.key,
+    required this.insets,
+    required super.child,
+  });
+
+  final EdgeInsets insets;
+
+  @override
+  bool updateShouldNotify(ViewportHeroInsets oldWidget) =>
+      insets != oldWidget.insets;
+}
+
 /// A scrolled-out image must not escape its clip into the navigation overlay.
 /// Measure after layout without scrolling or changing the child's geometry.
 class ViewportHero extends StatefulWidget {
@@ -16,11 +31,17 @@ class _ViewportHeroState extends State<ViewportHero> {
   ScrollPosition? _position;
   bool _visible = false;
   bool _scheduled = false;
+  EdgeInsets _insets = EdgeInsets.zero;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    _insets =
+        context
+            .dependOnInheritedWidgetOfExactType<ViewportHeroInsets>()
+            ?.insets ??
+        EdgeInsets.zero;
     final position = Scrollable.maybeOf(context)?.position;
     if (position != _position) {
       _position?.removeListener(_scheduleCheck);
@@ -55,10 +76,13 @@ class _ViewportHeroState extends State<ViewportHero> {
               box.getTransformTo(viewport),
               Offset.zero & box.size,
             );
+      final visibleBounds = viewport == null
+          ? null
+          : _insets.deflateRect(viewport.paintBounds).inflate(.5);
       final visible =
           bounds == null ||
-          viewport!.paintBounds.inflate(.5).contains(bounds.topLeft) &&
-              viewport.paintBounds.inflate(.5).contains(bounds.bottomRight);
+          visibleBounds!.contains(bounds.topLeft) &&
+              visibleBounds.contains(bounds.bottomRight);
 
       if (visible != _visible) setState(() => _visible = visible);
     });
