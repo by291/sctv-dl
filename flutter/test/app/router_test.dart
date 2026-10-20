@@ -23,6 +23,7 @@ import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/archive_page.dart';
 import 'package:sctv_dl_mobile/features/programmes/components/programme_card.dart';
+import 'package:sctv_dl_mobile/features/programmes/download_quality_sheet.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
 import '../support/fakes.dart';
@@ -115,6 +116,47 @@ void registerDownloadNoticeTests() {
 }
 
 void main() {
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'iOS quality choices remain reachable in landscape $brightness',
+      (tester) async {
+        tester.view.physicalSize = const Size(844, 390);
+        tester.view.devicePixelRatio = 1;
+        tester.view.padding = FakeViewPadding(left: 59, right: 59, bottom: 21);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPadding);
+        final harness = RouteHarness();
+        await harness.mount(
+          tester,
+          '/',
+          platform: TargetPlatform.iOS,
+          brightness: brightness,
+          textScale: 2,
+        );
+        await tester.pumpAndSettle();
+
+        final result = showDownloadQualitySheet(
+          tester.element(find.byType(LibraryPage)),
+          selections: [selection],
+          downloads: harness.downloads,
+          wifiOnly: true,
+        );
+        await tester.pumpAndSettle();
+        final option = find.widgetWithText(ListTile, '流畅');
+        await tester.ensureVisible(option);
+        await tester.pumpAndSettle();
+        await tester.tap(option);
+        await tester.pumpAndSettle();
+
+        await result;
+        expect(harness.downloads.requests.single.quality, VideoQuality.smooth);
+        expect(tester.takeException(), isNull);
+        await harness.close(tester);
+      },
+    );
+  }
+
   testWidgets(
     'iOS library remains interactive after leaving playback for downloads',
     (tester) async {

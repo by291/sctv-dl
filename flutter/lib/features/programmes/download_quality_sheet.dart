@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../design/primary_page_scaffold.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
 import '../../domain/programmes/programme.dart';
@@ -24,38 +25,44 @@ Future<DownloadBatchResult?> showDownloadQualitySheet(
     showDragHandle: true,
     useSafeArea: true,
     isScrollControlled: true,
-    builder: (context) => Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('下载清晰度', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text('已选择 ${selections.length} 项节目'),
-          if (selections.length > 1)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('缺少所选清晰度的节目将使用可用版本，文件名显示实际清晰度。'),
-            ),
-          const SizedBox(height: 12),
-          for (final option in VideoQuality.values)
-            if (options.contains(option))
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.download_outlined),
-                title: Text(option.label),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pop(context, option),
+    builder: (context) {
+      final content = Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('下载清晰度', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text('已选择 ${selections.length} 项节目'),
+            if (selections.length > 1)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('缺少所选清晰度的节目将使用可用版本，文件名显示实际清晰度。'),
               ),
-          const SizedBox(height: 8),
-          Text(
-            wifiOnly ? '本次任务$wifiPolicyLabel' : '本次任务允许使用移动网络',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    ),
+            const SizedBox(height: 12),
+            for (final option in VideoQuality.values)
+              if (options.contains(option))
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.download_outlined),
+                  title: Text(option.label),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(context, option),
+                ),
+            const SizedBox(height: 8),
+            Text(
+              wifiOnly ? '本次任务$wifiPolicyLabel' : '本次任务允许使用移动网络',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      );
+
+      return usesIosGlass(context)
+          ? SafeArea(top: false, child: SingleChildScrollView(child: content))
+          : content;
+    },
   );
   // Dismissing the chooser never creates a durable task or starts preflight.
   if (quality == null) return null;
