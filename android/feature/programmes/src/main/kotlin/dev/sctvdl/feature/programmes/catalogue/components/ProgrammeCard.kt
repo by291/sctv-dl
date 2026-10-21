@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -53,12 +51,7 @@ internal fun ProgrammeCard(
             override val minimumTouchTargetSize = DpSize(32.dp, 32.dp)
         }
     }
-    val coverShape = RoundedCornerShape(
-        topStart = MaterialTheme.shapes.large.topStart,
-        topEnd = MaterialTheme.shapes.large.topEnd,
-        bottomStart = CornerSize(0.dp),
-        bottomEnd = CornerSize(0.dp)
-    )
+    val coverShape = MaterialTheme.shapes.large
     val coverModifier = if (shareCover) Modifier.sharedProgrammeCover(programme, coverShape) else Modifier
     Card(
         onClick = {

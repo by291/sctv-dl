@@ -19,6 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -93,7 +94,7 @@ internal fun ProgrammeCardPlaceholder(index: Int) {
     ) {
         SkeletonContent {
             Column {
-                SkeletonBlock(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                SkeletonBlock(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.large))
                 Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                     SkeletonBlock(Modifier.fillMaxWidth(0.8f).height(titleHeight))
                 }
