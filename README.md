@@ -72,6 +72,10 @@ See [Repository Maintenance](docs/maintenance.md) for verification by change, CI
 
 ## Documentation
 
+The [native Apple client design](docs/superpowers/specs/2026-10-22-apple-client-design.md) describes the proposed SwiftUI client for iOS, iPadOS and macOS 26. It is a design specification, not an available client.
+
+The [Apple implementation plan](docs/superpowers/plans/2026-10-22-apple-client.md) sequences media feasibility, the browsing/playback experience, and durable downloads with platform acceptance gates.
+
 | Document                                      | Responsibility                                                                      |
 | --------------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Web Architecture](docs/architecture.md)      | Shared Vue frontend, Node services, module ownership, storage and player lifecycles |
