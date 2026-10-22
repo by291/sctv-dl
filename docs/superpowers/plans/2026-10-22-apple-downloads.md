@@ -10,6 +10,8 @@
 
 **Spec:** [Approved design](../specs/2026-10-22-apple-client-design.md); [plan index](2026-10-22-apple-client.md). Prerequisites: [A](2026-10-22-apple-media.md) and [B](2026-10-22-apple-browsing.md).
 
+Implementation status (2026-10-23): The planned application flows and service boundaries are implemented. Package and native fixture checks have passed on installed OS 27 systems. The user deferred physical-device and OS 26 acceptance; those gates and hosted CI remain open. The detailed checklists below retain the full acceptance scope and are not a claim that every device scenario has passed. Current contracts live in [Apple Architecture](../../apple.md) and commands in the [Apple README](../../../apple/README.md).
+
 ## Global Constraints
 
 Inherit every constraint and verification convention in the index. Download batches accept at most 100 distinct items. Each retry receives a new attempt. Publication is separate from transfer completion. New network preferences affect new tasks only. Missing local playback never silently falls back to the network. Signed distribution requires separate authorization.

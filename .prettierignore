@@ -13,3 +13,9 @@ android/**
 # Flutter owns Dart/native formatting and vendored plugin sources.
 flutter/**
 !flutter/*.md
+
+# Swift and Xcode own native source/project formatting.
+apple/**
+!apple/*.md
+!apple/tool/
+!apple/tool/**

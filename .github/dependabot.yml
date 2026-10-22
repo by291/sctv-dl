@@ -95,3 +95,18 @@ updates:
       actions:
         patterns: ['*']
         update-types: [minor, patch]
+
+  - package-ecosystem: swift
+    directory: /apple/Packages/SCTVKit
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      apple:
+        patterns: ['*']
+        update-types: [minor, patch]

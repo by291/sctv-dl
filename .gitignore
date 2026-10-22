@@ -48,3 +48,15 @@ flutter/ios/Flutter/flutter_export_environment.sh
 flutter/ios/Flutter/.last_build_id
 flutter/**/DerivedData/
 flutter/**/.DS_Store
+
+# Apple native build output and generated shared test fixtures
+apple/build/
+apple/**/.build/
+apple/**/.swiftpm/
+apple/**/xcuserdata/
+apple/**/.DS_Store
+apple/Packages/SCTVKit/Tests/SCTVCoreTests/Fixtures/
+apple/Packages/SCTVKit/Tests/SCTVDataTests/Fixtures/
+apple/Packages/SCTVKit/Tests/SCTVMediaTests/Fixtures/
+apple/Packages/SCTVKit/Tests/SCTVDownloadsTests/Fixtures/
+apple/Apps/Shared/Fixtures/

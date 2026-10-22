@@ -17,6 +17,7 @@ beforeEach(async () => {
     join(directory, 'android/app/build/reports'),
     join(directory, 'src-tauri/target/reports'),
     join(directory, 'flutter/build/reports'),
+    join(directory, 'apple/build/reports'),
   ]
 
   await mkdir(join(directory, 'src'))
@@ -78,6 +79,7 @@ describe('Web development scanning', () => {
     expect(dependencies).not.toHaveProperty('native-fixture-dep-0')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-1')
     expect(dependencies).not.toHaveProperty('native-fixture-dep-2')
+    expect(dependencies).not.toHaveProperty('native-fixture-dep-3')
   })
 
   it('watches Web edits without crawling native build output', async () => {
@@ -91,15 +93,19 @@ describe('Web development scanning', () => {
     await vi.waitFor(() => {
       expect(server!.watcher.getWatched()[sourceDirectory]).toContain('main.js')
     })
-    await writeFile(sourceFile, 'export const value = 2')
-    await vi.waitFor(() => expect(changes).toContain(sourceFile))
-
     const watchedDirectories = Object.keys(server!.watcher.getWatched())
 
-    for (const nativeRoot of ['android', 'src-tauri', 'flutter']) {
+    for (const nativeRoot of ['android', 'src-tauri', 'flutter', 'apple']) {
       expect(
         watchedDirectories.some((path) => relative(directory, path).split(sep)[0] === nativeRoot),
       ).toBe(false)
     }
+
+    // getWatched can precede the native event stream becoming active; exercise a fresh edit on retry.
+    let revision = 2
+    await vi.waitFor(async () => {
+      await writeFile(sourceFile, `export const value = ${revision++}`)
+      expect(changes).toContain(sourceFile)
+    })
   })
 })

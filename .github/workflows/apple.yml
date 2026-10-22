@@ -1,0 +1,62 @@
+name: Apple Native
+
+on:
+  push:
+    branches: [main]
+    paths:
+      ['apple/**', 'shared/fixtures/**', '.github/workflows/apple.yml', '.github/dependabot.yml']
+  pull_request:
+    branches: [main]
+    paths:
+      ['apple/**', 'shared/fixtures/**', '.github/workflows/apple.yml', '.github/dependabot.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: ${{ matrix.target }} native validation
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: macOS
+            platform: macos
+            arguments: ''
+          - target: iPhone
+            platform: ios
+            arguments: '--device iphone --os 26'
+          - target: iPad
+            platform: ios
+            arguments: '--device ipad --os 26'
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Record toolchains and available runtimes
+        run: |
+          xcodebuild -version
+          swift --version
+          node --version
+          xcrun simctl list runtimes
+      - name: Verify tooling
+        run: node --test apple/tool/*.test.mjs
+      - name: Test package and native UI with locked dependencies
+        run: node apple/tool/check.mjs --platform "${{ matrix.platform }}" ${{ matrix.arguments }} --verify-lockfiles
+      - name: Compile unsigned Release
+        run: node apple/tool/check.mjs --platform "${{ matrix.platform }}" --configuration Release --verify-lockfiles
+      - name: Preserve validation results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apple-${{ matrix.target }}-validation
+          path: apple/build/checks/
+          if-no-files-found: warn
+          retention-days: 7

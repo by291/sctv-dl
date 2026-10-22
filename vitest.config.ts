@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath } from 'node:url'
 import packageMetadata from './package.json' with { type: 'json' }
@@ -12,5 +12,5 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('./shared/', import.meta.url)),
     },
   },
-  test: { environment: 'node' },
+  test: { environment: 'node', exclude: [...configDefaults.exclude, 'apple/**'] },
 })

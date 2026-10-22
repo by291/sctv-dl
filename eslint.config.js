@@ -92,6 +92,8 @@ export default defineConfig(
       '.superpowers/**',
       'android/**',
       'flutter/**',
+      'apple/build/**',
+      'apple/**/.build/**',
       'src-tauri/target/**',
       'src-tauri/gen/**',
     ],
@@ -169,7 +171,7 @@ export default defineConfig(
     ]),
   },
   {
-    files: ['server/**/*.ts', '*.{js,ts}', 'tooling/**/*.{js,ts}'],
+    files: ['server/**/*.ts', '*.{js,ts}', 'tooling/**/*.{js,ts}', 'apple/tool/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   {

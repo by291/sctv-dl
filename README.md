@@ -1,6 +1,6 @@
 # sctv-dl
 
-A shared Web/Tauri desktop app, Kotlin Android client, and Flutter Android/iOS client for browsing and downloading Sichuan TV programmes.
+A shared Web/Tauri desktop app, Kotlin Android client, Flutter Android/iOS client, and SwiftUI iPhone/iPad/Mac client for browsing and downloading Sichuan TV programmes.
 
 Search the programme library, save favourites, browse broadcasts by date, and preview or download full episodes and clips in standard or smooth quality. Web preferences, viewing history, and programme metadata are saved locally. Web downloads go directly to the browser's download manager; Tauri keeps a durable task queue with pause/resume and local playback.
 
@@ -11,6 +11,7 @@ Search the programme library, save favourites, browse broadcasts by date, and pr
 | Web                     | `src/`, `server/`, `shared/`   | Commands below; production uses one Node service |
 | Desktop (Windows/macOS) | Shared Vue UI and `src-tauri/` | [Desktop Development](docs/desktop.md)           |
 | Kotlin Android          | `android/`                     | [Android README](android/README.md)              |
+| SwiftUI Apple           | `apple/`                       | [Apple README](apple/README.md)                  |
 | Flutter Android/iOS     | `flutter/`                     | [Flutter README](flutter/README.md)              |
 
 Native clients connect directly to upstream services and require no Node deployment. Each installation keeps its own local state; cross-client synchronization or automatic data import is not provided.
@@ -30,7 +31,7 @@ Open [http://127.0.0.1:5180](http://127.0.0.1:5180). Internet access is required
 
 Vite serves the frontend and the API/media proxy in one process. Installation uses pnpm's default shared package store.
 
-Web development excludes `android/`, `flutter/` and `src-tauri/` from file watching and discovers dependencies from the root `index.html`. Native build outputs and HTML reports stay outside both scans.
+Web development excludes `android/`, `flutter/`, `apple/` and `src-tauri/` from file watching and discovers dependencies from the root `index.html`. Native build outputs and HTML reports stay outside both scans.
 
 ## Build and Serve
 
@@ -72,7 +73,7 @@ See [Repository Maintenance](docs/maintenance.md) for verification by change, CI
 
 ## Documentation
 
-The [native Apple client design](docs/superpowers/specs/2026-10-22-apple-client-design.md) describes the proposed SwiftUI client for iOS, iPadOS and macOS 26. It is a design specification, not an available client.
+The [native Apple client](apple/README.md) supports iOS, iPadOS and macOS 26 with native browsing, library and download flows. Physical-device and minimum-OS acceptance remain pending.
 
 The [Apple implementation plan](docs/superpowers/plans/2026-10-22-apple-client.md) sequences media feasibility, the browsing/playback experience, and durable downloads with platform acceptance gates.
 
@@ -84,6 +85,7 @@ The [Apple implementation plan](docs/superpowers/plans/2026-10-22-apple-client.m
 | [Deployment](docs/deployment.md)              | Node production service, configuration, hosting and operations                      |
 | [Desktop Development](docs/desktop.md)        | Tauri architecture, native commands/resources, installers and release checks        |
 | [Android Architecture](docs/android.md)       | Kotlin/Compose product, module boundaries, persistence and native lifecycles        |
+| [Apple Architecture](docs/apple.md)           | SwiftUI navigation, storage, playback, background transfers and file ownership      |
 | [Flutter Architecture](docs/flutter.md)       | Flutter product, data boundaries, navigation, native transfers and playback         |
 | [Repository Maintenance](docs/maintenance.md) | Verification scope, CI, dependency updates and documentation ownership              |
 | [Android Setup](android/README.md)            | Toolchain, builds, device tests and performance tooling                             |

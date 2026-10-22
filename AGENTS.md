@@ -14,6 +14,8 @@ Read only the documents relevant to the change:
 - [Android Architecture](docs/android.md): native product, data, and lifecycle contracts.
 - [Flutter Architecture](docs/flutter.md): Flutter product, boundaries, and resource ownership.
 - [Flutter Instructions](flutter/AGENTS.md): Dart/native-host conventions and checks.
+- [Apple Architecture](docs/apple.md): SwiftUI navigation, storage, playback, downloads, and file ownership.
+- [Apple Instructions](apple/AGENTS.md): Swift concurrency, lifecycle ownership, and native checks.
 - [Android Instructions](android/AGENTS.md): native module ownership, Kotlin/Compose readability, and Android checks.
 - [Desktop Development](docs/desktop.md): Tauri scaffold, shared contracts, native commands, and current integration limits.
 - [Desktop Instructions](src-tauri/AGENTS.md): Rust ownership, readability, blocking work, and resource completion rules.

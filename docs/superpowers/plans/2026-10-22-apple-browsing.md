@@ -10,6 +10,8 @@
 
 **Spec:** [Approved design](../specs/2026-10-22-apple-client-design.md); [plan index](2026-10-22-apple-client.md). Prerequisite: [phase A](2026-10-22-apple-media.md).
 
+Implementation status (2026-10-23): The planned application flows and service boundaries are implemented. Package and native fixture checks have passed on installed OS 27 systems. The user deferred physical-device and OS 26 acceptance; those gates and hosted CI remain open. The detailed checklists below retain the full acceptance scope and are not a claim that every device scenario has passed. Current contracts live in [Apple Architecture](../../apple.md) and commands in the [Apple README](../../../apple/README.md).
+
 ## Global Constraints
 
 Inherit every constraint and verification convention in the index. Metadata bodies are limited to 2 MiB. History retains the newest 500 entries, writes advancing progress at five-second intervals and uses the 95% completion boundary. Documentation is English; product copy is Chinese. Preserve live navigation and accepted snapshots across refresh and appearance changes.

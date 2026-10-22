@@ -10,7 +10,7 @@
 
 **Spec:** [Approved Apple design](../specs/2026-10-22-apple-client-design.md).
 
-Status: Written for review on 2026-10-22. No execution tasks have started. Paths, interfaces and commands below describe future deliverables, not existing files or successful checks.
+Status: Execution started on main on 2026-10-22 after the documentation commit. Phases A–C now have implemented media, browsing/library and download flows; platform/device acceptance remains open. The user authorized continuing B/C while physical-device and OS 26 checks remain pending. See [current boundaries](../../../apple/README.md#current-boundaries). Unchecked tasks and later phases remain planned deliverables, not successful checks.
 
 ## Global Constraints
 
@@ -43,7 +43,7 @@ These cross-cutting cases are assigned explicit tests in the phase plans:
 | [B: Browsing and playback](2026-10-22-apple-browsing.md)   | B1–B4 | Usable catalogue/archive/library with durable settings and history | Native navigation and player ownership pass platform acceptance                   |
 | [C: Downloads and delivery](2026-10-22-apple-downloads.md) | C1–C4 | Durable downloads, offline files and reproducible validation       | Recovery tests and device matrix complete; signing remains separate               |
 
-Execute in order. A failed media gate stops expansion into B/C until its design is revised. A missing physical device is an unverified gate, not a pass; independent unit-test work may continue, but no claim of complete media or release acceptance is allowed. Each phase consumes the earlier phase's named interfaces.
+Execute in order. The user authorized B/C implementation before physical-device and OS 26 acceptance; unresolved media failures still require correction before release. A missing physical device is an unverified gate, not a pass; independent unit-test work may continue, but no claim of complete media or release acceptance is allowed. Each phase consumes the earlier phase's named interfaces.
 
 ## File ownership map
 

@@ -10,6 +10,7 @@ This guide owns repository-wide verification, CI and dependency updates. Runtime
 | Web or Node behaviour   | `pnpm check` and `pnpm build`; meaningful regression tests beside their owner.                                                                             |
 | Web UI                  | The above plus desktop/narrow browser checks, themes, keyboard and loading/empty/error states.                                                             |
 | Tauri Rust              | `pnpm desktop:check` and `pnpm test:desktop`; add Web checks for adapters, shared contracts or integration changes. See [Desktop Development](desktop.md). |
+| SwiftUI Apple           | Follow [Apple checks](../apple/README.md), including locked dependencies, native UI and unsigned Release builds; report device acceptance separately.      |
 | Kotlin Android          | Follow [Android build and device checks](../android/README.md); shared Web/tooling changes also require Web checks.                                        |
 | Flutter or native hosts | Follow [Flutter checks](../flutter/README.md); native plugin/host changes need relevant compilation and disposable-runtime checks.                         |
 
@@ -19,7 +20,7 @@ Use controlled upstream/media fixtures and disposable devices. HEAD or a small R
 
 [GitHub Actions](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`, and can also be started manually. It installs the pnpm version from `package.json` with a frozen lockfile, then runs tests and `pnpm build` on Ubuntu with Node.js 24.15.0 and 26. A separate repository-quality job runs ESLint, Prettier, local Markdown file/heading validation and actionlint once per run. Superseded runs are cancelled, and the shared pnpm store is cached between runs.
 
-[Dependabot](../.github/dependabot.yml) checks npm dependencies, Tauri Cargo dependencies, Android/Flutter Gradle dependencies and wrappers, Flutter pub dependencies, and GitHub Actions every Monday at 09:00 Asia/Shanghai. The `/android` entry includes the version catalogue, declared modules, and included `build-logic` build. Flutter native updates cover `/flutter/android` and the vendored player's Android build. Review those plugin changes against its patch provenance; Pub updates do not replace the local source override. Minor and patch updates are grouped by production dependencies, development dependencies, Android dependencies, Flutter dependencies, desktop Rust dependencies, Flutter native dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
+[Dependabot](../.github/dependabot.yml) checks npm dependencies, Tauri Cargo dependencies, Android/Flutter Gradle dependencies and wrappers, Flutter pub dependencies, Apple Swift package dependencies, and GitHub Actions every Monday at 09:00 Asia/Shanghai. The `/android` entry includes the version catalogue, declared modules, and included `build-logic` build. Flutter native updates cover `/flutter/android` and the vendored player's Android build. Review those plugin changes against its patch provenance; Pub updates do not replace the local source override. Minor and patch updates are grouped by production dependencies, development dependencies, Android dependencies, Flutter dependencies, desktop Rust dependencies, Flutter native dependencies, and actions; major updates receive separate pull requests. Updates require review and are not merged automatically.
 
 [Android CI](../.github/workflows/android.yml) also submits the resolved Gradle dependency graph in a separate job on pushes to `main` and manual runs on `main`. Release app dependencies are labelled `runtime`; other dependencies are labelled `development`. See [Android Dependency Security](../android/README.md#dependency-security) for scope rules and alert handling. Only that job has `contents: write`; pull-request checks keep read-only permissions. Dependabot alerts and security updates are repository settings enabled separately from the YAML configuration. Security updates open reviewable pull requests and do not enable automatic merging.
 
@@ -29,7 +30,7 @@ Desktop validation runs for shared frontend/server/contracts, native Rust/assets
 
 Workflow-level path filtering is not a required-check aggregator. If branch protection is added later, use an always-reported gate that distinguishes irrelevant jobs from failures; do not require a workflow that can be skipped by paths.
 
-Desktop and Flutter have their own workflows and native prerequisites; their platform guides describe packaging and signing. A workflow definition or local command passing does not establish a successful hosted run. Review job results and artifacts for the exact commit being released.
+Apple, Desktop and Flutter have their own workflows and native prerequisites; their platform guides describe packaging and signing. A workflow definition or local command passing does not establish a successful hosted run. Review job results and artifacts for the exact commit being released.
 
 ## Workflow and Documentation Checks
 
