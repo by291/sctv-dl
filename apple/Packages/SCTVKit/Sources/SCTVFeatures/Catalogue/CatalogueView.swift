@@ -135,10 +135,11 @@ public struct CatalogueView: View {
                 Image(
                     systemName: model.favouriteIDs.contains(programme.id) ? "heart.fill" : "heart"
                 )
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(PresentationStyle.accent(scheme))
-                .frame(width: 44, height: 44)
+                .frame(width: 32, height: 32)
                 .background(.regularMaterial, in: Circle())
+                .contentShape(Circle())
             }
             .buttonStyle(.plain).padding(8)
             .accessibilityLabel(

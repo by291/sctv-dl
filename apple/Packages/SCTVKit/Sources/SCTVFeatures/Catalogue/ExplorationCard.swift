@@ -69,7 +69,7 @@ struct ExplorationCard: View {
     private var compactContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             cover(compact: true)
-                .frame(maxWidth: 340)
+                .frame(maxWidth: 310)
                 .frame(maxWidth: .infinity)
             if typeSize.isAccessibilitySize {
                 identity(wide: false)
@@ -136,7 +136,7 @@ struct ExplorationCard: View {
             }
             // Reserve the rotated edges so loading and title changes cannot move the cover.
             .padding(.horizontal, compact ? 24 : 8)
-            .padding(.vertical, compact ? 14 : 18)
+            .padding(.vertical, compact ? 8 : 12)
             .accessibilityHidden(true)
     }
 
