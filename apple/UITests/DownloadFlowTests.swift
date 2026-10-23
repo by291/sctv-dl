@@ -39,12 +39,11 @@ final class DownloadFlowTests: XCTestCase {
         let completed = app.descendants(matching: .any)["download-30-completed"].firstMatch
         XCTAssertTrue(completed.waitForExistence(timeout: 20))
         #if os(iOS)
-            app.buttons["编辑"].tap()
+            app.buttons["选择"].tap()
             XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
             app.buttons["完成"].tap()
-            XCTAssertTrue(app.buttons["编辑"].exists)
+            XCTAssertTrue(app.buttons["选择"].exists)
         #endif
-        activate(completed)
         activate(app.descendants(matching: .any)["play-download-30"].firstMatch)
         XCTAssertTrue(
             app.descendants(matching: .any)["native-player-ready"].firstMatch.waitForExistence(

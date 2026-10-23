@@ -6,9 +6,7 @@ public struct DownloadsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirming: [DownloadCommand] = []
-    #if os(iOS)
-        @State private var editMode: EditMode = .inactive
-    #endif
+    @State private var selecting = false
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
     private let reauthorize: (DownloadTask) -> Void
@@ -27,10 +25,13 @@ public struct DownloadsView: View {
     }
 
     public var body: some View {
-        List(selection: Binding(get: { model.selection }, set: { model.setSelection($0) })) {
+        List(selection: selectionBinding) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("\(model.tasks.count) 个任务 · 将喜欢的节目带在身边")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                Text(
+                    selecting
+                        ? "已选 \(model.selection.count) 项" : "\(model.tasks.count) 个任务 · 将喜欢的节目带在身边"
+                )
+                .font(.subheadline).foregroundStyle(secondaryText)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(DownloadFilter.allCases) { filter in
@@ -78,7 +79,7 @@ public struct DownloadsView: View {
             ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
                 taskCard(task).tag(task.id)
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    .contextMenu { actions(task) }
+                    .contextMenu { if !selecting { actions(task) } }
             }
         }
         .listStyle(.plain)
@@ -93,37 +94,41 @@ public struct DownloadsView: View {
         .navigationTitle("下载")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            .toolbar(selecting ? .hidden : .visible, for: .tabBar)
             .toolbar(.visible, for: .navigationBar)
-            .environment(\.editMode, $editMode)
-            .onChange(of: editMode) { _, value in
-                if !value.isEditing { model.setSelection([]) }
-            }
-            .onChange(of: model.visibleTasks.isEmpty) { _, empty in
-                if empty { editMode = .inactive }
-            }
+            .environment(
+                \.editMode,
+                Binding(
+                    get: { selecting ? .active : .inactive },
+                    set: { selecting = $0.isEditing }))
         #endif
+        .onChange(of: selecting) { _, value in
+            if !value { model.setSelection([]) }
+        }
+        .onChange(of: model.visibleTasks.isEmpty) { _, empty in
+            if empty { selecting = false }
+        }
         .toolbar {
-            #if os(iOS)
-                if !model.visibleTasks.isEmpty {
-                    ToolbarItem {
-                        Button(editMode.isEditing ? "完成" : "编辑") {
-                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-                        }
+            if selecting {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选") {
+                        let all = Set(model.visibleTasks.map(\.id))
+                        model.setSelection(model.selection == all ? [] : all)
                     }
-                }
-            #endif
-            if !model.selection.isEmpty {
-                ToolbarItem {
-                    Menu("批量操作", systemImage: "checklist") {
-                        commandButton("暂停", .pause)
-                        commandButton("继续", .resume)
-                        commandButton("重试", .retry)
-                        commandButton("取消任务", .cancel)
-                        commandButton("删除文件", .deleteFile, destructive: true)
-                        commandButton("移除记录", .removeRecord, destructive: true)
-                    }
+                    .help(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选")
                 }
             }
+            if !model.visibleTasks.isEmpty {
+                ToolbarItem {
+                    Button(selecting ? "完成" : "选择") {
+                        withAnimation { selecting.toggle() }
+                    }
+                    .accessibilityIdentifier("downloads-select")
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting { selectionBar }
         }
         .confirmationDialog(
             "确认执行所选操作？",
@@ -141,43 +146,136 @@ public struct DownloadsView: View {
         .task { await model.load() }
     }
 
+    // A nil binding keeps ordinary row/menu taps out of native selection mode.
+    private var selectionBinding: Binding<Set<UUID>>? {
+        guard selecting else { return nil }
+        return Binding(get: { model.selection }, set: { model.setSelection($0) })
+    }
+
+    private struct BatchAction: Identifiable {
+        let title: String
+        let action: DownloadAction
+        var destructive = false
+        var id: String { title }
+    }
+
+    private var availableBatchActions: [BatchAction] {
+        [
+            BatchAction(title: "暂停", action: .pause),
+            BatchAction(title: "继续", action: .resume),
+            BatchAction(title: "重试", action: .retry),
+            BatchAction(title: "重试保存", action: .retryPublication),
+            BatchAction(title: "取消任务", action: .cancel),
+            BatchAction(title: "删除文件", action: .deleteFile, destructive: true),
+            BatchAction(title: "移除记录", action: .removeRecord, destructive: true),
+        ].filter { !model.commands(for: $0.action).isEmpty }
+    }
+
+    private var secondaryText: Color {
+        (scheme == .dark ? Color.white : Color.black).opacity(0.55)
+    }
+
+    private var selectionBar: some View {
+        let actions = availableBatchActions
+        return Group {
+            if model.selection.isEmpty {
+                Text("请选择要操作的下载任务")
+                    .font(.subheadline).foregroundStyle(secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else {
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: 12),
+                        count: typeSize.isAccessibilitySize ? 1 : max(1, min(actions.count, 3))),
+                    spacing: 12
+                ) {
+                    ForEach(actions) { item in
+                        Button(role: item.destructive ? .destructive : nil) {
+                            let commands = model.commands(for: item.action)
+                            if item.destructive {
+                                confirming = commands
+                            } else {
+                                Task { await model.perform(commands) }
+                            }
+                        } label: {
+                            Text(item.title).frame(maxWidth: .infinity, minHeight: 32)
+                        }
+                    }
+                }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: 600).frame(maxWidth: .infinity)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
     private func taskCard(_ task: DownloadTask) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             let layout =
                 typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-                : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
             layout {
                 Artwork(url: task.cover)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .frame(width: typeSize.isAccessibilitySize ? nil : 120)
-                VStack(alignment: .leading, spacing: 7) {
+                    // Fix both dimensions so title height cannot shrink the fitted artwork.
+                    .frame(
+                        width: typeSize.isAccessibilitySize ? nil : 136,
+                        height: typeSize.isAccessibilitySize ? nil : 136 * 9 / 16
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 4) {
                     Text(task.title).font(.headline)
+                        // Keep selected-row text readable without overriding button tint.
+                        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("\(task.programmeName) · \(task.broadcastDate)")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(secondaryText)
+                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     Text(task.quality == .standard ? "标准画质" : "流畅画质")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(PresentationStyle.accent(scheme))
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Menu("下载操作", systemImage: "ellipsis") { actions(task) }
-                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                    .accessibilityIdentifier(
-                        "download-\(task.content.contentID)-\(task.state.storageKey)")
             }
             Divider().opacity(0.5)
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 16) {
+                HStack(alignment: .center, spacing: 8) {
                     taskStatus(task)
-                    Spacer()
-                    primaryActions(task)
+                    Spacer(minLength: 4)
+                    if !selecting { cardActions(task) }
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     taskStatus(task)
-                    primaryActions(task)
+                    if !selecting {
+                        HStack {
+                            Spacer()
+                            cardActions(task)
+                        }
+                    }
                 }
             }
-        }.padding(18).editorialCard()
+            .frame(minHeight: 44)
+        }
+        .padding(12).editorialCard()
+    }
+
+    private func cardActions(_ task: DownloadTask) -> some View {
+        Group {
+            primaryActions(task)
+            Menu {
+                actions(task)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("下载操作")
+            .accessibilityIdentifier("download-\(task.content.contentID)-\(task.state.storageKey)")
+        }
     }
 
     private func taskStatus(_ task: DownloadTask) -> some View {
@@ -185,13 +283,15 @@ public struct DownloadsView: View {
             Image(systemName: symbol(task.state))
                 .foregroundStyle(PresentationStyle.accent(scheme))
             VStack(alignment: .leading, spacing: 5) { status(task.state) }
+                .foregroundStyle(scheme == .dark ? Color.white : Color.black)
         }
     }
 
     @ViewBuilder private func primaryActions(_ task: DownloadTask) -> some View {
         if case .completed = task.state {
-            Button("播放", systemImage: "play.fill") { play(task) }
+            Button("播放") { play(task) }
                 .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                .accessibilityIdentifier("play-download-\(task.content.contentID)")
         } else {
             HStack {
                 commandButton("暂停", .pause, ids: [task.id])
@@ -209,32 +309,35 @@ public struct DownloadsView: View {
             }
         #endif
         if case .completed = task.state {
-            Button("播放", systemImage: "play") { play(task) }.accessibilityIdentifier(
-                "play-download-\(task.content.contentID)")
             Button("导出副本", systemImage: "square.and.arrow.up") { export(task) }
             #if os(macOS)
                 Button("在访达中显示", systemImage: "folder") { reveal(task) }
             #endif
         }
-        commandButton("暂停", .pause, ids: [task.id])
-        commandButton("继续", .resume, ids: [task.id])
-        commandButton("重新下载", .retry, ids: [task.id])
-        commandButton("重试保存文件", .retryPublication, ids: [task.id])
-        commandButton("取消下载", .cancel, ids: [task.id])
-        commandButton("删除文件", .deleteFile, ids: [task.id], destructive: true)
-        commandButton("移除记录", .removeRecord, ids: [task.id], destructive: true)
+        commandButton("取消下载", .cancel, ids: [task.id], systemImage: "xmark.circle")
+        commandButton("删除文件", .deleteFile, ids: [task.id], destructive: true, systemImage: "trash")
+        commandButton(
+            "移除记录", .removeRecord, ids: [task.id], destructive: true,
+            systemImage: "text.badge.minus")
     }
 
     @ViewBuilder private func commandButton(
-        _ title: String, _ action: DownloadAction, ids: Set<UUID>? = nil, destructive: Bool = false
+        _ title: String, _ action: DownloadAction, ids: Set<UUID>? = nil, destructive: Bool = false,
+        systemImage: String? = nil
     ) -> some View {
         let commands = model.commands(for: action, ids: ids)
         if !commands.isEmpty {
-            Button(title, role: destructive ? .destructive : nil) {
+            Button(role: destructive ? .destructive : nil) {
                 if destructive {
                     confirming = commands
                 } else {
                     Task { await model.perform(commands) }
+                }
+            } label: {
+                if let systemImage {
+                    Label(title, systemImage: systemImage)
+                } else {
+                    Text(title)
                 }
             }
         }
@@ -251,22 +354,22 @@ public struct DownloadsView: View {
             }
             Text(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)).font(
                 .caption
-            ).foregroundStyle(.secondary)
+            ).foregroundStyle(secondaryText)
         case .completed(let file):
             Text(
                 "已完成 · "
                     + ByteCountFormatter.string(fromByteCount: file.byteSize, countStyle: .file)
             ).font(
                 .caption
-            ).foregroundStyle(.secondary)
+            ).foregroundStyle(secondaryText)
         case .queued: Text("等待下载").font(.caption)
         case .paused(let resume): Text(resume == nil ? "已暂停，可重新下载" : "已暂停").font(.caption)
         case .publishing: ProgressView("正在保存文件")
         case .cancelled: Text("已取消").font(.caption)
         case .interrupted(let reason), .transferFailed(let reason, _),
             .publicationFailed(let reason, _):
-            Text(reason).font(.caption).foregroundStyle(.secondary)
-        case .missingFile: Text("文件已移动或删除").font(.caption).foregroundStyle(.secondary)
+            Text(reason).font(.caption).foregroundStyle(secondaryText)
+        case .missingFile: Text("文件已移动或删除").font(.caption).foregroundStyle(secondaryText)
         }
     }
 

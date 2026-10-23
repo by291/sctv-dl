@@ -408,6 +408,76 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 5))
         }
 
+        func testDownloadsUseExplicitSelectionAndCompactTitles() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            for id in ["31", "32"] {
+                let menu = app.buttons["content-actions-\(id)"]
+                reveal(menu, in: app)
+                menu.tap()
+                app.buttons["download-content-\(id)"].tap()
+                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
+                app.alerts["提示"].buttons["好"].tap()
+            }
+            app.buttons["下载"].firstMatch.tap()
+            let longTitle = app.staticTexts.matching(
+                NSPredicate(format: "label BEGINSWITH %@", "秋日里的城市故事")
+            ).firstMatch
+            XCTAssertTrue(longTitle.waitForExistence(timeout: 15))
+            XCTAssertLessThan(longTitle.frame.height, 55)
+            let cards = XCTAttachment(screenshot: app.screenshot())
+            cards.name = "download-compact-cards"
+            cards.lifetime = .keepAlways
+            add(cards)
+            XCTAssertFalse(app.buttons["批量操作"].exists)
+            longTitle.tap()
+            XCTAssertFalse(app.buttons["批量操作"].exists)
+            XCTAssertFalse(app.staticTexts["已选 1 项"].exists)
+            let menu = app.buttons["download-31-completed"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 10))
+            menu.tap()
+            XCTAssertTrue(app.buttons["导出副本"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["批量操作"].exists)
+            let menuShot = XCTAttachment(screenshot: app.screenshot())
+            menuShot.name = "download-secondary-actions"
+            menuShot.lifetime = .keepAlways
+            add(menuShot)
+            app.navigationBars["下载"].tap()
+            let filtersTop = app.buttons["全部"].frame.minY
+            app.buttons["选择"].tap()
+            XCTAssertEqual(app.buttons["全部"].frame.minY, filtersTop, accuracy: 2)
+            longTitle.tap()
+            XCTAssertTrue(app.staticTexts["已选 1 项"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["栏目"].firstMatch.isHittable)
+            XCTAssertFalse(menu.exists)
+            XCTAssertTrue(app.buttons["删除文件"].isHittable)
+            XCTAssertTrue(app.buttons["移除记录"].isHittable)
+            app.buttons["全选"].tap()
+            XCTAssertTrue(app.staticTexts["已选 2 项"].exists)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "download-selection-actions"
+            shot.lifetime = .keepAlways
+            add(shot)
+            app.buttons["完成"].tap()
+            XCTAssertFalse(app.staticTexts["已选 2 项"].exists)
+            XCTAssertTrue(menu.exists)
+            XCTAssertEqual(app.buttons["全部"].frame.minY, filtersTop, accuracy: 2)
+            XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
+            app.buttons["选择"].tap()
+            app.buttons["全选"].tap()
+            app.buttons["移除记录"].tap()
+            XCTAssertTrue(app.buttons["确认"].waitForExistence(timeout: 5))
+            app.buttons["确认"].tap()
+            XCTAssertTrue(app.staticTexts["暂无下载"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["完成"].exists)
+        }
+
         func testContinuingDeletionKeepsLibraryPosition() {
             let app = XCUIApplication()
             app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
