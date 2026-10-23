@@ -84,4 +84,35 @@ import Testing
                 programmeID: "1", dateID: "2", contentID: id == "first" ? "3" : "4"),
             title: id, sources: [], quality: .standard, localFile: try LocalFileLease(url: url))
     }
+
+    @Test func discardedSceneReleasesItsPlayerButCannotCloseAnotherScenesReplacement() async throws
+    {
+        let session = PlayerSession(history: PlaybackHistoryTests.Repository())
+        var owner: PlayerPresentationLifetime? = PlayerPresentationLifetime(session: session)
+        let first = try #require(session.beginPresentation(for: session.beginRequest()))
+        owner?.takeOwnership(of: first)
+        await session.open(try request("first"), expected: first)
+
+        owner = nil
+        for _ in 0..<100 where session.playback.state != .idle {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.playback.state == .idle)
+        #expect(session.playback.player.currentItem == nil)
+
+        owner = PlayerPresentationLifetime(session: session)
+        let second = try #require(session.beginPresentation(for: session.beginRequest()))
+        owner?.takeOwnership(of: second)
+        await session.open(try request("second"), expected: second)
+        let replacement = try #require(session.beginPresentation(for: session.beginRequest()))
+        await session.open(try request("replacement"), expected: replacement)
+
+        owner = nil
+        // Await the old token's close as well as the queued deinitialization work.
+        await session.close(expected: second)
+        await Task.yield()
+        #expect(session.playback.state == .ready)
+        #expect(session.title == "replacement")
+        await session.close(expected: replacement)
+    }
 }

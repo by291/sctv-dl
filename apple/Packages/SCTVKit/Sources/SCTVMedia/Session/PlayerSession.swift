@@ -8,6 +8,7 @@ public final class PlayerSession: Identifiable {
     public let playback: PlaybackCoordinator
     public let recorder: PlaybackHistoryRecorder
     public private(set) var title = "播放器"
+    public private(set) var details: PlayerDetails?
     public var warning: String?
     public private(set) var presentationID = UUID()
     private var generation = UUID()
@@ -41,6 +42,7 @@ public final class PlayerSession: Identifiable {
         guard generation == token else { return }
         warning = nil
         title = request.title
+        details = PlayerDetails(request)
         do {
             let native = try await playback.open(request)
             guard generation == token else { return }
