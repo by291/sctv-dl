@@ -49,6 +49,14 @@
                         video: URL(string: "https://fscgc.scgchc.com/probe.mp4"), smoothVideo: nil,
                         publishedAt: "2026-10-22 19:06:00"))
             }
+            if ProcessInfo.processInfo.arguments.contains("--ui-many-contents") {
+                contents += (32..<62).map { index in
+                    ProgrammeContent(
+                        id: String(index), title: "城市故事 第\(index)段", cover: nil,
+                        video: URL(string: "https://fscgc.scgchc.com/probe.mp4"), smoothVideo: nil,
+                        publishedAt: "2026-10-22 19:06:00")
+                }
+            }
             return contents
         }
 

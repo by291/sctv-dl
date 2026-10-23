@@ -86,6 +86,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
         shot.name = "compact-long-archive-title"
         shot.lifetime = .keepAlways
         add(shot)
+
+        let menu = app.descendants(matching: .any)["content-actions-32"].firstMatch
+        XCTAssertGreaterThanOrEqual(menu.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(menu.frame.height, 44)
+        let edge = menu.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
+        #if os(macOS)
+            edge.click()
+        #else
+            edge.tap()
+        #endif
+        XCTAssertTrue(
+            app.descendants(matching: .any)["download-content-32"].firstMatch.waitForExistence(
+                timeout: 5))
     }
 
     func testLongDateHistoryOpensOnDemandAndSelectsOlderBroadcast() {
@@ -223,6 +236,64 @@ final class ApplicationAcceptanceTests: XCTestCase {
     }
 
     #if os(iOS)
+        func testLongHistoryTitlesKeepCardsCompact() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            let programme = app.buttons["四川新闻"]
+            XCTAssertTrue(programme.waitForExistence(timeout: 15))
+            programme.tap()
+            for id in ["31", "32"] {
+                let clip = app.buttons["archive-play-\(id)"]
+                reveal(clip, in: app)
+                clip.tap()
+                let player = app.descendants(matching: .any)["native-player-ready"].firstMatch
+                XCTAssertTrue(player.waitForExistence(timeout: 20))
+                app.navigationBars.buttons["BackButton"].firstMatch.tap()
+            }
+            app.buttons["资料库"].firstMatch.tap()
+            app.buttons["观看历史"].tap()
+            let long = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "秋日里的城市故事"))
+                .firstMatch
+            let short = app.buttons["城市一刻"]
+            XCTAssertTrue(long.waitForExistence(timeout: 10))
+            XCTAssertTrue(short.exists)
+            XCTAssertLessThan(long.frame.height, 120)
+            XCTAssertEqual(long.frame.height, short.frame.height, accuracy: 2)
+            let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            shot.name = "compact-history-titles"
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+
+        func testPlaybackPreservesArchiveScrollOffset() {
+            XCUIDevice.shared.orientation = .portrait
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-many-contents", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            let programme = app.buttons["四川新闻"]
+            XCTAssertTrue(programme.waitForExistence(timeout: 15))
+            programme.tap()
+            let clip = app.buttons["archive-play-40"]
+            reveal(clip, in: app)
+            XCTAssertTrue(clip.isHittable)
+            let before = clip.frame
+            clip.tap()
+            let player = app.descendants(matching: .any)["native-player-ready"].firstMatch
+            XCTAssertTrue(player.waitForExistence(timeout: 20))
+            app.navigationBars.buttons["BackButton"].firstMatch.tap()
+            XCTAssertTrue(clip.waitForExistence(timeout: 10))
+            XCTAssertTrue(clip.isHittable)
+            XCTAssertEqual(clip.frame.minY, before.minY, accuracy: 2)
+            XCTAssertEqual(clip.frame.height, before.height, accuracy: 2)
+        }
+
         func testPlaybackReturnsToArchiveThroughNavigation() {
             XCUIDevice.shared.orientation = .portrait
             defer { XCUIDevice.shared.orientation = .portrait }
