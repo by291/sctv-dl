@@ -155,6 +155,15 @@ final class ApplicationAcceptanceTests: XCTestCase {
 
         let programme = app.buttons["四川新闻"]
         XCTAssertTrue(programme.waitForExistence(timeout: 15))
+        #if os(iOS)
+            let settingsButton = app.buttons["设置"]
+            XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+            activate(settingsButton)
+            XCTAssertTrue(
+                app.descendants(matching: .any)["首选画质"].firstMatch.waitForExistence(timeout: 5))
+            activate(app.buttons["完成"])
+            XCTAssertTrue(programme.waitForExistence(timeout: 5))
+        #endif
         let catalogueShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         catalogueShot.name = "redesign-catalogue"
         catalogueShot.lifetime = .keepAlways

@@ -7,10 +7,15 @@ public struct CatalogueView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
     private let open: (Programme) -> Void
+    private let settings: () -> Void
 
-    public init(model: CatalogueModel, open: @escaping (Programme) -> Void) {
+    public init(
+        model: CatalogueModel, settings: @escaping () -> Void,
+        open: @escaping (Programme) -> Void
+    ) {
         self.model = model
         self.open = open
+        self.settings = settings
     }
 
     private var exploration: Programme? {
@@ -57,9 +62,16 @@ public struct CatalogueView: View {
             .toolbar {
                 ToolbarItem {
                     Button("刷新", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                    .labelStyle(.iconOnly).help("刷新")
                 }
             }
         #endif
+        .toolbar {
+            ToolbarItem {
+                Button("设置", systemImage: "gearshape", action: settings)
+                    .labelStyle(.iconOnly).help("设置")
+            }
+        }
         .refreshable { await model.refresh() }
         .task { await model.load() }
     }

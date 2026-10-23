@@ -98,7 +98,8 @@ private struct ArchiveDateBrowser: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button("关闭", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly).help("关闭")
                 }
             }
         }

@@ -114,10 +114,11 @@ public struct ArchiveView: View {
         #endif
         .toolbar {
             ToolbarItem {
-                Button(selecting ? "取消选择" : "选择") {
+                Button(selecting ? "取消选择" : "选择", systemImage: selecting ? "xmark" : "checklist") {
                     selecting.toggle()
                     model.setSelection([])
                 }
+                .labelStyle(.iconOnly).help(selecting ? "取消选择" : "选择")
                 .accessibilityIdentifier("archive-select")
             }
             #if os(macOS)
@@ -125,6 +126,7 @@ public struct ArchiveView: View {
                     Button("刷新", systemImage: "arrow.clockwise") {
                         Task { await model.refresh() }
                     }
+                    .labelStyle(.iconOnly).help("刷新")
                 }
             #endif
         }

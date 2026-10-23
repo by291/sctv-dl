@@ -120,9 +120,12 @@ public struct DownloadsView: View {
             }
             if !model.visibleTasks.isEmpty {
                 ToolbarItem {
-                    Button(selecting ? "完成" : "选择") {
+                    Button(
+                        selecting ? "完成" : "选择", systemImage: selecting ? "checkmark" : "checklist"
+                    ) {
                         withAnimation { selecting.toggle() }
                     }
+                    .labelStyle(.iconOnly).help(selecting ? "完成" : "选择")
                     .accessibilityIdentifier("downloads-select")
                 }
             }

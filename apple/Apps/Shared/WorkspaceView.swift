@@ -169,7 +169,8 @@ struct WorkspaceView: View {
             .sheet(isPresented: $showingSettings) {
                 NavigationStack {
                     ApplicationSettingsView(dependencies: dependencies).toolbar {
-                        Button("完成") { showingSettings = false }
+                        Button("完成", systemImage: "checkmark") { showingSettings = false }
+                        .labelStyle(.iconOnly).help("完成")
                     }
                 }
             }
@@ -177,12 +178,22 @@ struct WorkspaceView: View {
         #endif
     }
 
+    private func presentSettings() {
+        #if os(macOS)
+            openSettings()
+        #else
+            showingSettings = true
+        #endif
+    }
+
     private var catalogueNavigation: some View {
         NavigationStack(path: $cataloguePath) {
-            CatalogueView(model: catalogue) { cataloguePath.append(.archive($0)) }
-                .navigationDestination(for: WorkspaceRoute.self) {
-                    destination($0, section: .catalogue)
-                }
+            CatalogueView(model: catalogue, settings: presentSettings) {
+                cataloguePath.append(.archive($0))
+            }
+            .navigationDestination(for: WorkspaceRoute.self) {
+                destination($0, section: .catalogue)
+            }
         }
     }
 
@@ -205,13 +216,7 @@ struct WorkspaceView: View {
                     }
                 }, open: { libraryPath.append(.archive($0)) },
                 showHistory: { libraryPath.append(.history) },
-                settings: {
-                    #if os(macOS)
-                        openSettings()
-                    #else
-                        showingSettings = true
-                    #endif
-                }
+                settings: presentSettings
             ).navigationDestination(for: WorkspaceRoute.self) { destination($0, section: .library) }
         }
     }

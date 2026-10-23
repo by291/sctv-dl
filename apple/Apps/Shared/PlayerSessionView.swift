@@ -74,7 +74,10 @@ struct PlayerSessionView: View {
                         .accessibilityIdentifier("player-full-title")
                 }
                 .navigationTitle("节目标题")
-                .toolbar { Button("完成") { titleExpanded = false } }
+                .toolbar {
+                    Button("完成", systemImage: "checkmark") { titleExpanded = false }
+                        .labelStyle(.iconOnly).help("完成")
+                }
             }
             .presentationDetents([.medium, .large])
         }

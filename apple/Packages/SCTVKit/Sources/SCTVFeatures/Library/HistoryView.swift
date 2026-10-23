@@ -41,8 +41,9 @@ public struct HistoryView: View {
             .toolbar(.visible, for: .navigationBar)
         #endif
         .toolbar {
-            Button("清空历史", role: .destructive) { confirmClear = true }.disabled(
-                model.entries.isEmpty)
+            Button("清空历史", systemImage: "trash", role: .destructive) { confirmClear = true }
+                .labelStyle(.iconOnly).help("清空历史")
+                .disabled(model.entries.isEmpty)
         }
         .confirmationDialog("清空全部观看历史？", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("清空历史", role: .destructive) { Task { await model.clear() } }
