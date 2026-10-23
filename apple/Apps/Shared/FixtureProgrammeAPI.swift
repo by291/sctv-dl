@@ -2,15 +2,30 @@
     import Foundation
     import SCTVCore
 
-    struct FixtureProgrammeAPI: ProgrammeAPI {
+    actor FixtureProgrammeAPI: ProgrammeAPI {
+        private var catalogueLoads = 0
+
         func catalogue() async throws -> [Programme] {
-            [
+            catalogueLoads += 1
+            let isRefresh = catalogueLoads > 1
+            if ProcessInfo.processInfo.arguments.contains("--ui-slow-catalogue") {
+                try await Task.sleep(for: .seconds(6))
+            }
+            let programmes = [
                 Programme(id: "1", name: "四川新闻", cover: nil),
                 Programme(
                     id: "2",
                     name: ProcessInfo.processInfo.arguments.contains("--ui-long-titles")
                         ? "防癌大讲堂" : "今日视点", cover: nil),
             ]
+            if ProcessInfo.processInfo.arguments.contains("--ui-slow-catalogue"), isRefresh {
+                return programmes + [Programme(id: "3", name: "刷新后的栏目", cover: nil)]
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-many-programmes") {
+                return programmes
+                    + (3...30).map { Programme(id: String($0), name: "栏目 \($0)", cover: nil) }
+            }
+            return programmes
         }
         func dates(programmeID: String) async throws -> [BroadcastDate] {
             if ProcessInfo.processInfo.arguments.contains("--ui-many-dates") {

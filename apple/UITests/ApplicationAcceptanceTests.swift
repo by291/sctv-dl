@@ -236,6 +236,178 @@ final class ApplicationAcceptanceTests: XCTestCase {
     }
 
     #if os(iOS)
+        func testCataloguePullToRefreshLoadsUpdates() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-slow-catalogue", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 20))
+            let scroll = app.scrollViews["catalogue-scroll"]
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+            start.press(forDuration: 0.1, thenDragTo: end)
+            let update = app.buttons["发现新内容 · 点此更新"]
+            XCTAssertTrue(update.waitForExistence(timeout: 10))
+            update.tap()
+            XCTAssertTrue(app.buttons["刷新后的栏目"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.navigationBars["栏目"].exists)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "catalogue-after-pull-to-refresh"
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+
+        func testCustomPlayerControlsAndTitleDisclosure() {
+            XCUIDevice.shared.orientation = .portrait
+            defer { XCUIDevice.shared.orientation = .portrait }
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            let programme = app.buttons["四川新闻"]
+            XCTAssertTrue(programme.waitForExistence(timeout: 15))
+            programme.tap()
+            let clip = app.buttons["archive-play-31"]
+            reveal(clip, in: app)
+            clip.tap()
+            XCTAssertTrue(
+                app.descendants(matching: .any)["native-player-ready"].firstMatch.waitForExistence(
+                    timeout: 20))
+            XCTAssertFalse(app.navigationBars["播放"].exists)
+            let title = app.buttons["player-title-disclosure"]
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+            let collapsedHeight = title.frame.height
+            title.tap()
+            XCTAssertTrue(app.staticTexts["player-full-title"].waitForExistence(timeout: 5))
+            app.buttons["完成"].tap()
+            XCTAssertEqual(title.frame.height, collapsedHeight, accuracy: 2)
+            let inline = XCTAttachment(screenshot: app.screenshot())
+            inline.name = "custom-player-inline"
+            inline.lifetime = .keepAlways
+            add(inline)
+            app.buttons["player-quality"].tap()
+            XCTAssertTrue(app.buttons["标准"].waitForExistence(timeout: 5))
+            Thread.sleep(forTimeInterval: 0.5)
+            let qualityMenu = XCTAttachment(screenshot: app.screenshot())
+            qualityMenu.name = "custom-player-quality-options"
+            qualityMenu.lifetime = .keepAlways
+            add(qualityMenu)
+            app.buttons["标准"].tap()
+            let progress = app.sliders["player-progress"]
+            XCTAssertTrue(progress.exists)
+            progress.adjust(toNormalizedSliderPosition: 0.5)
+            app.buttons["player-fullscreen"].tap()
+            let speed = app.buttons["player-speed"]
+            XCTAssertTrue(speed.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(speed.frame.minX, progress.frame.maxX)
+            XCTAssertTrue(
+                app.windows.allElementsBoundByIndex.contains {
+                    $0.frame.width > 0 && $0.frame.contains(app.buttons["player-fullscreen"].frame)
+                })
+            let fullscreen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            fullscreen.name = "custom-player-fullscreen"
+            fullscreen.lifetime = .keepAlways
+            add(fullscreen)
+            progress.adjust(toNormalizedSliderPosition: 0)
+            app.buttons["player-toggle-play"].tap()
+            speed.tap()
+            Thread.sleep(forTimeInterval: 5)
+            XCTAssertTrue(app.buttons["1.5 倍速"].exists)
+            app.buttons["1.5 倍速"].tap()
+            XCTAssertEqual(speed.value as? String, "1.5 倍")
+            let surface = app.descendants(matching: .any)["player-gesture-surface"].firstMatch
+            surface.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.45)).press(
+                forDuration: 0.6)
+            XCTAssertEqual(speed.value as? String, "1.5 倍")
+            // A short horizontal gesture commits one seek and keeps the video usable.
+            surface.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.45)).press(
+                forDuration: 0.05,
+                thenDragTo: surface.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
+            XCTAssertTrue(app.buttons["player-toggle-play"].exists)
+            app.buttons["player-fullscreen"].tap()
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+            app.buttons["player-back"].tap()
+            XCTAssertTrue(clip.waitForExistence(timeout: 5))
+        }
+
+        func testCatalogueNativeHeadingAndSearch() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-many-programmes", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            let heading = app.navigationBars["栏目"]
+            XCTAssertTrue(heading.waitForExistence(timeout: 15))
+            let search = app.searchFields.firstMatch
+            let scroll = app.scrollViews["catalogue-scroll"]
+            if !search.isHittable { scroll.swipeDown() }
+            XCTAssertTrue(search.waitForExistence(timeout: 5))
+            let initialShot = XCTAttachment(screenshot: app.screenshot())
+            initialShot.name = "catalogue-native-heading-and-search"
+            initialShot.lifetime = .keepAlways
+            add(initialShot)
+            scroll.swipeUp()
+            scroll.swipeUp()
+            if let window = app.windows.allElementsBoundByIndex.first(where: {
+                $0.frame.width > 100
+            }),
+                window.frame.width < 500
+            {
+                XCTAssertTrue(heading.staticTexts["栏目"].exists)
+                XCTAssertFalse(search.isHittable)
+            } else {
+                // The adaptive iPad tab bar presents the selected page title itself.
+                XCTAssertTrue(app.buttons["栏目"].firstMatch.isSelected)
+            }
+            scroll.swipeDown()
+            scroll.swipeDown()
+            if !search.isHittable { scroll.swipeDown() }
+            search.tap()
+            search.typeText("今日")
+            XCTAssertTrue(app.buttons["今日视点"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["四川新闻"].exists)
+            let focusedShot = XCTAttachment(screenshot: app.screenshot())
+            focusedShot.name = "catalogue-native-search-focused"
+            focusedShot.lifetime = .keepAlways
+            add(focusedShot)
+            let clear = search.buttons.firstMatch
+            XCTAssertTrue(clear.exists)
+            clear.tap()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 5))
+        }
+
+        func testPlayerEdgeSwipeReturnsToArchive() {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            let clip = app.buttons["archive-play-31"]
+            reveal(clip, in: app)
+            clip.tap()
+            XCTAssertTrue(app.buttons["player-back"].waitForExistence(timeout: 15))
+            guard
+                let window = app.windows.allElementsBoundByIndex.first(where: {
+                    $0.frame.width > 100
+                })
+            else {
+                XCTFail("Expected a visible application window")
+                return
+            }
+            window.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.2)).press(
+                forDuration: 0.05,
+                thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.2)))
+            XCTAssertTrue(clip.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["player-back"].exists)
+            app.buttons["资料库"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 5))
+        }
+
         func testLongHistoryTitlesKeepCardsCompact() {
             let app = XCUIApplication()
             app.launchArguments = [
@@ -252,9 +424,15 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 clip.tap()
                 let player = app.descendants(matching: .any)["native-player-ready"].firstMatch
                 XCTAssertTrue(player.waitForExistence(timeout: 20))
-                app.navigationBars.buttons["BackButton"].firstMatch.tap()
+                app.sliders["player-progress"].adjust(toNormalizedSliderPosition: 0.25)
+                app.buttons["player-back"].firstMatch.tap()
             }
             app.buttons["资料库"].firstMatch.tap()
+            let libraryShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            libraryShot.name = "compact-continuing-cards"
+            libraryShot.lifetime = .keepAlways
+            add(libraryShot)
+            reveal(app.buttons["观看历史"], in: app)
             app.buttons["观看历史"].tap()
             let long = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "秋日里的城市故事"))
                 .firstMatch
@@ -267,6 +445,12 @@ final class ApplicationAcceptanceTests: XCTestCase {
             shot.name = "compact-history-titles"
             shot.lifetime = .keepAlways
             add(shot)
+            long.swipeLeft()
+            let delete = app.buttons["删除记录"]
+            XCTAssertTrue(delete.waitForExistence(timeout: 5))
+            delete.tap()
+            XCTAssertTrue(long.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(short.exists)
         }
 
         func testPlaybackPreservesArchiveScrollOffset() {
@@ -287,7 +471,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             clip.tap()
             let player = app.descendants(matching: .any)["native-player-ready"].firstMatch
             XCTAssertTrue(player.waitForExistence(timeout: 20))
-            app.navigationBars.buttons["BackButton"].firstMatch.tap()
+            app.buttons["player-back"].firstMatch.tap()
             XCTAssertTrue(clip.waitForExistence(timeout: 10))
             XCTAssertTrue(clip.isHittable)
             XCTAssertEqual(clip.frame.minY, before.minY, accuracy: 2)
@@ -322,7 +506,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             landscape.lifetime = .keepAlways
             add(landscape)
             XCUIDevice.shared.orientation = .portrait
-            let back = app.navigationBars.buttons["BackButton"].firstMatch
+            let back = app.buttons["player-back"].firstMatch
             XCTAssertTrue(back.waitForExistence(timeout: 5))
             back.tap()
             XCTAssertTrue(menu.waitForExistence(timeout: 10))
@@ -335,7 +519,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(entry.waitForExistence(timeout: 5))
             entry.tap()
             XCTAssertTrue(player.waitForExistence(timeout: 20))
-            app.navigationBars.buttons["BackButton"].firstMatch.tap()
+            app.buttons["player-back"].firstMatch.tap()
             XCTAssertTrue(app.navigationBars["观看历史"].waitForExistence(timeout: 5))
             XCTAssertTrue(entry.exists)
         }
