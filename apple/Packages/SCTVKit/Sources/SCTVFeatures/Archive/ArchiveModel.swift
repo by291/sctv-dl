@@ -85,6 +85,10 @@ public final class ArchiveModel {
                     let candidate = values.first { $0.id == restoredDateID } ?? values.first
                     restoredDateID = nil
                     if let candidate { await selectDate(candidate.id) } else { await clearDate() }
+                } else if let id = selectedDateID, contentsObservation == nil {
+                    // Returning from playback reconnects ownership without removing
+                    // the rows that SwiftUI uses to retain the exact scroll offset.
+                    await observeContents(id)
                 }
             }
         }
@@ -119,9 +123,15 @@ public final class ArchiveModel {
         warning = nil
         await clearDate()
         guard generation == route else { return }
+        selectedDateID = id
+        await observeContents(id)
+    }
+
+    private func observeContents(_ id: String) async {
+        let route = UUID()
+        generation = route
         contentOwner = UUID()
         let owner = contentOwner
-        selectedDateID = id
         let query = ProgrammeQuery.contents(programmeID: programme.id, dateID: id)
         let source = await repository.observe(query)
         guard running, generation == route else { return }
@@ -198,8 +208,6 @@ public final class ArchiveModel {
         contentsObservation?.cancel()
         contentsObservation = nil
         releaseOwnership()
-        restoredDateID = selectedDateID
-        selectedDateID = nil
         generation = UUID()
     }
 

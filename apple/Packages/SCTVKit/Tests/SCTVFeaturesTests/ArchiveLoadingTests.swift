@@ -6,13 +6,17 @@ import Testing
 
 private actor ArchiveLoadingRepository: ProgrammeRepository {
     private var observers: [ProgrammeQuery: AsyncStream<ProgrammeUpdate>.Continuation] = [:]
+    private var observationCounts: [ProgrammeQuery: Int] = [:]
     private var failedQuery: ProgrammeQuery?
 
     func observe(_ query: ProgrammeQuery) async -> AsyncStream<ProgrammeUpdate> {
         let (stream, continuation) = AsyncStream<ProgrammeUpdate>.makeStream()
         observers[query] = continuation
+        observationCounts[query, default: 0] += 1
         return stream
     }
+
+    func observationCount(_ query: ProgrammeQuery) -> Int { observationCounts[query, default: 0] }
 
     func isObserving(_ query: ProgrammeQuery) -> Bool { observers[query] != nil }
     func failRefresh(_ query: ProgrammeQuery) { failedQuery = query }
@@ -36,6 +40,44 @@ private actor ArchiveLoadingRepository: ProgrammeRepository {
 }
 
 @MainActor struct ArchiveLoadingTests {
+    @Test func resumingArchiveKeepsRowsWhileReconnectingSubscriptions() async throws {
+        let repository = ArchiveLoadingRepository()
+        let model = ArchiveModel(
+            programme: Programme(id: "1", name: "News", cover: nil), repository: repository)
+        let dates = ProgrammeQuery.dates(programmeID: "1")
+        let query = ProgrammeQuery.contents(programmeID: "1", dateID: "20")
+        let broadcast = BroadcastDate(id: "20", date: "2026-10-22")
+        let row = ProgrammeContent(
+            id: "clip", title: "Story", cover: nil, video: nil, smoothVideo: nil, publishedAt: nil)
+        await model.load()
+        await repository.publish(dates, items: .dates([broadcast]))
+        for _ in 0..<100 where !(await repository.isObserving(query)) {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        await repository.publish(query, items: .contents([row]))
+        for _ in 0..<100 where model.isLoading { try await Task.sleep(for: .milliseconds(1)) }
+        model.scrollAnchor = row.id
+        model.stop()
+
+        await model.load()
+        await repository.publish(dates, items: .dates([broadcast]))
+        for _ in 0..<100 where await repository.observationCount(query) < 2 {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(await repository.observationCount(query) == 2)
+        #expect(model.selectedDateID == broadcast.id)
+        #expect(model.clips.map(\.id) == [row.id])
+        #expect(!model.isLoading)
+        #expect(model.scrollAnchor == row.id)
+
+        await repository.publish(query, items: .contents([]))
+        for _ in 0..<100 where !model.contents.isEmpty {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(model.contents.isEmpty)
+        model.stop()
+    }
+
     @Test func contentGroupsFollowAcceptedSnapshotsDatesAndSortOrder() async throws {
         let repository = ArchiveLoadingRepository()
         let model = ArchiveModel(

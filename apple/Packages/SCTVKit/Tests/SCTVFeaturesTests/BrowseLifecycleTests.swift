@@ -77,9 +77,12 @@ private actor SuspendedBrowseRepository: ProgrammeRepository {
         await repository.waitUntilBlocked()
         model.stop()
         await model.load()
-        for _ in 0..<100 where model.selectedDateID != "19" {
+        // The selected date now survives suspension; wait for the new request
+        // registration rather than treating date identity as subscription readiness.
+        for _ in 0..<100 where await repository.ownerCount(query) != 1 {
             try await Task.sleep(for: .milliseconds(1))
         }
+        #expect(await repository.ownerCount(query) == 1)
         await repository.resumeBlocked()
         await stale.value
 
