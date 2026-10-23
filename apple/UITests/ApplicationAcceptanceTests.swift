@@ -408,6 +408,49 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 5))
         }
 
+        func testContinuingDeletionKeepsLibraryPosition() {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            for id in ["30", "31"] {
+                let content = app.buttons["archive-play-\(id)"]
+                reveal(content, in: app)
+                content.tap()
+                XCTAssertTrue(
+                    app.descendants(matching: .any)["native-player-ready"].firstMatch
+                        .waitForExistence(
+                            timeout: 20))
+                app.sliders["player-progress"].adjust(toNormalizedSliderPosition: 0.25)
+                app.buttons["player-back"].tap()
+            }
+            app.buttons["资料库"].firstMatch.tap()
+            let row = app.buttons["秋日里的城市故事"]
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            let heading = app.staticTexts["继续观看"]
+            let headingY = heading.frame.minY
+            row.swipeLeft()
+            app.buttons["删除记录"].tap()
+            XCTAssertTrue(row.waitForNonExistence(timeout: 5))
+            let remaining = app.buttons.matching(
+                NSPredicate(format: "label BEGINSWITH %@", "四川新闻（")
+            ).firstMatch
+            XCTAssertTrue(remaining.exists)
+            XCTAssertEqual(heading.frame.minY, headingY, accuracy: 2)
+            remaining.swipeLeft()
+            app.buttons["删除记录"].tap()
+            XCTAssertTrue(remaining.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["故事，留待下次继续"].exists)
+            XCTAssertEqual(heading.frame.minY, headingY, accuracy: 2)
+            XCTAssertTrue(app.buttons["观看历史"].isHittable)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "library-after-continuing-deletion"
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+
         func testLongHistoryTitlesKeepCardsCompact() {
             let app = XCUIApplication()
             app.launchArguments = [

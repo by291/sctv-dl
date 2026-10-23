@@ -5,6 +5,7 @@ public struct LibraryView: View {
     @Bindable private var model: LibraryModel
     @Bindable private var catalogue: CatalogueModel
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let play: (HistoryEntry) -> Void
     private let open: (Programme) -> Void
     private let showHistory: () -> Void
@@ -43,6 +44,10 @@ public struct LibraryView: View {
                 }
             #endif
         }
+        // Animate the accepted row change once, including replacement by the empty state.
+        .animation(
+            reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.continuing.map(\.id)
+        )
         .background(PresentationStyle.canvas(scheme))
         .navigationTitle("资料库")
         #if os(iOS)
@@ -62,7 +67,9 @@ public struct LibraryView: View {
             Section {
                 if model.continuing.isEmpty {
                     informationCard(
-                        "故事，留待下次继续", detail: "观看中的节目会自动保存在这里。", symbol: "play.rectangle")
+                        "故事，留待下次继续", detail: "观看中的节目会自动保存在这里。", symbol: "play.rectangle"
+                    )
+                    .transition(.opacity)
                 } else {
                     #if os(iOS)
                         ForEach(model.continuing) { entry in historyRow(entry) }

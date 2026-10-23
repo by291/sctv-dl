@@ -5,6 +5,7 @@ public struct HistoryView: View {
     @Bindable private var model: LibraryModel
     @State private var confirmClear = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let play: (HistoryEntry) -> Void
 
     public init(model: LibraryModel, play: @escaping (HistoryEntry) -> Void) {
@@ -33,6 +34,8 @@ public struct HistoryView: View {
         .overlay {
             if model.entries.isEmpty { ContentUnavailableView("暂无观看记录", systemImage: "clock") }
         }
+        // Animate the accepted row change once, including replacement by the empty state.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.entries.map(\.id))
         .navigationTitle("观看历史")
         #if os(iOS)
             .toolbar(.visible, for: .navigationBar)

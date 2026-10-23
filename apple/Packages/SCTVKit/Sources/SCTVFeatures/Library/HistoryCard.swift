@@ -54,11 +54,15 @@ struct HistoryCard: View {
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(entry.title)
         }.padding(10).editorialCard()
+            .transition(.opacity)
             .accessibilityHint(entry.completed ? "点击再次观看" : "点击继续观看")
             .accessibilityAction(named: "删除记录", remove)
             #if os(iOS)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button("删除记录", systemImage: "trash", role: .destructive, action: remove)
+                    // Persistence publishes removal asynchronously. A destructive role would
+                    // collapse the row early, conflicting with the final empty-state replacement.
+                    Button("删除记录", systemImage: "trash", action: remove)
+                    .tint(.red)
                 }
             #else
                 .contextMenu {
