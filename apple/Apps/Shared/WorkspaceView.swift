@@ -352,7 +352,7 @@ struct WorkspaceView: View {
                 .toolbar(.hidden, for: .tabBar)
             #endif
             .onDisappear {
-                // AVKit fullscreen temporarily covers this view without ending its route.
+                // Fullscreen layout changes do not end the playback route.
                 // A committed navigation pop releases only the presentation that left.
                 let remains =
                     cataloguePath.contains(.player(presentation))

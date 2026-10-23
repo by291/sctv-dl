@@ -9,6 +9,9 @@ struct PlayerSessionView: View {
     @State private var snapshot: PlaybackSnapshot?
     @State private var downloadMessage: String?
     @State private var downloading = false
+    @State private var overlay = PlayerOverlayState()
+    @State private var titleExpanded = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var phase
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -18,7 +21,7 @@ struct PlayerSessionView: View {
 
     private var videoOnly: Bool {
         #if os(iOS)
-            verticalSizeClass == .compact
+            overlay.fullscreen || verticalSizeClass == .compact
         #else
             false
         #endif
@@ -49,21 +52,36 @@ struct PlayerSessionView: View {
                 }
             }
         }
-        .background(PresentationStyle.canvas(scheme))
+        .background(videoOnly ? Color.black : PresentationStyle.canvas(scheme))
         .tint(PresentationStyle.accent(scheme))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(
             session.playback.state == .ready ? "native-player-ready" : "native-player"
         )
-        .navigationTitle("播放")
+        .navigationTitle("")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(videoOnly ? .hidden : .visible, for: .navigationBar)
-            .toolbarBackground(PresentationStyle.canvas(scheme), for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
+            .statusBarHidden(videoOnly)
+            .background(PlayerBackGesture(enabled: !videoOnly))
         #endif
+        .sheet(isPresented: $titleExpanded) {
+            NavigationStack {
+                ScrollView {
+                    Text(session.details?.title ?? session.title)
+                        .font(.title3).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(24)
+                        .accessibilityIdentifier("player-full-title")
+                }
+                .navigationTitle("节目标题")
+                .toolbar { Button("完成") { titleExpanded = false } }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .task(id: session.presentationID) {
             downloadMessage = nil
+            titleExpanded = false
+            overlay.reveal()
             snapshot = session.playback.capture()
             for await value in session.playback.snapshots() {
                 guard !Task.isCancelled else { break }
@@ -72,7 +90,9 @@ struct PlayerSessionView: View {
         }
         .onChange(of: phase) { _, value in
             if value == .background {
-                session.playback.pauseForBackground()
+                #if os(macOS)
+                    session.playback.pauseForBackground()
+                #endif
                 Task { await session.recorder.flush(session.playback) }
             }
         }
@@ -81,9 +101,24 @@ struct PlayerSessionView: View {
     private var video: some View {
         ZStack {
             #if os(iOS)
-                IOSPlayerView(playback: session.playback)
+                IOSPlayerView(playback: session.playback, overlay: overlay)
+                PlayerControlsView(
+                    session: session, snapshot: snapshot, overlay: overlay, fullscreen: videoOnly
+                ) {
+                    session.playback.pauseForInterruption()
+                    dismiss()
+                }
             #else
                 MacPlayerView(playback: session.playback)
+                    .overlay(alignment: .topTrailing) {
+                        HStack {
+                            PlayerSpeedMenu(playback: session.playback, speed: snapshot?.speed ?? 1)
+                            if session.details?.isLocal == false {
+                                PlayerQualityMenu(session: session, quality: snapshot?.quality)
+                            }
+                        }
+                        .buttonStyle(.bordered).foregroundStyle(.white).padding(12)
+                    }
             #endif
             if case .preparing = session.playback.state {
                 ProgressView("正在准备播放")
@@ -118,19 +153,30 @@ struct PlayerSessionView: View {
                     systemImage: metadata.isLocal ? "internaldrive" : "play.rectangle"
                 )
                 .font(.caption.weight(.semibold)).foregroundStyle(PresentationStyle.accent(scheme))
-                Text(metadata.title)
-                    .font(.system(.title2, design: .serif, weight: .bold))
-                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    titleExpanded = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(metadata.title)
+                            .font(.system(.title2, design: .serif, weight: .bold))
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("查看完整标题")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(metadata.title)
+                .accessibilityHint("点击查看全文")
+                .accessibilityIdentifier("player-title-disclosure")
                 Text(
                     [metadata.programmeName, metadata.broadcastDate].filter { !$0.isEmpty }.joined(
                         separator: " · ")
                 )
                 .font(.subheadline).foregroundStyle(.secondary)
                 Divider()
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 12) { playbackOptions(metadata) }
-                    VStack(alignment: .leading, spacing: 12) { playbackOptions(metadata) }
-                }
                 if metadata.resumeMilliseconds > 0 {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("上次看到 \(timestamp(metadata.resumeMilliseconds))")
@@ -175,39 +221,6 @@ struct PlayerSessionView: View {
         }
     }
 
-    @ViewBuilder private func playbackOptions(_ metadata: PlayerDetails) -> some View {
-        if !metadata.isLocal {
-            Menu {
-                ForEach(metadata.sources, id: \.quality) { source in
-                    Button {
-                        changeQuality(source.quality)
-                    } label: {
-                        if snapshot?.quality == source.quality {
-                            Label(qualityName(source.quality), systemImage: "checkmark")
-                        } else {
-                            Text(qualityName(source.quality))
-                        }
-                    }
-                }
-            } label: {
-                Label(
-                    snapshot.map { qualityName($0.quality) } ?? "选择画质",
-                    systemImage: "slider.horizontal.3")
-            }.buttonStyle(.bordered).buttonBorderShape(.capsule)
-        }
-        Menu {
-            ForEach([0.75, 1, 1.25, 1.5, 2], id: \.self) { speed in
-                Button("\(speed.formatted()) 倍速") { session.playback.setSpeed(speed) }
-            }
-        } label: {
-            Label("\((snapshot?.speed ?? 1).formatted()) 倍速", systemImage: "speedometer")
-        }.buttonStyle(.bordered).buttonBorderShape(.capsule)
-    }
-
-    private func qualityName(_ quality: VideoQuality) -> String {
-        quality == .standard ? "标准画质" : "流畅画质"
-    }
-
     private func timestamp(_ milliseconds: Int64) -> String {
         let seconds = milliseconds / 1000
         if seconds >= 3600 {
@@ -217,12 +230,4 @@ struct PlayerSessionView: View {
         return String(format: "%lld:%02lld", seconds / 60, seconds % 60)
     }
 
-    private func changeQuality(_ quality: VideoQuality) {
-        guard snapshot?.quality != quality else { return }
-        Task {
-            do { try await session.playback.switchQuality(quality) } catch {
-                session.warning = error.localizedDescription
-            }
-        }
-    }
 }

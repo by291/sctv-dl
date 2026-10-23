@@ -7,6 +7,54 @@ import Testing
 
 @MainActor
 struct PlayerSessionTests {
+    @Test func playDuringSeekUsesLatestIntentWhenSeekFinishes() async throws {
+        let coordinator = try coordinator()
+        _ = try await coordinator.open(request())
+        let seeking = Task { try await coordinator.seek(to: 8_000) }
+        await Task.yield()
+        coordinator.setPlaybackIntent(.playing)
+        try await seeking.value
+        #expect(coordinator.player.rate == 1)
+        #expect(coordinator.capture()?.playIntent == .playing)
+        coordinator.beginDismissal()
+        await coordinator.finishDismissal()
+    }
+
+    @Test func temporarySpeedRestoresSelectedRateWithoutChangingSavedSpeed() async throws {
+        let coordinator = try coordinator()
+        _ = try await coordinator.open(request())
+        coordinator.setSpeed(1.5)
+        coordinator.setPlaybackIntent(.playing)
+        let token = try #require(coordinator.beginTemporarySpeed())
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(coordinator.player.rate == 2)
+        #expect(coordinator.capture()?.speed == 1.5)
+        coordinator.endTemporarySpeed(token)
+        #expect(coordinator.player.rate == 1.5)
+        coordinator.beginDismissal()
+        await coordinator.finishDismissal()
+    }
+
+    @Test func interruptedTemporarySpeedCannotResumeOrAffectReplacement() async throws {
+        let coordinator = try coordinator()
+        _ = try await coordinator.open(request())
+        #expect(coordinator.beginTemporarySpeed() == nil)
+        coordinator.setSpeed(1.25)
+        coordinator.setPlaybackIntent(.playing)
+        let token = try #require(coordinator.beginTemporarySpeed())
+        coordinator.pauseForInterruption()
+        coordinator.endTemporarySpeed(token)
+        #expect(coordinator.player.rate == 0)
+        #expect(coordinator.capture()?.speed == 1.25)
+        coordinator.setPlaybackIntent(.playing)
+        let stale = try #require(coordinator.beginTemporarySpeed())
+        try await coordinator.switchQuality(.smooth)
+        coordinator.endTemporarySpeed(stale)
+        #expect(coordinator.player.rate == 1.25)
+        coordinator.beginDismissal()
+        await coordinator.finishDismissal()
+    }
+
     private func request(resume: Int64 = 3000) throws -> PlaybackRequest {
         let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
         let standard = try MediaSource(

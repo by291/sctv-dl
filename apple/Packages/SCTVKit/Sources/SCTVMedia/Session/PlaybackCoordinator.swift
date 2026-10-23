@@ -23,6 +23,7 @@ public final class PlaybackCoordinator: PlaybackService {
     #endif
     private var quality = VideoQuality.standard
     private var speed = 1.0
+    private var temporarySpeedToken: UUID?
     private var intent = PlaybackIntent.paused
     private var settled = false
     private var ended = false
@@ -70,8 +71,9 @@ public final class PlaybackCoordinator: PlaybackService {
         guard request != nil, !dismissing else { return }
         // Preparation delays playback, but must never discard a newer pause request.
         self.intent = intent
+        if intent == .paused { temporarySpeedToken = nil }
         if intent == .playing, settled {
-            player.playImmediately(atRate: Float(speed))
+            player.playImmediately(atRate: effectiveRate)
         } else {
             player.pause()
         }
@@ -81,8 +83,26 @@ public final class PlaybackCoordinator: PlaybackService {
     public func setSpeed(_ speed: Double) {
         guard speed.isFinite, speed > 0, speed <= 4 else { return }
         self.speed = speed
-        if intent == .playing, settled, !dismissing { player.rate = Float(speed) }
+        if intent == .playing, settled, !dismissing { player.rate = effectiveRate }
         emitSnapshot()
+    }
+
+    private var effectiveRate: Float { temporarySpeedToken == nil ? Float(speed) : 2 }
+
+    public func beginTemporarySpeed() -> UUID? {
+        guard settled, intent == .playing, !dismissing, temporarySpeedToken == nil else {
+            return nil
+        }
+        let token = UUID()
+        temporarySpeedToken = token
+        player.rate = 2
+        return token
+    }
+
+    public func endTemporarySpeed(_ token: UUID) {
+        guard temporarySpeedToken == token else { return }
+        temporarySpeedToken = nil
+        if settled, intent == .playing, !dismissing { player.rate = Float(speed) }
     }
 
     public func seek(to milliseconds: Int64) async throws {
@@ -102,6 +122,12 @@ public final class PlaybackCoordinator: PlaybackService {
             throw CancellationError()
         }
         ended = false
+        // Scrubbing can overlap play/pause taps; the latest intent owns the resumed rate.
+        if intent == .playing {
+            player.playImmediately(atRate: effectiveRate)
+        } else {
+            player.pause()
+        }
         emitSnapshot(.seek)
     }
 
@@ -129,6 +155,7 @@ public final class PlaybackCoordinator: PlaybackService {
     }
 
     public func beginDismissal() {
+        if let token = temporarySpeedToken { endTemporarySpeed(token) }
         dismissing = true
         if !pictureInPicture {
             intent = .paused
@@ -142,6 +169,7 @@ public final class PlaybackCoordinator: PlaybackService {
     public func setPictureInPictureActive(_ active: Bool) { pictureInPicture = active }
 
     public func pauseForInterruption() {
+        temporarySpeedToken = nil
         intent = .paused
         player.pause()
         emitSnapshot()
@@ -240,12 +268,16 @@ public final class PlaybackCoordinator: PlaybackService {
                 guard let self, generation == token else { return }
                 switch event {
                 case .playbackChanged(let isPlaying, let actualSpeed):
+                    guard settled else { return }
+                    // Rate KVO is queued; an older boost/pause event must not replace newer intent.
+                    guard abs(Double(player.rate) - actualSpeed) < 0.001 else { return }
                     if dismissing && !pictureInPicture {
                         player.pause()
                         intent = .paused
                     } else {
                         intent = isPlaying ? .playing : .paused
-                        if isPlaying { speed = actualSpeed }
+                        if isPlaying, temporarySpeedToken == nil { speed = actualSpeed }
+                        if !isPlaying { temporarySpeedToken = nil }
                     }
                     emitSnapshot()
                 case .sample: emitSnapshot()
@@ -298,6 +330,7 @@ public final class PlaybackCoordinator: PlaybackService {
     }
 
     private func disposeItem() {
+        temporarySpeedToken = nil
         generation &+= 1
         settled = false
         observation?.dispose()
