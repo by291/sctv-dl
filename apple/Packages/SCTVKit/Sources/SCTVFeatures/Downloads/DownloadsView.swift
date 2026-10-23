@@ -92,6 +92,8 @@ public struct DownloadsView: View {
         )
         .navigationTitle("下载")
         #if os(iOS)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.visible, for: .navigationBar)
             .environment(\.editMode, $editMode)
             .onChange(of: editMode) { _, value in
                 if !value.isEditing { model.setSelection([]) }

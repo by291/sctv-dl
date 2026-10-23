@@ -46,8 +46,14 @@ public struct CatalogueView: View {
         .accessibilityIdentifier("catalogue-scroll")
         .scrollPosition(id: $model.scrollAnchor)
         .navigationTitle("栏目")
-        .searchable(text: $model.search, prompt: "搜索栏目")
-        #if os(macOS)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.visible, for: .navigationBar)
+            .searchable(
+                text: $model.search, placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "搜索栏目")
+        #else
+            .searchable(text: $model.search, prompt: "搜索栏目")
             .toolbar {
                 ToolbarItem {
                     Button("刷新", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
@@ -72,7 +78,8 @@ public struct CatalogueView: View {
             .accessibilityLabel(model.favouritesOnly ? "显示全部栏目" : "只看收藏")
             Menu("排序", systemImage: "arrow.up.arrow.down") {
                 Toggle("按名称排序", isOn: $model.alphabetical)
-            }.menuStyle(.borderlessButton).fixedSize()
+            }
+            .menuStyle(.borderlessButton).fixedSize()
         }
     }
 
