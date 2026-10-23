@@ -42,20 +42,35 @@ public enum ArtworkCache {
 
 public struct Artwork: View {
     let url: URL?
+    @Environment(\.colorScheme) private var scheme
     public init(url: URL?) { self.url = url }
 
     public var body: some View {
-        LazyImage(url: ArtworkCache.allowed(url)) { state in
-            if let image = state.image {
-                image.resizable().scaledToFill()
-            } else {
-                Rectangle().fill(.quaternary)
-                    .overlay { Image(systemName: "tv").foregroundStyle(.secondary) }
+        Rectangle().fill(.clear)
+            .aspectRatio(16.0 / 9.0, contentMode: .fit)
+            .overlay {
+                LazyImage(url: ArtworkCache.allowed(url)) { state in
+                    if let image = state.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        PresentationStyle.accent(scheme).opacity(0.22),
+                                        PresentationStyle.accent(scheme).opacity(0.06),
+                                    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .overlay {
+                                Image(systemName: "play.rectangle")
+                                    .font(.system(size: 32, weight: .ultraLight))
+                                    .foregroundStyle(PresentationStyle.accent(scheme).opacity(0.6))
+                            }
+                    }
+                }
+                .pipeline(ArtworkCache.pipeline)
             }
-        }
-        .pipeline(ArtworkCache.pipeline)
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .clipped()
-        .accessibilityHidden(true)
+            .clipped()
+            .accessibilityHidden(true)
     }
 }
