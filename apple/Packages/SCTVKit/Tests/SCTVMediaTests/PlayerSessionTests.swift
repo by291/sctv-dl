@@ -26,6 +26,20 @@ struct PlayerSessionTests {
         return PlaybackCoordinator(transport: FixtureFileTransport(url: url))
     }
 
+    @Test(.timeLimit(.minutes(1))) func repeatedDismissalReleasesPlayerItems() async throws {
+        let coordinator = try coordinator()
+        for _ in 0..<5 {
+            _ = try await coordinator.open(request())
+            weak var item = coordinator.player.currentItem
+            #expect(item != nil)
+            coordinator.beginDismissal()
+            await coordinator.finishDismissal()
+            for _ in 0..<100 where item != nil { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(item == nil)
+            #expect(coordinator.state == .idle)
+        }
+    }
+
     @Test(.timeLimit(.minutes(1))) func opensPausedAndRestoresAfterSeek() async throws {
         let coordinator = try coordinator()
         _ = try await coordinator.open(request())

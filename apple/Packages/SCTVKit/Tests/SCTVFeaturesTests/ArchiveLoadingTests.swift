@@ -40,6 +40,18 @@ private actor ArchiveLoadingRepository: ProgrammeRepository {
 }
 
 @MainActor struct ArchiveLoadingTests {
+    @Test func leavingArchiveReleasesItsPageModel() async throws {
+        let repository = ArchiveLoadingRepository()
+        var model: ArchiveModel? = ArchiveModel(
+            programme: Programme(id: "1", name: "News", cover: nil), repository: repository)
+        weak var released = model
+        await model?.load()
+        model?.stop()
+        model = nil
+        for _ in 0..<100 where released != nil { try await Task.sleep(for: .milliseconds(1)) }
+        #expect(released == nil)
+    }
+
     @Test func resumingArchiveKeepsRowsWhileReconnectingSubscriptions() async throws {
         let repository = ArchiveLoadingRepository()
         let model = ArchiveModel(
