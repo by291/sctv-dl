@@ -47,7 +47,7 @@ public final class PlaybackCoordinator: PlaybackService {
     public func open(_ request: PlaybackRequest) async throws -> UUID {
         #if os(iOS)
             if audioSession == nil {
-                audioSession = try IOSPlaybackAudioSession { [weak self] in
+                audioSession = IOSPlaybackAudioSession { [weak self] in
                     self?.pauseForInterruption()
                 }
             }
@@ -156,13 +156,18 @@ public final class PlaybackCoordinator: PlaybackService {
         guard dismissing, !pictureInPicture else { return }
         disposeItem()
         #if os(iOS)
-            audioSession?.dispose()
+            let audioDisposal = audioSession?.dispose()
             audioSession = nil
         #endif
         request = nil
         sessionID = nil
         lastSnapshot = nil
         state = .idle
+        #if os(iOS)
+            // Commit cleanup before suspension: a replacement may open while audio drains.
+            // Deactivation is best effort and cannot restore an already disposed player.
+            _ = try? await audioDisposal?.value
+        #endif
     }
 
     public func snapshots() -> AsyncStream<PlaybackSnapshot> {
@@ -191,6 +196,10 @@ public final class PlaybackCoordinator: PlaybackService {
         state = .preparing
 
         do {
+            #if os(iOS)
+                try await audioSession?.prepare()
+                guard generation == token, !dismissing else { throw CancellationError() }
+            #endif
             let asset: AVURLAsset
             if let lease = request.localFile {
                 // A local intent remains local even when an online source is available.
