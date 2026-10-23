@@ -28,12 +28,17 @@ struct HistoryCard: View {
                                 .accessibilityLabel("观看进度")
                             }
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .frame(width: typeSize.isAccessibilitySize ? nil : 116)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: typeSize.isAccessibilitySize ? 18 : 10)
+                        )
+                        .frame(width: typeSize.isAccessibilitySize ? nil : 136)
                     VStack(alignment: .leading, spacing: 7) {
                         Text(entry.title).font(.headline).foregroundStyle(.primary)
+                            .lineLimit(3, reservesSpace: true)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text("\(entry.programmeName) · \(entry.broadcastDate)")
                             .font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(entry.title)
@@ -45,10 +50,18 @@ struct HistoryCard: View {
                 .foregroundStyle(PresentationStyle.accent(scheme))
                 .frame(minHeight: 44)
                 Spacer()
-                Menu("记录操作", systemImage: "ellipsis") {
+                Menu {
                     Button("删除记录", role: .destructive) { remove() }
-                }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(PresentationStyle.accent(scheme))
+                .accessibilityLabel("记录操作")
             }.padding(.top, 6)
-        }.padding(16).editorialCard()
+        }.padding(12).editorialCard()
     }
 }
