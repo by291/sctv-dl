@@ -24,17 +24,19 @@ struct WorkspaceView: View {
     @State private var downloads: DownloadsModel
     @State private var sharing: FileSharingController
     @State private var player: PlayerSession
+    @State private var playerLifetime: PlayerPresentationLifetime
     @State private var selection: WorkspaceSection? = .catalogue
     @SceneStorage("workspace.tab") private var selectedTabName = "栏目"
     @SceneStorage("workspace.cataloguePath") private var savedCataloguePath = Data()
     @SceneStorage("workspace.libraryPath") private var savedLibraryPath = Data()
     @SceneStorage("workspace.catalogueSort") private var savedAlphabetical = false
     @State private var restoredPaths = false
-    @State private var cataloguePath: [Programme] = []
-    @State private var libraryPath: [Programme] = []
+    @State private var cataloguePath: [WorkspaceRoute] = []
+    @State private var libraryPath: [WorkspaceRoute] = []
+    @State private var downloadsPath: [PlayerPresentation] = []
     @State private var showingSettings = false
-    @State private var playerPresentation: PlayerPresentation?
     @State private var message: String?
+    @Environment(\.colorScheme) private var systemScheme
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var phase
     #if os(macOS)
@@ -50,17 +52,55 @@ struct WorkspaceView: View {
         _downloads = State(initialValue: DownloadsModel(service: dependencies.downloads.service))
         _sharing = State(initialValue: FileSharingController(downloads: dependencies.downloads))
         _player = State(initialValue: dependencies.player)
+        _playerLifetime = State(
+            initialValue: PlayerPresentationLifetime(session: dependencies.player))
     }
 
     var body: some View {
         Group {
             #if os(macOS)
                 NavigationSplitView {
-                    List(WorkspaceSection.allCases, selection: $selection) { item in
-                        Label(item.rawValue, systemImage: item.symbol).tag(item)
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.rectangle.fill")
+                                .font(.title).foregroundStyle(
+                                    PresentationStyle.accent(colorScheme ?? systemScheme))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("SCTV").font(.system(.title2, design: .serif, weight: .bold))
+                                Text("好节目，随时回看").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.padding(.horizontal, 20).padding(.top, 28)
+                        ScrollView {
+                            VStack(spacing: 6) {
+                                ForEach(WorkspaceSection.allCases) { item in
+                                    Button {
+                                        selection = item
+                                    } label: {
+                                        Label(item.rawValue, systemImage: item.symbol)
+                                            .font(.headline)
+                                            .foregroundStyle(
+                                                selection == item
+                                                    ? PresentationStyle.accent(
+                                                        colorScheme ?? systemScheme) : .primary
+                                            )
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 14).padding(.vertical, 13)
+                                            .background(
+                                                selection == item
+                                                    ? PresentationStyle.accent(
+                                                        colorScheme ?? systemScheme
+                                                    ).opacity(0.12) : .clear,
+                                                in: RoundedRectangle(cornerRadius: 12))
+                                    }.buttonStyle(.plain)
+                                        .accessibilityAddTraits(
+                                            selection == item ? .isSelected : [])
+                                }
+                            }.padding(.horizontal, 12)
+                        }
+                        Button("设置", systemImage: "gearshape") { openSettings() }
+                            .buttonStyle(.plain).padding(20)
                     }
-                    .navigationTitle("SCTV")
-                    .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
                 } detail: {
                     switch selection ?? .catalogue {
                     case .catalogue: catalogueNavigation
@@ -86,6 +126,7 @@ struct WorkspaceView: View {
                 }.tabViewStyle(.sidebarAdaptable)
             #endif
         }
+        .tint(PresentationStyle.accent(colorScheme ?? systemScheme))
         .preferredColorScheme(colorScheme)
         .onChange(of: sharing.warning) { _, value in
             if let value {
@@ -106,10 +147,12 @@ struct WorkspaceView: View {
             libraryPath = restore(savedLibraryPath)
         }
         .onChange(of: cataloguePath) { _, value in
-            savedCataloguePath = (try? JSONEncoder().encode(value.map(\.id))) ?? Data()
+            savedCataloguePath =
+                (try? JSONEncoder().encode(value.compactMap(\.programmeID))) ?? Data()
         }
         .onChange(of: libraryPath) { _, value in
-            savedLibraryPath = (try? JSONEncoder().encode(value.map(\.id))) ?? Data()
+            savedLibraryPath =
+                (try? JSONEncoder().encode(value.compactMap(\.programmeID))) ?? Data()
         }
         .onChange(of: catalogue.alphabetical) { _, value in savedAlphabetical = value }
         .onChange(of: phase) { _, value in
@@ -131,24 +174,15 @@ struct WorkspaceView: View {
                 }
             }
             .sheet(item: $sharing.sharing) { FileShareView(file: $0) }
-            .sheet(item: $playerPresentation) { presentation in
-                NavigationStack {
-                    PlayerSessionView(session: player)
-                    .onDisappear { Task { await player.close(expected: presentation.id) } }
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("完成") { playerPresentation = nil }
-                        }
-                    }
-                }
-            }
         #endif
     }
 
     private var catalogueNavigation: some View {
         NavigationStack(path: $cataloguePath) {
-            CatalogueView(model: catalogue) { cataloguePath.append($0) }
-                .navigationDestination(for: Programme.self) { archive($0) }
+            CatalogueView(model: catalogue) { cataloguePath.append(.archive($0)) }
+                .navigationDestination(for: WorkspaceRoute.self) {
+                    destination($0, section: .catalogue)
+                }
         }
     }
 
@@ -162,14 +196,15 @@ struct WorkspaceView: View {
                         do {
                             let request = try await dependencies.resolver.resolve(
                                 entry, quality: dependencies.settings.value.playbackQuality)
-                            await present(request, intent: intent)
+                            await present(request, intent: intent, section: .library)
                         } catch {
                             if player.isCurrentRequest(intent) {
                                 message = error.localizedDescription
                             }
                         }
                     }
-                }, open: { libraryPath.append($0) },
+                }, open: { libraryPath.append(.archive($0)) },
+                showHistory: { libraryPath.append(.history) },
                 settings: {
                     #if os(macOS)
                         openSettings()
@@ -177,12 +212,12 @@ struct WorkspaceView: View {
                         showingSettings = true
                     #endif
                 }
-            ).navigationDestination(for: Programme.self) { archive($0) }
+            ).navigationDestination(for: WorkspaceRoute.self) { destination($0, section: .library) }
         }
     }
 
     private var downloadsNavigation: some View {
-        NavigationStack {
+        NavigationStack(path: $downloadsPath) {
             DownloadsView(
                 model: downloads,
                 play: { task in
@@ -191,7 +226,9 @@ struct WorkspaceView: View {
                 },
                 export: { task in Task { await sharing.export(task) } },
                 reveal: { task in Task { await sharing.reveal(task) } },
-                reauthorize: { task in Task { await sharing.reauthorize(task) } })
+                reauthorize: { task in Task { await sharing.reauthorize(task) } }
+            )
+            .navigationDestination(for: PlayerPresentation.self) { playerPage($0) }
         }
     }
 
@@ -210,16 +247,16 @@ struct WorkspaceView: View {
                     content: task.content, title: task.title, sources: [], quality: task.quality,
                     resumeMilliseconds: resume, programmeName: task.programmeName,
                     broadcastDate: task.broadcastDate,
-                    cover: task.cover, localFile: lease), intent: intent)
+                    cover: task.cover, localFile: lease), intent: intent, section: .downloads)
         } catch {
             if player.isCurrentRequest(intent) { message = error.localizedDescription }
             try? await dependencies.downloads.service.reconcile()
         }
     }
 
-    private func archive(_ programme: Programme) -> some View {
+    private func archive(_ programme: Programme, section: WorkspaceSection) -> some View {
         ArchiveDestination(
-            programme: programme, repository: dependencies.programmes,
+            programme: programme, repository: dependencies.programmes, catalogue: catalogue,
             play: { content, date in
                 let intent = player.beginRequest()
                 Task {
@@ -227,7 +264,7 @@ struct WorkspaceView: View {
                         let request = try await dependencies.resolver.prepare(
                             content, programme: programme, broadcast: date,
                             quality: dependencies.settings.value.playbackQuality)
-                        await present(request, intent: intent)
+                        await present(request, intent: intent, section: section)
                     } catch {
                         if player.isCurrentRequest(intent) { message = error.localizedDescription }
                     }
@@ -266,19 +303,71 @@ struct WorkspaceView: View {
             + (failed > 0 ? "；\(failed) 项未添加，请检查任务列表或稍后重试。" : "。")
     }
 
-    private func present(_ request: PlaybackRequest, intent: UUID) async {
+    private func present(_ request: PlaybackRequest, intent: UUID, section: WorkspaceSection) async
+    {
         guard let token = player.beginPresentation(for: intent) else { return }
         #if os(macOS)
             openWindow(id: "player")
         #else
-            playerPresentation = PlayerPresentation(id: token)
+            let presentation = PlayerPresentation(id: token, section: section)
+            playerLifetime.takeOwnership(of: token)
+            // The shared session has one destination, even when a tab retains its stack.
+            cataloguePath.removeAll { $0.isPlayback }
+            libraryPath.removeAll { $0.isPlayback }
+            downloadsPath.removeAll()
+            switch section {
+            case .catalogue: cataloguePath.append(.player(presentation))
+            case .library: libraryPath.append(.player(presentation))
+            case .downloads: downloadsPath.append(presentation)
+            }
         #endif
         await player.open(request, expected: token)
     }
 
-    private func restore(_ data: Data) -> [Programme] {
+    @ViewBuilder private func destination(_ route: WorkspaceRoute, section: WorkspaceSection)
+        -> some View
+    {
+        switch route {
+        case .archive(let programme): archive(programme, section: section)
+        case .player(let presentation): playerPage(presentation)
+        case .history:
+            HistoryView(model: library) { entry in
+                let intent = player.beginRequest()
+                Task {
+                    do {
+                        let request = try await dependencies.resolver.resolve(
+                            entry, quality: dependencies.settings.value.playbackQuality)
+                        await present(request, intent: intent, section: .library)
+                    } catch {
+                        if player.isCurrentRequest(intent) { message = error.localizedDescription }
+                    }
+                }
+            }
+        }
+    }
+
+    private func playerPage(_ presentation: PlayerPresentation) -> some View {
+        PlayerSessionView(session: player, download: dependencies.downloadCurrentProgramme)
+            #if os(iOS)
+                .toolbar(.hidden, for: .tabBar)
+            #endif
+            .onDisappear {
+                // AVKit fullscreen temporarily covers this view without ending its route.
+                // A committed navigation pop releases only the presentation that left.
+                let remains =
+                    cataloguePath.contains(.player(presentation))
+                    || libraryPath.contains(.player(presentation))
+                    || downloadsPath.contains(presentation)
+                guard !remains else { return }
+                Task { await player.close(expected: presentation.id) }
+            }
+    }
+
+    private func restore(_ data: Data) -> [WorkspaceRoute] {
         let ids = (try? JSONDecoder().decode([String].self, from: data)) ?? []
-        return ids.compactMap { id in catalogue.programmes.first { $0.id == id } }
+        return ids.compactMap { id in
+            catalogue.programmes.first { $0.id == id }.map(WorkspaceRoute.archive)
+        }
     }
 
     private var colorScheme: ColorScheme? {
@@ -291,22 +380,26 @@ struct WorkspaceView: View {
 }
 
 private struct ArchiveDestination: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
     @State private var model: ArchiveModel?
     @SceneStorage private var dateID: String
     @SceneStorage private var ascending: Bool
     @SceneStorage private var anchor: String
     let programme: Programme
     let repository: any ProgrammeRepository
+    let catalogue: CatalogueModel
     let play: (ProgrammeContent, BroadcastDate) -> Void
     let download: ([ProgrammeContent], BroadcastDate) -> Void
 
     init(
-        programme: Programme, repository: any ProgrammeRepository,
+        programme: Programme, repository: any ProgrammeRepository, catalogue: CatalogueModel,
         play: @escaping (ProgrammeContent, BroadcastDate) -> Void,
         download: @escaping ([ProgrammeContent], BroadcastDate) -> Void
     ) {
         self.programme = programme
         self.repository = repository
+        self.catalogue = catalogue
         self.play = play
         self.download = download
         _dateID = SceneStorage(wrappedValue: "", "archive.\(programme.id).date")
@@ -317,13 +410,27 @@ private struct ArchiveDestination: View {
     var body: some View {
         Group {
             if let model {
-                ArchiveView(model: model, play: play, download: download)
-                    .onChange(of: model.selectedDateID) { _, value in
-                        if let value { dateID = value }
+                ArchiveView(
+                    model: model, favourite: catalogue.favouriteIDs.contains(programme.id),
+                    toggleFavourite: { Task { await catalogue.toggleFavourite(programme) } },
+                    play: play, download: download
+                )
+                .onChange(of: model.selectedDateID) { _, value in
+                    if let value { dateID = value }
+                }
+                .onChange(of: model.ascending) { _, value in ascending = value }
+                // Persist at lifecycle boundaries without observing every scroll target
+                // in this parent, which would invalidate the complete archive subtree.
+                .onAppear { isVisible = true }
+                .onDisappear {
+                    isVisible = false
+                    if let value = model.scrollAnchor { anchor = value }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if isVisible, phase != .active, let value = model.scrollAnchor {
+                        anchor = value
                     }
-                    .onChange(of: model.ascending) { _, value in ascending = value }
-                    .onChange(of: model.scrollAnchor) { _, value in if let value { anchor = value }
-                    }
+                }
             } else {
                 ProgressView("载入栏目")
             }
@@ -338,4 +445,21 @@ private struct ArchiveDestination: View {
     }
 }
 
-private struct PlayerPresentation: Identifiable { let id: UUID }
+private struct PlayerPresentation: Identifiable, Hashable {
+    let id: UUID
+    let section: WorkspaceSection
+}
+
+private enum WorkspaceRoute: Hashable {
+    case archive(Programme)
+    case history
+    case player(PlayerPresentation)
+
+    var isPlayback: Bool {
+        if case .player = self { true } else { false }
+    }
+
+    var programmeID: String? {
+        if case .archive(let programme) = self { programme.id } else { nil }
+    }
+}

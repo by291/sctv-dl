@@ -4,61 +4,110 @@ import SwiftUI
 public struct ArchiveView: View {
     @Bindable private var model: ArchiveModel
     @State private var selecting = false
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorScheme) private var scheme
+    private let favourite: Bool
+    private let toggleFavourite: () -> Void
     private let play: (ProgrammeContent, BroadcastDate) -> Void
     private let download: ([ProgrammeContent], BroadcastDate) -> Void
 
     public init(
-        model: ArchiveModel, play: @escaping (ProgrammeContent, BroadcastDate) -> Void,
+        model: ArchiveModel, favourite: Bool = false, toggleFavourite: @escaping () -> Void = {},
+        play: @escaping (ProgrammeContent, BroadcastDate) -> Void,
         download: @escaping ([ProgrammeContent], BroadcastDate) -> Void
     ) {
         self.model = model
+        self.favourite = favourite
+        self.toggleFavourite = toggleFavourite
         self.play = play
         self.download = download
     }
 
     public var body: some View {
-        List {
-            if !model.dates.isEmpty {
-                Section {
-                    if dynamicTypeSize.isAccessibilitySize {
-                        Menu {
-                            datePicker.pickerStyle(.inline)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("播出日期", systemImage: "chevron.down").font(.headline)
-                                Text(model.broadcast?.date ?? "选择日期")
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                        }.buttonStyle(.plain)
+        GeometryReader { geometry in
+            let wide = geometry.size.width >= 850 && !typeSize.isAccessibilitySize
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    archiveHeader
+                    dateSelection
+                    if let warning = model.warning {
+                        InlineNotice(text: warning)
+                        Button("重试") { Task { await model.refresh() } }
+                    }
+                    if model.hasPendingUpdate && !selecting {
+                        Button("发现新内容，点此查看", systemImage: "arrow.clockwise") {
+                            Task { await model.acceptUpdate() }
+                        }.buttonStyle(.bordered)
+                    }
+                    if model.isLoading && model.contents.isEmpty {
+                        ProgressView("载入节目").frame(maxWidth: .infinity).padding(24)
+                    }
+                    if wide {
+                        HStack(alignment: .top, spacing: 28) {
+                            if !model.fullEpisodes.isEmpty {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
+                                    LazyVStack(spacing: 16) {
+                                        ForEach(model.fullEpisodes) { content in
+                                            contentCard(content, featured: true).id(content.id)
+                                        }
+                                    }.scrollTargetLayout()
+                                }.frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            if !model.clips.isEmpty {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    SectionHeading(title: "节目片段", count: model.clips.count)
+                                    LazyVStack(spacing: 12) {
+                                        ForEach(model.clips) { content in
+                                            contentCard(content, featured: false).id(content.id)
+                                        }
+                                    }.scrollTargetLayout()
+                                }.frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                        }
                     } else {
-                        datePicker
+                        // Keep rows in one lazy stack so the scroll view can track
+                        // their geometry without nested section-sized layouts.
+                        if !model.fullEpisodes.isEmpty {
+                            Section {
+                                ForEach(model.fullEpisodes) { content in
+                                    contentCard(content, featured: true).id(content.id)
+                                }
+                            } header: {
+                                SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
+                                    .padding(.top, 12)
+                            }
+                        }
+                        if !model.clips.isEmpty {
+                            Section {
+                                ForEach(model.clips) { content in
+                                    contentCard(content, featured: false).id(content.id)
+                                }
+                            } header: {
+                                SectionHeading(title: "节目片段", count: model.clips.count)
+                                    .padding(.top, 12)
+                            }
+                        }
+                    }
+                    if !model.isLoading && model.contents.isEmpty && model.warning == nil {
+                        ContentUnavailableView(
+                            "暂无节目", systemImage: "play.rectangle",
+                            description: Text("选择其他播出日期，或稍后刷新。"))
                     }
                 }
+                .scrollTargetLayout(isEnabled: !wide)
+                .padding(20)
+                .frame(maxWidth: 1160)
+                .frame(maxWidth: .infinity)
             }
-            if let warning = model.warning {
-                Section {
-                    Label(warning, systemImage: "exclamationmark.triangle")
-                    Button("重试") { Task { await model.refresh() } }
-                }
-            }
-            if model.hasPendingUpdate {
-                Button("本栏目有更新，点此查看") { Task { await model.acceptUpdate() } }.disabled(
-                    !model.selection.isEmpty)
-            }
-            if model.isLoading && model.contents.isEmpty { ProgressView("载入节目") }
-            if !model.fullEpisodes.isEmpty {
-                Section("完整节目") { ForEach(model.fullEpisodes) { contentRow($0) } }
-            }
-            if !model.clips.isEmpty { Section("节目片段") { ForEach(model.clips) { contentRow($0) } } }
-            if !model.isLoading && model.contents.isEmpty {
-                ContentUnavailableView(
-                    "暂无节目", systemImage: "play.rectangle", description: Text("选择其他播出日期，或稍后刷新。"))
-            }
+            .scrollPosition(id: $model.scrollAnchor)
+            .accessibilityIdentifier("archive-scroll")
+            .background(PresentationStyle.canvas(scheme))
         }
-        .scrollPosition(id: $model.scrollAnchor)
         .navigationTitle(model.programme.name)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem {
                 Menu("更多", systemImage: "ellipsis") {
@@ -70,65 +119,166 @@ public struct ArchiveView: View {
                     Button("刷新", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom) {
             if selecting {
-                ToolbarItem {
+                HStack {
+                    Button("取消") {
+                        selecting = false
+                        model.setSelection([])
+                    }
+                    Spacer()
                     Button("下载所选（\(model.selection.count)）", systemImage: "arrow.down.circle") {
                         if let date = model.broadcast { download(model.selectedContents, date) }
-                    }.disabled(model.selection.isEmpty || model.selection.count > 100)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.selection.isEmpty || model.selection.count > 100)
                 }
+                .padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+                .padding(.horizontal, 20).padding(.bottom, 8)
             }
         }
         .task { await model.load() }
         .onDisappear { model.stop() }
     }
 
-    private var datePicker: some View {
-        Picker(
-            "播出日期",
-            selection: Binding(
-                get: { model.selectedDateID ?? "" },
-                set: { id in Task { await model.selectDate(id) } })
-        ) {
-            ForEach(model.dates) { Text($0.date).tag($0.id) }
+    private var archiveHeader: some View {
+        let layout =
+            typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 22))
+        return layout {
+            if !typeSize.isAccessibilitySize {
+                Artwork(url: model.programme.cover)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .frame(maxWidth: 340)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("SCTV / 栏目档案").font(.caption.weight(.semibold))
+                    .tracking(2).foregroundStyle(PresentationStyle.accent(scheme))
+                Text(model.programme.name)
+                    .font(.system(.title, design: .serif, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(
+                    favourite ? "已收藏" : "收藏栏目", systemImage: favourite ? "heart.fill" : "heart",
+                    action: toggleFavourite
+                )
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.vertical, 8)
+    }
+
+    @ViewBuilder private var dateSelection: some View {
+        if !model.dates.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("播出日期").font(.headline)
+                    Spacer()
+                    Picker(
+                        "全部日期",
+                        selection: Binding(
+                            get: { model.selectedDateID ?? "" },
+                            set: { id in Task { await model.selectDate(id) } }
+                        )
+                    ) {
+                        ForEach(model.dates) { Text($0.date).tag($0.id) }
+                    }.labelsHidden().pickerStyle(.menu)
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(model.dates.prefix(14)) { date in
+                            Button {
+                                Task { await model.selectDate(date.id) }
+                            } label: {
+                                Text(date.date).font(.subheadline.weight(.medium)).monospacedDigit()
+                                    .padding(.horizontal, 16).padding(.vertical, 13)
+                                    .foregroundStyle(
+                                        date.id == model.selectedDateID
+                                            ? (scheme == .dark ? Color.black : .white) : .primary
+                                    )
+                                    .background(
+                                        date.id == model.selectedDateID
+                                            ? PresentationStyle.accent(scheme)
+                                            : PresentationStyle.surface(scheme), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(
+                                date.id == model.selectedDateID ? .isSelected : [])
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private func contentRow(_ content: ProgrammeContent) -> some View {
-        HStack(spacing: 12) {
-            if selecting {
-                Button {
-                    var ids = model.selection
-                    if !ids.insert(content.id).inserted { ids.remove(content.id) }
-                    model.setSelection(ids)
-                } label: {
-                    Image(
-                        systemName: model.selection.contains(content.id)
-                            ? "checkmark.circle.fill" : "circle")
-                }
-                .buttonStyle(.plain).accessibilityLabel("选择\(content.title)")
-            }
+    private func contentCard(_ content: ProgrammeContent, featured: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             Button {
-                if let date = model.broadcast { play(content, date) }
+                activate(content)
             } label: {
-                HStack(spacing: 12) {
-                    Artwork(url: content.cover).frame(width: 104).clipShape(
-                        RoundedRectangle(cornerRadius: 8))
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(content.title).foregroundStyle(.primary)
-                        if let published = content.publishedAt {
-                            Text(published).font(.caption).foregroundStyle(.secondary)
+                let vertical = featured || typeSize.isAccessibilitySize
+                let layout =
+                    vertical
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+                layout {
+                    Artwork(url: content.cover ?? model.programme.cover)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(
+                                systemName: selecting
+                                    ? (model.selection.contains(content.id)
+                                        ? "checkmark.circle.fill" : "circle") : "play.fill"
+                            )
+                            .font(.system(size: featured ? 20 : 14, weight: .semibold))
+                            .frame(width: featured ? 48 : 32, height: featured ? 48 : 32)
+                            .background(.regularMaterial, in: Circle()).padding(12)
+                            .foregroundStyle(PresentationStyle.accent(scheme))
                         }
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.plain)
-            Menu("节目操作", systemImage: "ellipsis") {
-                Button("播放", systemImage: "play") {
-                    if let date = model.broadcast { play(content, date) }
+                        .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 12))
+                        .frame(width: vertical ? nil : 112)
+                    Text(content.title)
+                        .font(featured ? .title3.weight(.semibold) : .headline)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(vertical ? 18 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Button("下载", systemImage: "arrow.down.circle") {
-                    if let date = model.broadcast { download([content], date) }
-                }.accessibilityIdentifier("download-content-\(content.id)")
-            }.labelStyle(.iconOnly).accessibilityIdentifier("content-actions-\(content.id)")
-        }.padding(.vertical, 4).id(content.id)
+                .padding(vertical ? 0 : 12)
+                .contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            HStack(spacing: 12) {
+                Text(content.publishedAt ?? model.broadcast?.date ?? "")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Menu("节目操作", systemImage: "ellipsis") {
+                    Button("播放", systemImage: "play") {
+                        if let date = model.broadcast { play(content, date) }
+                    }
+                    Button("下载", systemImage: "arrow.down.circle") {
+                        if let date = model.broadcast { download([content], date) }
+                    }.accessibilityIdentifier("download-content-\(content.id)")
+                }
+                .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                .accessibilityIdentifier("content-actions-\(content.id)")
+            }.padding(.horizontal, 16).padding(.bottom, 6)
+        }
+        .editorialCard()
+        .overlay {
+            if model.selection.contains(content.id) {
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(PresentationStyle.accent(scheme), lineWidth: 2)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func activate(_ content: ProgrammeContent) {
+        if selecting {
+            var ids = model.selection
+            if !ids.insert(content.id).inserted { ids.remove(content.id) }
+            model.setSelection(ids)
+        } else if let date = model.broadcast {
+            play(content, date)
+        }
     }
 }

@@ -9,18 +9,22 @@ struct SCTVmacOSApp: App {
         WindowGroup("SCTV", id: "workspace") {
             ApplicationBootstrap(model: model).frame(minWidth: 720, minHeight: 480)
         }
+        .defaultSize(width: 1180, height: 800)
         .defaultLaunchBehavior(.presented)
         Window("播放器", id: "player") {
             if let dependencies = model.dependencies {
                 let session = dependencies.player
                 let presentation = session.presentationID
-                NavigationStack { PlayerSessionView(session: session) }
-                    .frame(minWidth: 480, minHeight: 320)
-                    .onDisappear {
-                        Task {
-                            await session.close(expected: presentation)
-                        }
+                NavigationStack {
+                    PlayerSessionView(
+                        session: session, download: dependencies.downloadCurrentProgramme)
+                }
+                .frame(minWidth: 640, minHeight: 480)
+                .onDisappear {
+                    Task {
+                        await session.close(expected: presentation)
                     }
+                }
             } else {
                 ContentUnavailableView("请先选择节目", systemImage: "play.rectangle")
             }
