@@ -28,7 +28,7 @@ struct ExplorationCard: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { backdrop }
         .clipShape(RoundedRectangle(cornerRadius: 28))
@@ -69,7 +69,7 @@ struct ExplorationCard: View {
     private var compactContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             cover(compact: true)
-                .frame(maxWidth: 310)
+                .frame(maxWidth: 280)
                 .frame(maxWidth: .infinity)
             if typeSize.isAccessibilitySize {
                 identity(wide: false)
@@ -136,7 +136,7 @@ struct ExplorationCard: View {
             }
             // Reserve the rotated edges so loading and title changes cannot move the cover.
             .padding(.horizontal, compact ? 24 : 8)
-            .padding(.vertical, compact ? 8 : 12)
+            .padding(.vertical, compact ? 6 : 12)
             .accessibilityHidden(true)
     }
 

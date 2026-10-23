@@ -107,11 +107,14 @@ public struct ArchiveView: View {
         }
         .navigationTitle(model.programme.name)
         #if os(iOS)
+            .toolbar(.visible, for: .navigationBar)
+        #endif
+        #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItem {
-                Button(selecting ? "取消选择" : "选择节目") {
+                Button(selecting ? "取消选择" : "选择") {
                     selecting.toggle()
                     model.setSelection([])
                 }
@@ -235,7 +238,9 @@ public struct ArchiveView: View {
                             reservesSpace: !featured
                         )
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(vertical ? 18 : 0)
+                        .padding(.horizontal, vertical ? (featured ? 16 : 18) : 0)
+                        .padding(.top, vertical ? (featured ? 8 : 18) : 0)
+                        .padding(.bottom, vertical && !featured ? 18 : 0)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, vertical ? 0 : 12)
@@ -251,7 +256,7 @@ public struct ArchiveView: View {
                 Spacer(minLength: 0)
             }
             .padding(.trailing, 44)
-            .frame(minHeight: vertical ? 44 : 20)
+            .frame(minHeight: typeSize.isAccessibilitySize ? 44 : 20)
             .overlay(alignment: .trailing) {
                 Menu {
                     Button("播放", systemImage: "play") {
@@ -272,8 +277,9 @@ public struct ArchiveView: View {
                 .accessibilityIdentifier("content-actions-\(content.id)")
             }
             .padding(.horizontal, 16)
-            .padding(.top, vertical ? 0 : 12)
-            .padding(.bottom, vertical ? 6 : 14)
+            .padding(.top, typeSize.isAccessibilitySize ? 0 : 12)
+            // Shared episode/clip insets contain the menu's full 44-point hit area.
+            .padding(.bottom, typeSize.isAccessibilitySize ? 6 : 14)
         }
         .editorialCard()
         .overlay {
