@@ -2,6 +2,132 @@ import XCTest
 
 @MainActor
 final class ApplicationAcceptanceTests: XCTestCase {
+    func testExplorationKeepsGeometryWhenChangingTitle() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--ui-fixtures", "--ui-long-titles", "-ApplePersistenceIgnoreState", "YES",
+        ]
+        continueAfterFailure = false
+        app.launch()
+        #if os(macOS)
+            app.activate()
+            if !app.windows.firstMatch.waitForExistence(timeout: 3) {
+                app.typeKey("n", modifierFlags: .command)
+            }
+        #endif
+        let title = app.staticTexts["exploration-title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        let card = app.descendants(matching: .any)["catalogue-exploration"].firstMatch
+        let initial = card.frame
+        let initialShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        initialShot.name = "editorial-short-title"
+        initialShot.lifetime = .keepAlways
+        add(initialShot)
+        XCTAssertTrue(title.isHittable)
+        #if os(iOS)
+            if app.windows.firstMatch.frame.width < 500 {
+                XCTAssertLessThanOrEqual(
+                    app.buttons["四川新闻"].frame.maxY,
+                    app.buttons["下载"].firstMatch.frame.minY)
+            }
+        #endif
+        if initial.width >= 580 {
+            XCTAssertLessThan(initial.height, initial.width * 0.7)
+        }
+        activate(app.buttons["换一个"])
+        #if os(macOS)
+            XCTAssertEqual(title.value as? String, "防癌大讲堂")
+        #else
+            XCTAssertEqual(title.label, "防癌大讲堂")
+        #endif
+        XCTAssertEqual(card.frame.height, initial.height, accuracy: 1)
+        XCTAssertEqual(card.frame.width, initial.width, accuracy: 1)
+        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        shot.name = "polished-long-title"
+        shot.lifetime = .keepAlways
+        add(shot)
+        activate(app.buttons["换一个"])
+        #if os(macOS)
+            XCTAssertEqual(title.value as? String, "四川新闻")
+        #else
+            XCTAssertEqual(title.label, "四川新闻")
+        #endif
+        XCTAssertEqual(card.frame.height, initial.height, accuracy: 1)
+        activate(app.buttons["查看节目"])
+        XCTAssertTrue(
+            app.descendants(matching: .any)["完整节目"].firstMatch.waitForExistence(timeout: 10))
+    }
+
+    func testLongArchiveTitlesKeepCompactCardHeight() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+        ]
+        continueAfterFailure = false
+        app.launch()
+        #if os(macOS)
+            app.activate()
+            if !app.windows.firstMatch.waitForExistence(timeout: 3) {
+                app.typeKey("n", modifierFlags: .command)
+            }
+        #endif
+        let programme = app.buttons["四川新闻"]
+        XCTAssertTrue(programme.waitForExistence(timeout: 15))
+        activate(programme)
+        let long = app.buttons["archive-play-31"]
+        let short = app.buttons["archive-play-32"]
+        reveal(short, in: app)
+        XCTAssertTrue(long.waitForExistence(timeout: 10))
+        XCTAssertTrue(short.exists)
+        XCTAssertGreaterThan(long.label.count, 200)
+        XCTAssertLessThan(long.frame.height, 120)
+        XCTAssertEqual(long.frame.height, short.frame.height, accuracy: 2)
+        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        shot.name = "compact-long-archive-title"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    func testLongDateHistoryOpensOnDemandAndSelectsOlderBroadcast() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--ui-fixtures", "--ui-many-dates", "-ApplePersistenceIgnoreState", "YES",
+        ]
+        continueAfterFailure = false
+        app.launch()
+        #if os(macOS)
+            app.activate()
+            if !app.windows.firstMatch.waitForExistence(timeout: 3) {
+                app.typeKey("n", modifierFlags: .command)
+            }
+        #endif
+        let programme = app.buttons["四川新闻"]
+        XCTAssertTrue(programme.waitForExistence(timeout: 15))
+        activate(programme)
+        let dates = app.buttons["archive-all-dates"]
+        XCTAssertTrue(dates.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["archive-date-3421"].exists)
+        activate(dates)
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        activate(search)
+        search.typeText("2017-06-30")
+        let oldest = app.buttons["archive-date-3421"]
+        XCTAssertTrue(oldest.waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        shot.name = "archive-date-search"
+        shot.lifetime = .keepAlways
+        add(shot)
+        activate(oldest)
+        XCTAssertTrue(app.buttons["四川新闻（2017.06.30）"].waitForExistence(timeout: 10))
+        XCTAssertFalse(search.exists)
+        activate(dates)
+        XCTAssertTrue(oldest.waitForExistence(timeout: 5))
+        XCTAssertTrue(oldest.isHittable)
+        activate(app.buttons["关闭"])
+        XCTAssertFalse(oldest.exists)
+    }
+
     func testCatalogueArchiveLibraryAndSettings() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
@@ -16,15 +142,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
 
         let programme = app.buttons["四川新闻"]
         XCTAssertTrue(programme.waitForExistence(timeout: 15))
+        let catalogueShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        catalogueShot.name = "redesign-catalogue"
+        catalogueShot.lifetime = .keepAlways
+        add(catalogueShot)
         activate(programme)
         XCTAssertTrue(
             app.descendants(matching: .any)["完整节目"].firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(
-            app.descendants(matching: .any).matching(
-                NSPredicate(format: "label CONTAINS %@", "秋日里的城市故事")
-            ).firstMatch
-                .exists)
-        let archive = XCTAttachment(screenshot: app.screenshot())
+        let clip = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS %@", "秋日里的城市故事")
+        ).firstMatch
+        reveal(clip, in: app)
+        XCTAssertTrue(clip.exists)
+        let archive = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         archive.name = "native-archive"
         archive.lifetime = .keepAlways
         add(archive)
@@ -35,8 +165,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let library = app.buttons["资料库"].firstMatch
             activate(library)
         #endif
-        XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 10))
-        activate(app.buttons["设置"])
+        XCTAssertTrue(app.buttons["设置"].firstMatch.waitForExistence(timeout: 10))
+        let libraryShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        libraryShot.name = "redesign-library"
+        libraryShot.lifetime = .keepAlways
+        add(libraryShot)
+        activate(app.buttons["下载"].firstMatch)
+        XCTAssertTrue(app.staticTexts["暂无下载"].waitForExistence(timeout: 10))
+        let downloadsShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        downloadsShot.name = "polished-empty-downloads"
+        downloadsShot.lifetime = .keepAlways
+        add(downloadsShot)
+        activate(app.buttons["资料库"].firstMatch)
+        activate(app.buttons["设置"].firstMatch)
         XCTAssertTrue(
             app.descendants(matching: .any)["首选画质"].firstMatch.waitForExistence(timeout: 10))
         let settings = XCTAttachment(screenshot: app.screenshot())
@@ -45,7 +186,89 @@ final class ApplicationAcceptanceTests: XCTestCase {
         add(settings)
     }
 
+    func testFavouriteActionFiltersCatalogueWithoutOpeningProgramme() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+        continueAfterFailure = false
+        app.launch()
+        #if os(macOS)
+            app.activate()
+            if !app.windows.firstMatch.waitForExistence(timeout: 3) {
+                app.typeKey("n", modifierFlags: .command)
+            }
+        #endif
+        let favourite = app.buttons["收藏 四川新闻"]
+        XCTAssertTrue(favourite.waitForExistence(timeout: 15))
+        reveal(favourite, in: app)
+        activate(favourite)
+        let saved = app.buttons["取消收藏 四川新闻"]
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        activate(app.buttons["只看收藏"])
+        XCTAssertTrue(app.buttons["四川新闻"].exists)
+        XCTAssertFalse(app.buttons["今日视点"].exists)
+        activate(saved)
+        XCTAssertTrue(app.staticTexts["还没有收藏栏目"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["查看节目"].exists)
+        activate(app.buttons["显示全部栏目"])
+        XCTAssertTrue(app.buttons["今日视点"].waitForExistence(timeout: 5))
+        #if os(macOS)
+            let search = app.searchFields.firstMatch
+            search.click()
+            search.typeText("sctv-no-results")
+            XCTAssertTrue(app.staticTexts["没有找到栏目"].waitForExistence(timeout: 5))
+            search.typeKey("a", modifierFlags: .command)
+            search.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+            XCTAssertTrue(app.buttons["今日视点"].waitForExistence(timeout: 5))
+        #endif
+    }
+
     #if os(iOS)
+        func testPlaybackReturnsToArchiveThroughNavigation() {
+            XCUIDevice.shared.orientation = .portrait
+            defer { XCUIDevice.shared.orientation = .portrait }
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            let programme = app.buttons["四川新闻"]
+            XCTAssertTrue(programme.waitForExistence(timeout: 15))
+            programme.tap()
+            let menu = app.descendants(matching: .any)["content-actions-30"].firstMatch
+            reveal(menu, in: app)
+            XCTAssertTrue(menu.waitForExistence(timeout: 10))
+            menu.tap()
+            app.buttons["播放"].firstMatch.tap()
+            let player = app.descendants(matching: .any)["native-player-ready"].firstMatch
+            XCTAssertTrue(player.waitForExistence(timeout: 20))
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "redesign-player"
+            shot.lifetime = .keepAlways
+            add(shot)
+            XCUIDevice.shared.orientation = .landscapeLeft
+            XCTAssertTrue(player.waitForExistence(timeout: 5))
+            let landscape = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            landscape.name = "redesign-player-landscape"
+            landscape.lifetime = .keepAlways
+            add(landscape)
+            XCUIDevice.shared.orientation = .portrait
+            let back = app.navigationBars.buttons["BackButton"].firstMatch
+            XCTAssertTrue(back.waitForExistence(timeout: 5))
+            back.tap()
+            XCTAssertTrue(menu.waitForExistence(timeout: 10))
+            XCTAssertFalse(player.exists)
+            app.buttons["资料库"].firstMatch.tap()
+            let history = app.buttons["观看历史"]
+            XCTAssertTrue(history.waitForExistence(timeout: 5))
+            history.tap()
+            let entry = app.buttons["四川新闻（2026.10.22）"]
+            XCTAssertTrue(entry.waitForExistence(timeout: 5))
+            entry.tap()
+            XCTAssertTrue(player.waitForExistence(timeout: 20))
+            app.navigationBars.buttons["BackButton"].firstMatch.tap()
+            XCTAssertTrue(app.navigationBars["观看历史"].waitForExistence(timeout: 5))
+            XCTAssertTrue(entry.exists)
+        }
+
         func testLargeTextDarkArchiveSurvivesRotation() {
             let app = XCUIApplication()
             app.launchArguments = [
@@ -57,12 +280,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCUIDevice.shared.orientation = .portrait
             defer { XCUIDevice.shared.orientation = .portrait }
             app.launch()
-            let programme = app.buttons["四川新闻"]
-            XCTAssertTrue(programme.waitForExistence(timeout: 15))
-            programme.tap()
+            let entry = app.buttons["查看节目"]
+            XCTAssertTrue(entry.waitForExistence(timeout: 15))
+            reveal(entry, in: app)
+            let catalogue = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            catalogue.name = "editorial-large-text-dark"
+            catalogue.lifetime = .keepAlways
+            add(catalogue)
+            entry.tap()
             let content = app.descendants(matching: .any)["content-actions-30"].firstMatch
+            reveal(content, in: app)
             XCTAssertTrue(content.waitForExistence(timeout: 10))
             XCUIDevice.shared.orientation = .landscapeLeft
+            reveal(content, in: app)
             XCTAssertTrue(content.waitForExistence(timeout: 10))
             content.tap()
             XCTAssertTrue(
@@ -74,6 +304,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
             add(attachment)
         }
     #endif
+
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<8 {
+            if element.exists && element.isHittable { return }
+            #if os(macOS)
+                let archive = app.scrollViews["archive-scroll"]
+                let scroll = archive.exists ? archive : app.scrollViews["catalogue-scroll"]
+                scroll.scroll(byDeltaX: 0, deltaY: -300)
+            #else
+                app.swipeUp()
+            #endif
+        }
+    }
 
     private func activate(_ element: XCUIElement) {
         #if os(macOS)

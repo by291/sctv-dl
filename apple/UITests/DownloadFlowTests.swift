@@ -17,6 +17,14 @@ final class DownloadFlowTests: XCTestCase {
         XCTAssertTrue(programme.waitForExistence(timeout: 15))
         activate(programme)
         let menu = app.descendants(matching: .any)["content-actions-30"].firstMatch
+        for _ in 0..<8 {
+            if menu.exists && menu.isHittable { break }
+            #if os(macOS)
+                app.scrollViews["archive-scroll"].scroll(byDeltaX: 0, deltaY: -300)
+            #else
+                app.swipeUp()
+            #endif
+        }
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
         activate(menu)
         activate(app.descendants(matching: .any)["download-content-30"].firstMatch)
@@ -30,6 +38,12 @@ final class DownloadFlowTests: XCTestCase {
         activate(app.descendants(matching: .any)["下载"].firstMatch)
         let completed = app.descendants(matching: .any)["download-30-completed"].firstMatch
         XCTAssertTrue(completed.waitForExistence(timeout: 20))
+        #if os(iOS)
+            app.buttons["编辑"].tap()
+            XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 5))
+            app.buttons["完成"].tap()
+            XCTAssertTrue(app.buttons["编辑"].exists)
+        #endif
         activate(completed)
         activate(app.descendants(matching: .any)["play-download-30"].firstMatch)
         XCTAssertTrue(
