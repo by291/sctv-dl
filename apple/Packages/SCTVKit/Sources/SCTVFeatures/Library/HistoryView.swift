@@ -13,24 +13,30 @@ public struct HistoryView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                if let warning = model.warning { InlineNotice(text: warning) }
-                ForEach(HistoryDay.group(model.entries)) { day in
-                    SectionHeading(title: day.id.formatted(date: .abbreviated, time: .omitted))
-                    ForEach(day.entries) { entry in
-                        HistoryCard(
-                            entry: entry, play: { play(entry) },
-                            remove: { Task { await model.remove(entry) } })
-                    }
+        Group {
+            #if os(iOS)
+                List {
+                    historySections
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                 }
-            }.padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
+                .listStyle(.plain).scrollContentBackground(.hidden)
+            #else
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 20) { historySections }
+                        .padding(20).frame(maxWidth: 1000).frame(maxWidth: .infinity)
+                }
+            #endif
         }
         .background(PresentationStyle.canvas(scheme))
         .overlay {
             if model.entries.isEmpty { ContentUnavailableView("暂无观看记录", systemImage: "clock") }
         }
         .navigationTitle("观看历史")
+        #if os(iOS)
+            .toolbar(.visible, for: .navigationBar)
+        #endif
         .toolbar {
             Button("清空历史", role: .destructive) { confirmClear = true }.disabled(
                 model.entries.isEmpty)
@@ -40,4 +46,23 @@ public struct HistoryView: View {
         }
         .task { await model.load() }
     }
+
+    private var historySections: some View {
+        Group {
+            if let warning = model.warning { InlineNotice(text: warning) }
+            ForEach(HistoryDay.group(model.entries)) { day in
+                Section {
+                    ForEach(day.entries) { entry in
+                        HistoryCard(
+                            entry: entry, play: { play(entry) },
+                            remove: { Task { await model.remove(entry) } })
+                    }
+                } header: {
+                    SectionHeading(title: day.id.formatted(date: .abbreviated, time: .omitted))
+                        .foregroundStyle(Color.primary).textCase(nil)
+                }
+            }
+        }
+    }
+
 }

@@ -7,6 +7,7 @@ struct HistoryCard: View {
     let remove: () -> Void
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .headline) private var contentHeight = 82.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,6 +20,14 @@ struct HistoryCard: View {
                     : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
                 layout {
                     Artwork(url: entry.cover)
+                        .overlay {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 30, height: 30)
+                                .background(.black.opacity(0.4), in: Circle())
+                                .accessibilityHidden(true)
+                        }
                         .overlay(alignment: .bottom) {
                             if let duration = entry.durationMs, duration > 0 {
                                 ProgressView(
@@ -29,39 +38,32 @@ struct HistoryCard: View {
                             }
                         }
                         .clipShape(
-                            RoundedRectangle(cornerRadius: typeSize.isAccessibilitySize ? 18 : 10)
+                            RoundedRectangle(cornerRadius: typeSize.isAccessibilitySize ? 18 : 12)
                         )
                         .frame(width: typeSize.isAccessibilitySize ? nil : 136)
-                    VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(entry.title).font(.headline).foregroundStyle(.primary)
-                            .lineLimit(3, reservesSpace: true)
+                            .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                         Text("\(entry.programmeName) · \(entry.broadcastDate)")
                             .font(.caption).foregroundStyle(.secondary)
                             .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                     }.frame(maxWidth: .infinity, alignment: .leading)
-                }.contentShape(Rectangle())
+                }
+                .frame(minHeight: typeSize.isAccessibilitySize ? nil : contentHeight)
+                .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(entry.title)
-            HStack {
-                Button(entry.completed ? "再次观看" : "继续观看", systemImage: "play.fill") {
-                    play()
+        }.padding(10).editorialCard()
+            .accessibilityHint(entry.completed ? "点击再次观看" : "点击继续观看")
+            .accessibilityAction(named: "删除记录", remove)
+            #if os(iOS)
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button("删除记录", systemImage: "trash", role: .destructive, action: remove)
                 }
-                .buttonStyle(.plain).font(.subheadline)
-                .foregroundStyle(PresentationStyle.accent(scheme))
-                .frame(minHeight: 44)
-                Spacer()
-                Menu {
-                    Button("删除记录", role: .destructive) { remove() }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+            #else
+                .contextMenu {
+                    Button("删除记录", systemImage: "trash", role: .destructive, action: remove)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(PresentationStyle.accent(scheme))
-                .accessibilityLabel("记录操作")
-            }.padding(.top, 6)
-        }.padding(12).editorialCard()
+            #endif
     }
 }
