@@ -121,9 +121,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
         XCTAssertTrue(dates.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["archive-date-3421"].exists)
         activate(dates)
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        activate(search)
+        let search = activateSearch(in: app)
         search.typeText("2017-06-30")
         let oldest = app.buttons["archive-date-3421"]
         XCTAssertTrue(oldest.waitForExistence(timeout: 5))
@@ -359,24 +357,18 @@ final class ApplicationAcceptanceTests: XCTestCase {
             initialShot.name = "catalogue-native-heading-and-search"
             initialShot.lifetime = .keepAlways
             add(initialShot)
+            let initialSpotlightY = app.buttons["查看节目"].frame.minY
             scroll.swipeUp()
             scroll.swipeUp()
-            if let window = app.windows.allElementsBoundByIndex.first(where: {
-                $0.frame.width > 100
-            }),
-                window.frame.width < 500
-            {
-                XCTAssertTrue(heading.staticTexts["栏目"].exists)
-                XCTAssertFalse(search.isHittable)
-            } else {
-                // The adaptive iPad tab bar presents the selected page title itself.
-                XCTAssertTrue(app.buttons["栏目"].firstMatch.isSelected)
-            }
+            // Native navigation can move its title and controls into a side rail,
+            // even on a narrow iPhone window. Assert the route, not that hierarchy.
+            XCTAssertTrue(heading.exists)
+            XCTAssertTrue(app.buttons["栏目"].firstMatch.isSelected)
+            XCTAssertLessThan(app.buttons["查看节目"].frame.minY, initialSpotlightY)
             scroll.swipeDown()
             scroll.swipeDown()
             if !search.isHittable { scroll.swipeDown() }
-            search.tap()
-            search.typeText("今日")
+            activateSearch(in: app).typeText("今日")
             XCTAssertTrue(app.buttons["今日视点"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["四川新闻"].exists)
             let focusedShot = XCTAttachment(screenshot: app.screenshot())
@@ -742,6 +734,21 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 app.swipeUp()
             #endif
         }
+    }
+
+    private func activateSearch(in app: XCUIApplication) -> XCUIElement {
+        let search = app.searchFields.firstMatch
+        if !search.exists {
+            // Adaptive navigation may expose a search button before its text field.
+            let searchButton = app.buttons.matching(
+                NSPredicate(format: "label IN %@", ["Search", "搜索"])
+            ).firstMatch
+            XCTAssertTrue(searchButton.waitForExistence(timeout: 5))
+            activate(searchButton)
+        }
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        activate(search)
+        return search
     }
 
     private func activate(_ element: XCUIElement) {
