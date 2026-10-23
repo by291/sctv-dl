@@ -29,7 +29,7 @@ public struct ArchiveView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     archiveHeader
-                    dateSelection
+                    ArchiveDateSelection(model: model)
                     if let warning = model.warning {
                         InlineNotice(text: warning)
                         Button("重试") { Task { await model.refresh() } }
@@ -168,49 +168,6 @@ public struct ArchiveView: View {
         }.padding(.vertical, 8)
     }
 
-    @ViewBuilder private var dateSelection: some View {
-        if !model.dates.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("播出日期").font(.headline)
-                    Spacer()
-                    Picker(
-                        "全部日期",
-                        selection: Binding(
-                            get: { model.selectedDateID ?? "" },
-                            set: { id in Task { await model.selectDate(id) } }
-                        )
-                    ) {
-                        ForEach(model.dates) { Text($0.date).tag($0.id) }
-                    }.labelsHidden().pickerStyle(.menu)
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(model.dates.prefix(14)) { date in
-                            Button {
-                                Task { await model.selectDate(date.id) }
-                            } label: {
-                                Text(date.date).font(.subheadline.weight(.medium)).monospacedDigit()
-                                    .padding(.horizontal, 16).padding(.vertical, 13)
-                                    .foregroundStyle(
-                                        date.id == model.selectedDateID
-                                            ? (scheme == .dark ? Color.black : .white) : .primary
-                                    )
-                                    .background(
-                                        date.id == model.selectedDateID
-                                            ? PresentationStyle.accent(scheme)
-                                            : PresentationStyle.surface(scheme), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(
-                                date.id == model.selectedDateID ? .isSelected : [])
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private func contentCard(_ content: ProgrammeContent, featured: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -239,13 +196,17 @@ public struct ArchiveView: View {
                     Text(content.title)
                         .font(featured ? .title3.weight(.semibold) : .headline)
                         .foregroundStyle(.primary)
+                        .lineLimit(typeSize.isAccessibilitySize ? 3 : 2, reservesSpace: !featured)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(vertical ? 18 : 0)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(vertical ? 0 : 12)
                 .contentShape(Rectangle())
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(content.title)
+            .accessibilityIdentifier("archive-play-\(content.id)")
             HStack(spacing: 12) {
                 Text(content.publishedAt ?? model.broadcast?.date ?? "")
                     .font(.caption).foregroundStyle(.secondary)
