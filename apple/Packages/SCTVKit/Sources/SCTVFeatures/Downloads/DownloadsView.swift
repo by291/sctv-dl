@@ -109,8 +109,9 @@ public struct DownloadsView: View {
             if empty { selecting = false }
         }
         .toolbar {
+            // Preserve item identity when select-all is inserted or removed during rapid toggles.
             if selecting {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(id: "downloads-select-all", placement: .cancellationAction) {
                     Button(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选") {
                         let all = Set(model.visibleTasks.map(\.id))
                         model.setSelection(model.selection == all ? [] : all)
@@ -119,7 +120,7 @@ public struct DownloadsView: View {
                 }
             }
             if !model.visibleTasks.isEmpty {
-                ToolbarItem {
+                ToolbarItem(id: "downloads-selection") {
                     Button(
                         selecting ? "完成" : "选择", systemImage: selecting ? "checkmark" : "checklist"
                     ) {

@@ -417,6 +417,55 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 5))
         }
 
+        func testDownloadSelectionSurvivesRapidTaps() {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            let content = app.buttons["content-actions-30"]
+            reveal(content, in: app)
+            content.tap()
+            app.buttons["download-content-30"].tap()
+            XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
+            app.alerts["提示"].buttons["好"].tap()
+            app.buttons["下载"].firstMatch.tap()
+            assertRapidSelectionTaps(app, identifier: "downloads-select", activeLabel: "完成")
+        }
+
+        func testArchiveSelectionSurvivesRapidTaps() {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            assertRapidSelectionTaps(app, identifier: "archive-select", activeLabel: "取消选择")
+        }
+
+        private func assertRapidSelectionTaps(
+            _ app: XCUIApplication, identifier: String, activeLabel: String
+        ) {
+            let toggle = app.buttons[identifier]
+            XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+            for _ in 0..<4 {
+                toggle.tap(withNumberOfTaps: 6, numberOfTouches: 1)
+                XCTAssertTrue(toggle.exists)
+                XCTAssertTrue(toggle.isHittable)
+                XCTAssertTrue(["选择", activeLabel].contains(toggle.label))
+                let expectedLabel = toggle.label == "选择" ? activeLabel : "选择"
+                toggle.tap()
+                let changed = XCTNSPredicateExpectation(
+                    predicate: NSPredicate(format: "label == %@", expectedLabel), object: toggle)
+                XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+            }
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "\(identifier)-after-rapid-taps"
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+
         func testDownloadsUseExplicitSelectionAndCompactTitles() {
             let app = XCUIApplication()
             app.launchArguments = [
