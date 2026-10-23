@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "B9C69F9F6BA2D276BFB643E9"
-               BuildableName = "SCTVmacOS.app"
-               BlueprintName = "SCTVmacOS"
+               BlueprintIdentifier = "7960D34C8DCCDE8421016EC5"
+               BuildableName = "SCTV.app"
+               BlueprintName = "SCTV"
                ReferencedContainer = "container:SCTV.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,9 +32,9 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9AB7F4DCF9ADCD66D5D58EF9"
-               BuildableName = "SCTVmacOSUITests.xctest"
-               BlueprintName = "SCTVmacOSUITests"
+               BlueprintIdentifier = "3B584BB4D36D773B42F9D49A"
+               BuildableName = "SCTVUITests.xctest"
+               BlueprintName = "SCTVUITests"
                ReferencedContainer = "container:SCTV.xcodeproj">
             </BuildableReference>
          </TestableReference>
@@ -54,9 +54,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "B9C69F9F6BA2D276BFB643E9"
-            BuildableName = "SCTVmacOS.app"
-            BlueprintName = "SCTVmacOS"
+            BlueprintIdentifier = "7960D34C8DCCDE8421016EC5"
+            BuildableName = "SCTV.app"
+            BlueprintName = "SCTV"
             ReferencedContainer = "container:SCTV.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -67,6 +67,16 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "7960D34C8DCCDE8421016EC5"
+            BuildableName = "SCTV.app"
+            BlueprintName = "SCTV"
+            ReferencedContainer = "container:SCTV.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

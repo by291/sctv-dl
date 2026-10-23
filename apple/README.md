@@ -1,12 +1,12 @@
 # Native Apple Client
 
-This is the native SwiftUI programme client, with catalogue/archive browsing, favourites, playback history, settings, downloads and local playback. iPhone/iPad share the iOS target; macOS has a native target. Deployment targets are iOS/iPadOS 26 and macOS 26.
+This is the native SwiftUI programme client, with catalogue/archive browsing, favourites, playback history, settings, downloads and local playback. iPhone, iPad and native Mac share the `SCTV` multiplatform application target and the `SCTVUITests` target. Deployment targets are iOS/iPadOS 26 and macOS 26.
 
 The approved [design](../docs/superpowers/specs/2026-10-22-apple-client-design.md) and [implementation plan](../docs/superpowers/plans/2026-10-22-apple-client.md) retain the acceptance requirements still awaiting device verification. Durable module and lifecycle contracts are in [Apple Architecture](../docs/apple.md). Contribution conventions are in [AGENTS](AGENTS.md).
 
 ## Build and check
 
-Use Xcode with the required Apple SDKs and Swift 6.2 or newer. Run commands from the repository root. Open `apple/SCTV.xcodeproj` and select `SCTViOS` or `SCTVmacOS`. Device signing requires your own development team; no team or credentials are stored in the project.
+Use Xcode with the required Apple SDKs and Swift 6.2 or newer. Run commands from the repository root. Open `apple/SCTV.xcodeproj` and select the `SCTV` scheme, then choose an iPhone, iPad or My Mac destination. Device signing requires your own development team; no team or credentials are stored in the project.
 
 ```sh
 swift apple/tool/make-fixture.swift

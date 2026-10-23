@@ -7,18 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0B8DFE0E64C7945E9896C58E /* SCTVMedia in Frameworks */ = {isa = PBXBuildFile; productRef = A490C5C54B5FBC9C9C1A6C88 /* SCTVMedia */; };
-		20AB38FCB691D797B8C5BF96 /* SCTViOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09454B5B5BAD86B45B25F7E /* SCTViOSApp.swift */; };
-		25CE068182A0811ACE014D6C /* SCTVData in Frameworks */ = {isa = PBXBuildFile; productRef = 6FD67E0A588DE583E98E3457 /* SCTVData */; };
-		277C1694BDF1B3274E9C32DC /* SCTVmacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 481275779C3B76AF798FCECB /* SCTVmacOSApp.swift */; };
-		30E476612FE0AAD8699FE8AB /* SCTVCore in Frameworks */ = {isa = PBXBuildFile; productRef = B3EEC2BB79320EFA37D54867 /* SCTVCore */; };
 		58ED0A0D221C47E2F7A5F44F /* SCTVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 51399710F6B344DDB15ED4C9 /* SCTVCore */; };
 		8836AC762B5D0E80A7481E73 /* SCTVData in Frameworks */ = {isa = PBXBuildFile; productRef = 440ED27FA25F062940F4B252 /* SCTVData */; };
 		BECCB0B969CDB773EBBDF562 /* SCTVMedia in Frameworks */ = {isa = PBXBuildFile; productRef = C3566A632B93A8FF8280A17A /* SCTVMedia */; };
 		F00000000000000000000010 /* SCTVFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = F00000000000000000000000 /* SCTVFeatures */; };
-		F00000000000000000000011 /* SCTVFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = F00000000000000000000001 /* SCTVFeatures */; };
 		F00000000000000000000030 /* SCTVDownloads in Frameworks */ = {isa = PBXBuildFile; productRef = F00000000000000000000020 /* SCTVDownloads */; };
-		F00000000000000000000031 /* SCTVDownloads in Frameworks */ = {isa = PBXBuildFile; productRef = F00000000000000000000021 /* SCTVDownloads */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,24 +20,17 @@
 			containerPortal = 244210E48437B6556980A702 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 7960D34C8DCCDE8421016EC5;
-			remoteInfo = SCTViOS;
-		};
-		A2AF8BB8F41C45F14F9B8612 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 244210E48437B6556980A702 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = B9C69F9F6BA2D276BFB643E9;
-			remoteInfo = SCTVmacOS;
+			remoteInfo = SCTV;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		436BE7ADB11C04465D28B54F /* SCTVmacOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SCTVmacOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		481275779C3B76AF798FCECB /* SCTVmacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCTVmacOSApp.swift; sourceTree = "<group>"; };
-		9F50C55FFB80EFCC82426A85 /* SCTVmacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SCTVmacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C09454B5B5BAD86B45B25F7E /* SCTViOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCTViOSApp.swift; sourceTree = "<group>"; };
-		D1CBC097C58EEFC5A9C8212D /* SCTViOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SCTViOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E83E2E384E55751B9C1CF4C3 /* SCTViOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SCTViOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		481275779C3B76AF798FCECB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C09454B5B5BAD86B45B25F7E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		D1CBC097C58EEFC5A9C8212D /* SCTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SCTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SCTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000001 /* SCTViOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTViOS.entitlements; sourceTree = "<group>"; };
+		F10000000000000000000002 /* SCTVmacOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTVmacOS.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -72,35 +58,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		EA5A1FD82906CF64897EDB19 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F0EA67B858DBB4103D4BDF3D /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F00000000000000000000031 /* SCTVDownloads in Frameworks */,
-				F00000000000000000000011 /* SCTVFeatures in Frameworks */,
-				25CE068182A0811ACE014D6C /* SCTVData in Frameworks */,
-				30E476612FE0AAD8699FE8AB /* SCTVCore in Frameworks */,
-				0B8DFE0E64C7945E9896C58E /* SCTVMedia in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0A3E27B8CA818264D75C8D81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D1CBC097C58EEFC5A9C8212D /* SCTViOS.app */,
-				9F50C55FFB80EFCC82426A85 /* SCTVmacOS.app */,
-				E83E2E384E55751B9C1CF4C3 /* SCTViOSUITests.xctest */,
-				436BE7ADB11C04465D28B54F /* SCTVmacOSUITests.xctest */,
+				D1CBC097C58EEFC5A9C8212D /* SCTV.app */,
+				E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -119,7 +84,8 @@
 		348A629F5CEED032C3E8706E /* Apps/macOS */ = {
 			isa = PBXGroup;
 			children = (
-				481275779C3B76AF798FCECB /* SCTVmacOSApp.swift */,
+				F10000000000000000000002 /* SCTVmacOS.entitlements */,
+				481275779C3B76AF798FCECB /* Info.plist */,
 			);
 			path = Apps/macOS;
 			sourceTree = "<group>";
@@ -127,7 +93,8 @@
 		48EE046028069A9C6DED9844 /* Apps/iOS */ = {
 			isa = PBXGroup;
 			children = (
-				C09454B5B5BAD86B45B25F7E /* SCTViOSApp.swift */,
+				F10000000000000000000001 /* SCTViOS.entitlements */,
+				C09454B5B5BAD86B45B25F7E /* Info.plist */,
 			);
 			path = Apps/iOS;
 			sourceTree = "<group>";
@@ -135,9 +102,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3B584BB4D36D773B42F9D49A /* SCTViOSUITests */ = {
+		3B584BB4D36D773B42F9D49A /* SCTVUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2D7A0AE7EE53CFA88BD3E3AA /* Build configuration list for PBXNativeTarget "SCTViOSUITests" */;
+			buildConfigurationList = 2D7A0AE7EE53CFA88BD3E3AA /* Build configuration list for PBXNativeTarget "SCTVUITests" */;
 			buildPhases = (
 				D5115B54FD2D4DB3782B72AB /* Sources */,
 				ADA67CB9CE4E3FC349367119 /* Frameworks */,
@@ -151,14 +118,14 @@
 			fileSystemSynchronizedGroups = (
 				59830EBC3A4184110566BF1A /* UITests */,
 			);
-			name = SCTViOSUITests;
-			productName = SCTViOSUITests;
-			productReference = E83E2E384E55751B9C1CF4C3 /* SCTViOSUITests.xctest */;
+			name = SCTVUITests;
+			productName = SCTVUITests;
+			productReference = E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		7960D34C8DCCDE8421016EC5 /* SCTViOS */ = {
+		7960D34C8DCCDE8421016EC5 /* SCTV */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 77C831D1EB6DE883DA3F49AB /* Build configuration list for PBXNativeTarget "SCTViOS" */;
+			buildConfigurationList = 77C831D1EB6DE883DA3F49AB /* Build configuration list for PBXNativeTarget "SCTV" */;
 			buildPhases = (
 				3F16BB77FA459B2CEB18E14C /* Sources */,
 				C1A64BB26E2EEDF6A3AFEE51 /* Frameworks */,
@@ -171,7 +138,7 @@
 			fileSystemSynchronizedGroups = (
 				A4D26868017C0CCFFE2EFE50 /* Apps/Shared */,
 			);
-			name = SCTViOS;
+			name = SCTV;
 			packageProductDependencies = (
 				F00000000000000000000020 /* SCTVDownloads */,
 				F00000000000000000000000 /* SCTVFeatures */,
@@ -179,56 +146,8 @@
 				51399710F6B344DDB15ED4C9 /* SCTVCore */,
 				C3566A632B93A8FF8280A17A /* SCTVMedia */,
 			);
-			productName = SCTViOS;
-			productReference = D1CBC097C58EEFC5A9C8212D /* SCTViOS.app */;
-			productType = "com.apple.product-type.application";
-		};
-		9AB7F4DCF9ADCD66D5D58EF9 /* SCTVmacOSUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = DFBA8BC6C86B07634E0EF315 /* Build configuration list for PBXNativeTarget "SCTVmacOSUITests" */;
-			buildPhases = (
-				421F168EF188BE54F10AE9B5 /* Sources */,
-				EA5A1FD82906CF64897EDB19 /* Frameworks */,
-				0ABCF959D68A453B1B816D8D /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				D785045A10C008A2AD7FBB1C /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				59830EBC3A4184110566BF1A /* UITests */,
-			);
-			name = SCTVmacOSUITests;
-			productName = SCTVmacOSUITests;
-			productReference = 436BE7ADB11C04465D28B54F /* SCTVmacOSUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
-		B9C69F9F6BA2D276BFB643E9 /* SCTVmacOS */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2F61CB11D4306A7BD995A890 /* Build configuration list for PBXNativeTarget "SCTVmacOS" */;
-			buildPhases = (
-				B94DF07737A8F77A21D91867 /* Sources */,
-				F0EA67B858DBB4103D4BDF3D /* Frameworks */,
-				D2544B9D40F79E5A5C612ADC /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				A4D26868017C0CCFFE2EFE50 /* Apps/Shared */,
-			);
-			name = SCTVmacOS;
-			packageProductDependencies = (
-				F00000000000000000000021 /* SCTVDownloads */,
-				F00000000000000000000001 /* SCTVFeatures */,
-				6FD67E0A588DE583E98E3457 /* SCTVData */,
-				B3EEC2BB79320EFA37D54867 /* SCTVCore */,
-				A490C5C54B5FBC9C9C1A6C88 /* SCTVMedia */,
-			);
-			productName = SCTVmacOS;
-			productReference = 9F50C55FFB80EFCC82426A85 /* SCTVmacOS.app */;
+			productName = SCTV;
+			productReference = D1CBC097C58EEFC5A9C8212D /* SCTV.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -257,30 +176,14 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				7960D34C8DCCDE8421016EC5 /* SCTViOS */,
-				B9C69F9F6BA2D276BFB643E9 /* SCTVmacOS */,
-				3B584BB4D36D773B42F9D49A /* SCTViOSUITests */,
-				9AB7F4DCF9ADCD66D5D58EF9 /* SCTVmacOSUITests */,
+				7960D34C8DCCDE8421016EC5 /* SCTV */,
+				3B584BB4D36D773B42F9D49A /* SCTVUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		0ABCF959D68A453B1B816D8D /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		1CE565D0B5F73EABA973625E /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D2544B9D40F79E5A5C612ADC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -301,22 +204,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				20AB38FCB691D797B8C5BF96 /* SCTViOSApp.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		421F168EF188BE54F10AE9B5 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		B94DF07737A8F77A21D91867 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				277C1694BDF1B3274E9C32DC /* SCTVmacOSApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,13 +219,8 @@
 /* Begin PBXTargetDependency section */
 		B1010E885FEC8DA6486086D7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 7960D34C8DCCDE8421016EC5 /* SCTViOS */;
+			target = 7960D34C8DCCDE8421016EC5 /* SCTV */;
 			targetProxy = 7E0560B9ED40281281CEE1EB /* PBXContainerItemProxy */;
-		};
-		D785045A10C008A2AD7FBB1C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = B9C69F9F6BA2D276BFB643E9 /* SCTVmacOS */;
-			targetProxy = A2AF8BB8F41C45F14F9B8612 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -351,25 +233,6 @@
 			};
 			name = Release;
 		};
-		10A75461E12E3589DA929135 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.mac.uitests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = SCTVmacOS;
-			};
-			name = Release;
-		};
 		4E019F1B6D9944697E91D7B7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -377,40 +240,22 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios.uitests;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = SCTViOS;
+				TEST_TARGET_NAME = SCTV;
 			};
 			name = Debug;
-		};
-		5F8E7C4CA3C147D7DA4F950E /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Apps/macOS/SCTVmacOS.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Apps/macOS/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Release;
 		};
 		73EBF6644258C120893E685D /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -421,25 +266,6 @@
 			};
 			name = Debug;
 		};
-		9742BE9F47A5B5A468BD87BE /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.mac.uitests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = SCTVmacOS;
-			};
-			name = Debug;
-		};
 		A547834684F81ABE4D0B8FD8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -447,56 +273,41 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios.uitests;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = SCTViOS;
+				TEST_TARGET_NAME = SCTV;
 			};
 			name = Release;
-		};
-		A6B8D7115FE7533372BFD790 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Apps/macOS/SCTVmacOS.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Apps/macOS/Info.plist;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 6.0;
-			};
-			name = Debug;
 		};
 		E6935DC466719C9A9FD1518E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/iOS/SCTViOS.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Apps/macOS/SCTVmacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_FILE[sdk=macosx*]" = Apps/macOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -510,17 +321,20 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Apps/iOS/SCTViOS.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Apps/macOS/SCTVmacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_FILE[sdk=macosx*]" = Apps/macOS/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -533,7 +347,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2D7A0AE7EE53CFA88BD3E3AA /* Build configuration list for PBXNativeTarget "SCTViOSUITests" */ = {
+		2D7A0AE7EE53CFA88BD3E3AA /* Build configuration list for PBXNativeTarget "SCTVUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4E019F1B6D9944697E91D7B7 /* Debug */,
@@ -542,16 +356,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2F61CB11D4306A7BD995A890 /* Build configuration list for PBXNativeTarget "SCTVmacOS" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A6B8D7115FE7533372BFD790 /* Debug */,
-				5F8E7C4CA3C147D7DA4F950E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		77C831D1EB6DE883DA3F49AB /* Build configuration list for PBXNativeTarget "SCTViOS" */ = {
+		77C831D1EB6DE883DA3F49AB /* Build configuration list for PBXNativeTarget "SCTV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E6935DC466719C9A9FD1518E /* Debug */,
@@ -565,15 +370,6 @@
 			buildConfigurations = (
 				73EBF6644258C120893E685D /* Debug */,
 				0B0C687DF8B6B8DC790B519C /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		DFBA8BC6C86B07634E0EF315 /* Build configuration list for PBXNativeTarget "SCTVmacOSUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				9742BE9F47A5B5A468BD87BE /* Debug */,
-				10A75461E12E3589DA929135 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -598,21 +394,6 @@
 			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
 			productName = SCTVCore;
 		};
-		6FD67E0A588DE583E98E3457 /* SCTVData */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
-			productName = SCTVData;
-		};
-		A490C5C54B5FBC9C9C1A6C88 /* SCTVMedia */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
-			productName = SCTVMedia;
-		};
-		B3EEC2BB79320EFA37D54867 /* SCTVCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
-			productName = SCTVCore;
-		};
 		C3566A632B93A8FF8280A17A /* SCTVMedia */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
@@ -623,17 +404,7 @@
 			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
 			productName = SCTVFeatures;
 		};
-		F00000000000000000000001 /* SCTVFeatures */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
-			productName = SCTVFeatures;
-		};
 		F00000000000000000000020 /* SCTVDownloads */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
-			productName = SCTVDownloads;
-		};
-		F00000000000000000000021 /* SCTVDownloads */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BC4A71180870F7945155FBB0 /* XCLocalSwiftPackageReference "Packages/SCTVKit" */;
 			productName = SCTVDownloads;

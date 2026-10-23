@@ -1,17 +1,17 @@
 # Native Apple Architecture
 
-The SwiftUI client in `apple/` supports iOS/iPadOS 26 and macOS 26. iPhone and iPad share an iOS application target; macOS uses AppKit and native SwiftUI windows. It connects directly to upstream programme/media services, with independent local state and no Node service requirement. Build commands and acceptance limits belong to the [Apple README](../apple/README.md).
+The SwiftUI client in `apple/` supports iOS/iPadOS 26 and macOS 26. One `SCTV` multiplatform application target and shared scheme build for iPhone, iPad and native Mac. `Apps/Shared/SCTVApp.swift` owns the shared application entry point, with platform-specific delegates and scenes; macOS retains AppKit and native SwiftUI windows. The shared `SCTVUITests` target follows the selected destination. SDK-specific build settings select each platform's Info.plist, entitlements and existing bundle identifier (`dev.sctvdl.apple.ios` or `dev.sctvdl.apple.mac`), preserving installed application identity. It connects directly to upstream programme/media services, with independent local state and no Node service requirement. Build commands and acceptance limits belong to the [Apple README](../apple/README.md).
 
 ## Ownership
 
-| Owner                                   | Responsibility                                                                                                          |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `Apps/Shared` and platform entry points | Dependency composition, navigation, application delegates, settings windows, player presentation and native file panels |
-| `SCTVCore`                              | Immutable programme/history/download values, URL and quality policies, typed states and service protocols               |
-| `SCTVData`                              | Bounded metadata transport, decoding, SQLite migrations, snapshots, preferences, favourites and history                 |
-| `SCTVMedia`                             | Bounded HTTP ranges, resource loading, the single AVPlayer session, playback-history recording and player presentation  |
-| `SCTVDownloads`                         | Durable queue transitions, background sessions, staging, publication, bookmarks and file leases                         |
-| `SCTVFeatures`                          | Observable page models and native SwiftUI catalogue, archive, library, downloads and settings views                     |
+| Owner                                    | Responsibility                                                                                                          |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Apps/Shared` and platform configuration | Dependency composition, navigation, application delegates, settings windows, player presentation and native file panels |
+| `SCTVCore`                               | Immutable programme/history/download values, URL and quality policies, typed states and service protocols               |
+| `SCTVData`                               | Bounded metadata transport, decoding, SQLite migrations, snapshots, preferences, favourites and history                 |
+| `SCTVMedia`                              | Bounded HTTP ranges, resource loading, the single AVPlayer session, playback-history recording and player presentation  |
+| `SCTVDownloads`                          | Durable queue transitions, background sessions, staging, publication, bookmarks and file leases                         |
+| `SCTVFeatures`                           | Observable page models and native SwiftUI catalogue, archive, library, downloads and settings views                     |
 
 Features depend on core service contracts. Application roots construct concrete services; the download engine does not import GRDB. GRDB owns database transactions and Nuke owns artwork loading. Swift 6 concurrency checking applies throughout. See [Apple contribution instructions](../apple/AGENTS.md) for readability and cleanup conventions.
 

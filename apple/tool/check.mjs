@@ -247,7 +247,7 @@ async function main() {
         '-project',
         'apple/SCTV.xcodeproj',
         '-scheme',
-        values.platform === 'ios' ? 'SCTViOS' : 'SCTVmacOS',
+        'SCTV',
         '-destination',
         destination,
         '-configuration',
