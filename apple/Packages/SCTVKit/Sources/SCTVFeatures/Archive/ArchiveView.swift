@@ -56,7 +56,7 @@ public struct ArchiveView: View {
                             }
                             if !model.clips.isEmpty {
                                 VStack(alignment: .leading, spacing: 16) {
-                                    SectionHeading(title: "节目片段", count: model.clips.count)
+                                    clipsHeading
                                     LazyVStack(spacing: 12) {
                                         ForEach(model.clips) { content in
                                             contentCard(content, featured: false).id(content.id)
@@ -84,7 +84,7 @@ public struct ArchiveView: View {
                                     contentCard(content, featured: false).id(content.id)
                                 }
                             } header: {
-                                SectionHeading(title: "节目片段", count: model.clips.count)
+                                clipsHeading
                                     .padding(.top, 12)
                             }
                         }
@@ -101,6 +101,7 @@ public struct ArchiveView: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollPosition(id: $model.scrollAnchor)
+            .refreshable { await model.refresh() }
             .accessibilityIdentifier("archive-scroll")
             .background(PresentationStyle.canvas(scheme))
         }
@@ -110,15 +111,19 @@ public struct ArchiveView: View {
         #endif
         .toolbar {
             ToolbarItem {
-                Menu("更多", systemImage: "ellipsis") {
-                    Toggle("片段时间正序", isOn: $model.ascending)
-                    Button(selecting ? "取消选择" : "选择节目") {
-                        selecting.toggle()
-                        model.setSelection([])
-                    }
-                    Button("刷新", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                Button(selecting ? "取消选择" : "选择节目") {
+                    selecting.toggle()
+                    model.setSelection([])
                 }
+                .accessibilityIdentifier("archive-select")
             }
+            #if os(macOS)
+                ToolbarItem {
+                    Button("刷新", systemImage: "arrow.clockwise") {
+                        Task { await model.refresh() }
+                    }
+                }
+            #endif
         }
         .safeAreaInset(edge: .bottom) {
             if selecting {
@@ -140,6 +145,35 @@ public struct ArchiveView: View {
         }
         .task { await model.load() }
         .onDisappear { model.stop() }
+    }
+
+    private var clipsHeading: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                SectionHeading(title: "节目片段", count: model.clips.count)
+                Spacer(minLength: 12)
+                sortButton
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                SectionHeading(title: "节目片段", count: model.clips.count)
+                sortButton
+            }
+        }
+    }
+
+    private var sortButton: some View {
+        Button {
+            model.ascending.toggle()
+        } label: {
+            Label(model.ascending ? "时间正序" : "时间倒序", systemImage: "arrow.up.arrow.down")
+                .font(.subheadline)
+                .fixedSize()
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(PresentationStyle.accent(scheme))
+        .accessibilityIdentifier("archive-sort")
     }
 
     private var archiveHeader: some View {
@@ -169,11 +203,11 @@ public struct ArchiveView: View {
     }
 
     private func contentCard(_ content: ProgrammeContent, featured: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let vertical = featured || typeSize.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: 0) {
             Button {
                 activate(content)
             } label: {
-                let vertical = featured || typeSize.isAccessibilitySize
                 let layout =
                     vertical
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
@@ -191,17 +225,21 @@ public struct ArchiveView: View {
                             .background(.regularMaterial, in: Circle()).padding(12)
                             .foregroundStyle(PresentationStyle.accent(scheme))
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 12))
-                        .frame(width: vertical ? nil : 112)
+                        .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 10))
+                        .frame(width: vertical ? nil : 136)
                     Text(content.title)
                         .font(featured ? .title3.weight(.semibold) : .headline)
                         .foregroundStyle(.primary)
-                        .lineLimit(typeSize.isAccessibilitySize ? 3 : 2, reservesSpace: !featured)
+                        .lineLimit(
+                            featured && !typeSize.isAccessibilitySize ? 2 : 3,
+                            reservesSpace: !featured
+                        )
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(vertical ? 18 : 0)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(vertical ? 0 : 12)
+                .padding(.horizontal, vertical ? 0 : 12)
+                .padding(.top, vertical ? 0 : 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -211,17 +249,31 @@ public struct ArchiveView: View {
                 Text(content.publishedAt ?? model.broadcast?.date ?? "")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                Menu("节目操作", systemImage: "ellipsis") {
+            }
+            .padding(.trailing, 44)
+            .frame(minHeight: vertical ? 44 : 20)
+            .overlay(alignment: .trailing) {
+                Menu {
                     Button("播放", systemImage: "play") {
                         if let date = model.broadcast { play(content, date) }
                     }
                     Button("下载", systemImage: "arrow.down.circle") {
                         if let date = model.broadcast { download([content], date) }
                     }.accessibilityIdentifier("download-content-\(content.id)")
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                .buttonStyle(.plain)
+                .foregroundStyle(PresentationStyle.accent(scheme))
+                .accessibilityLabel("节目操作")
                 .accessibilityIdentifier("content-actions-\(content.id)")
-            }.padding(.horizontal, 16).padding(.bottom, 6)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, vertical ? 0 : 12)
+            .padding(.bottom, vertical ? 6 : 14)
         }
         .editorialCard()
         .overlay {
