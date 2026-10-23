@@ -3,7 +3,12 @@ import SwiftUI
 
 public struct DownloadsView: View {
     @Bindable private var model: DownloadsModel
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirming: [DownloadCommand] = []
+    #if os(iOS)
+        @State private var editMode: EditMode = .inactive
+    #endif
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
     private let reauthorize: (DownloadTask) -> Void
@@ -23,28 +28,36 @@ public struct DownloadsView: View {
 
     public var body: some View {
         List(selection: Binding(get: { model.selection }, set: { model.setSelection($0) })) {
-            if let warning = model.warning {
-                Label(warning, systemImage: "exclamationmark.triangle")
-            }
-            ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
-                HStack(spacing: 12) {
-                    Image(systemName: symbol(task.state)).font(.title2).foregroundStyle(.secondary)
-                        .frame(width: 32)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(task.title)
-                        Text("\(task.programmeName) · \(task.quality == .standard ? "标准" : "流畅")")
-                            .font(.caption).foregroundStyle(.secondary)
-                        status(task.state)
+            VStack(alignment: .leading, spacing: 16) {
+                Text("\(model.tasks.count) 个任务 · 将喜欢的节目带在身边")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(DownloadFilter.allCases) { filter in
+                            Button {
+                                model.selectFilter(filter)
+                            } label: {
+                                Text(filter.rawValue).font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 18).padding(.vertical, 12)
+                                    .foregroundStyle(
+                                        model.filter == filter
+                                            ? (scheme == .dark ? Color.black : .white) : .primary
+                                    )
+                                    .background(
+                                        model.filter == filter
+                                            ? PresentationStyle.accent(scheme)
+                                            : PresentationStyle.surface(scheme), in: Capsule())
+                            }.buttonStyle(.plain)
+                                .accessibilityAddTraits(model.filter == filter ? .isSelected : [])
+                        }
                     }
-                    Spacer()
-                    Menu("下载操作", systemImage: "ellipsis") { actions(task) }.labelStyle(.iconOnly)
-                        .accessibilityIdentifier(
-                            "download-\(task.content.contentID)-\(task.state.storageKey)")
-                }.padding(.vertical, 5).tag(task.id)
-                    .contextMenu { actions(task) }
+                }
             }
-        }
-        .overlay {
+            .padding(.vertical, 12)
+            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            if let warning = model.warning {
+                InlineNotice(text: warning).listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
             if model.isReconciling {
                 VStack {
                     if model.warning == nil {
@@ -53,28 +66,49 @@ public struct DownloadsView: View {
                         Button("重试恢复下载状态") { Task { await model.reconcile() } }
                     }
                 }
+                .listRowBackground(Color.clear).listRowSeparator(.hidden)
             } else if model.visibleTasks.isEmpty {
                 ContentUnavailableView(
                     "暂无下载", systemImage: "arrow.down.circle",
-                    description: Text("在节目页面选择下载，完成后即可离线观看。"))
+                    description: Text("在节目页面选择下载，完成后即可离线观看。")
+                )
+                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
+
+            ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
+                taskCard(task).tag(task.id)
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    .contextMenu { actions(task) }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 1160)
+        .frame(maxWidth: .infinity)
+        .background(PresentationStyle.canvas(scheme))
         .scrollPosition(
             id: Binding(
                 get: { model.anchors[model.filter] }, set: { model.anchors[model.filter] = $0 })
         )
         .navigationTitle("下载")
-        .toolbar {
-            ToolbarItem {
-                Picker(
-                    "下载筛选",
-                    selection: Binding(get: { model.filter }, set: { model.selectFilter($0) })
-                ) {
-                    ForEach(DownloadFilter.allCases) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.menu)
+        #if os(iOS)
+            .environment(\.editMode, $editMode)
+            .onChange(of: editMode) { _, value in
+                if !value.isEditing { model.setSelection([]) }
             }
+            .onChange(of: model.visibleTasks.isEmpty) { _, empty in
+                if empty { editMode = .inactive }
+            }
+        #endif
+        .toolbar {
             #if os(iOS)
-                ToolbarItem { EditButton() }
+                if !model.visibleTasks.isEmpty {
+                    ToolbarItem {
+                        Button(editMode.isEditing ? "完成" : "编辑") {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        }
+                    }
+                }
             #endif
             if !model.selection.isEmpty {
                 ToolbarItem {
@@ -103,6 +137,67 @@ public struct DownloadsView: View {
             Text("移除记录会保留文件；删除文件会保留记录。")
         }
         .task { await model.load() }
+    }
+
+    private func taskCard(_ task: DownloadTask) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            let layout =
+                typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+            layout {
+                Artwork(url: task.cover)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .frame(width: typeSize.isAccessibilitySize ? nil : 120)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(task.title).font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(task.programmeName) · \(task.broadcastDate)")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(task.quality == .standard ? "标准画质" : "流畅画质")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(PresentationStyle.accent(scheme))
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Menu("下载操作", systemImage: "ellipsis") { actions(task) }
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                    .accessibilityIdentifier(
+                        "download-\(task.content.contentID)-\(task.state.storageKey)")
+            }
+            Divider().opacity(0.5)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 16) {
+                    taskStatus(task)
+                    Spacer()
+                    primaryActions(task)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    taskStatus(task)
+                    primaryActions(task)
+                }
+            }
+        }.padding(18).editorialCard()
+    }
+
+    private func taskStatus(_ task: DownloadTask) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol(task.state))
+                .foregroundStyle(PresentationStyle.accent(scheme))
+            VStack(alignment: .leading, spacing: 5) { status(task.state) }
+        }
+    }
+
+    @ViewBuilder private func primaryActions(_ task: DownloadTask) -> some View {
+        if case .completed = task.state {
+            Button("播放", systemImage: "play.fill") { play(task) }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        } else {
+            HStack {
+                commandButton("暂停", .pause, ids: [task.id])
+                commandButton("继续", .resume, ids: [task.id])
+                commandButton("重试", .retry, ids: [task.id])
+                commandButton("重试保存", .retryPublication, ids: [task.id])
+            }.buttonStyle(.bordered).buttonBorderShape(.capsule)
+        }
     }
 
     @ViewBuilder private func actions(_ task: DownloadTask) -> some View {
@@ -156,7 +251,10 @@ public struct DownloadsView: View {
                 .caption
             ).foregroundStyle(.secondary)
         case .completed(let file):
-            Text(ByteCountFormatter.string(fromByteCount: file.byteSize, countStyle: .file)).font(
+            Text(
+                "已完成 · "
+                    + ByteCountFormatter.string(fromByteCount: file.byteSize, countStyle: .file)
+            ).font(
                 .caption
             ).foregroundStyle(.secondary)
         case .queued: Text("等待下载").font(.caption)

@@ -2,6 +2,7 @@ import SCTVCore
 import SwiftUI
 
 public struct SettingsView: View {
+    @Environment(\.colorScheme) private var scheme
     @Bindable private var model: SettingsModel
     private let clearCache: () async throws -> Void
     private let appVersion: String
@@ -25,6 +26,23 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            Section {
+                HStack(spacing: 18) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(PresentationStyle.accent(scheme))
+                        .frame(width: 64, height: 64)
+                        .background(
+                            PresentationStyle.accent(scheme).opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 20))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("SCTV").font(.system(.title, design: .serif, weight: .bold))
+                        Text("让好节目，随时在身边。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }.padding(.vertical, 10)
+            }
+
             Section("外观") {
                 Picker(
                     "显示模式",
@@ -82,6 +100,9 @@ public struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(PresentationStyle.canvas(scheme))
+        .tint(PresentationStyle.accent(scheme))
         .navigationTitle("设置")
         .task { await model.load() }
     }
