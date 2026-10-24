@@ -37,7 +37,8 @@ public struct ArchiveView: View {
 
     private func page(selectionProgress: CGFloat) -> some View {
         GeometryReader { geometry in
-            let wide = geometry.size.width >= 850 && !typeSize.isAccessibilitySize
+            let wide =
+                MediaCardLayout.columnCount(width: geometry.size.width, typeSize: typeSize) == 2
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     archiveHeader
@@ -59,7 +60,10 @@ public struct ArchiveView: View {
                             if !model.fullEpisodes.isEmpty {
                                 VStack(alignment: .leading, spacing: 16) {
                                     SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
-                                    LazyVStack(spacing: 16) {
+                                    LazyVGrid(
+                                        columns: MediaCardLayout.columns(
+                                            model.clips.isEmpty ? 2 : 1), spacing: 16
+                                    ) {
                                         ForEach(model.fullEpisodes) { content in
                                             contentCard(content, featured: true).id(content.id)
                                         }
@@ -69,7 +73,10 @@ public struct ArchiveView: View {
                             if !model.clips.isEmpty {
                                 VStack(alignment: .leading, spacing: 16) {
                                     clipsHeading
-                                    LazyVStack(spacing: 12) {
+                                    LazyVGrid(
+                                        columns: MediaCardLayout.columns(
+                                            model.fullEpisodes.isEmpty ? 2 : 1), spacing: 12
+                                    ) {
                                         ForEach(model.clips) { content in
                                             contentCard(content, featured: false).id(content.id)
                                         }
