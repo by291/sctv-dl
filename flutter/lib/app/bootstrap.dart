@@ -67,9 +67,7 @@ Future<AppServices> bootstrapServices() async {
     final preferences = await user.loadPreferences();
     final favourites = await user.loadFavourites();
 
-    final transferGateway = BackgroundTransferGateway(
-      appVersion: package.version,
-    );
+    final transferGateway = BackgroundTransferGateway();
     transfers = transferGateway;
     final downloads = DurableDownloadRepository(
       store: SqliteDownloadTaskStore(runtimeDatabase),
@@ -118,7 +116,7 @@ Future<AppServices> bootstrapServices() async {
       user: user,
       history: history,
       downloads: downloads,
-      playback: VideoPlayerBackend(userAgent: 'sctv-dl/${package.version}'),
+      playback: VideoPlayerBackend(),
       initialPreferences: preferences,
       initialFavourites: favourites,
       version: '${package.version} (${package.buildNumber})',

@@ -25,7 +25,7 @@ Programme cards, exploration and archive regions are callback-driven presentatio
 
 ### Metadata and accepted snapshots
 
-Metadata requests use a persisted installation UUID and the Android-compatible guest profile. Android supplies native device build values; iOS uses the explicitly documented compatibility profile. Covers, player requests and transfers use separate transports and receive no metadata identity headers. Media requests use the allowed HTTPS MP4 CDNs, the required Referer and `sctv-dl/<installed-version>` User-Agent.
+Metadata requests use a persisted installation UUID and the Android-compatible guest profile. Android supplies native device build values; iOS uses the explicitly documented compatibility profile. Covers, player requests and transfers use separate transports and receive no metadata identity headers. Media requests use the allowed HTTPS MP4 CDNs, the required Referer and `okhttp/4.12.0` User-Agent from the shared domain request profile.
 
 Background refresh compares parsed model fields rather than serialized JSON: programme ID/name/cover, broadcast ID/date, and content ID/title/cover/video variants/publication time. Missing optional values, JSON key order and unused metadata do not create revisions. Additions, removals and effective display-order changes do; broadcast dates retain their existing deduplication and descending-date normalization. Unchanged snapshots keep their revision while advancing the fetched timestamp. A valid refresh repairs malformed cached items. Cancellation, stale-response rejection and serialized cache writes remain authoritative.
 

@@ -10,6 +10,7 @@ import '../../domain/downloads/download_task.dart';
 import '../../domain/downloads/file_gateway.dart';
 import '../../domain/downloads/media_probe.dart';
 import '../../domain/downloads/transfer_gateway.dart';
+import '../../domain/network/upstream_request_profile.dart';
 import '../../domain/programmes/programme_policy.dart';
 import '../../domain/programmes/programme_repository.dart';
 import 'dio_media_probe.dart';
@@ -19,15 +20,13 @@ import 'notification_inbox.dart';
 /// queue. No Dart queue is involved when the application is suspended.
 class BackgroundTransferGateway implements TransferGateway {
   BackgroundTransferGateway({
-    required this.appVersion,
     native.FileDownloader? downloader,
     bool? isIOS,
     DownloadMediaProbe? mediaProbe,
   }) : _providedDownloader = downloader,
        _isIOS = isIOS ?? Platform.isIOS,
-       _mediaProbe = mediaProbe ?? DioMediaProbe(appVersion: appVersion);
+       _mediaProbe = mediaProbe ?? DioMediaProbe();
 
-  final String appVersion;
   final DownloadMediaProbe _mediaProbe;
   final _preparing = <String, RequestScope>{};
 
@@ -65,9 +64,6 @@ class BackgroundTransferGateway implements TransferGateway {
         !RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(task.attemptId)) {
       throw ArgumentError('Unsafe download destination');
     }
-    if (appVersion.isEmpty || appVersion.contains(RegExp(r'[\r\n]'))) {
-      throw ArgumentError('Invalid application version');
-    }
 
     return native.DownloadTask(
       taskId: task.attemptId,
@@ -75,7 +71,7 @@ class BackgroundTransferGateway implements TransferGateway {
       filename: task.filename,
       headers: {
         'Referer': 'https://scgc.video.play/',
-        'User-Agent': 'sctv-dl/$appVersion',
+        'User-Agent': upstreamUserAgent,
       },
       baseDirectory: _isIOS
           ? native.BaseDirectory.applicationDocuments

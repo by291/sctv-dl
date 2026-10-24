@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../domain/downloads/file_gateway.dart';
+import '../../domain/network/upstream_request_profile.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
@@ -17,9 +18,6 @@ import 'playback_picture_in_picture.dart';
 import 'playback_wakelock.dart';
 
 class VideoPlayerBackend implements PlaybackBackend {
-  VideoPlayerBackend({required this.userAgent});
-
-  final String userAgent;
   final _releases = _NativePlayerReleases();
 
   @override
@@ -50,7 +48,7 @@ class VideoPlayerBackend implements PlaybackBackend {
     }
 
     await _releases.waitForPending();
-    final session = _VideoSession(resolved, userAgent, _releases);
+    final session = _VideoSession(resolved, _releases);
     try {
       await session.initialize();
       return session;
@@ -70,8 +68,7 @@ class VideoPlayerBackend implements PlaybackBackend {
 }
 
 class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
-  _VideoSession(this.input, this.userAgent, this._releases)
-    : id = 'playback-${++_nextId}' {
+  _VideoSession(this.input, this._releases) : id = 'playback-${++_nextId}' {
     _pip = PlaybackPictureInPicture(
       onChanged: (active) {
         _inPip = active;
@@ -88,7 +85,6 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
 
   static int _nextId = 0;
   final PlaybackInput input;
-  final String userAgent;
   final _NativePlayerReleases _releases;
   final surface = ValueNotifier<VideoPlayerController?>(null);
   final _changes = StreamController<PlaybackSnapshot>.broadcast(sync: true);
@@ -170,7 +166,7 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
       Uri.parse(source.url),
       httpHeaders: {
         'Referer': 'https://scgc.video.play/',
-        'User-Agent': userAgent,
+        'User-Agent': upstreamUserAgent,
       },
       formatHint: VideoFormat.other,
       videoPlayerOptions: options,

@@ -18,7 +18,6 @@ void main() {
     adapters.clear();
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     probe = DioMediaProbe(
-      appVersion: '1.2.3',
       createClient: () {
         final adapter = LoopbackAdapter(server.port);
         adapters.add(adapter);
@@ -47,7 +46,7 @@ void main() {
       requests.single.headers.value('referer'),
       'https://scgc.video.play/',
     );
-    expect(requests.single.headers.value('user-agent'), 'sctv-dl/1.2.3');
+    expect(requests.single.headers.value('user-agent'), 'okhttp/4.12.0');
     expect(requests.single.headers.value('authorization'), isNull);
   });
   test('unsupported HEAD falls back to small Range and closes an ignored Range body', () async {

@@ -27,10 +27,7 @@ void main() {
       await tester.runAsync(() async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final engine = native.FileDownloader();
-        final gateway = BackgroundTransferGateway(
-          appVersion: 'fixture',
-          downloader: engine,
-        );
+        final gateway = BackgroundTransferGateway(downloader: engine);
         final files = NativeDownloadFiles(downloader: engine);
         final events = <TransferSnapshot>[];
         final subscription = gateway.events.listen(events.add);
@@ -131,7 +128,7 @@ void main() {
               request.headers.value('referer'),
               'https://scgc.video.play/',
             );
-            expect(request.headers.value('user-agent'), 'sctv-dl/fixture');
+            expect(request.headers.value('user-agent'), 'okhttp/4.12.0');
             expect(request.headers.value('authorization'), isNull);
           }
         } finally {
@@ -157,10 +154,7 @@ void main() {
       await tester.runAsync(() async {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final engine = native.FileDownloader();
-        final gateway = BackgroundTransferGateway(
-          appVersion: 'fixture',
-          downloader: engine,
-        );
+        final gateway = BackgroundTransferGateway(downloader: engine);
         final files = NativeDownloadFiles(downloader: engine);
         final bytes = Uint8List.fromList(
           List.generate(8 * 1024 * 1024, (index) => index % 251),

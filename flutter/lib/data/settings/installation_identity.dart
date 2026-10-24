@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../../domain/network/upstream_request_profile.dart';
 import '../database/record_database.dart';
 
 class MetadataDeviceProfile {
@@ -63,7 +64,7 @@ class InstallationIdentity {
     'systemVersion': profile.systemVersion,
     'deviceType': 'android',
     'appVersion': '9.6.1.5',
-    'User-Agent': 'okhttp/4.12.0',
+    'User-Agent': upstreamUserAgent,
     'Accept': 'application/json',
   });
 }

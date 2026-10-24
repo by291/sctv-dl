@@ -164,7 +164,7 @@ void main() {
 }
 
 class _RecordingBackend implements PlaybackBackend {
-  final delegate = VideoPlayerBackend(userAgent: 'sctv-dl/resume-test');
+  final delegate = VideoPlayerBackend();
   PlaybackSession? session;
   int opens = 0;
   @override

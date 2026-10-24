@@ -250,7 +250,6 @@ class _RecordingBackend implements PlaybackBackend {
   @override
   Future<PlaybackSession> open(PlaybackInput input) async {
     opens++;
-    return session = await VideoPlayerBackend(userAgent: 'sctv-dl/integration')
-        .open(input);
+    return session = await VideoPlayerBackend().open(input);
   }
 }

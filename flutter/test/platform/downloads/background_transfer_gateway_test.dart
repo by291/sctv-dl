@@ -29,16 +29,13 @@ void main() {
   );
 
   test('native request keeps preallocated identity, media headers and network policy', () {
-    final gateway = BackgroundTransferGateway(
-      appVersion: '1.2.3',
-      isIOS: false,
-    );
+    final gateway = BackgroundTransferGateway(isIOS: false);
     final request = gateway.buildNativeTask(
       task('https://fscgc.scgchc.com/video.mp4'),
     );
     expect(request.taskId, 'attempt');
     expect(request.headers['Referer'], 'https://scgc.video.play/');
-    expect(request.headers['User-Agent'], 'sctv-dl/1.2.3');
+    expect(request.headers['User-Agent'], 'okhttp/4.12.0');
     expect(request.headers.keys, unorderedEquals(['Referer', 'User-Agent']));
     expect(request.baseDirectory, native.BaseDirectory.applicationSupport);
     expect(request.requiresWiFi, isTrue);
@@ -47,7 +44,7 @@ void main() {
     expect(request.allowPause, isTrue);
   });
   test('iOS destinations use relative Documents Downloads references', () {
-    final gateway = BackgroundTransferGateway(appVersion: '1', isIOS: true);
+    final gateway = BackgroundTransferGateway(isIOS: true);
     final request = gateway.buildNativeTask(
       task('https://fscgc.sctv-tf.com/video.mp4'),
     );
@@ -56,10 +53,7 @@ void main() {
   });
   test('configuration failure can retry concurrently without losing the native callback owner', () async {
     final engine = FailOnceDownloader();
-    final gateway = BackgroundTransferGateway(
-      appVersion: '1',
-      downloader: engine,
-    );
+    final gateway = BackgroundTransferGateway(downloader: engine);
     final events = <Object>[];
     final listener = gateway.events.listen(events.add);
     await expectLater(gateway.initialize(), throwsStateError);
@@ -80,7 +74,7 @@ void main() {
   test(
     'initial transfers reject arbitrary hosts before reaching the plugin',
     () {
-      final gateway = BackgroundTransferGateway(appVersion: '1');
+      final gateway = BackgroundTransferGateway();
       expect(
         () => gateway.buildNativeTask(task('https://example.com/video.mp4')),
         throwsArgumentError,
@@ -89,10 +83,7 @@ void main() {
   );
   test('cancellation during preflight rejects a late successful probe without native enqueue', () async {
     final probe = DelayedProbe();
-    final gateway = BackgroundTransferGateway(
-      appVersion: '1',
-      mediaProbe: probe,
-    );
+    final gateway = BackgroundTransferGateway(mediaProbe: probe);
     final pending = gateway.enqueue(task('https://fscgc.scgchc.com/video.mp4'));
     final rejected = expectLater(pending, throwsA(isA<RequestCancelled>()));
     await probe.entered.future;

@@ -73,7 +73,7 @@ void main() {
         formatHint: VideoFormat.other,
         httpHeaders: {
           'Referer': 'https://scgc.video.play/',
-          'User-Agent': 'sctv-dl/integration',
+          'User-Agent': 'okhttp/4.12.0',
         },
       ),
     );
@@ -99,7 +99,7 @@ void main() {
       headers.every(
         (request) =>
             request['Referer'] == 'https://scgc.video.play/' &&
-            request['User-Agent'] == 'sctv-dl/integration',
+            request['User-Agent'] == 'okhttp/4.12.0',
       ),
       isTrue,
     );
@@ -142,7 +142,7 @@ void main() {
         if (await file.exists()) await file.delete();
       });
       final session = await tester.runAsync(
-        () => VideoPlayerBackend(userAgent: 'test').open(
+        () => VideoPlayerBackend().open(
           const PlaybackInput(
             title: 'Fixture',
             sources: [],
@@ -191,7 +191,7 @@ void main() {
       if (await file.exists()) await file.delete();
     });
     final session = await tester.runAsync(
-      () => VideoPlayerBackend(userAgent: 'test').open(
+      () => VideoPlayerBackend().open(
         PlaybackInput(
           title: 'Public fixture',
           sources: const [],
@@ -233,7 +233,7 @@ void main() {
       if (await file.exists()) await file.delete();
     });
     final session = (await tester.runAsync(
-      () => VideoPlayerBackend(userAgent: 'test').open(
+      () => VideoPlayerBackend().open(
         const PlaybackInput(
           title: 'PiP fixture',
           sources: [],

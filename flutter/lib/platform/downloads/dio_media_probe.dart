@@ -3,18 +3,18 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 
 import '../../domain/downloads/media_probe.dart';
+import '../../domain/network/upstream_request_profile.dart';
 import '../../domain/programmes/programme_policy.dart';
 import '../../domain/programmes/programme_repository.dart';
 
 /// A separate media transport has no metadata identity or guest headers. Probe
 /// responses are streamed and immediately closed, even if Range is ignored.
 class DioMediaProbe implements DownloadMediaProbe {
-  DioMediaProbe({required this.appVersion, Dio Function()? createClient})
+  DioMediaProbe({Dio Function()? createClient})
     : _createClient =
           createClient ??
           (() => Dio(BaseOptions(connectTimeout: const Duration(seconds: 15))));
 
-  final String appVersion;
   final Dio Function() _createClient;
 
   final _clients = <Dio>{};
@@ -64,7 +64,7 @@ class DioMediaProbe implements DownloadMediaProbe {
           validateStatus: (_) => true,
           headers: {
             'Referer': 'https://scgc.video.play/',
-            'User-Agent': 'sctv-dl/$appVersion',
+            'User-Agent': upstreamUserAgent,
             if (method == 'GET') 'Range': 'bytes=0-1023',
           },
         ),

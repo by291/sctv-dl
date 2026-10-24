@@ -54,8 +54,9 @@ void main() {
   tearDown(() => debugDefaultTargetPlatformOverride = null);
   tearDownAll(() => native.close());
   test('buffering does not turn a quality change into a user pause', () async {
-    final session = await VideoPlayerBackend(userAgent: 'test')
-        .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+    final session = await VideoPlayerBackend().open(
+      const PlaybackInput(title: 'Title', sources: [first, second]),
+    );
     await session.play();
     native.latestEvents.add(
       VideoEvent(eventType: VideoEventType.bufferingStart),
@@ -76,7 +77,7 @@ void main() {
   test(
     'resume seeks after initialization and survives a source switch',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test').open(
+      final session = await VideoPlayerBackend().open(
         const PlaybackInput(
           title: 'Resume',
           sources: [first, second],
@@ -98,7 +99,7 @@ void main() {
     'content URI uses the native local source without network headers',
     () async {
       const uri = 'content://media/external/downloads/123';
-      final session = await VideoPlayerBackend(userAgent: 'test').open(
+      final session = await VideoPlayerBackend().open(
         const PlaybackInput(title: 'Local', sources: [], localLocation: uri),
       );
       expect(native.sources.single.uri, uri);
@@ -112,9 +113,9 @@ void main() {
     tester,
   ) async {
     final session = (await tester.runAsync(
-      () =>
-          VideoPlayerBackend(userAgent: 'sctv-dl/test')
-              .open(const PlaybackInput(title: 'Title', sources: [first])),
+      () => VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      ),
     ))!;
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox());
@@ -136,11 +137,12 @@ void main() {
     await tester.runAsync(session.dispose);
   });
   test('passes isolated media headers and starts paused', () async {
-    final session = await VideoPlayerBackend(userAgent: 'sctv-dl/test')
-        .open(const PlaybackInput(title: 'Title', sources: [first]));
+    final session = await VideoPlayerBackend().open(
+      const PlaybackInput(title: 'Title', sources: [first]),
+    );
     expect(native.sources.single.httpHeaders, {
       'Referer': 'https://scgc.video.play/',
-      'User-Agent': 'sctv-dl/test',
+      'User-Agent': 'okhttp/4.12.0',
     });
     expect(session.value.playing, isFalse);
     await session.dispose();
@@ -149,8 +151,9 @@ void main() {
   test(
     'switch preserves position speed and play intent and rolls back failure',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first, second]),
+      );
       await session.seek(const Duration(seconds: 12));
       await session.setSpeed(1.5);
       await session.play();
@@ -171,8 +174,9 @@ void main() {
     },
   );
   test('play after completion restarts at zero before resuming', () async {
-    final session = await VideoPlayerBackend(userAgent: 'test')
-        .open(const PlaybackInput(title: 'Title', sources: [first]));
+    final session = await VideoPlayerBackend().open(
+      const PlaybackInput(title: 'Title', sources: [first]),
+    );
     await session.seek(const Duration(seconds: 100));
     native.latestEvents.add(VideoEvent(eventType: VideoEventType.completed));
     await Future<void>.delayed(Duration.zero);
@@ -186,8 +190,9 @@ void main() {
   test(
     'background pause while switching cancels the preserved play intent',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first, second]),
+      );
       await session.play();
       final pending = Completer<void>();
       native.setupDelay = pending.future;
@@ -203,8 +208,9 @@ void main() {
   test(
     'pause failure still releases native handles and closes observations',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      );
       var closed = false;
       final subscription = session.changes.listen(
         (_) {},
@@ -226,8 +232,9 @@ void main() {
   test(
     'repeated disposal waits for the same native release completion',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      );
       final pending = Completer<void>();
       native.disposeDelay = pending.future;
       final firstRelease = session.dispose();
@@ -246,8 +253,9 @@ void main() {
   );
 
   test('quality replacement waits for native release before allocating another decoder', () async {
-    final session = await VideoPlayerBackend(userAgent: 'test')
-        .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+    final session = await VideoPlayerBackend().open(
+      const PlaybackInput(title: 'Title', sources: [first, second]),
+    );
     final released = Completer<void>();
     native.disposeDelay = released.future;
     final switching = session.selectSource(second);
@@ -267,8 +275,9 @@ void main() {
       '$platform PiP observes native entry and exit on the same player',
       () async {
         debugDefaultTargetPlatformOverride = platform;
-        final session = await VideoPlayerBackend(userAgent: 'test')
-            .open(const PlaybackInput(title: 'Title', sources: [first]));
+        final session = await VideoPlayerBackend().open(
+          const PlaybackInput(title: 'Title', sources: [first]),
+        );
         await session.play();
         await session.enterPictureInPicture();
         expect(session.value.inPip, isTrue);
@@ -293,8 +302,9 @@ void main() {
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       pip.accept = false;
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      );
       await expectLater(session.enterPictureInPicture(), throwsStateError);
       expect(session.value.playing, isFalse);
       expect(session.value.inPip, isFalse);
@@ -305,8 +315,9 @@ void main() {
   test(
     'screen lock follows foreground playback and is released with the session',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      );
       expect(wake.enabledValue, isFalse);
       await session.play();
       await Future<void>.delayed(Duration.zero);
@@ -323,8 +334,9 @@ void main() {
   test(
     'exit cancels pending initialization without waiting for media readiness',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first, second]),
+      );
       final ready = Completer<void>();
       native.setupDelay = ready.future;
       final switching = session.selectSource(second);
@@ -341,8 +353,9 @@ void main() {
     'iOS system PiP play resumes progress and survives a quality switch',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first, second]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first, second]),
+      );
       await session.enterPictureInPicture();
       expect(session.value.playing, isFalse);
       native.positions[native.createCalls] = const Duration(seconds: 20);
@@ -365,8 +378,9 @@ void main() {
   test(
     'release during Android PiP entry closes the system window before disposal',
     () async {
-      final session = await VideoPlayerBackend(userAgent: 'test')
-          .open(const PlaybackInput(title: 'Title', sources: [first]));
+      final session = await VideoPlayerBackend().open(
+        const PlaybackInput(title: 'Title', sources: [first]),
+      );
       final pending = Completer<void>();
       pip.enterGate = pending.future;
       final entering = session.enterPictureInPicture();
@@ -383,7 +397,7 @@ void main() {
   test('native allocation failure reports its original cause without hanging cleanup', () async {
     native.createFailure = true;
     await expectLater(
-      VideoPlayerBackend(userAgent: 'test')
+      VideoPlayerBackend()
           .open(const PlaybackInput(title: 'Title', sources: [first]))
           .timeout(const Duration(seconds: 7)),
       throwsA(
@@ -397,7 +411,7 @@ void main() {
   });
 
   test('an unconfirmed release blocks a new route until the original native disposal finishes', () async {
-    final backend = VideoPlayerBackend(userAgent: 'test');
+    final backend = VideoPlayerBackend();
     final session = await backend.open(
       const PlaybackInput(title: 'Title', sources: [first, second]),
     );
@@ -421,8 +435,9 @@ void main() {
   });
 
   test('stopping the Android PiP Activity pauses without waiting for another background event', () async {
-    final session = await VideoPlayerBackend(userAgent: 'test')
-        .open(const PlaybackInput(title: 'Title', sources: [first]));
+    final session = await VideoPlayerBackend().open(
+      const PlaybackInput(title: 'Title', sources: [first]),
+    );
     await session.play();
     await session.enterPictureInPicture();
     final delivered = Completer<void>();
@@ -444,7 +459,7 @@ void main() {
 
   test('rejects unapproved media before native creation', () async {
     await expectLater(
-      VideoPlayerBackend(userAgent: 'test').open(
+      VideoPlayerBackend().open(
         const PlaybackInput(
           title: 'Title',
           sources: [
