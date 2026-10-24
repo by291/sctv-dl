@@ -30,7 +30,7 @@ node apple/tool/check.mjs --platform ios --device iphone --os 26 --verify-lockfi
 node apple/tool/check.mjs --platform ios --device ipad --os 26 --verify-lockfiles
 ```
 
-The fixture generator writes an original 12-second MP4 under ignored `apple/build/fixtures/`. Synchronization copies shared JSON fixtures into package test resources and that MP4 into the test resources and debug host. Run both steps before direct Swift package tests or launching the Xcode project. The checker performs this automatically, runs formatting/package tests, then builds and tests the native host. Logs and XCTest result bundles are written under `apple/build/checks/`.
+The fixture generator writes an original 12-second MP4 under ignored `apple/build/fixtures/`. Synchronization copies shared JSON fixtures into package test resources and that MP4 into the test resources and debug host. Run both steps before direct Swift package tests or launching the Xcode project. The checker prepares the Xcode lock and fixtures automatically, then runs formatting/package tests. Debug mode also runs native UI tests locally; Release mode only compiles the application. Logs and XCTest result bundles are written under `apple/build/checks/`.
 
 The checker creates and deletes only its own simulator. An unavailable requested OS returns an error; it never substitutes a newer system. To inspect compatibility with an installed newer runtime, pass its major version explicitly and report that result separately. Mac checks run on the host OS and do not establish compatibility with an older macOS release.
 
@@ -45,15 +45,14 @@ The shared `Apps/Shared/Assets.xcassets/AppIcon.appiconset` supplies the iPhone,
 ## Unsigned release and CI
 
 ```sh
-node apple/tool/check.mjs --platform macos --configuration Release --verify-lockfiles
-node apple/tool/check.mjs --platform ios --configuration Release --verify-lockfiles
+node apple/tool/check.mjs --platform all --configuration Release --verify-lockfiles
 ```
 
-Release mode compiles without signing, using generic iOS or the host Mac architecture. It does not create a distributable signed archive.
+Release mode compiles without signing, using generic iOS or the host Mac architecture. `--platform all` requires Release and runs formatting/package tests once before compiling both platforms. It never starts a simulator or runs native UI tests, and it does not create a distributable signed archive. Individual `--platform macos` and `--platform ios` Release commands remain available.
 
 `Packages/SCTVKit/Package.resolved` is the canonical checked-in resolution, with GRDB and Nuke pinned to stable releases. Dependabot updates this file and `Package.swift` together. `node apple/tool/lockfiles.mjs` generates the ignored Xcode resolution from those pins; run it before opening Xcode or after dependency updates when not using the checker. The generated file uses the supported version-2 pin format without copying the package manifest's graph-specific `originHash`. Locked checks reject changes to the canonical file and verify that Xcode retains the same package identities, locations, versions and revisions; Xcode-only metadata changes are allowed. Do not update or commit the generated application lock separately.
 
-[Apple CI](../.github/workflows/apple.yml) uses the `macos-26` runner and Xcode 26.6 for Mac, iPhone and iPad validation, plus unsigned Release compilation. Logs and XCTest bundles are retained on failure. A valid workflow does not establish a successful hosted run.
+[Apple CI](../.github/workflows/apple.yml) uses the `macos-26` runner and Xcode 26.6 for tooling tests, Swift formatting, package tests and unsigned macOS/iOS Release compilation. It does not start simulators or execute native UI tests; the Debug commands above remain local acceptance checks. Logs and build result bundles are retained even on failure. A valid workflow does not establish a successful hosted run.
 
 ## Current boundaries
 

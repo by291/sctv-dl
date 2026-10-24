@@ -124,12 +124,19 @@ export function parseOptions(args = process.argv.slice(2)) {
       os: { type: 'string', default: '26' },
     },
   })
-  if (!['ios', 'macos'].includes(values.platform)) {
-    throw new Error('Use --platform ios|macos')
+  if (!['ios', 'macos', 'all'].includes(values.platform)) {
+    throw new Error('Use --platform ios|macos|all')
   }
 
   if (!['Debug', 'Release'].includes(values.configuration)) {
     throw new Error('Use --configuration Debug|Release')
+  }
+
+  if (values.platform === 'all' && values.configuration !== 'Release') {
+    throw new Error('All-platform validation requires --configuration Release')
+  }
+  if (values.configuration === 'Release' && values.device) {
+    throw new Error('Release compilation does not accept --device')
   }
 
   return values
@@ -197,7 +204,7 @@ async function main() {
     { logPath: `${output}/package.log` },
   )
 
-  const test = async (destination) =>
+  const buildOrTest = async (platform, destination) =>
     runProcess(
       'xcodebuild',
       [
@@ -214,25 +221,34 @@ async function main() {
           ? ['-onlyUsePackageVersionsFromResolvedFile', '-disableAutomaticPackageResolution']
           : []),
         '-derivedDataPath',
-        `apple/build/DerivedData-${values.platform}`,
+        `apple/build/DerivedData-${platform}`,
         '-resultBundlePath',
-        `${output}/Tests.xcresult`,
+        values.platform === 'all' ? `${output}/${platform}.xcresult` : `${output}/Tests.xcresult`,
         release ? 'build' : 'test',
         ...(release ? ['CODE_SIGNING_ALLOWED=NO', 'ONLY_ACTIVE_ARCH=YES'] : []),
         'CODE_SIGN_IDENTITY=-',
         'CODE_SIGNING_REQUIRED=NO',
       ],
-      { logPath: `${output}/xcode.log` },
+      {
+        logPath:
+          values.platform === 'all' ? `${output}/${platform}-xcode.log` : `${output}/xcode.log`,
+      },
     )
 
   if (selection) {
-    await withSimulator(selection, execute, (id) => test(`platform=iOS Simulator,id=${id}`))
-  } else {
-    await test(
-      values.platform === 'ios'
-        ? 'generic/platform=iOS'
-        : `platform=macOS,arch=${process.arch === 'arm64' ? 'arm64' : 'x86_64'}`,
+    await withSimulator(selection, execute, (id) =>
+      buildOrTest('ios', `platform=iOS Simulator,id=${id}`),
     )
+  } else {
+    const platforms = values.platform === 'all' ? ['macos', 'ios'] : [values.platform]
+    for (const platform of platforms) {
+      await buildOrTest(
+        platform,
+        platform === 'ios'
+          ? 'generic/platform=iOS'
+          : `platform=macOS,arch=${process.arch === 'arm64' ? 'arm64' : 'x86_64'}`,
+      )
+    }
   }
 
   if (locked) {

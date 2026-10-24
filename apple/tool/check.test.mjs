@@ -137,3 +137,12 @@ test('locked validation rejects changed or missing dependency resolution', async
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('all-platform CI validation permits only unsigned Release builds without device options', () => {
+  assert.equal(parseOptions(['--platform', 'all', '--configuration', 'Release']).platform, 'all')
+  assert.throws(() => parseOptions(['--platform', 'all']), /Release/)
+  assert.throws(
+    () => parseOptions(['--platform', 'all', '--configuration', 'Release', '--device', 'iphone']),
+    /device/,
+  )
+})

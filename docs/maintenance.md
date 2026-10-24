@@ -30,6 +30,8 @@ Desktop validation runs for shared frontend/server/contracts, native Rust/assets
 
 Workflow-level path filtering is not a required-check aggregator. If branch protection is added later, use an always-reported gate that distinguishes irrelevant jobs from failures; do not require a workflow that can be skipped by paths.
 
+Apple CI runs tooling and Swift package tests plus unsigned macOS/iOS builds, without simulators or native UI execution. The package `Package.resolved` is the canonical Swift lock tracked by Dependabot; the Apple checker generates the ignored Xcode lock and rejects resolution drift after builds. Native UI and device acceptance remain local checks.
+
 Apple, Desktop and Flutter have their own workflows and native prerequisites; their platform guides describe packaging and signing. A workflow definition or local command passing does not establish a successful hosted run. Review job results and artifacts for the exact commit being released.
 
 ## Workflow and Documentation Checks
