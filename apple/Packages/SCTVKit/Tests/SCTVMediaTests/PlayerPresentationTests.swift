@@ -27,52 +27,56 @@ import Testing
     @Test func oldHistoryFailureCannotReplaceNewPresentationWarning() async throws {
         let history = DelayedHistory()
         let session = PlayerSession(history: history)
-        let first = try #require(session.beginPresentation(for: session.beginRequest()))
+        let first = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
         let firstRequest = try request("first")
-        let opening = Task { await session.open(firstRequest, expected: first) }
+        let opening = Task { await session.open(firstRequest, forPresentation: first) }
         for _ in 0..<100 {
             if await history.pending != nil { break }
             try await Task.sleep(for: .milliseconds(5))
         }
         #expect(await history.pending != nil)
-        let second = try #require(session.beginPresentation(for: session.beginRequest()))
-        await session.open(try request("second"), expected: second)
+        let second = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
+        await session.open(try request("second"), forPresentation: second)
 
         await history.failFirst()
         await opening.value
         #expect(session.warning == nil)
         #expect(session.title == "second")
-        await session.close(expected: second)
+        await session.close(presentationID: second)
     }
 
     @Test func slowEarlierRequestCannotReplaceNewerPlayback() async throws {
         let session = PlayerSession(history: PlaybackHistoryTests.Repository())
-        let slow = session.beginRequest()
-        let newest = session.beginRequest()
-        let token = try #require(session.beginPresentation(for: newest))
-        await session.open(try request("newest"), expected: token)
+        let slow = session.reservePlaybackRequest()
+        let newest = session.reservePlaybackRequest()
+        let token = try #require(session.beginPresentation(forRequest: newest))
+        await session.open(try request("newest"), forPresentation: token)
         #expect(session.playback.state == .ready)
 
         // The older resolver finishes only after the newer player has become ready.
-        #expect(session.beginPresentation(for: slow) == nil)
+        #expect(session.beginPresentation(forRequest: slow) == nil)
         #expect(session.title == "newest")
-        await session.close(expected: token)
+        await session.close(presentationID: token)
     }
 
     @Test func oldDismissalCannotCloseReplacementAndCloseInvalidatesPendingResolution() async throws
     {
         let session = PlayerSession(history: PlaybackHistoryTests.Repository())
-        let first = try #require(session.beginPresentation(for: session.beginRequest()))
-        await session.open(try request("first"), expected: first)
-        let second = try #require(session.beginPresentation(for: session.beginRequest()))
-        await session.open(try request("second"), expected: second)
+        let first = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
+        await session.open(try request("first"), forPresentation: first)
+        let second = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
+        await session.open(try request("second"), forPresentation: second)
 
-        await session.close(expected: first)
+        await session.close(presentationID: first)
         #expect(session.playback.state == .ready)
         #expect(session.title == "second")
-        let pending = session.beginRequest()
-        await session.close(expected: second)
-        #expect(session.beginPresentation(for: pending) == nil)
+        let pending = session.reservePlaybackRequest()
+        await session.close(presentationID: second)
+        #expect(session.beginPresentation(forRequest: pending) == nil)
         #expect(session.playback.state == .idle)
     }
 
@@ -89,9 +93,10 @@ import Testing
     {
         let session = PlayerSession(history: PlaybackHistoryTests.Repository())
         var owner: PlayerPresentationLifetime? = PlayerPresentationLifetime(session: session)
-        let first = try #require(session.beginPresentation(for: session.beginRequest()))
+        let first = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
         owner?.takeOwnership(of: first)
-        await session.open(try request("first"), expected: first)
+        await session.open(try request("first"), forPresentation: first)
 
         owner = nil
         for _ in 0..<100 where session.playback.state != .idle {
@@ -101,18 +106,20 @@ import Testing
         #expect(session.playback.player.currentItem == nil)
 
         owner = PlayerPresentationLifetime(session: session)
-        let second = try #require(session.beginPresentation(for: session.beginRequest()))
+        let second = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
         owner?.takeOwnership(of: second)
-        await session.open(try request("second"), expected: second)
-        let replacement = try #require(session.beginPresentation(for: session.beginRequest()))
-        await session.open(try request("replacement"), expected: replacement)
+        await session.open(try request("second"), forPresentation: second)
+        let replacement = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
+        await session.open(try request("replacement"), forPresentation: replacement)
 
         owner = nil
         // Await the old token's close as well as the queued deinitialization work.
-        await session.close(expected: second)
+        await session.close(presentationID: second)
         await Task.yield()
         #expect(session.playback.state == .ready)
         #expect(session.title == "replacement")
-        await session.close(expected: replacement)
+        await session.close(presentationID: replacement)
     }
 }

@@ -37,7 +37,8 @@
         private var pip: AVPictureInPictureController?
         private var notifications: [NSObjectProtocol] = []
         private var backgroundPause: Task<Void, Never>?
-        private var seekTask: Task<Void, Never>?
+        private let seekOwner = UUID()
+        private var dragPreview: UUID?
         private var brightnessBeforeGesture: CGFloat?
         private weak var adjustedScreen: UIScreen?
         private var boostToken: UUID?
@@ -143,7 +144,7 @@
             case .began:
                 boostToken = playback.beginTemporarySpeed()
                 if boostToken != nil {
-                    overlay.isInteracting = true
+                    overlay.setGestureInteraction(active: true)
                     overlay.hint = "2 倍速播放中"
                 }
             case .ended, .cancelled, .failed: endBoost()
@@ -156,7 +157,7 @@
             boostToken = nil
             playback.endTemporarySpeed(token)
             overlay.hint = nil
-            overlay.isInteracting = false
+            overlay.setGestureInteraction(active: false)
             overlay.reveal()
         }
 
@@ -170,6 +171,7 @@
                         duration > 0
                     else { return }
                     drag = .seek(position: snapshot.positionMs, duration: duration)
+                    dragPreview = overlay.beginSeekPreview(at: snapshot.positionMs)
                 } else if recognizer.location(in: self).x < bounds.midX {
                     guard let screen = window?.windowScene?.screen else { return }
                     if brightnessBeforeGesture == nil {
@@ -180,22 +182,20 @@
                 } else {
                     drag = .volume(Double(playback.player.volume))
                 }
-                overlay.isInteracting = true
+                overlay.setGestureInteraction(active: true)
                 overlay.reveal()
                 updateDrag(delta)
             case .changed: updateDrag(delta)
             case .ended:
                 if case .seek = drag, let target = overlay.previewMilliseconds {
-                    seekTask?.cancel()
-                    let token = overlay.beginSeekPreview(at: target)
-                    drag = nil
-                    overlay.hint = nil
-                    seekTask = Task { [weak self] in
-                        guard let self else { return }
-                        defer { overlay.finishSeekPreview(token) }
-                        do { try await playback.seek(to: target) } catch {
-                            if !Task.isCancelled, !disposed { overlay.hint = "跳转未完成，请重试" }
-                        }
+                    finishDrag()
+                    playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
+                        [weak self] in
+                        guard let self, !disposed else { throw CancellationError() }
+                        try await playback.seek(to: target)
+                    } onFailure: { [weak self] _ in
+                        guard let self, !disposed else { return }
+                        overlay.hint = "跳转未完成，请重试"
                     }
                     return
                 }
@@ -210,7 +210,7 @@
             case .seek(let position, let duration):
                 let target = PlayerInteraction.seek(
                     position: position, duration: duration, delta: delta.x, width: bounds.width)
-                overlay.previewMilliseconds = target
+                if let dragPreview { overlay.updateSeekPreview(at: target, token: dragPreview) }
                 let difference = (target - position) / 1000
                 overlay.hint = "\(difference >= 0 ? "+" : "")\(difference) 秒"
             case .brightness(let initial):
@@ -229,8 +229,9 @@
 
         private func finishDrag() {
             drag = nil
-            overlay.previewMilliseconds = nil
-            overlay.isInteracting = false
+            if let dragPreview { overlay.finishSeekPreview(dragPreview) }
+            dragPreview = nil
+            overlay.setGestureInteraction(active: false)
             overlay.hint = nil
             overlay.reveal()
         }
@@ -261,7 +262,7 @@
             finishDrag()
             restoreBrightness()
             backgroundPause?.cancel()
-            seekTask?.cancel()
+            playback.seekInteraction.cancel(owner: seekOwner)
             notifications.forEach(NotificationCenter.default.removeObserver)
             notifications.removeAll()
             pip?.stopPictureInPicture()

@@ -12,7 +12,7 @@
         @State private var hovering = false
         @State private var volume = 1.0
         @State private var muted = false
-        @State private var seekTask: Task<Void, Never>?
+        @State private var seekOwner = UUID()
         @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -101,17 +101,16 @@
             }
             .onChange(of: playing) { _, _ in overlay.reveal() }
             .onChange(of: session.presentationID) { _, _ in
-                seekTask?.cancel()
+                session.playback.seekInteraction.cancel(owner: seekOwner)
                 scrubbing = false
-                overlay.previewMilliseconds = nil
-                overlay.isInteracting = false
+                overlay.setGestureInteraction(active: false)
                 overlay.reveal()
             }
             .onAppear {
                 volume = Double(session.playback.player.volume)
                 muted = session.playback.player.isMuted
             }
-            .onDisappear { seekTask?.cancel() }
+            .onDisappear { session.playback.seekInteraction.cancel(owner: seekOwner) }
         }
 
         private var timeline: some View {
@@ -126,11 +125,12 @@
                     if editing {
                         scrubPosition = Double(position)
                         scrubbing = true
-                        overlay.isInteracting = true
+                        overlay.setGestureInteraction(active: true)
                         overlay.reveal()
                     } else {
                         let target = Int64(scrubPosition)
                         scrubbing = false
+                        overlay.setGestureInteraction(active: false)
                         seek(to: target)
                     }
                 }
@@ -177,7 +177,7 @@
                 MacPlayerSlider(
                     value: $volume, range: 0...1, label: "音量", identifier: "player-volume"
                 ) { editing in
-                    overlay.isInteracting = editing
+                    overlay.setGestureInteraction(active: editing)
                     overlay.reveal()
                 }
                 .frame(width: 92, height: 24)
@@ -271,22 +271,12 @@
         }
 
         private func seek(to target: Int64, resume: Bool = false) {
-            let previous = seekTask
-            previous?.cancel()
-            let token = overlay.beginSeekPreview(at: target)
-            overlay.reveal()
-            seekTask = Task {
-                defer { overlay.finishSeekPreview(token) }
-                do {
-                    // Let AVPlayer settle the current seek before applying the latest target.
-                    await previous?.value
-                    try Task.checkCancellation()
-                    try await session.playback.seek(to: target)
-                    try Task.checkCancellation()
-                    if resume { session.playback.setPlaybackIntent(.playing) }
-                } catch is CancellationError {
-                    // A newer seek or presentation owns the thumb and playback intent.
-                } catch { session.warning = error.localizedDescription }
+            // Record the explicit play action now; a later pause must win while seeking.
+            if resume { session.playback.setPlaybackIntent(.playing) }
+            session.playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
+                try await session.playback.seek(to: target)
+            } onFailure: { error in
+                session.warning = error.localizedDescription
             }
         }
 

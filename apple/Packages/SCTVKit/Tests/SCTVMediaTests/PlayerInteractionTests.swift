@@ -14,16 +14,29 @@ struct PlayerInteractionTests {
         overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
         #expect(!overlay.controlsVisible)
     }
+    @Test @MainActor func finishingGestureKeepsPendingSeekAndMenuPinned() {
+        let overlay = PlayerOverlayState()
+        overlay.setGestureInteraction(active: true)
+        let token = overlay.beginSeekPreview(at: 1000)
+        overlay.setOptionsPresented(true, id: "quality")
+        overlay.setGestureInteraction(active: false)
+        #expect(overlay.isInteracting)
+        overlay.setOptionsPresented(false, id: "quality")
+        #expect(overlay.isInteracting)
+        overlay.finishSeekPreview(token)
+        #expect(!overlay.isInteracting)
+    }
+
     @Test @MainActor func desktopControlsStayVisibleDuringInteractionAndIgnoreOldTimers() {
         let overlay = PlayerOverlayState()
         let old = overlay.activity
         overlay.reveal()
         overlay.hideIfIdle(activity: old, playing: true, pinned: false)
         #expect(overlay.controlsVisible)
-        overlay.isInteracting = true
+        overlay.setGestureInteraction(active: true)
         overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
         #expect(overlay.controlsVisible)
-        overlay.isInteracting = false
+        overlay.setGestureInteraction(active: false)
         overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: true)
         #expect(overlay.controlsVisible)
         overlay.hideIfIdle(activity: overlay.activity, playing: false, pinned: false)

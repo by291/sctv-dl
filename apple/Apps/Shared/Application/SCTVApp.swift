@@ -8,7 +8,9 @@ struct SCTVApp: App {
     #else
         @UIApplicationDelegateAdaptor(NativeApplicationDelegate.self) private var nativeDelegate
     #endif
+
     @State private var model = ApplicationModel()
+
     var body: some Scene {
         #if os(macOS)
             WindowGroup("SCTV", id: "workspace") {
@@ -16,6 +18,7 @@ struct SCTVApp: App {
             }
             .defaultSize(width: 1180, height: 800)
             .defaultLaunchBehavior(.presented)
+
             Window("播放器", id: "player") {
                 if let dependencies = model.dependencies {
                     let session = dependencies.player
@@ -26,7 +29,7 @@ struct SCTVApp: App {
                     .frame(minWidth: 640, minHeight: 480)
                     .onDisappear {
                         Task {
-                            await session.close(expected: presentation)
+                            await session.close(presentationID: presentation)
                         }
                     }
                 } else {
@@ -38,6 +41,7 @@ struct SCTVApp: App {
             .windowManagerRole(.principal)
             .defaultLaunchBehavior(.suppressed)
             .restorationBehavior(.disabled)
+
             Settings {
                 if let dependencies = model.dependencies {
                     ApplicationSettingsView(dependencies: dependencies).frame(

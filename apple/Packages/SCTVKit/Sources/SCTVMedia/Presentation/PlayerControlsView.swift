@@ -9,6 +9,7 @@ public struct PlayerControlsView: View {
     let back: () -> Void
     @State private var scrubPosition = 0.0
     @State private var scrubbing = false
+    @State private var seekOwner = UUID()
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     public init(
@@ -65,20 +66,13 @@ public struct PlayerControlsView: View {
                             if editing {
                                 scrubPosition = Double(snapshot?.positionMs ?? 0)
                                 scrubbing = true
-                                overlay.isInteracting = true
+                                overlay.setGestureInteraction(active: true)
                                 overlay.reveal()
                             } else {
                                 let target = Int64(scrubPosition)
-                                // Hold the released thumb until AVPlayer has accepted the seek.
-                                let token = overlay.beginSeekPreview(at: target)
                                 scrubbing = false
-                                overlay.reveal()
-                                Task {
-                                    defer { overlay.finishSeekPreview(token) }
-                                    do { try await session.playback.seek(to: target) } catch {
-                                        session.warning = error.localizedDescription
-                                    }
-                                }
+                                overlay.setGestureInteraction(active: false)
+                                seek(to: target)
                             }
                         }
                         .disabled(
@@ -106,12 +100,8 @@ public struct PlayerControlsView: View {
                     Button {
                         overlay.reveal()
                         if snapshot?.ended == true {
-                            Task {
-                                do {
-                                    try await session.playback.seek(to: 0)
-                                    session.playback.setPlaybackIntent(.playing)
-                                } catch { session.warning = error.localizedDescription }
-                            }
+                            session.playback.setPlaybackIntent(.playing)
+                            seek(to: 0)
                         } else {
                             session.playback.setPlaybackIntent(playing ? .paused : .playing)
                         }
@@ -140,11 +130,25 @@ public struct PlayerControlsView: View {
             do { try await Task.sleep(for: .seconds(4)) } catch { return }
             if !overlay.isInteracting { overlay.controlsVisible = false }
         }
+        .onDisappear { session.playback.seekInteraction.cancel(owner: seekOwner) }
+        .onChange(of: session.presentationID) { _, _ in
+            session.playback.seekInteraction.cancel(owner: seekOwner)
+            scrubbing = false
+            overlay.setGestureInteraction(active: false)
+        }
         .onChange(of: playing) { _, _ in overlay.reveal() }
         .task(id: overlay.hint) {
             guard overlay.hint != nil, !overlay.isInteracting else { return }
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             overlay.hint = nil
+        }
+    }
+
+    private func seek(to target: Int64) {
+        session.playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
+            try await session.playback.seek(to: target)
+        } onFailure: { error in
+            session.warning = error.localizedDescription
         }
     }
 

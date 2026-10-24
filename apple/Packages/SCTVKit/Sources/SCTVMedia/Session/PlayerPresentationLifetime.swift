@@ -5,15 +5,15 @@ import Foundation
 @MainActor
 public final class PlayerPresentationLifetime {
     private let session: PlayerSession
-    private var token: UUID?
+    private var presentationID: UUID?
 
     public init(session: PlayerSession) { self.session = session }
 
-    public func takeOwnership(of token: UUID) { self.token = token }
+    public func takeOwnership(of presentationID: UUID) { self.presentationID = presentationID }
 
     isolated deinit {
-        guard let token else { return }
+        guard let presentationID else { return }
         let session = session
-        Task { await session.close(expected: token) }
+        Task { await session.close(presentationID: presentationID) }
     }
 }

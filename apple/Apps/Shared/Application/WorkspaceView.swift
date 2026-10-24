@@ -211,7 +211,7 @@ struct WorkspaceView: View {
             LibraryView(
                 model: library, catalogue: catalogue,
                 play: { entry in
-                    let intent = player.beginRequest()
+                    let intent = player.reservePlaybackRequest()
                     Task {
                         do {
                             let request = try await dependencies.resolver.resolve(
@@ -235,7 +235,7 @@ struct WorkspaceView: View {
             DownloadsView(
                 model: downloads,
                 play: { task in
-                    let intent = player.beginRequest()
+                    let intent = player.reservePlaybackRequest()
                     Task { await playDownloaded(task, intent: intent) }
                 },
                 export: { task in Task { await sharing.export(task) } },
@@ -272,7 +272,7 @@ struct WorkspaceView: View {
         ArchiveDestination(
             programme: programme, repository: dependencies.programmes, catalogue: catalogue,
             play: { content, date in
-                let intent = player.beginRequest()
+                let intent = player.reservePlaybackRequest()
                 Task {
                     do {
                         let request = try await dependencies.resolver.prepare(
@@ -319,7 +319,7 @@ struct WorkspaceView: View {
 
     private func present(_ request: PlaybackRequest, intent: UUID, section: WorkspaceSection) async
     {
-        guard let token = player.beginPresentation(for: intent) else { return }
+        guard let token = player.beginPresentation(forRequest: intent) else { return }
         #if os(macOS)
             openWindow(id: "player")
         #else
@@ -335,7 +335,7 @@ struct WorkspaceView: View {
             case .downloads: downloadsPath.append(presentation)
             }
         #endif
-        await player.open(request, expected: token)
+        await player.open(request, forPresentation: token)
     }
 
     @ViewBuilder private func destination(_ route: WorkspaceRoute, section: WorkspaceSection)
@@ -346,7 +346,7 @@ struct WorkspaceView: View {
         case .player(let presentation): playerPage(presentation)
         case .history:
             HistoryView(model: library) { entry in
-                let intent = player.beginRequest()
+                let intent = player.reservePlaybackRequest()
                 Task {
                     do {
                         let request = try await dependencies.resolver.resolve(
@@ -373,7 +373,7 @@ struct WorkspaceView: View {
                     || libraryPath.contains(.player(presentation))
                     || downloadsPath.contains(presentation)
                 guard !remains else { return }
-                Task { await player.close(expected: presentation.id) }
+                Task { await player.close(presentationID: presentation.id) }
             }
     }
 

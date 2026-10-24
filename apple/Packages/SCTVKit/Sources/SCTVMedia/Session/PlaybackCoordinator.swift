@@ -10,12 +10,13 @@ public final class PlaybackCoordinator: PlaybackService {
         case failed(String)
     }
     public let player = AVPlayer()
+    let seekInteraction = PlayerSeekInteraction()
     public private(set) var state = State.idle
 
     private let transport: any MediaRangeTransport
     private var request: PlaybackRequest?
     private var sessionID: UUID?
-    private var generation: UInt64 = 0
+    private var sourceGeneration: UInt64 = 0
     private var loader: AssetResourceLoader?
     private var observation: PlaybackObservation?
     #if os(iOS)
@@ -37,6 +38,7 @@ public final class PlaybackCoordinator: PlaybackService {
     }
 
     isolated deinit {
+        seekInteraction.cancel()
         observation?.dispose()
         loader?.cancelAll()
         #if os(iOS)
@@ -107,14 +109,14 @@ public final class PlaybackCoordinator: PlaybackService {
 
     public func seek(to milliseconds: Int64) async throws {
         guard settled, let item = player.currentItem else { return }
-        let token = generation
+        let token = sourceGeneration
         settled = false
         let target = min(
             max(0, Double(milliseconds) / 1000), validDuration(item) ?? .greatestFiniteMagnitude)
         let completed = await player.seek(
             to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero,
             toleranceAfter: .zero)
-        guard generation == token else { throw CancellationError() }
+        guard sourceGeneration == token else { throw CancellationError() }
         // A native scrub can interrupt this seek without replacing the usable item.
         settled = item.status == .readyToPlay
         guard completed, !dismissing else {
@@ -155,6 +157,7 @@ public final class PlaybackCoordinator: PlaybackService {
     }
 
     public func beginDismissal() {
+        seekInteraction.cancel()
         if let token = temporarySpeedToken { endTemporarySpeed(token) }
         dismissing = true
         if !pictureInPicture {
@@ -217,89 +220,113 @@ public final class PlaybackCoordinator: PlaybackService {
         guard request.localFile != nil || source != nil else {
             throw QualityResolver.ResolutionError.unavailable
         }
+
         lastSnapshot = capture()
         disposeItem()
-        let token = generation
+        let token = sourceGeneration
         quality = request.localFile == nil ? (source?.quality ?? request.quality) : request.quality
         state = .preparing
 
         do {
             #if os(iOS)
                 try await audioSession?.prepare()
-                guard generation == token, !dismissing else { throw CancellationError() }
+                guard sourceGeneration == token, !dismissing else { throw CancellationError() }
             #endif
-            let asset: AVURLAsset
-            if let lease = request.localFile {
-                // A local intent remains local even when an online source is available.
-                guard FileManager.default.isReadableFile(atPath: lease.url.path) else {
-                    throw CocoaError(.fileReadNoSuchFile)
-                }
-                asset = AVURLAsset(url: lease.url)
-            } else if let source {
-                let loader = AssetResourceLoader(transport: transport)
-                self.loader = loader
-                asset = try loader.makeAsset(source: source)
-            } else {
-                throw QualityResolver.ResolutionError.unavailable
-            }
-            let item = AVPlayerItem(asset: asset)
+
+            let item = try makePlayerItem(for: request, source: source)
             player.replaceCurrentItem(with: item)
-            let deadline = ContinuousClock.now.advanced(by: .seconds(20))
-            while item.status != .readyToPlay {
-                try Task.checkCancellation()
-                guard generation == token, !dismissing else { throw CancellationError() }
-                if item.status == .failed {
-                    throw item.error ?? MediaTransportError.invalidResponse
-                }
-                guard ContinuousClock.now < deadline else { throw URLError(.timedOut) }
-                try await Task.sleep(for: .milliseconds(20))
-            }
-            guard generation == token, !dismissing else { throw CancellationError() }
+            try await waitUntilReady(item, sourceGeneration: token)
+            guard sourceGeneration == token, !dismissing else { throw CancellationError() }
+
             let target = min(Double(positionMs) / 1000, validDuration(item) ?? 0)
             let completed = await player.seek(
                 to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero,
                 toleranceAfter: .zero)
-            guard completed, generation == token, !dismissing else { throw CancellationError() }
+            guard completed, sourceGeneration == token, !dismissing else {
+                throw CancellationError()
+            }
 
             settled = true
             ended = false
             state = .ready
             observation = PlaybackObservation(player: player, item: item) { [weak self] event in
-                guard let self, generation == token else { return }
-                switch event {
-                case .playbackChanged(let isPlaying, let actualSpeed):
-                    guard settled else { return }
-                    // Rate KVO is queued; an older boost/pause event must not replace newer intent.
-                    guard abs(Double(player.rate) - actualSpeed) < 0.001 else { return }
-                    if dismissing && !pictureInPicture {
-                        player.pause()
-                        intent = .paused
-                    } else {
-                        intent = isPlaying ? .playing : .paused
-                        if isPlaying, temporarySpeedToken == nil { speed = actualSpeed }
-                        if !isPlaying { temporarySpeedToken = nil }
-                    }
-                    emitSnapshot()
-                case .sample: emitSnapshot()
-                case .ended:
-                    ended = true
-                    intent = .paused
-                    emitSnapshot()
-                case .failed(let message):
-                    lastSnapshot = capture()
-                    disposeItem()
-                    state = .failed(message)
-                }
+                self?.receive(event, sourceGeneration: token)
             }
+
             if intent == .playing { player.playImmediately(atRate: Float(speed)) }
             emitSnapshot()
         } catch {
-            if generation == token {
+            if sourceGeneration == token {
                 // Preparation owns its loader even when the calling task is cancelled.
                 disposeItem()
                 state = .failed(error.localizedDescription)
             }
             throw error
+        }
+    }
+
+    /// The coordinator retains the loader; preparation never transfers resource ownership.
+    private func makePlayerItem(for request: PlaybackRequest, source: MediaSource?) throws
+        -> AVPlayerItem
+    {
+        let asset: AVURLAsset
+        if let lease = request.localFile {
+            // A local intent remains local even when an online source is available.
+            guard FileManager.default.isReadableFile(atPath: lease.url.path) else {
+                throw CocoaError(.fileReadNoSuchFile)
+            }
+            asset = AVURLAsset(url: lease.url)
+        } else if let source {
+            let loader = AssetResourceLoader(transport: transport)
+            self.loader = loader
+            asset = try loader.makeAsset(source: source)
+        } else {
+            throw QualityResolver.ResolutionError.unavailable
+        }
+        return AVPlayerItem(asset: asset)
+    }
+
+    private func waitUntilReady(_ item: AVPlayerItem, sourceGeneration: UInt64) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while item.status != .readyToPlay {
+            try Task.checkCancellation()
+            guard self.sourceGeneration == sourceGeneration, !dismissing else {
+                throw CancellationError()
+            }
+            if item.status == .failed {
+                throw item.error ?? MediaTransportError.invalidResponse
+            }
+            guard ContinuousClock.now < deadline else { throw URLError(.timedOut) }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    private func receive(_ event: PlaybackObservation.Event, sourceGeneration: UInt64) {
+        // Observation callbacks are queued and can arrive after source disposal.
+        guard self.sourceGeneration == sourceGeneration else { return }
+        switch event {
+        case .playbackChanged(let isPlaying, let actualSpeed):
+            guard settled else { return }
+            // Rate KVO is queued; an older boost/pause event must not replace newer intent.
+            guard abs(Double(player.rate) - actualSpeed) < 0.001 else { return }
+            if dismissing && !pictureInPicture {
+                player.pause()
+                intent = .paused
+            } else {
+                intent = isPlaying ? .playing : .paused
+                if isPlaying, temporarySpeedToken == nil { speed = actualSpeed }
+                if !isPlaying { temporarySpeedToken = nil }
+            }
+            emitSnapshot()
+        case .sample: emitSnapshot()
+        case .ended:
+            ended = true
+            intent = .paused
+            emitSnapshot()
+        case .failed(let message):
+            lastSnapshot = capture()
+            disposeItem()
+            state = .failed(message)
         }
     }
 
@@ -330,8 +357,9 @@ public final class PlaybackCoordinator: PlaybackService {
     }
 
     private func disposeItem() {
+        seekInteraction.cancel()
         temporarySpeedToken = nil
-        generation &+= 1
+        sourceGeneration &+= 1
         settled = false
         observation?.dispose()
         observation = nil
