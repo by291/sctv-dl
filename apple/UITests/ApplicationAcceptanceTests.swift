@@ -567,7 +567,16 @@ final class ApplicationAcceptanceTests: XCTestCase {
             menuShot.name = "download-secondary-actions"
             menuShot.lifetime = .keepAlways
             add(menuShot)
+            app.buttons["移除记录"].tap()
+            let confirm = app.buttons["download-confirm-action"].firstMatch
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+            XCTAssertGreaterThan(confirm.frame.midY, app.buttons["全部"].frame.maxY)
+            let anchorShot = XCTAttachment(screenshot: app.screenshot())
+            anchorShot.name = "download-single-confirmation-anchor"
+            anchorShot.lifetime = .keepAlways
+            add(anchorShot)
             app.navigationBars["下载"].tap()
+            XCTAssertTrue(menu.isHittable)
             let filtersTop = app.buttons["全部"].frame.minY
             let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
             app.buttons["选择"].tap()
@@ -580,6 +589,12 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["移除记录"].isHittable)
             app.buttons["全选"].tap()
             XCTAssertTrue(app.staticTexts["已选 2 项"].exists)
+            app.buttons["删除文件"].tap()
+            let deleteAlert = app.alerts["删除 2 个文件？"]
+            XCTAssertTrue(deleteAlert.waitForExistence(timeout: 5))
+            XCTAssertTrue(deleteAlert.staticTexts["下载记录会保留，之后可以重新下载。"].exists)
+            deleteAlert.buttons["取消"].tap()
+            XCTAssertTrue(app.staticTexts["已选 2 项"].exists)
             let shot = XCTAttachment(screenshot: app.screenshot())
             shot.name = "download-selection-actions"
             shot.lifetime = .keepAlways
@@ -589,13 +604,82 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(menu.exists)
             XCTAssertEqual(app.buttons["全部"].frame.minY, filtersTop, accuracy: 2)
             XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
+            let secondMenu = app.buttons["download-32-completed"]
+            secondMenu.tap()
+            app.buttons["移除记录"].tap()
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+            confirm.tap()
+            XCTAssertTrue(secondMenu.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(menu.exists)
             app.buttons["选择"].tap()
             app.buttons["全选"].tap()
+            for _ in 0..<2 {
+                app.buttons["移除记录"].tap()
+                let batchAlert = app.alerts["移除 1 条记录？"]
+                XCTAssertTrue(batchAlert.waitForExistence(timeout: 5))
+                XCTAssertTrue(batchAlert.staticTexts["已下载的文件会保留。"].exists)
+                let confirmationShot = XCTAttachment(screenshot: app.screenshot())
+                confirmationShot.name = "download-batch-confirmation-with-hidden-tabs"
+                confirmationShot.lifetime = .keepAlways
+                add(confirmationShot)
+                XCTAssertEqual(app.buttons["栏目"].firstMatch.exists, !usesBottomTabs)
+                batchAlert.buttons["取消"].tap()
+                XCTAssertTrue(app.buttons["移除记录"].isHittable)
+                XCTAssertEqual(app.buttons["栏目"].firstMatch.exists, !usesBottomTabs)
+            }
             app.buttons["移除记录"].tap()
-            XCTAssertTrue(app.buttons["确认"].waitForExistence(timeout: 5))
-            app.buttons["确认"].tap()
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+            confirm.tap()
             XCTAssertTrue(app.staticTexts["暂无下载"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["完成"].exists)
+        }
+
+        func testDownloadSelectionBackdropCoversBottomSafeArea() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            app.buttons["四川新闻"].tap()
+            for id in ["30", "31", "32"] {
+                let menu = app.buttons["content-actions-\(id)"]
+                reveal(menu, in: app)
+                menu.tap()
+                app.buttons["download-content-\(id)"].tap()
+                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
+                app.alerts["提示"].buttons["好"].tap()
+            }
+            app.buttons["下载"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["download-30-completed"].waitForExistence(timeout: 15))
+            app.buttons["选择"].tap()
+            app.buttons["全选"].tap()
+            XCTAssertTrue(app.staticTexts["已选 3 项"].waitForExistence(timeout: 5))
+            let delete = app.buttons["删除文件"]
+            XCTAssertTrue(delete.isHittable)
+            let buttonY = delete.frame.midY
+            let selected = XCTAttachment(screenshot: app.screenshot())
+            selected.name = "download-selection-bottom-safe-area"
+            selected.lifetime = .keepAlways
+            add(selected)
+            app.swipeUp()
+            XCTAssertTrue(app.buttons["select-download-30"].isHittable)
+            XCTAssertEqual(delete.frame.midY, buttonY, accuracy: 2)
+            let scrolled = XCTAttachment(screenshot: app.screenshot())
+            scrolled.name = "download-selection-scrolled-bottom-safe-area"
+            scrolled.lifetime = .keepAlways
+            add(scrolled)
+            app.buttons["完成"].tap()
+            XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
+            app.buttons["选择"].tap()
+            XCTAssertTrue(app.staticTexts["已选 0 项"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["请选择要操作的下载任务"].isHittable)
+            app.buttons["全选"].tap()
+            XCTAssertTrue(app.staticTexts["已选 3 项"].waitForExistence(timeout: 5))
+            XCTAssertEqual(delete.frame.midY, buttonY, accuracy: 2)
+            app.buttons["完成"].tap()
+            XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
         }
 
         func testContinuingDeletionKeepsLibraryPosition() {

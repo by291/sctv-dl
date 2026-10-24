@@ -1,24 +1,18 @@
 #if os(iOS)
     import SwiftUI
 
-    struct DownloadTabBarInsets: Equatable {
-        var height: CGFloat = 0
-        var bottom: CGFloat = 0
-    }
-
-    /// Keeps the native bar mounted while the page drives both surfaces with one progress value.
+    /// Gives the system ownership of tab visibility while selection owns the page's controls.
     struct DownloadTabBarVisibility: UIViewControllerRepresentable {
         static let travelDistance: CGFloat = 24
-        let progress: CGFloat
-        @Binding var insets: DownloadTabBarInsets
+        let hidden: Bool
+        let animated: Bool
+        @Binding var bottomSafeArea: CGFloat
 
         func makeUIViewController(context: Context) -> Controller { Controller() }
 
         func updateUIViewController(_ controller: Controller, context: Context) {
-            controller.reportInsets = { value in
-                if insets != value { insets = value }
-            }
-            controller.update(progress: progress)
+            controller.bottomSafeArea = $bottomSafeArea
+            controller.update(hidden: hidden, animated: animated)
         }
 
         static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
@@ -26,15 +20,13 @@
         }
 
         final class Controller: UIViewController {
-            private var progress: CGFloat = 0
+            var bottomSafeArea: Binding<CGFloat>?
+            private var hidden = false
+            private var animated = false
             private var visible = false
-            private weak var bar: UITabBar?
-            private var originalTransform = CGAffineTransform.identity
-            private var originalAlpha: CGFloat = 1
-            private var originalInteraction = true
-            private var originalAccessibilityHidden = false
-            private var lastInsets: DownloadTabBarInsets?
-            var reportInsets: ((DownloadTabBarInsets) -> Void)?
+            private weak var controlledTabs: UITabBarController?
+            private var originalHidden = false
+            private var requestedHidden: Bool?
 
             override func loadView() {
                 view = UIView()
@@ -58,74 +50,48 @@
                 restore()
             }
 
-            func update(progress: CGFloat) {
-                self.progress = min(1, max(0, progress))
+            func update(hidden: Bool, animated: Bool) {
+                self.hidden = hidden
+                self.animated = animated
                 if visible { apply() }
             }
 
             private func apply() {
+                if let inset = view.window?.safeAreaInsets.bottom,
+                    let bottomSafeArea, bottomSafeArea.wrappedValue != inset
+                {
+                    // Report the window inset, excluding the tab bar's changing safe area.
+                    Task { @MainActor in bottomSafeArea.wrappedValue = inset }
+                }
                 guard let tabs = tabBarController else { return }
-                let bottom = view.window?.safeAreaInsets.bottom ?? 0
-                // Top tabs/sidebar do not compete with bottom actions. Keep their controls stationary.
-                if tabs.traitCollection.horizontalSizeClass == .regular {
-                    if bar != nil { restore() }
-                    report(DownloadTabBarInsets(bottom: bottom))
-                    return
-                }
-                if bar == nil && progress > 0 {
-                    bar = tabs.tabBar
-                    originalTransform = tabs.tabBar.transform
-                    originalAlpha = tabs.tabBar.alpha
-                    originalInteraction = tabs.tabBar.isUserInteractionEnabled
-                    originalAccessibilityHidden = tabs.tabBar.accessibilityElementsHidden
-                }
-                let measuredBar = bar ?? tabs.tabBar
-                let frame = measuredBar.convert(measuredBar.bounds, to: tabs.view)
-                // Subtract our translation when measuring the native resting inset.
-                let translation = bar.map { $0.transform.ty - originalTransform.ty } ?? 0
-                let restingBottom = frame.minY - translation
-                let height =
-                    frame.midY > tabs.view.bounds.midY
-                    ? max(0, tabs.view.bounds.maxY - restingBottom - bottom) : 0
-                report(DownloadTabBarInsets(height: height.rounded(), bottom: bottom))
-                guard let bar else { return }
-                if progress == 0 {
+                // Top tabs/sidebar do not compete with bottom actions.
+                guard tabs.traitCollection.horizontalSizeClass != .regular else {
                     restore()
                     return
                 }
-                UIView.performWithoutAnimation {
-                    bar.alpha = originalAlpha * (1 - progress)
-                    bar.transform = originalTransform.translatedBy(
-                        x: 0, y: progress * DownloadTabBarVisibility.travelDistance)
+                if controlledTabs == nil {
+                    guard hidden else { return }
+                    controlledTabs = tabs
+                    originalHidden = tabs.isTabBarHidden
                 }
-                bar.isUserInteractionEnabled = originalInteraction && progress == 0
-                bar.accessibilityElementsHidden = originalAccessibilityHidden || progress > 0
-            }
-
-            private func report(_ insets: DownloadTabBarInsets) {
-                if lastInsets != insets {
-                    lastInsets = insets
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self, visible, lastInsets == insets else { return }
-                        reportInsets?(insets)
-                    }
-                }
+                let target = hidden || originalHidden
+                // Layout callbacks must not restart an in-flight system transition.
+                guard requestedHidden != target else { return }
+                requestedHidden = target
+                tabs.setTabBarHidden(target, animated: animated)
             }
 
             func restore() {
-                if let bar {
-                    bar.transform = originalTransform
-                    bar.alpha = originalAlpha
-                    bar.isUserInteractionEnabled = originalInteraction
-                    bar.accessibilityElementsHidden = originalAccessibilityHidden
+                if let controlledTabs {
+                    controlledTabs.setTabBarHidden(originalHidden, animated: false)
                 }
-                bar = nil
-                lastInsets = nil
+                controlledTabs = nil
+                requestedHidden = nil
             }
         }
     }
 
-    /// Interpolates once; rows and native chrome consume the same presentation progress.
+    /// Interpolates once so every row and the batch action area reverse together.
     struct DownloadSelectionTransition<Content: View>: View, Animatable {
         nonisolated var progress: CGFloat
         @ViewBuilder var content: (CGFloat) -> Content

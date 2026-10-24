@@ -6,11 +6,22 @@ public struct DownloadsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var confirming: [DownloadCommand] = []
+    private enum ConfirmationSource: Equatable {
+        case task(UUID)
+        case batch(String)
+    }
+
+    private struct Confirmation {
+        let source: ConfirmationSource
+        let commands: [DownloadCommand]
+    }
+
+    @State private var confirming: Confirmation?
     @State private var selecting = false
+    @State private var departingActions: [BatchAction] = []
     #if os(iOS)
-        @State private var tabBarInsets = DownloadTabBarInsets()
         @State private var selectionBarHeight: CGFloat = 0
+        @State private var bottomSafeArea: CGFloat = 0
     #endif
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
@@ -110,26 +121,30 @@ public struct DownloadsView: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(
-                    height: max(0, selectionBarHeight - tabBarInsets.height) * selectionProgress)
+                Color.clear.frame(height: selectionBarHeight * selectionProgress)
             }
             .overlay(alignment: .bottom) {
                 selectionBar
+                .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) {
                     $0.size.height
                 } action: {
                     selectionBarHeight = $0
                 }
-                .offset(
-                    y: tabBarInsets.height
-                        + (1 - selectionProgress) * DownloadTabBarVisibility.travelDistance
-                )
+                .padding(.bottom, bottomSafeArea)
+                .background {
+                    Rectangle().fill(.regularMaterial)
+                }
+                // Keep the footer at the screen edge while the system changes the tab bar inset.
+                .offset(y: (1 - selectionProgress) * DownloadTabBarVisibility.travelDistance)
                 .opacity(selectionProgress)
+                .ignoresSafeArea(.container, edges: .bottom)
                 .allowsHitTesting(selecting)
                 .accessibilityHidden(!selecting)
             }
             .background(
-                DownloadTabBarVisibility(progress: selectionProgress, insets: $tabBarInsets)
+                DownloadTabBarVisibility(
+                    hidden: selecting, animated: !reduceMotion, bottomSafeArea: $bottomSafeArea)
             )
             .toolbar(.visible, for: .navigationBar)
         #endif
@@ -167,23 +182,61 @@ public struct DownloadsView: View {
                 if selecting { selectionBar }
             }
         #endif
-        .confirmationDialog(
-            "确认执行所选操作？",
-            isPresented: Binding(get: { !confirming.isEmpty }, set: { if !$0 { confirming = [] } }),
-            titleVisibility: .visible
-        ) {
-            Button("确认", role: .destructive) {
-                let commands = confirming
-                confirming = []
-                Task { await model.perform(commands) }
+        .alert(
+            batchConfirmationTitle,
+            isPresented: Binding(
+                get: { batchConfirmation != nil },
+                set: { if !$0, batchConfirmation != nil { confirming = nil } }),
+            presenting: batchConfirmation
+        ) { pending in
+            Button("取消", role: .cancel) { confirming = nil }
+            Button(
+                pending.commands.first?.action == .deleteFile ? "删除文件" : "移除记录", role: .destructive
+            ) {
+                confirming = nil
+                Task { await model.perform(pending.commands) }
             }
-        } message: {
-            Text("移除记录会保留文件；删除文件会保留记录。")
+            .accessibilityIdentifier("download-confirm-action")
+        } message: { pending in
+            Text(
+                pending.commands.first?.action == .deleteFile
+                    ? "下载记录会保留，之后可以重新下载。" : "已下载的文件会保留。")
         }
         .task { await model.load() }
     }
 
+    private var batchConfirmation: Confirmation? {
+        guard let confirming, case .batch = confirming.source else { return nil }
+        return confirming
+    }
+
+    private var batchConfirmationTitle: String {
+        guard let pending = batchConfirmation else { return "" }
+        let count = pending.commands.count
+        return pending.commands.first?.action == .deleteFile
+            ? "删除 \(count) 个文件？" : "移除 \(count) 条记录？"
+    }
+
+    private func confirmationPresented(for source: ConfirmationSource) -> Binding<Bool> {
+        Binding(
+            get: { confirming?.source == source },
+            set: { presented in
+                if !presented, confirming?.source == source { confirming = nil }
+            })
+    }
+
+    private var confirmationActions: some View {
+        Button("确认", role: .destructive) {
+            guard let pending = confirming else { return }
+            confirming = nil
+            // Keep the original attempt guards while the confirmation is presented.
+            Task { await model.perform(pending.commands) }
+        }
+        .accessibilityIdentifier("download-confirm-action")
+    }
+
     private func setSelecting(_ value: Bool) {
+        if !value { departingActions = availableBatchActions }
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
             selecting = value
         }
@@ -260,9 +313,10 @@ public struct DownloadsView: View {
     }
 
     private var selectionBar: some View {
-        let actions = availableBatchActions
+        // Clearing selected IDs must not replace the buttons during their exit animation.
+        let actions = selecting ? availableBatchActions : departingActions
         return Group {
-            if model.selection.isEmpty {
+            if actions.isEmpty {
                 Text("请选择要操作的下载任务")
                     .font(.subheadline).foregroundStyle(secondaryText)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -277,13 +331,15 @@ public struct DownloadsView: View {
                         Button(role: item.destructive ? .destructive : nil) {
                             let commands = model.commands(for: item.action)
                             if item.destructive {
-                                confirming = commands
+                                confirming = Confirmation(
+                                    source: .batch(item.id), commands: commands)
                             } else {
                                 Task { await model.perform(commands) }
                             }
                         } label: {
                             Text(item.title).frame(maxWidth: .infinity, minHeight: 32)
                         }
+
                     }
                 }
                 .buttonStyle(.bordered).buttonBorderShape(.capsule)
@@ -291,12 +347,9 @@ public struct DownloadsView: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .frame(maxWidth: 600).frame(maxWidth: .infinity)
-        .background {
-            Rectangle().fill(.regularMaterial)
-                #if os(iOS)
-                    .padding(.bottom, -tabBarInsets.bottom)
-                #endif
-        }
+        #if os(macOS)
+            .background(.regularMaterial)
+        #endif
         .overlay(alignment: .top) { Divider() }
     }
 
@@ -373,6 +426,15 @@ public struct DownloadsView: View {
             .buttonStyle(.borderless)
             .accessibilityLabel("下载操作")
             .accessibilityIdentifier("download-\(task.content.contentID)-\(task.state.storageKey)")
+            .confirmationDialog(
+                "确认执行所选操作？",
+                isPresented: confirmationPresented(for: .task(task.id)),
+                titleVisibility: .visible
+            ) {
+                confirmationActions
+            } message: {
+                Text("移除记录会保留文件；删除文件会保留记录。")
+            }
         }
     }
 
@@ -427,7 +489,8 @@ public struct DownloadsView: View {
         if !commands.isEmpty {
             Button(role: destructive ? .destructive : nil) {
                 if destructive {
-                    confirming = commands
+                    guard let id = ids?.first else { return }
+                    confirming = Confirmation(source: .task(id), commands: commands)
                 } else {
                     Task { await model.perform(commands) }
                 }
