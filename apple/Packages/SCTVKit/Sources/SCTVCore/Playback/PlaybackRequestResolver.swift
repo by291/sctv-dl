@@ -1,11 +1,19 @@
 import Foundation
-import SCTVCore
 
-struct PlaybackRequestResolver: Sendable {
-    let api: any ProgrammeAPI
-    let history: any HistoryRepository
+public struct PlaybackRequestResolver: Sendable {
+    private let api: any ProgrammeAPI
+    private let history: any HistoryRepository
 
-    func resolve(_ saved: HistoryEntry, quality: VideoQuality) async throws -> PlaybackRequest {
+    public init(
+        api: any ProgrammeAPI, history: any HistoryRepository
+    ) {
+        self.api = api
+        self.history = history
+    }
+
+    public func resolve(_ saved: HistoryEntry, quality: VideoQuality) async throws
+        -> PlaybackRequest
+    {
         let content = saved.content
         let contents = try await api.contents(
             programmeID: content.programmeID, dateID: content.dateID)
@@ -21,7 +29,7 @@ struct PlaybackRequestResolver: Sendable {
                 positionMs: saved.positionMs, completed: saved.completed))
     }
 
-    func prepare(
+    public func prepare(
         _ content: ProgrammeContent, programme: Programme, broadcast: BroadcastDate,
         quality: VideoQuality, resumeOverride: Int64? = nil
     ) async throws -> PlaybackRequest {
@@ -42,8 +50,8 @@ struct PlaybackRequestResolver: Sendable {
             broadcastDate: broadcast.date, cover: content.cover)
     }
 
-    enum PreparationError: LocalizedError {
+    public enum PreparationError: LocalizedError, Equatable {
         case removed
-        var errorDescription: String? { "该节目已不可用，请刷新后重试。" }
+        public var errorDescription: String? { "该节目已不可用，请刷新后重试。" }
     }
 }

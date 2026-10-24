@@ -47,6 +47,8 @@ Preference edits carry accepted revisions. Failed saves remain visible and retry
 
 ## Playback and files
 
+`SCTVCore/Playback/PlaybackRequestResolver` prepares playback requests through the programme and history protocols. Preparation preserves quality fallback and treats history as optional; resolving a saved entry refreshes programme metadata while retaining that entry's resume position, with completed entries restarting at zero. Missing programmes and upstream failures remain distinct errors.
+
 Opening a programme starts paused. One application-wide AVPlayer owns the active session, source replacement, interruption state and cleanup. Tap-time request tokens reject older metadata resolutions. Presentation tokens protect a newer player from an older window or navigation destination's delayed dismissal. Local playback retains a file lease for the session and never silently falls back to an online URL.
 
 iOS audio configuration and deactivation are serialized across player lifetimes. AVPlayer activates audio only when playback starts. Teardown uses asynchronous deactivation when supported by the SDK and OS, with a dedicated background queue for the iOS 26 fallback and category configuration. A replacement waits for the previous deactivation; player cleanup commits before awaiting completion so a late close cannot clear a newer session. Deactivation failure is best effort and does not prevent the next configuration.
