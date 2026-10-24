@@ -61,10 +61,9 @@ struct HistoryCard: View {
                     Button("删除记录", systemImage: "trash", action: remove)
                     .tint(.red)
                 }
-            #else
-                .contextMenu {
-                    Button("删除记录", systemImage: "trash", role: .destructive, action: remove)
-                }
             #endif
+            .contextMenu {
+                Button("删除记录", systemImage: "trash", role: .destructive, action: remove)
+            }
     }
 }

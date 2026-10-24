@@ -4,6 +4,7 @@ import SwiftUI
 public struct LibraryView: View {
     @Bindable private var model: LibraryModel
     @Bindable private var catalogue: CatalogueModel
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let play: (HistoryEntry) -> Void
@@ -25,23 +26,24 @@ public struct LibraryView: View {
     }
 
     public var body: some View {
-        Group {
+        GeometryReader { geometry in
+            let columns = MediaCardLayout.columnCount(
+                width: geometry.size.width, typeSize: typeSize)
             #if os(iOS)
-                List {
-                    sections
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-            #else
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        sections
+                if columns == 1 {
+                    List {
+                        sections(columns: columns)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                     }
-                    .padding(20).frame(maxWidth: 1160).frame(maxWidth: .infinity)
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                } else {
+                    gridPage(columns: columns)
                 }
+            #else
+                gridPage(columns: columns)
             #endif
         }
         // Animate the accepted row change once, including replacement by the empty state.
@@ -68,7 +70,16 @@ public struct LibraryView: View {
         }
     }
 
-    private var sections: some View {
+    private func gridPage(columns: Int) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                sections(columns: columns)
+            }
+            .padding(20).frame(maxWidth: 1160).frame(maxWidth: .infinity)
+        }
+    }
+
+    private func sections(columns: Int) -> some View {
         Group {
             if let warning = model.warning { InlineNotice(text: warning) }
             Section {
@@ -78,15 +89,16 @@ public struct LibraryView: View {
                     )
                     .transition(.opacity)
                 } else {
-                    #if os(iOS)
+                    if columns == 1 {
                         ForEach(model.continuing) { entry in historyRow(entry) }
-                    #else
+                    } else {
                         LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 16
+                            columns: MediaCardLayout.columns(columns),
+                            spacing: MediaCardLayout.spacing
                         ) {
                             ForEach(model.continuing) { entry in historyRow(entry) }
                         }
-                    #endif
+                    }
                 }
             } header: {
                 SectionHeading(title: "继续观看", count: model.continuing.count)
