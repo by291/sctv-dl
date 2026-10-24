@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.sctvdl.data.downloads.preflight.MediaIdentity
 import dev.sctvdl.data.network.UpstreamUrlPolicy
 import dev.sctvdl.domain.download.DownloadTask
+import dev.sctvdl.domain.network.UpstreamRequestProfile
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -129,9 +130,10 @@ internal class DownloadNetworkAccess @Inject constructor(
             if (UpstreamUrlPolicy.media(original.url.toString()) == null) throw IOException("Unsupported media URL")
             val position =
                 original.header("Range")?.substringAfter("bytes=")?.substringBefore('-')?.toLongOrNull() ?: 0L
-            val request = original.newBuilder().header("Referer", UpstreamUrlPolicy.REFERER).apply {
-                if (position > 0) (task.mediaEtag ?: task.mediaLastModified)?.let { header("If-Range", it) }
-            }.build()
+            val request = original.newBuilder().header("Referer", UpstreamUrlPolicy.REFERER)
+                .header("User-Agent", UpstreamRequestProfile.USER_AGENT).apply {
+                    if (position > 0) (task.mediaEtag ?: task.mediaLastModified)?.let { header("If-Range", it) }
+                }.build()
             val response = chain.proceed(request)
             try {
                 if (request.method == "GET") {

@@ -2,6 +2,7 @@ package dev.sctvdl.data.downloads.preflight
 
 import dev.sctvdl.data.network.UpstreamUrlPolicy
 import dev.sctvdl.domain.download.isActive
+import dev.sctvdl.domain.network.UpstreamRequestProfile
 import java.io.IOException
 import javax.inject.Inject
 import kotlin.coroutines.resume
@@ -20,6 +21,7 @@ internal class OkHttpMediaProbe @Inject constructor(private val client: OkHttpCl
                 .url(url)
                 .method(method, null)
                 .header("Referer", UpstreamUrlPolicy.REFERER)
+                .header("User-Agent", UpstreamRequestProfile.USER_AGENT)
                 .apply { range?.let { header("Range", it) } }
                 .build()
             val call = client.newCall(request)

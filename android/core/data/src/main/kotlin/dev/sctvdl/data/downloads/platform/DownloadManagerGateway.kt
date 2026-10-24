@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.sctvdl.data.network.UpstreamUrlPolicy
 import dev.sctvdl.domain.download.DownloadReason
 import dev.sctvdl.domain.download.DownloadState
+import dev.sctvdl.domain.network.UpstreamRequestProfile
 import java.io.File
 import java.io.IOException
 import javax.inject.Inject
@@ -31,6 +32,7 @@ internal class DownloadManagerGateway @Inject constructor(@ApplicationContext pr
                     "蜀台回看 · ${if (request.wifiOnly) "仅 Wi-Fi" else "Wi-Fi 或移动网络"}"
             )
             .setMimeType("video/mp4").addRequestHeader("Referer", UpstreamUrlPolicy.REFERER)
+            .addRequestHeader("User-Agent", UpstreamRequestProfile.USER_AGENT)
             .setDestinationInExternalPublicDir(
                 Environment.DIRECTORY_DOWNLOADS,
                 "sctv-dl/${request.filename}"

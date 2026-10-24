@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import dev.sctvdl.domain.media.Quality
+import dev.sctvdl.domain.network.UpstreamRequestProfile
 import dev.sctvdl.player.controller.PlaybackBackend
 import dev.sctvdl.player.controller.PlaybackController
 import dev.sctvdl.player.model.PlaybackBackendSnapshot
@@ -34,6 +35,7 @@ private class ExoBackend(context: Context) : PlaybackBackend {
         .followSslRedirects(false)
         .build()
     private val http = OkHttpDataSource.Factory(client)
+        .setUserAgent(UpstreamRequestProfile.USER_AGENT)
         .setDefaultRequestProperties(mapOf("Referer" to "https://scgc.video.play/"))
 
     val player = ExoPlayer.Builder(context)

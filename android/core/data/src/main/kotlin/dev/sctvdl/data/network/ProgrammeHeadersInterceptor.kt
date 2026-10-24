@@ -1,5 +1,6 @@
 package dev.sctvdl.data.network
 
+import dev.sctvdl.domain.network.UpstreamRequestProfile
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -21,7 +22,7 @@ internal class ProgrammeHeadersInterceptor(
             .header("deviceType", "android")
             .header("appVersion", "9.6.1.5")
             .header("captchaId", "")
-            .header("User-Agent", "okhttp/4.12.0")
+            .header("User-Agent", UpstreamRequestProfile.USER_AGENT)
             .build()
 
         return chain.proceed(request)
