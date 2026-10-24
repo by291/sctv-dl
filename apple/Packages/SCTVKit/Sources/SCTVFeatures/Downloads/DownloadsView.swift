@@ -89,12 +89,14 @@ public struct DownloadsView: View {
                         Button("重试恢复下载状态") { Task { await model.reconcile() } }
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
             } else if model.visibleTasks.isEmpty {
                 ContentUnavailableView(
                     "暂无下载", systemImage: "arrow.down.circle",
                     description: Text("在节目页面选择下载，完成后即可离线观看。")
                 )
+                .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
 

@@ -108,12 +108,15 @@ public struct CatalogueView: View {
                 } actions: {
                     Button("重试") { Task { await model.refresh() } }
                 }
+                .frame(maxWidth: .infinity)
             } else {
                 ContentUnavailableView(
                     model.favouritesOnly ? "还没有收藏栏目" : "没有找到栏目",
                     systemImage: model.favouritesOnly ? "heart" : "magnifyingglass",
                     description: Text(
-                        model.favouritesOnly ? "轻点封面上的爱心，把喜欢的栏目留在这里。" : "试试其他关键词，或下拉刷新。"))
+                        model.favouritesOnly ? "轻点封面上的爱心，把喜欢的栏目留在这里。" : "试试其他关键词，或下拉刷新。")
+                )
+                .frame(maxWidth: .infinity)
             }
         } else {
             LazyVGrid(

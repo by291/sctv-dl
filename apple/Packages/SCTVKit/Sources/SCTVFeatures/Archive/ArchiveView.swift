@@ -104,7 +104,9 @@ public struct ArchiveView: View {
                     if !model.isLoading && model.contents.isEmpty && model.warning == nil {
                         ContentUnavailableView(
                             "暂无节目", systemImage: "play.rectangle",
-                            description: Text("选择其他播出日期，或稍后刷新。"))
+                            description: Text("选择其他播出日期，或稍后刷新。")
+                        )
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .scrollTargetLayout(isEnabled: !wide)
