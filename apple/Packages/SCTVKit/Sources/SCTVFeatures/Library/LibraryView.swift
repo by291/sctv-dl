@@ -54,12 +54,14 @@ public struct LibraryView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar(.visible, for: .navigationBar)
         #endif
-        .toolbar {
-            ToolbarItem {
-                Button("设置", systemImage: "gearshape", action: settings)
+        #if os(iOS)
+            .toolbar {
+                ToolbarItem {
+                    Button("设置", systemImage: "gearshape", action: settings)
                     .labelStyle(.iconOnly).help("设置")
+                }
             }
-        }
+        #endif
         .task {
             await model.load()
             await catalogue.load()

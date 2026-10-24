@@ -65,12 +65,14 @@ public struct CatalogueView: View {
                 }
             }
         #endif
-        .toolbar {
-            ToolbarItem {
-                Button("设置", systemImage: "gearshape", action: settings)
+        #if os(iOS)
+            .toolbar {
+                ToolbarItem {
+                    Button("设置", systemImage: "gearshape", action: settings)
                     .labelStyle(.iconOnly).help("设置")
+                }
             }
-        }
+        #endif
         .refreshable { await model.refresh() }
         .task { await model.load() }
     }

@@ -90,15 +90,23 @@ struct WorkspaceView: View {
                                                     ? PresentationStyle.accent(
                                                         colorScheme ?? systemScheme
                                                     ).opacity(0.12) : .clear,
-                                                in: RoundedRectangle(cornerRadius: 12))
+                                                in: RoundedRectangle(cornerRadius: 12)
+                                            )
+                                            .contentShape(Rectangle())
                                     }.buttonStyle(.plain)
                                         .accessibilityAddTraits(
                                             selection == item ? .isSelected : [])
                                 }
                             }.padding(.horizontal, 12)
                         }
-                        Button("设置", systemImage: "gearshape") { openSettings() }
-                            .buttonStyle(.plain).padding(20)
+                        Button {
+                            openSettings()
+                        } label: {
+                            Label("设置", systemImage: "gearshape")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(20)
+                                .contentShape(Rectangle())
+                        }.buttonStyle(.plain)
                     }
                     .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
                 } detail: {
