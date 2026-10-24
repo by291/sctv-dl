@@ -19,10 +19,6 @@ public struct DownloadsView: View {
     @State private var confirming: Confirmation?
     @State private var selecting = false
     @State private var departingActions: [BatchAction] = []
-    #if os(iOS)
-        @State private var selectionBarHeight: CGFloat = 0
-        @State private var bottomSafeArea: CGFloat = 0
-    #endif
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
     private let reauthorize: (DownloadTask) -> Void
@@ -42,7 +38,7 @@ public struct DownloadsView: View {
 
     public var body: some View {
         #if os(iOS)
-            DownloadSelectionTransition(progress: selecting ? 1 : 0) { progress in
+            BatchSelectionTransition(progress: selecting ? 1 : 0) { progress in
                 page(selectionProgress: progress)
             }
         #else
@@ -120,32 +116,6 @@ public struct DownloadsView: View {
         .navigationTitle("下载")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(height: selectionBarHeight * selectionProgress)
-            }
-            .overlay(alignment: .bottom) {
-                selectionBar
-                .fixedSize(horizontal: false, vertical: true)
-                .onGeometryChange(for: CGFloat.self) {
-                    $0.size.height
-                } action: {
-                    selectionBarHeight = $0
-                }
-                .padding(.bottom, bottomSafeArea)
-                .background {
-                    Rectangle().fill(.regularMaterial)
-                }
-                // Keep the footer at the screen edge while the system changes the tab bar inset.
-                .offset(y: (1 - selectionProgress) * DownloadTabBarVisibility.travelDistance)
-                .opacity(selectionProgress)
-                .ignoresSafeArea(.container, edges: .bottom)
-                .allowsHitTesting(selecting)
-                .accessibilityHidden(!selecting)
-            }
-            .background(
-                DownloadTabBarVisibility(
-                    hidden: selecting, animated: !reduceMotion, bottomSafeArea: $bottomSafeArea)
-            )
             .toolbar(.visible, for: .navigationBar)
         #endif
         .onChange(of: selecting) { _, value in
@@ -177,11 +147,9 @@ public struct DownloadsView: View {
                 }
             }
         }
-        #if os(macOS)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if selecting { selectionBar }
-            }
-        #endif
+        .batchSelectionBar(selecting: selecting, progress: selectionProgress) {
+            selectionBar(progress: selectionProgress)
+        }
         .alert(
             batchConfirmationTitle,
             isPresented: Binding(
@@ -312,10 +280,11 @@ public struct DownloadsView: View {
         (scheme == .dark ? Color.white : Color.black).opacity(0.55)
     }
 
-    private var selectionBar: some View {
-        // Clearing selected IDs must not replace the buttons during their exit animation.
-        let actions = selecting ? availableBatchActions : departingActions
-        return Group {
+    private func selectionBar(progress: CGFloat) -> some View {
+        // Retain outgoing labels only through the exit animation. Native menus can otherwise
+        // expose the invisible buttons to accessibility after selection has ended.
+        let actions = selecting ? availableBatchActions : (progress > 0 ? departingActions : [])
+        return BatchActionBar {
             if actions.isEmpty {
                 Text("请选择要操作的下载任务")
                     .font(.subheadline).foregroundStyle(secondaryText)
@@ -342,15 +311,8 @@ public struct DownloadsView: View {
 
                     }
                 }
-                .buttonStyle(.bordered).buttonBorderShape(.capsule)
             }
         }
-        .padding(.horizontal, 20).padding(.vertical, 12)
-        .frame(maxWidth: 600).frame(maxWidth: .infinity)
-        #if os(macOS)
-            .background(.regularMaterial)
-        #endif
-        .overlay(alignment: .top) { Divider() }
     }
 
     private func taskCard(_ task: DownloadTask, progress: CGFloat) -> some View {

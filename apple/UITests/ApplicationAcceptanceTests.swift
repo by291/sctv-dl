@@ -542,7 +542,32 @@ final class ApplicationAcceptanceTests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
             app.buttons["四川新闻"].tap()
-            assertRapidSelectionTaps(app, identifier: "archive-select", activeLabel: "取消选择")
+            assertRapidSelectionTaps(
+                app, identifier: "archive-select", activeLabel: "完成", expectsEveryTap: true)
+            let toggle = app.buttons["archive-select"]
+            if toggle.label == "选择" { toggle.tap() }
+            XCTAssertTrue(app.staticTexts["请选择要下载的节目"].waitForExistence(timeout: 5))
+            let compact = app.windows.firstMatch.frame.width < 600
+            if compact { XCTAssertFalse(app.buttons["资料库"].firstMatch.isHittable) }
+            app.buttons["全选"].tap()
+            let download = app.buttons["archive-download-selection"]
+            XCTAssertTrue(download.waitForExistence(timeout: 5))
+            XCTAssertTrue(download.isHittable)
+            XCTAssertTrue(download.isEnabled)
+            XCTAssertFalse(app.buttons["content-actions-30"].exists)
+            let selected = XCTAttachment(screenshot: app.screenshot())
+            selected.name = "archive-batch-selection"
+            selected.lifetime = .keepAlways
+            add(selected)
+            download.tap()
+            XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 10))
+            app.alerts["提示"].buttons["好"].tap()
+            if compact { XCTAssertFalse(app.buttons["资料库"].firstMatch.isHittable) }
+            app.buttons["取消全选"].tap()
+            XCTAssertTrue(app.staticTexts["请选择要下载的节目"].exists)
+            toggle.tap()
+            XCTAssertTrue(app.buttons["资料库"].firstMatch.isHittable)
+            XCTAssertFalse(download.exists)
         }
 
         private func assertRapidSelectionTaps(

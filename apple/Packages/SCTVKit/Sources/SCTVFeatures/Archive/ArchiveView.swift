@@ -4,6 +4,8 @@ import SwiftUI
 public struct ArchiveView: View {
     @Bindable private var model: ArchiveModel
     @State private var selecting = false
+    @State private var departingSelectionCount = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var scheme
     private let favourite: Bool
@@ -24,6 +26,16 @@ public struct ArchiveView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
+            BatchSelectionTransition(progress: selecting ? 1 : 0) { progress in
+                page(selectionProgress: progress)
+            }
+        #else
+            page(selectionProgress: selecting ? 1 : 0)
+        #endif
+    }
+
+    private func page(selectionProgress: CGFloat) -> some View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= 850 && !typeSize.isAccessibilitySize
             ScrollView {
@@ -113,12 +125,21 @@ public struct ArchiveView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
-            ToolbarItem {
-                Button(selecting ? "取消选择" : "选择", systemImage: selecting ? "xmark" : "checklist") {
-                    selecting.toggle()
-                    model.setSelection([])
+            if selecting {
+                ToolbarItem(id: "archive-select-all", placement: .cancellationAction) {
+                    Button(model.selection.count == model.contents.count ? "取消全选" : "全选") {
+                        let all = Set(model.contents.map(\.id))
+                        model.setSelection(model.selection == all ? [] : all)
+                    }
+                    .disabled(model.contents.isEmpty)
                 }
-                .labelStyle(.iconOnly).help(selecting ? "取消选择" : "选择")
+            }
+            ToolbarItem(id: "archive-selection") {
+                Button(selecting ? "完成" : "选择", systemImage: selecting ? "checkmark" : "checklist")
+                {
+                    setSelecting(!selecting)
+                }
+                .labelStyle(.iconOnly).help(selecting ? "完成" : "选择")
                 .accessibilityIdentifier("archive-select")
             }
             #if os(macOS)
@@ -130,26 +151,38 @@ public struct ArchiveView: View {
                 }
             #endif
         }
-        .safeAreaInset(edge: .bottom) {
-            if selecting {
-                HStack {
-                    Button("取消") {
-                        selecting = false
-                        model.setSelection([])
-                    }
-                    Spacer()
-                    Button("下载所选（\(model.selection.count)）", systemImage: "arrow.down.circle") {
-                        if let date = model.broadcast { download(model.selectedContents, date) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.selection.isEmpty || model.selection.count > 100)
-                }
-                .padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
-                .padding(.horizontal, 20).padding(.bottom, 8)
-            }
+        .batchSelectionBar(selecting: selecting, progress: selectionProgress) {
+            selectionBar
         }
         .task { await model.load() }
         .onDisappear { model.stop() }
+    }
+
+    private var selectionBar: some View {
+        let count = selecting ? model.selection.count : departingSelectionCount
+        return BatchActionBar {
+            if count == 0 {
+                Text("请选择要下载的节目")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            } else {
+                Button {
+                    if let date = model.broadcast { download(model.selectedContents, date) }
+                } label: {
+                    Text("下载所选（\(count)）").frame(maxWidth: .infinity, minHeight: 32)
+                }
+                .disabled(count > 100)
+                .accessibilityIdentifier("archive-download-selection")
+            }
+        }
+    }
+
+    private func setSelecting(_ value: Bool) {
+        if !value { departingSelectionCount = model.selection.count }
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+            selecting = value
+        }
+        if !value { model.setSelection([]) }
     }
 
     private var clipsHeading: some View {

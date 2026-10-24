@@ -2,7 +2,7 @@
     import SwiftUI
 
     /// Gives the system ownership of tab visibility while selection owns the page's controls.
-    struct DownloadTabBarVisibility: UIViewControllerRepresentable {
+    struct SelectionTabBarVisibility: UIViewControllerRepresentable {
         static let travelDistance: CGFloat = 24
         let hidden: Bool
         let animated: Bool
@@ -64,7 +64,7 @@
                     Task { @MainActor in bottomSafeArea.wrappedValue = inset }
                 }
                 guard let tabs = tabBarController else { return }
-                // Top tabs/sidebar do not compete with bottom actions.
+                // Top tabs do not compete with bottom actions.
                 guard tabs.traitCollection.horizontalSizeClass != .regular else {
                     restore()
                     return
@@ -92,7 +92,7 @@
     }
 
     /// Interpolates once so every row and the batch action area reverse together.
-    struct DownloadSelectionTransition<Content: View>: View, Animatable {
+    struct BatchSelectionTransition<Content: View>: View, Animatable {
         nonisolated var progress: CGFloat
         @ViewBuilder var content: (CGFloat) -> Content
         nonisolated var animatableData: CGFloat {
