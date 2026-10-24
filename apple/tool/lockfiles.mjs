@@ -27,6 +27,7 @@ function parseLockfile(text, path) {
   ) {
     throw new Error(`Invalid stable dependency lockfile: ${path}`)
   }
+
   return lock
 }
 
@@ -56,9 +57,11 @@ export async function readLockfiles(root) {
     files[path] = text
     pins.push(resolutions(parseLockfile(text, path)))
   }
+
   if (pins[0] !== pins[1]) {
     throw new Error('Package and application dependency pins differ')
   }
+
   return files
 }
 
@@ -66,6 +69,7 @@ export function verifyLockfiles(before, after) {
   if (before[packagePath] !== after[packagePath]) {
     throw new Error(`Dependency lockfile changed: ${packagePath}`)
   }
+
   const expected = resolutions(parseLockfile(before[packagePath], packagePath))
   for (const path of [packagePath, applicationPath]) {
     if (expected !== resolutions(parseLockfile(after[path], path))) {
