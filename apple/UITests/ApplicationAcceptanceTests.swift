@@ -298,8 +298,15 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(title.waitForExistence(timeout: 5))
             let collapsedHeight = title.frame.height
             title.tap()
-            XCTAssertTrue(app.staticTexts["player-full-title"].waitForExistence(timeout: 5))
-            app.buttons["完成"].tap()
+            XCTAssertGreaterThan(title.frame.height, collapsedHeight + 30)
+            XCTAssertFalse(app.navigationBars["节目标题"].exists)
+            XCTAssertEqual(title.value as? String, "已展开")
+            let expanded = XCTAttachment(screenshot: app.screenshot())
+            expanded.name = "player-title-expanded-inline"
+            expanded.lifetime = .keepAlways
+            add(expanded)
+            title.tap()
+            XCTAssertEqual(title.value as? String, "已收起")
             XCTAssertEqual(title.frame.height, collapsedHeight, accuracy: 2)
             let inline = XCTAttachment(screenshot: app.screenshot())
             inline.name = "custom-player-inline"

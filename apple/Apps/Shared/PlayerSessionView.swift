@@ -15,6 +15,7 @@ struct PlayerSessionView: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
         @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
@@ -65,22 +66,6 @@ struct PlayerSessionView: View {
             .statusBarHidden(videoOnly)
             .background(PlayerBackGesture(enabled: !videoOnly))
         #endif
-        .sheet(isPresented: $titleExpanded) {
-            NavigationStack {
-                ScrollView {
-                    Text(session.details?.title ?? session.title)
-                        .font(.title3).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(24)
-                        .accessibilityIdentifier("player-full-title")
-                }
-                .navigationTitle("节目标题")
-                .toolbar {
-                    Button("完成", systemImage: "checkmark") { titleExpanded = false }
-                        .labelStyle(.iconOnly).help("完成")
-                }
-            }
-            .presentationDetents([.medium, .large])
-        }
         .task(id: session.presentationID) {
             downloadMessage = nil
             titleExpanded = false
@@ -157,14 +142,16 @@ struct PlayerSessionView: View {
                 )
                 .font(.caption.weight(.semibold)).foregroundStyle(PresentationStyle.accent(scheme))
                 Button {
-                    titleExpanded = true
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        titleExpanded.toggle()
+                    }
                 } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(metadata.title)
                             .font(.system(.title2, design: .serif, weight: .bold))
-                            .lineLimit(3)
+                            .lineLimit(titleExpanded ? nil : 3)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("查看完整标题")
+                        Text(titleExpanded ? "收起标题" : "展开标题")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -172,7 +159,8 @@ struct PlayerSessionView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(metadata.title)
-                .accessibilityHint("点击查看全文")
+                .accessibilityValue(titleExpanded ? "已展开" : "已收起")
+                .accessibilityHint(titleExpanded ? "点击收起标题" : "点击展开完整标题")
                 .accessibilityIdentifier("player-title-disclosure")
                 Text(
                     [metadata.programmeName, metadata.broadcastDate].filter { !$0.isEmpty }.joined(
