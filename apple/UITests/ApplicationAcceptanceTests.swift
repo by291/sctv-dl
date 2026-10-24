@@ -34,7 +34,14 @@ final class ApplicationAcceptanceTests: XCTestCase {
         if initial.width >= 580 {
             XCTAssertLessThan(initial.height, initial.width * 0.7)
         }
-        activate(app.buttons["换一个"])
+        let shuffle = app.buttons["换一个"]
+        XCTAssertGreaterThanOrEqual(shuffle.frame.height, 44)
+        let shuffleEdge = shuffle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+        #if os(macOS)
+            shuffleEdge.click()
+        #else
+            shuffleEdge.tap()
+        #endif
         #if os(macOS)
             XCTAssertEqual(title.value as? String, "防癌大讲堂")
         #else
@@ -53,7 +60,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertEqual(title.label, "四川新闻")
         #endif
         XCTAssertEqual(card.frame.height, initial.height, accuracy: 1)
-        activate(app.buttons["查看节目"])
+        activate(app.buttons["exploration-cover"])
         XCTAssertTrue(
             app.descendants(matching: .any)["完整节目"].firstMatch.waitForExistence(timeout: 10))
     }

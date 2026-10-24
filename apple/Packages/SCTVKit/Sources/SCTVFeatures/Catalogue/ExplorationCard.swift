@@ -59,11 +59,15 @@ struct ExplorationCard: View {
     }
 
     private var shuffleButton: some View {
-        Button("换一个", systemImage: "shuffle", action: shuffle)
-            .buttonStyle(.plain)
-            .font(.subheadline)
-            .disabled(!canShuffle)
-            .frame(minHeight: 44)
+        Button(action: shuffle) {
+            Label("换一个", systemImage: "shuffle")
+                .padding(.horizontal, 8)
+                .frame(minWidth: 88, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .font(.subheadline)
+        .disabled(!canShuffle)
     }
 
     private var compactContent: some View {
@@ -119,25 +123,34 @@ struct ExplorationCard: View {
     }
 
     private func cover(compact: Bool) -> some View {
-        Artwork(url: programme.cover)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(PresentationStyle.surface(scheme), lineWidth: 3)
-            }
-            .rotationEffect(.degrees(3))
-            .shadow(color: .black.opacity(scheme == .dark ? 0.24 : 0.14), radius: 12, x: 0, y: 8)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(PresentationStyle.surface(scheme).opacity(scheme == .dark ? 0.65 : 0.8))
-                    .rotationEffect(.degrees(-7))
-                    .scaleEffect(0.94)
-                    .offset(x: -4, y: -5)
-            }
-            // Reserve the rotated edges so loading and title changes cannot move the cover.
-            .padding(.horizontal, compact ? 24 : 8)
-            .padding(.vertical, compact ? 6 : 12)
-            .accessibilityHidden(true)
+        Button(action: open) {
+            Artwork(url: programme.cover)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(PresentationStyle.surface(scheme), lineWidth: 3)
+                }
+                .rotationEffect(.degrees(3))
+                .shadow(
+                    color: .black.opacity(scheme == .dark ? 0.24 : 0.14), radius: 12, x: 0, y: 8
+                )
+                .background {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            PresentationStyle.surface(scheme).opacity(scheme == .dark ? 0.65 : 0.8)
+                        )
+                        .rotationEffect(.degrees(-7))
+                        .scaleEffect(0.94)
+                        .offset(x: -4, y: -5)
+                }
+                // Reserve the rotated edges so loading and title changes cannot move the cover.
+                .padding(.horizontal, compact ? 24 : 8)
+                .padding(.vertical, compact ? 6 : 12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("查看\(programme.name)的节目")
+        .accessibilityIdentifier("exploration-cover")
     }
 
     private var backdrop: some View {
