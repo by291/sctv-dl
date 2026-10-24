@@ -2,10 +2,26 @@ import SCTVCore
 import SwiftUI
 
 public struct CatalogueView: View {
+    private struct ScrollViewport: Equatable {
+        var offset: CGFloat = 0
+        var topInset: CGFloat = 0
+    }
+
+    private enum ScrollReturn {
+        case idle
+        case away(CGFloat)
+        case awaitingGeometry(CGFloat)
+    }
+
     @Bindable private var model: CatalogueModel
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
-    private let open: (Programme) -> Void
+
+    @State private var scrollPosition = ScrollPosition(edge: .top)
+    @State private var viewport = ScrollViewport()
+    @State private var scrollReturn = ScrollReturn.idle
+
+    private let openDestination: (Programme) -> Void
     private let settings: () -> Void
 
     public init(
@@ -13,7 +29,7 @@ public struct CatalogueView: View {
         open: @escaping (Programme) -> Void
     ) {
         self.model = model
-        self.open = open
+        self.openDestination = open
         self.settings = settings
     }
 
@@ -44,6 +60,30 @@ public struct CatalogueView: View {
         }
         .background(PresentationStyle.canvas(scheme))
         .accessibilityIdentifier("catalogue-scroll")
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: ScrollViewport.self) {
+            ScrollViewport(offset: $0.contentOffset.y, topInset: $0.contentInsets.top)
+        } action: { _, value in
+            viewport = value
+            if case .awaitingGeometry(let offset) = scrollReturn {
+                // Navigation updates the top inset after onAppear. Convert the saved raw offset
+                // only after that layout update; an ID anchor would follow a reordered programme.
+                scrollReturn = .idle
+                scrollPosition.scrollTo(y: offset + value.topInset)
+            }
+        }
+        .onAppear {
+            if case .away(let offset) = scrollReturn {
+                scrollReturn = .awaitingGeometry(offset)
+            }
+        }
+        .onScrollPhaseChange { _, phase in
+            // If return navigation leaves geometry unchanged, the next user scroll wins.
+            if phase == .tracking || phase == .interacting { scrollReturn = .idle }
+        }
+        .onChange(of: model.search) { _, _ in scrollReturn = .idle }
+        .onChange(of: model.favouritesOnly) { _, _ in scrollReturn = .idle }
+        .onChange(of: model.alphabetical) { _, _ in scrollReturn = .idle }
         .navigationTitle("栏目")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
@@ -70,6 +110,11 @@ public struct CatalogueView: View {
         #endif
         .refreshable { await model.refresh() }
         .task { await model.load() }
+    }
+
+    private func open(_ programme: Programme) {
+        scrollReturn = .away(viewport.offset)
+        openDestination(programme)
     }
 
     private var catalogueHeading: some View {
