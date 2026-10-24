@@ -121,8 +121,14 @@ final class ApplicationAcceptanceTests: XCTestCase {
         XCTAssertTrue(dates.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["archive-date-3421"].exists)
         activate(dates)
+        XCTAssertTrue(app.staticTexts["2026年10月"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["当前选择"].exists)
+        let browser = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        browser.name = "archive-monthly-date-browser"
+        browser.lifetime = .keepAlways
+        add(browser)
         let search = activateSearch(in: app)
-        search.typeText("2017-06-30")
+        search.typeText("20170630")
         let oldest = app.buttons["archive-date-3421"]
         XCTAssertTrue(oldest.waitForExistence(timeout: 5))
         let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
@@ -135,6 +141,10 @@ final class ApplicationAcceptanceTests: XCTestCase {
         activate(dates)
         XCTAssertTrue(oldest.waitForExistence(timeout: 5))
         XCTAssertTrue(oldest.isHittable)
+        let reopened = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        reopened.name = "archive-date-reopened-at-selection"
+        reopened.lifetime = .keepAlways
+        add(reopened)
         activate(app.buttons["关闭"])
         XCTAssertFalse(oldest.exists)
     }
@@ -628,6 +638,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let app = XCUIApplication()
             app.launchArguments = [
                 "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
+                "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
             ]
             continueAfterFailure = false
             app.launch()
@@ -657,6 +668,10 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(short.exists)
             XCTAssertLessThan(long.frame.height, 120)
             XCTAssertEqual(long.frame.height, short.frame.height, accuracy: 2)
+            let chineseDate = app.staticTexts.matching(
+                NSPredicate(format: "label MATCHES %@", "[0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日")
+            ).firstMatch
+            XCTAssertTrue(chineseDate.exists)
             let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             shot.name = "compact-history-titles"
             shot.lifetime = .keepAlways
@@ -667,6 +682,21 @@ final class ApplicationAcceptanceTests: XCTestCase {
             delete.tap()
             XCTAssertTrue(long.waitForNonExistence(timeout: 5))
             XCTAssertTrue(short.exists)
+            let clear = app.buttons["history-clear"]
+            clear.tap()
+            XCTAssertTrue(
+                app.buttons["history-confirm-clear"].firstMatch.waitForExistence(timeout: 5))
+            let confirmation = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            confirmation.name = "history-clear-confirmation-anchor"
+            confirmation.lifetime = .keepAlways
+            add(confirmation)
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.7))
+                .tap()
+            XCTAssertTrue(short.exists)
+            clear.tap()
+            app.buttons["history-confirm-clear"].firstMatch.tap()
+            XCTAssertTrue(app.staticTexts["暂无观看记录"].waitForExistence(timeout: 5))
+
         }
 
         func testPlaybackPreservesArchiveScrollOffset() {
