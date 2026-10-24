@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       '@lucide/vue':
-        specifier: ^1.57.0
-        version: 1.57.0(vue@3.5.44(typescript@6.0.3))
+        specifier: ^1.61.0
+        version: 1.61.0(vue@3.5.44(typescript@6.0.3))
       '@tauri-apps/api':
         specifier: 2.12.4
         version: 2.12.4
@@ -428,8 +428,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@lucide/vue@1.57.0':
-    resolution: {integrity: sha512-l/D9mr+8Wb8uHl2vzHfcGVRkunJnq0NDmv8HFwXAL3UiYYxuNpDSd1uaCVqeR8+I1XY70dWA+R5W/pSpXWilMw==}
+  '@lucide/vue@1.61.0':
+    resolution: {integrity: sha512-XYclbwUQ6Mvf0UskBG9gJH91BdF3VK4Tt6Pv8PSntwPwNnf357PCQnma4TrzOEdwD49UYCtsTafpfytRIxm1cQ==}
     peerDependencies:
       vue: '>=3.0.1'
 
@@ -2579,7 +2579,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@lucide/vue@1.57.0(vue@3.5.44(typescript@6.0.3))':
+  '@lucide/vue@1.61.0(vue@3.5.44(typescript@6.0.3))':
     dependencies:
       vue: 3.5.44(typescript@6.0.3)
 
