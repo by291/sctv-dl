@@ -253,17 +253,13 @@ public struct ArchiveView: View {
                 layout {
                     Artwork(url: content.cover ?? model.programme.cover)
                         .overlay(alignment: .bottomTrailing) {
-                            Image(
-                                systemName: selecting
+                            MediaCoverBadge(
+                                symbol: selecting
                                     ? (model.selection.contains(content.id)
-                                        ? "checkmark.circle.fill" : "circle") : "play.fill"
-                            )
-                            .font(.system(size: featured ? 20 : 14, weight: .semibold))
-                            .frame(width: featured ? 48 : 32, height: featured ? 48 : 32)
-                            .background(.regularMaterial, in: Circle()).padding(12)
-                            .foregroundStyle(PresentationStyle.accent(scheme))
+                                        ? "checkmark.circle.fill" : "circle") : "play.fill",
+                                large: featured)
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 10))
+                        .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 12))
                         .frame(width: vertical ? nil : 136)
                     Text(content.title)
                         .font(featured ? .title3.weight(.semibold) : .headline)
@@ -293,23 +289,25 @@ public struct ArchiveView: View {
             .padding(.trailing, 44)
             .frame(minHeight: typeSize.isAccessibilitySize ? 44 : 20)
             .overlay(alignment: .trailing) {
-                Menu {
-                    Button("播放", systemImage: "play") {
-                        if let date = model.broadcast { play(content, date) }
+                if !selecting {
+                    Menu {
+                        Button("播放", systemImage: "play") {
+                            if let date = model.broadcast { play(content, date) }
+                        }
+                        Button("下载", systemImage: "arrow.down.circle") {
+                            if let date = model.broadcast { download([content], date) }
+                        }.accessibilityIdentifier("download-content-\(content.id)")
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
-                    Button("下载", systemImage: "arrow.down.circle") {
-                        if let date = model.broadcast { download([content], date) }
-                    }.accessibilityIdentifier("download-content-\(content.id)")
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PresentationStyle.accent(scheme))
+                    .accessibilityLabel("节目操作")
+                    .accessibilityIdentifier("content-actions-\(content.id)")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(PresentationStyle.accent(scheme))
-                .accessibilityLabel("节目操作")
-                .accessibilityIdentifier("content-actions-\(content.id)")
             }
             .padding(.horizontal, 16)
             .padding(.top, typeSize.isAccessibilitySize ? 0 : 12)

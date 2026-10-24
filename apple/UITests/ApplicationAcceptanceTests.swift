@@ -489,13 +489,16 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 app.alerts["提示"].buttons["好"].tap()
             }
             app.buttons["下载"].firstMatch.tap()
-            let title = app.staticTexts["秋日里的城市故事"]
+            let title = app.buttons["play-download-31"]
             XCTAssertTrue(title.waitForExistence(timeout: 10))
-            let secondTitle = app.staticTexts["四川新闻（2026.10.22）"]
+            let secondTitle = app.buttons["play-download-30"]
             XCTAssertTrue(secondTitle.exists)
             let filters = app.buttons["全部"]
-            let originalTitleInset = title.frame.minX - filters.frame.minX
-            let originalSecondInset = secondTitle.frame.minX - filters.frame.minX
+            let firstRow = app.cells.containing(.button, identifier: "play-download-31").firstMatch
+            let secondRow = app.cells.containing(.button, identifier: "play-download-30").firstMatch
+            let originalTitleInset = firstRow.frame.minX - filters.frame.minX
+            let originalSecondInset = secondRow.frame.minX - filters.frame.minX
+            let originalWidth = firstRow.frame.width
             let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
             assertRapidSelectionTaps(
                 app, identifier: "downloads-select", activeLabel: "完成", expectsEveryTap: true
@@ -505,12 +508,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 XCTAssertEqual(
                     catalogue.exists && catalogue.isHittable, !usesBottomTabs || !selecting)
                 XCTAssertEqual(app.buttons["下载操作"].firstMatch.exists, !selecting)
+                let firstCard = app.cells.containing(
+                    .button, identifier: selecting ? "select-download-31" : "play-download-31"
+                ).firstMatch
+                let secondCard = app.cells.containing(
+                    .button, identifier: selecting ? "select-download-30" : "play-download-30"
+                ).firstMatch
+                XCTAssertEqual(firstCard.frame.width, originalWidth, accuracy: 2)
                 XCTAssertEqual(
-                    title.frame.minX - filters.frame.minX - originalTitleInset,
-                    secondTitle.frame.minX - filters.frame.minX - originalSecondInset, accuracy: 2)
+                    firstCard.frame.minX - filters.frame.minX - originalTitleInset,
+                    secondCard.frame.minX - filters.frame.minX - originalSecondInset, accuracy: 2)
+                XCTAssertEqual(
+                    firstCard.frame.minX - filters.frame.minX, originalTitleInset, accuracy: 2)
                 if selecting {
-                    XCTAssertGreaterThan(
-                        title.frame.minX - filters.frame.minX, originalTitleInset + 20)
                     XCTAssertTrue(app.staticTexts["请选择要操作的下载任务"].isHittable)
                     let firstSelection = app.buttons["select-download-30"]
                     let secondSelection = app.buttons["select-download-31"]
@@ -518,14 +528,15 @@ final class ApplicationAcceptanceTests: XCTestCase {
                     XCTAssertTrue(app.staticTexts["已选 1 项"].exists)
                     XCTAssertTrue(firstSelection.isSelected)
                     XCTAssertFalse(secondSelection.isSelected)
+                    let selectedShot = XCTAttachment(screenshot: app.screenshot())
+                    selectedShot.name = "download-cover-selection-and-outline"
+                    selectedShot.lifetime = .keepAlways
+                    add(selectedShot)
                     firstSelection.tap()
                     app.buttons["全选"].tap()
                     XCTAssertTrue(app.staticTexts["已选 2 项"].waitForExistence(timeout: 5))
                     app.buttons["取消全选"].tap()
                     XCTAssertTrue(app.staticTexts["已选 0 项"].exists)
-                } else {
-                    XCTAssertEqual(
-                        title.frame.minX - filters.frame.minX, originalTitleInset, accuracy: 2)
                 }
             }
             app.buttons["play-download-30"].tap()
@@ -627,13 +638,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
             cards.lifetime = .keepAlways
             add(cards)
             XCTAssertFalse(app.buttons["批量操作"].exists)
-            longTitle.tap()
-            XCTAssertFalse(app.buttons["批量操作"].exists)
+            XCTAssertFalse(app.buttons["播放"].exists)
+            let playableCard = app.buttons["play-download-31"]
+            XCTAssertGreaterThan(playableCard.frame.width, 200)
+            playableCard.tap()
+            XCTAssertTrue(app.buttons["player-back"].waitForExistence(timeout: 10))
+            app.buttons["player-back"].tap()
+            XCTAssertTrue(playableCard.waitForExistence(timeout: 5))
             XCTAssertFalse(app.staticTexts["已选 1 项"].exists)
             let menu = app.buttons["download-31-completed"]
             XCTAssertTrue(menu.waitForExistence(timeout: 10))
             menu.tap()
             XCTAssertTrue(app.buttons["导出副本"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["player-back"].exists)
             XCTAssertFalse(app.buttons["批量操作"].exists)
             let menuShot = XCTAttachment(screenshot: app.screenshot())
             menuShot.name = "download-secondary-actions"
@@ -653,7 +670,8 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
             app.buttons["选择"].tap()
             XCTAssertEqual(app.buttons["全部"].frame.minY, filtersTop, accuracy: 2)
-            longTitle.tap()
+            app.buttons["select-download-31"].tap()
+            XCTAssertFalse(app.buttons["player-back"].exists)
             XCTAssertTrue(app.staticTexts["已选 1 项"].waitForExistence(timeout: 5))
             XCTAssertEqual(app.buttons["栏目"].firstMatch.isHittable, !usesBottomTabs)
             XCTAssertFalse(menu.exists)

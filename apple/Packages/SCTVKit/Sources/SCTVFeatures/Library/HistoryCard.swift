@@ -20,13 +20,8 @@ struct HistoryCard: View {
                     : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
                 layout {
                     Artwork(url: entry.cover)
-                        .overlay {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 30, height: 30)
-                                .background(.black.opacity(0.4), in: Circle())
-                                .accessibilityHidden(true)
+                        .overlay(alignment: .bottomTrailing) {
+                            MediaCoverBadge(symbol: "play.fill")
                         }
                         .overlay(alignment: .bottom) {
                             if let duration = entry.durationMs, duration > 0 {

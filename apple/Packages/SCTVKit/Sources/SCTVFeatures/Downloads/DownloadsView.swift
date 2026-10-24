@@ -223,38 +223,52 @@ public struct DownloadsView: View {
     @ViewBuilder private func taskRow(_ task: DownloadTask, progress: CGFloat) -> some View {
         #if os(iOS)
             let selected = model.selection.contains(task.id)
-            // Keep the selection lane in the row so every card follows the same transaction.
-            // Native List editing otherwise schedules its own per-cell transitions.
-            HStack(spacing: 0) {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22))
-                    .foregroundStyle(selected ? PresentationStyle.accent(scheme) : secondaryText)
-                    .frame(width: 32, height: 44)
-                    .frame(width: 44 * progress, alignment: .leading)
-                    .clipped()
-                    .opacity(progress)
-                    .accessibilityHidden(true)
-                taskCard(task, progress: progress)
-            }
-            .overlay {
-                if selecting {
-                    Button {
-                        var selection = model.selection
-                        if selected { selection.remove(task.id) } else { selection.insert(task.id) }
-                        model.setSelection(selection)
-                    } label: {
-                        Color.clear.contentShape(Rectangle())
+            playableCard(task, progress: progress)
+                .overlay {
+                    if selecting {
+                        Button {
+                            var selection = model.selection
+                            if selected {
+                                selection.remove(task.id)
+                            } else {
+                                selection.insert(task.id)
+                            }
+                            model.setSelection(selection)
+                        } label: {
+                            Color.clear.contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(task.title)
+                        .accessibilityValue(selected ? "已选择" : "未选择")
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                        .accessibilityIdentifier("select-download-\(task.content.contentID)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(task.title)
-                    .accessibilityValue(selected ? "已选择" : "未选择")
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                    .accessibilityIdentifier("select-download-\(task.content.contentID)")
                 }
-            }
         #else
-            taskCard(task, progress: progress)
+            playableCard(task, progress: progress)
         #endif
+    }
+
+    @ViewBuilder private func playableCard(_ task: DownloadTask, progress: CGFloat) -> some View {
+        if case .completed = task.state {
+            Button {
+                play(task)
+            } label: {
+                taskCard(task, progress: progress).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .allowsHitTesting(!selecting)
+            .accessibilityHidden(selecting)
+            .accessibilityLabel(task.title)
+            .accessibilityHint("点击播放已下载的节目")
+            .accessibilityIdentifier("play-download-\(task.content.contentID)")
+            // Keep the menu outside the playback button so it cannot trigger playback.
+            .overlay(alignment: .bottomTrailing) {
+                fadingCardActions(task, progress: progress).padding(12)
+            }
+        } else {
+            taskCard(task, progress: progress)
+        }
     }
 
     private struct BatchAction: Identifiable {
@@ -328,6 +342,17 @@ public struct DownloadsView: View {
                         width: typeSize.isAccessibilitySize ? nil : 136,
                         height: typeSize.isAccessibilitySize ? nil : 136 * 9 / 16
                     )
+                    .overlay(alignment: .bottomTrailing) {
+                        if case .completed = task.state {
+                            MediaCoverBadge(symbol: "play.fill").opacity(1 - progress)
+                        }
+                        #if os(iOS)
+                            MediaCoverBadge(
+                                symbol: model.selection.contains(task.id)
+                                    ? "checkmark.circle.fill" : "circle"
+                            ).opacity(progress)
+                        #endif
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.title).font(.headline)
@@ -348,19 +373,36 @@ public struct DownloadsView: View {
                 HStack(alignment: .center, spacing: 8) {
                     taskStatus(task)
                     Spacer(minLength: 4)
-                    fadingCardActions(task, progress: progress)
+                    cardActionSpace(task, progress: progress)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     taskStatus(task)
                     HStack {
                         Spacer()
-                        fadingCardActions(task, progress: progress)
+                        cardActionSpace(task, progress: progress)
                     }
                 }
             }
             .frame(minHeight: 44)
         }
         .padding(12).editorialCard()
+        #if os(iOS)
+            .overlay {
+                RoundedRectangle(cornerRadius: 22)
+                .strokeBorder(PresentationStyle.accent(scheme), lineWidth: 2)
+                .opacity(model.selection.contains(task.id) ? progress : 0)
+                .allowsHitTesting(false)
+            }
+        #endif
+    }
+
+    @ViewBuilder private func cardActionSpace(_ task: DownloadTask, progress: CGFloat) -> some View
+    {
+        if case .completed = task.state {
+            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+        } else {
+            fadingCardActions(task, progress: progress)
+        }
     }
 
     @ViewBuilder private func fadingCardActions(_ task: DownloadTask, progress: CGFloat)
@@ -411,9 +453,7 @@ public struct DownloadsView: View {
 
     @ViewBuilder private func primaryActions(_ task: DownloadTask) -> some View {
         if case .completed = task.state {
-            Button("播放") { play(task) }
-                .buttonStyle(.bordered).buttonBorderShape(.capsule)
-                .accessibilityIdentifier("play-download-\(task.content.contentID)")
+            EmptyView()
         } else {
             HStack {
                 commandButton("暂停", .pause, ids: [task.id])
