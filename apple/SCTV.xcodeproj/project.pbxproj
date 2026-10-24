@@ -27,7 +27,7 @@
 /* Begin PBXFileReference section */
 		481275779C3B76AF798FCECB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C09454B5B5BAD86B45B25F7E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		D1CBC097C58EEFC5A9C8212D /* SCTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SCTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1CBC097C58EEFC5A9C8212D /* SCTV Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = "SCTV Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SCTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000001 /* SCTViOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTViOS.entitlements; sourceTree = "<group>"; };
 		F10000000000000000000002 /* SCTVmacOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTVmacOS.entitlements; sourceTree = "<group>"; };
@@ -66,7 +66,7 @@
 		0A3E27B8CA818264D75C8D81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D1CBC097C58EEFC5A9C8212D /* SCTV.app */,
+				D1CBC097C58EEFC5A9C8212D /* SCTV Debug.app */,
 				E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */,
 			);
 			name = Products;
@@ -159,7 +159,7 @@
 				C3566A632B93A8FF8280A17A /* SCTVMedia */,
 			);
 			productName = SCTV;
-			productReference = D1CBC097C58EEFC5A9C8212D /* SCTV.app */;
+			productReference = D1CBC097C58EEFC5A9C8212D /* SCTV Debug.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
