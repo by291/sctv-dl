@@ -47,69 +47,42 @@ public struct DownloadsView: View {
     }
 
     private func page(selectionProgress: CGFloat) -> some View {
-        List(selection: selectionBinding) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(
-                    selecting
-                        ? "已选 \(model.selection.count) 项" : "\(model.tasks.count) 个任务 · 将喜欢的节目带在身边"
-                )
-                .font(.subheadline).foregroundStyle(secondaryText)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(DownloadFilter.allCases) { filter in
-                            Button {
-                                model.selectFilter(filter)
-                            } label: {
-                                Text(filter.rawValue).font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 18).padding(.vertical, 12)
-                                    .foregroundStyle(
-                                        model.filter == filter
-                                            ? (scheme == .dark ? Color.black : .white) : .primary
-                                    )
-                                    .background(
-                                        model.filter == filter
-                                            ? PresentationStyle.accent(scheme)
-                                            : PresentationStyle.surface(scheme), in: Capsule())
-                            }.buttonStyle(.plain)
-                                .accessibilityAddTraits(model.filter == filter ? .isSelected : [])
+        GeometryReader { geometry in
+            let columns = MediaCardLayout.columnCount(
+                width: geometry.size.width, typeSize: typeSize)
+            Group {
+                if columns == 1 {
+                    List(selection: selectionBinding) {
+                        listHeader
+                        ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
+                            taskRow(task, progress: selectionProgress).tag(task.id)
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                                .contextMenu { if !selecting { actions(task) } }
                         }
                     }
-                }
-            }
-            .padding(.vertical, 12)
-            .listRowBackground(Color.clear).listRowSeparator(.hidden)
-            if let warning = model.warning {
-                InlineNotice(text: warning).listRowBackground(Color.clear).listRowSeparator(.hidden)
-            }
-            if model.isReconciling {
-                VStack {
-                    if model.warning == nil {
-                        ProgressView("正在恢复下载任务")
-                    } else {
-                        Button("重试恢复下载状态") { Task { await model.reconcile() } }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 20) {
+                            listHeader
+                            LazyVGrid(
+                                columns: MediaCardLayout.columns(columns),
+                                spacing: MediaCardLayout.spacing
+                            ) {
+                                ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
+                                    taskRow(task, progress: selectionProgress, cardSelection: true)
+                                        .id(task.id)
+                                        .contextMenu { if !selecting { actions(task) } }
+                                }
+                            }.scrollTargetLayout()
+                        }.padding(20)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear).listRowSeparator(.hidden)
-            } else if model.visibleTasks.isEmpty {
-                ContentUnavailableView(
-                    "暂无下载", systemImage: "arrow.down.circle",
-                    description: Text("在节目页面选择下载，完成后即可离线观看。")
-                )
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
-
-            ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
-                taskRow(task, progress: selectionProgress).tag(task.id)
-                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    .contextMenu { if !selecting { actions(task) } }
-            }
+            .frame(maxWidth: 1160)
+            .frame(maxWidth: .infinity)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: 1160)
-        .frame(maxWidth: .infinity)
         .background(PresentationStyle.canvas(scheme))
         .scrollPosition(
             id: Binding(
@@ -175,6 +148,60 @@ public struct DownloadsView: View {
         .task { await model.load() }
     }
 
+    @ViewBuilder private var listHeader: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(
+                selecting
+                    ? "已选 \(model.selection.count) 项" : "\(model.tasks.count) 个任务 · 将喜欢的节目带在身边"
+            )
+            .font(.subheadline).foregroundStyle(secondaryText)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(DownloadFilter.allCases) { filter in
+                        Button {
+                            model.selectFilter(filter)
+                        } label: {
+                            Text(filter.rawValue).font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 18).padding(.vertical, 12)
+                                .foregroundStyle(
+                                    model.filter == filter
+                                        ? (scheme == .dark ? Color.black : .white) : .primary
+                                )
+                                .background(
+                                    model.filter == filter
+                                        ? PresentationStyle.accent(scheme)
+                                        : PresentationStyle.surface(scheme), in: Capsule())
+                        }.buttonStyle(.plain)
+                            .accessibilityAddTraits(model.filter == filter ? .isSelected : [])
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+        if let warning = model.warning {
+            InlineNotice(text: warning).listRowBackground(Color.clear).listRowSeparator(.hidden)
+        }
+        if model.isReconciling {
+            VStack {
+                if model.warning == nil {
+                    ProgressView("正在恢复下载任务")
+                } else {
+                    Button("重试恢复下载状态") { Task { await model.reconcile() } }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+        } else if model.visibleTasks.isEmpty {
+            ContentUnavailableView(
+                "暂无下载", systemImage: "arrow.down.circle",
+                description: Text("在节目页面选择下载，完成后即可离线观看。")
+            )
+            .frame(maxWidth: .infinity)
+            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+        }
+    }
+
     private var batchConfirmation: Confirmation? {
         guard let confirming, case .batch = confirming.source else { return nil }
         return confirming
@@ -222,33 +249,42 @@ public struct DownloadsView: View {
         #endif
     }
 
-    @ViewBuilder private func taskRow(_ task: DownloadTask, progress: CGFloat) -> some View {
+    @ViewBuilder private func taskRow(
+        _ task: DownloadTask, progress: CGFloat, cardSelection: Bool = false
+    ) -> some View {
         #if os(iOS)
+            let usesCardSelection = true
+        #else
+            let usesCardSelection = cardSelection
+        #endif
+        if usesCardSelection {
             let selected = model.selection.contains(task.id)
             playableCard(task, progress: progress)
                 .overlay {
-                    if selecting {
-                        Button {
-                            var selection = model.selection
-                            if selected {
-                                selection.remove(task.id)
-                            } else {
-                                selection.insert(task.id)
-                            }
-                            model.setSelection(selection)
-                        } label: {
-                            Color.clear.contentShape(Rectangle())
+                    // Keep the hit target stable: an animated removal can otherwise
+                    // leave the outgoing selection button intercepting playback taps.
+                    Button {
+                        var selection = model.selection
+                        if selected {
+                            selection.remove(task.id)
+                        } else {
+                            selection.insert(task.id)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(task.title)
-                        .accessibilityValue(selected ? "已选择" : "未选择")
-                        .accessibilityAddTraits(selected ? .isSelected : [])
-                        .accessibilityIdentifier("select-download-\(task.content.contentID)")
+                        model.setSelection(selection)
+                    } label: {
+                        Color.clear.contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .allowsHitTesting(selecting)
+                    .accessibilityHidden(!selecting)
+                    .accessibilityLabel(task.title)
+                    .accessibilityValue(selected ? "已选择" : "未选择")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("select-download-\(task.content.contentID)")
                 }
-        #else
+        } else {
             playableCard(task, progress: progress)
-        #endif
+        }
     }
 
     @ViewBuilder private func playableCard(_ task: DownloadTask, progress: CGFloat) -> some View {
@@ -349,12 +385,10 @@ public struct DownloadsView: View {
                         if case .completed = task.state {
                             MediaCoverBadge(symbol: "play.fill").opacity(1 - progress)
                         }
-                        #if os(iOS)
-                            MediaCoverBadge(
-                                symbol: model.selection.contains(task.id)
-                                    ? "checkmark.circle.fill" : "circle"
-                            ).opacity(progress)
-                        #endif
+                        MediaCoverBadge(
+                            symbol: model.selection.contains(task.id)
+                                ? "checkmark.circle.fill" : "circle"
+                        ).opacity(progress)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
@@ -389,14 +423,12 @@ public struct DownloadsView: View {
             .frame(minHeight: 44)
         }
         .padding(PresentationStyle.mediaCardInset).editorialCard()
-        #if os(iOS)
-            .overlay {
-                RoundedRectangle(cornerRadius: 22)
+        .overlay {
+            RoundedRectangle(cornerRadius: 22)
                 .strokeBorder(PresentationStyle.accent(scheme), lineWidth: 2)
                 .opacity(model.selection.contains(task.id) ? progress : 0)
                 .allowsHitTesting(false)
-            }
-        #endif
+        }
     }
 
     @ViewBuilder private func cardActionSpace(_ task: DownloadTask, progress: CGFloat) -> some View
