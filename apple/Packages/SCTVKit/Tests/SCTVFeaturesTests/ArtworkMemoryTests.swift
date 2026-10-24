@@ -9,6 +9,33 @@ import UniformTypeIdentifiers
 
 @MainActor @Suite(.serialized)
 struct ArtworkMemoryTests {
+    @Test func artworkRequestsRetainURLRestrictionsAndThumbnailBounds() throws {
+        let url = URL(string: "https://kscgc.sctv.com/cover.jpg")!
+        for host in ["kscgc.sctv.com", "kscgc.scgchc.com", "kscgc.sctv-tf.com"] {
+            let allowed = URL(string: "https://\(host):443/cover.jpg")!
+            #expect(ArtworkCache.allowed(allowed) == allowed)
+        }
+        for address in [
+            "http://kscgc.sctv.com/cover.jpg",
+            "https://example.com/cover.jpg",
+            "https://kscgc.sctv.com:8443/cover.jpg",
+            "https://user@kscgc.sctv.com/cover.jpg",
+            "https://user:password@kscgc.sctv.com/cover.jpg",
+        ] {
+            #expect(ArtworkCache.request(url: URL(string: address), width: 136, scale: 3) == nil)
+        }
+        for width in [CGFloat(0), -1, .infinity, .nan] {
+            #expect(ArtworkCache.request(url: url, width: width, scale: 3) == nil)
+        }
+        for scale in [CGFloat(0), -1, .infinity, .nan] {
+            #expect(ArtworkCache.request(url: url, width: 136, scale: scale) == nil)
+        }
+        let small = try #require(ArtworkCache.request(url: url, width: 1, scale: 1))
+        let large = try #require(ArtworkCache.request(url: url, width: 10_000, scale: 3))
+        #expect(small.thumbnail == ImageRequest.ThumbnailOptions(maxPixelSize: 256))
+        #expect(large.thumbnail == ImageRequest.ThumbnailOptions(maxPixelSize: 2048))
+    }
+
     @Test func compactCoverDecodesBelowSourceResolution() throws {
         let context = try #require(
             CGContext(
