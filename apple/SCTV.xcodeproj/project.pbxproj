@@ -293,6 +293,7 @@
 		E6935DC466719C9A9FD1518E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/iOS/SCTViOS.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Apps/macOS/SCTVmacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -320,6 +321,7 @@
 		EF6C8D2D4EDEE351C766A006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Apps/iOS/SCTViOS.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Apps/macOS/SCTVmacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;

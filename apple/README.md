@@ -29,6 +29,8 @@ To format Swift sources:
 swift format format --in-place --recursive apple/Packages/SCTVKit/Sources apple/Packages/SCTVKit/Tests apple/Apps apple/UITests
 ```
 
+The shared `Apps/Shared/Assets.xcassets/AppIcon.appiconset` supplies the iPhone, iPad and Mac launcher icons for both build configurations. Regenerate the warm-red television artwork with `swift apple/tool/generate-icons.swift` from the repository root. The generator reuses the Flutter television mark with the Apple client's light appearance accent, exports an opaque 1024-pixel iOS master, and renders the Mac sizes with a transparent outer margin. Commit the generated assets with generator changes; builds do not run the generator.
+
 ## Unsigned release and CI
 
 ```sh
