@@ -90,10 +90,13 @@ public actor SQLiteDownloadRepository: DownloadRepository {
 
     public func all() throws -> [DownloadTask] {
         try database.read { db in
-            try Data.fetchAll(
-                db, sql: "SELECT payload FROM download_tasks ORDER BY updated_at DESC, task_id DESC"
-            )
-            .map { try JSONDecoder().decode(DownloadTask.self, from: $0) }
+            try Data.fetchAll(db, sql: "SELECT payload FROM download_tasks")
+                .map { try JSONDecoder().decode(DownloadTask.self, from: $0) }
+                .sorted {
+                    // Progress and retries change updated_at, but must not move existing cards.
+                    if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+                    return $0.id.uuidString > $1.id.uuidString
+                }
         }
     }
 
