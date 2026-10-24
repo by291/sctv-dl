@@ -2,10 +2,6 @@ import SCTVCore
 import SwiftUI
 
 public struct DownloadsView: View {
-    @Bindable private var model: DownloadsModel
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private enum ConfirmationSource: Equatable {
         case task(UUID)
         case batch(String)
@@ -16,9 +12,22 @@ public struct DownloadsView: View {
         let commands: [DownloadCommand]
     }
 
+    private struct BatchAction: Identifiable {
+        let title: String
+        let action: DownloadAction
+        var destructive = false
+        var id: String { title }
+    }
+
+    @Bindable private var model: DownloadsModel
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var confirming: Confirmation?
     @State private var selecting = false
     @State private var departingActions: [BatchAction] = []
+
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
     private let reauthorize: (DownloadTask) -> Void
@@ -54,7 +63,7 @@ public struct DownloadsView: View {
                 if columns == 1 {
                     List(selection: selectionBinding) {
                         listHeader
-                        ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
+                        ForEach(model.canPerformCommands ? model.visibleTasks : []) { task in
                             taskRow(task, progress: selectionProgress).tag(task.id)
                                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
                                 .contextMenu { if !selecting { actions(task) } }
@@ -70,7 +79,8 @@ public struct DownloadsView: View {
                                 columns: MediaCardLayout.columns(columns),
                                 spacing: MediaCardLayout.spacing
                             ) {
-                                ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
+                                ForEach(model.canPerformCommands ? model.visibleTasks : []) {
+                                    task in
                                     taskRow(task, progress: selectionProgress, cardSelection: true)
                                         .id(task.id)
                                         .contextMenu { if !selecting { actions(task) } }
@@ -182,12 +192,15 @@ public struct DownloadsView: View {
         if let warning = model.warning {
             InlineNotice(text: warning).listRowBackground(Color.clear).listRowSeparator(.hidden)
         }
-        if model.isReconciling {
+        if !model.canPerformCommands {
             VStack {
-                if model.warning == nil {
+                switch model.recoveryState {
+                case .loading:
                     ProgressView("正在恢复下载任务")
-                } else {
+                case .failed:
                     Button("重试恢复下载状态") { Task { await model.reconcile() } }
+                case .ready:
+                    EmptyView()
                 }
             }
             .frame(maxWidth: .infinity)
@@ -249,7 +262,7 @@ public struct DownloadsView: View {
         #endif
     }
 
-    @ViewBuilder private func taskRow(
+    private func taskRow(
         _ task: DownloadTask, progress: CGFloat, cardSelection: Bool = false
     ) -> some View {
         #if os(iOS)
@@ -257,63 +270,22 @@ public struct DownloadsView: View {
         #else
             let usesCardSelection = cardSelection
         #endif
-        if usesCardSelection {
-            let selected = model.selection.contains(task.id)
-            playableCard(task, progress: progress)
-                .overlay {
-                    // Keep the hit target stable: an animated removal can otherwise
-                    // leave the outgoing selection button intercepting playback taps.
-                    Button {
-                        var selection = model.selection
-                        if selected {
-                            selection.remove(task.id)
-                        } else {
-                            selection.insert(task.id)
-                        }
-                        model.setSelection(selection)
-                    } label: {
-                        Color.clear.contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .allowsHitTesting(selecting)
-                    .accessibilityHidden(!selecting)
-                    .accessibilityLabel(task.title)
-                    .accessibilityValue(selected ? "已选择" : "未选择")
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                    .accessibilityIdentifier("select-download-\(task.content.contentID)")
-                }
-        } else {
-            playableCard(task, progress: progress)
-        }
+
+        return DownloadCard(
+            task: task, selected: model.selection.contains(task.id), selecting: selecting,
+            selectionProgress: progress, usesCardSelection: usesCardSelection,
+            play: { play(task) }, toggleSelection: { toggleSelection(of: task) },
+            actions: { cardActions(task) })
     }
 
-    @ViewBuilder private func playableCard(_ task: DownloadTask, progress: CGFloat) -> some View {
-        if case .completed = task.state {
-            Button {
-                play(task)
-            } label: {
-                taskCard(task, progress: progress).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .allowsHitTesting(!selecting)
-            .accessibilityHidden(selecting)
-            .accessibilityLabel(task.title)
-            .accessibilityHint("点击播放已下载的节目")
-            .accessibilityIdentifier("play-download-\(task.content.contentID)")
-            // Keep the menu outside the playback button so it cannot trigger playback.
-            .overlay(alignment: .bottomTrailing) {
-                fadingCardActions(task, progress: progress).padding(12)
-            }
+    private func toggleSelection(of task: DownloadTask) {
+        var selection = model.selection
+        if selection.contains(task.id) {
+            selection.remove(task.id)
         } else {
-            taskCard(task, progress: progress)
+            selection.insert(task.id)
         }
-    }
-
-    private struct BatchAction: Identifiable {
-        let title: String
-        let action: DownloadAction
-        var destructive = false
-        var id: String { title }
+        model.setSelection(selection)
     }
 
     private var availableBatchActions: [BatchAction] {
@@ -367,90 +339,6 @@ public struct DownloadsView: View {
         }
     }
 
-    private func taskCard(_ task: DownloadTask, progress: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            let layout =
-                typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-                : AnyLayout(
-                    HStackLayout(alignment: .center, spacing: PresentationStyle.mediaCardSpacing))
-            layout {
-                Artwork(url: task.cover)
-                    // Fix both dimensions so title height cannot shrink the fitted artwork.
-                    .frame(
-                        width: typeSize.isAccessibilitySize ? nil : 136,
-                        height: typeSize.isAccessibilitySize ? nil : 136 * 9 / 16
-                    )
-                    .overlay(alignment: .bottomTrailing) {
-                        if case .completed = task.state {
-                            MediaCoverBadge(symbol: "play.fill").opacity(1 - progress)
-                        }
-                        MediaCoverBadge(
-                            symbol: model.selection.contains(task.id)
-                                ? "checkmark.circle.fill" : "circle"
-                        ).opacity(progress)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title).font(.headline)
-                        // Keep selected-row text readable without overriding button tint.
-                        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("\(task.programmeName) · \(task.broadcastDate)")
-                        .font(.caption).foregroundStyle(secondaryText)
-                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
-                    Text(task.quality == .standard ? "标准画质" : "流畅画质")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(PresentationStyle.accent(scheme))
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Divider().opacity(0.5)
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 8) {
-                    taskStatus(task)
-                    Spacer(minLength: 4)
-                    cardActionSpace(task, progress: progress)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    taskStatus(task)
-                    HStack {
-                        Spacer()
-                        cardActionSpace(task, progress: progress)
-                    }
-                }
-            }
-            .frame(minHeight: 44)
-        }
-        .padding(PresentationStyle.mediaCardInset).editorialCard()
-        .overlay {
-            RoundedRectangle(cornerRadius: 22)
-                .strokeBorder(PresentationStyle.accent(scheme), lineWidth: 2)
-                .opacity(model.selection.contains(task.id) ? progress : 0)
-                .allowsHitTesting(false)
-        }
-    }
-
-    @ViewBuilder private func cardActionSpace(_ task: DownloadTask, progress: CGFloat) -> some View
-    {
-        if case .completed = task.state {
-            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
-        } else {
-            fadingCardActions(task, progress: progress)
-        }
-    }
-
-    @ViewBuilder private func fadingCardActions(_ task: DownloadTask, progress: CGFloat)
-        -> some View
-    {
-        if progress < 1 {
-            cardActions(task)
-                .opacity(1 - progress)
-                .allowsHitTesting(!selecting)
-                .accessibilityHidden(selecting)
-        }
-    }
-
     private func cardActions(_ task: DownloadTask) -> some View {
         Group {
             primaryActions(task)
@@ -474,15 +362,6 @@ public struct DownloadsView: View {
             } message: {
                 Text("移除记录会保留文件；删除文件会保留记录。")
             }
-        }
-    }
-
-    private func taskStatus(_ task: DownloadTask) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol(task.state))
-                .foregroundStyle(PresentationStyle.accent(scheme))
-            VStack(alignment: .leading, spacing: 5) { status(task.state) }
-                .foregroundStyle(scheme == .dark ? Color.white : Color.black)
         }
     }
 
@@ -541,43 +420,4 @@ public struct DownloadsView: View {
         }
     }
 
-    @ViewBuilder private func status(_ state: DownloadState) -> some View {
-        switch state {
-        case .transferring(let received, let total):
-            if let total, total > 0 {
-                ProgressView(value: Double(received), total: Double(max(total, received)))
-                    .accessibilityLabel("下载进度")
-            } else {
-                ProgressView().controlSize(.small)
-            }
-            Text(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)).font(
-                .caption
-            ).foregroundStyle(secondaryText)
-        case .completed(let file):
-            Text(
-                "已完成 · "
-                    + ByteCountFormatter.string(fromByteCount: file.byteSize, countStyle: .file)
-            ).font(
-                .caption
-            ).foregroundStyle(secondaryText)
-        case .queued: Text("等待下载").font(.caption)
-        case .paused(let resume): Text(resume == nil ? "已暂停，可重新下载" : "已暂停").font(.caption)
-        case .publishing: ProgressView("正在保存文件")
-        case .cancelled: Text("已取消").font(.caption)
-        case .interrupted(let reason), .transferFailed(let reason, _),
-            .publicationFailed(let reason, _):
-            Text(reason).font(.caption).foregroundStyle(secondaryText)
-        case .missingFile: Text("文件已移动或删除").font(.caption).foregroundStyle(secondaryText)
-        }
-    }
-
-    private func symbol(_ state: DownloadState) -> String {
-        switch state {
-        case .completed: "checkmark.circle"
-        case .paused: "pause.circle"
-        case .transferFailed, .publicationFailed, .missingFile, .interrupted:
-            "exclamationmark.circle"
-        default: "arrow.down.circle"
-        }
-    }
 }

@@ -24,18 +24,19 @@ public final class ArchiveModel {
         var fullEpisodes: [ProgrammeContent] = []
         var clips: [ProgrammeContent] = []
     }
+
     private var contentGroups = ContentGroups()
 
     private let repository: any ProgrammeRepository
-    private var datesOwner = UUID()
-    private var contentOwner = UUID()
+    private var datesRequestOwner = UUID()
+    private var contentsRequestOwner = UUID()
     private var restoredDateID: String?
     private var datesObservation: Task<Void, Never>?
     private var contentsObservation: Task<Void, Never>?
     private var selectionTask: Task<Void, Never>?
-    private var generation = UUID()
-    private var lifecycle = UUID()
-    private var running = false
+    private var contentsGeneration = UUID()
+    private var lifecycleToken = UUID()
+    private var isRunning = false
 
     public init(
         programme: Programme, repository: any ProgrammeRepository, restoredDateID: String? = nil
@@ -46,38 +47,50 @@ public final class ArchiveModel {
     }
 
     public var broadcast: BroadcastDate? { dates.first { $0.id == selectedDateID } }
+
     public var fullEpisodes: [ProgrammeContent] { contentGroups.fullEpisodes }
+
     public var clips: [ProgrammeContent] { contentGroups.clips }
+
     public var selectedContents: [ProgrammeContent] {
         contents.filter { selection.contains($0.id) }
     }
+
     public var hasPendingUpdate: Bool { pendingDates != nil || pendingContents != nil }
+
     private var contentQuery: ProgrammeQuery? {
         selectedDateID.map { .contents(programmeID: programme.id, dateID: $0) }
     }
 
     public func load() async {
-        guard !running else { return }
-        running = true
+        guard !isRunning else { return }
+
+        isRunning = true
         if contents.isEmpty { isLoading = true }
-        lifecycle = UUID()
-        datesOwner = UUID()
-        let active = lifecycle
+        lifecycleToken = UUID()
+        datesRequestOwner = UUID()
+        let activeLifecycle = lifecycleToken
+
         let source = await repository.observe(.dates(programmeID: programme.id))
-        guard running, lifecycle == active else { return }
+        guard isRunning, lifecycleToken == activeLifecycle else { return }
+
         datesObservation = Task { [weak self] in
             for await update in source {
-                guard !Task.isCancelled, let self, running, lifecycle == active else { break }
+                guard !Task.isCancelled, let self, isRunning, lifecycleToken == activeLifecycle
+                else { break }
+
                 pendingDates = update.pending
                 if case .refreshFailed(let message) = update.warning {
                     warning = message
                 }
+
                 guard case .dates(let values) = update.accepted?.items else { continue }
+
                 dates = values
                 rebuildContentGroups()
                 if values.isEmpty {
                     await clearDate()
-                    guard running, lifecycle == active else { break }
+                    guard isRunning, lifecycleToken == activeLifecycle else { break }
                     isLoading = false
                     continue
                 }
@@ -92,71 +105,88 @@ public final class ArchiveModel {
                 }
             }
         }
+
         await refresh()
     }
 
     public func refresh() async {
-        guard running else { return }
-        let active = lifecycle
-        let owner = datesOwner
+        guard isRunning else { return }
+
+        let activeLifecycle = lifecycleToken
+        let owner = datesRequestOwner
         let query = ProgrammeQuery.dates(programmeID: programme.id)
+
         do {
             try await repository.refresh(query, owner: owner)
-            if lifecycle == active { warning = nil }
+            if lifecycleToken == activeLifecycle { warning = nil }
         } catch {
-            if lifecycle == active {
+            if lifecycleToken == activeLifecycle {
                 warning = error.localizedDescription
                 // Once dates exist, selectDate owns loading even while it is
                 // releasing the previous date and selectedDateID is temporarily nil.
                 if dates.isEmpty { isLoading = false }
             }
         }
+
         // Refresh can acquire ownership after stop has already released this lifecycle.
-        if lifecycle != active { await repository.cancel(query, owner: owner) }
+        if lifecycleToken != activeLifecycle { await repository.cancel(query, owner: owner) }
     }
 
     public func selectDate(_ id: String) async {
-        guard running, selectedDateID != id, dates.contains(where: { $0.id == id }) else { return }
-        let route = UUID()
-        generation = route
+        guard isRunning, selectedDateID != id, dates.contains(where: { $0.id == id }) else {
+            return
+        }
+
+        let requestGeneration = UUID()
+        contentsGeneration = requestGeneration
         isLoading = true
         warning = nil
+
         await clearDate()
-        guard generation == route else { return }
+        guard contentsGeneration == requestGeneration else { return }
         selectedDateID = id
         await observeContents(id)
     }
 
     private func observeContents(_ id: String) async {
-        let route = UUID()
-        generation = route
-        contentOwner = UUID()
-        let owner = contentOwner
+        let requestGeneration = UUID()
+        contentsGeneration = requestGeneration
+        contentsRequestOwner = UUID()
+        let owner = contentsRequestOwner
         let query = ProgrammeQuery.contents(programmeID: programme.id, dateID: id)
         let source = await repository.observe(query)
-        guard running, generation == route else { return }
+        guard isRunning, contentsGeneration == requestGeneration else { return }
+
         contentsObservation = Task { [weak self] in
             for await update in source {
-                guard !Task.isCancelled, let self, generation == route else { break }
+                guard !Task.isCancelled, let self, contentsGeneration == requestGeneration else {
+                    break
+                }
+
                 if case .contents(let values) = update.accepted?.items {
                     contents = values
                     rebuildContentGroups()
                     isLoading = false
                     warning = nil
                 }
+
                 pendingContents = update.pending
                 if case .refreshFailed(let message) = update.warning {
                     warning = message
                 }
             }
         }
-        do { try await repository.refresh(query, owner: owner) } catch {
-            if generation == route {
+
+        do {
+            try await repository.refresh(query, owner: owner)
+        } catch {
+            if contentsGeneration == requestGeneration {
                 warning = error.localizedDescription
                 isLoading = false
             }
         }
-        if generation != route { await repository.cancel(query, owner: owner) }
+
+        if contentsGeneration != requestGeneration { await repository.cancel(query, owner: owner) }
         // Only an accepted snapshot can establish an empty result. Refresh completion
         // can precede delivery to the observation task.
     }
@@ -164,89 +194,103 @@ public final class ArchiveModel {
     public func setSelection(_ ids: Set<String>) {
         selection = ids
         guard let query = contentQuery else { return }
-        let previous = selectionTask
+
+        let previousSelectionChange = selectionTask
         let repository = repository
-        let owner = contentOwner
+        let owner = contentsRequestOwner
+
         // Serialize ownership changes so a late clear cannot unlock a newer selection.
         selectionTask = Task {
-            await previous?.value
+            await previousSelectionChange?.value
             await repository.setSelectionActive(!ids.isEmpty, for: query, owner: owner)
         }
     }
 
     public func acceptUpdate() async {
-        guard selection.isEmpty, running else { return }
-        let route = generation
+        guard selection.isEmpty, isRunning else { return }
+
+        let requestGeneration = contentsGeneration
         let datesUpdate = pendingDates
         let contentsUpdate = pendingContents
         do {
             if let datesUpdate {
                 try await repository.accept(datesUpdate.query, revision: datesUpdate.revision)
-                guard generation == route, running else { return }
+                guard contentsGeneration == requestGeneration, isRunning else { return }
                 if let query = contentQuery {
-                    let owner = contentOwner
+                    let owner = contentsRequestOwner
                     do {
                         try await repository.refresh(query, owner: owner)
                     } catch {
-                        if generation != route { await repository.cancel(query, owner: owner) }
+                        if contentsGeneration != requestGeneration {
+                            await repository.cancel(query, owner: owner)
+                        }
                         throw error
                     }
-                    if generation != route { await repository.cancel(query, owner: owner) }
+                    if contentsGeneration != requestGeneration {
+                        await repository.cancel(query, owner: owner)
+                    }
                 }
                 // A refreshed content revision requires its own explicit acceptance.
             } else if let contentsUpdate {
                 try await repository.accept(contentsUpdate.query, revision: contentsUpdate.revision)
             }
-        } catch { if generation == route { warning = error.localizedDescription } }
+        } catch {
+            if contentsGeneration == requestGeneration { warning = error.localizedDescription }
+        }
     }
 
     public func stop() {
-        running = false
-        lifecycle = UUID()
+        isRunning = false
+        lifecycleToken = UUID()
         datesObservation?.cancel()
         datesObservation = nil
         contentsObservation?.cancel()
         contentsObservation = nil
         releaseOwnership()
-        generation = UUID()
+        contentsGeneration = UUID()
     }
 
     private func releaseOwnership() {
         setSelection([])
+
         let query = contentQuery
         let datesQuery = ProgrammeQuery.dates(programmeID: programme.id)
-        let datesOwner = datesOwner
-        let contentOwner = contentOwner
+        let datesRequestOwner = datesRequestOwner
+        let contentsRequestOwner = contentsRequestOwner
         let repository = repository
-        let previous = selectionTask
+        let previousSelectionChange = selectionTask
         selectionTask = Task {
-            await previous?.value
-            await repository.cancel(datesQuery, owner: datesOwner)
-            if let query { await repository.cancel(query, owner: contentOwner) }
+            await previousSelectionChange?.value
+            await repository.cancel(datesQuery, owner: datesRequestOwner)
+            if let query { await repository.cancel(query, owner: contentsRequestOwner) }
         }
     }
 
     private func clearDate() async {
-        let oldQuery = contentQuery
-        let oldOwner = contentOwner
+        let previousContentsQuery = contentQuery
+        let previousContentsOwner = contentsRequestOwner
         setSelection([])
         let selectionChange = selectionTask
         contentsObservation?.cancel()
         contentsObservation = nil
+
         selectedDateID = nil
         contents = []
         contentGroups = ContentGroups()
         pendingContents = nil
+
         await selectionChange?.value
-        if let oldQuery {
-            await repository.cancel(oldQuery, owner: oldOwner)
-            await repository.setSelectionActive(false, for: oldQuery, owner: oldOwner)
+        if let previousContentsQuery {
+            await repository.cancel(previousContentsQuery, owner: previousContentsOwner)
+            await repository.setSelectionActive(
+                false, for: previousContentsQuery, owner: previousContentsOwner)
         }
     }
 
     private func rebuildContentGroups() {
         let date = broadcast?.date ?? ""
         var groups = ContentGroups()
+
         for content in contents {
             if ProgrammeRules.isFullEpisode(
                 title: content.title, programmeName: programme.name, broadcastDate: date)
@@ -256,6 +300,7 @@ public final class ArchiveModel {
                 groups.clips.append(content)
             }
         }
+
         groups.clips = ProgrammeRules.sortClips(groups.clips, ascending: ascending)
         // Scroll-anchor updates redraw the archive. Keep date parsing and sorting out
         // of those render passes; only accepted data or ordering changes rebuild groups.
@@ -265,18 +310,19 @@ public final class ArchiveModel {
     isolated deinit {
         datesObservation?.cancel()
         contentsObservation?.cancel()
+
         let query = contentQuery
         let datesQuery = ProgrammeQuery.dates(programmeID: programme.id)
-        let datesOwner = datesOwner
-        let contentOwner = contentOwner
+        let datesRequestOwner = datesRequestOwner
+        let contentsRequestOwner = contentsRequestOwner
         let repository = repository
-        let previous = selectionTask
+        let previousSelectionChange = selectionTask
         Task {
-            await previous?.value
-            await repository.cancel(datesQuery, owner: datesOwner)
+            await previousSelectionChange?.value
+            await repository.cancel(datesQuery, owner: datesRequestOwner)
             if let query {
-                await repository.cancel(query, owner: contentOwner)
-                await repository.setSelectionActive(false, for: query, owner: contentOwner)
+                await repository.cancel(query, owner: contentsRequestOwner)
+                await repository.setSelectionActive(false, for: query, owner: contentsRequestOwner)
             }
         }
     }
