@@ -44,9 +44,13 @@ public struct HistoryView: View {
             Button("清空历史", systemImage: "trash", role: .destructive) { confirmClear = true }
                 .labelStyle(.iconOnly).help("清空历史")
                 .disabled(model.entries.isEmpty)
-        }
-        .confirmationDialog("清空全部观看历史？", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("清空历史", role: .destructive) { Task { await model.clear() } }
+                .accessibilityIdentifier("history-clear")
+                .confirmationDialog(
+                    "清空全部观看历史？", isPresented: $confirmClear, titleVisibility: .visible
+                ) {
+                    Button("清空历史", role: .destructive) { Task { await model.clear() } }
+                        .accessibilityIdentifier("history-confirm-clear")
+                }
         }
         .task { await model.load() }
     }
@@ -62,8 +66,11 @@ public struct HistoryView: View {
                             remove: { Task { await model.remove(entry) } })
                     }
                 } header: {
-                    SectionHeading(title: day.id.formatted(date: .abbreviated, time: .omitted))
-                        .foregroundStyle(Color.primary).textCase(nil)
+                    SectionHeading(
+                        title: day.id.formatted(
+                            .dateTime.year().month(.wide).day().locale(Locale(identifier: "zh_CN")))
+                    )
+                    .foregroundStyle(Color.primary).textCase(nil)
                 }
             }
         }
