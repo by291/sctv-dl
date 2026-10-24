@@ -135,6 +135,7 @@ export function parseOptions(args = process.argv.slice(2)) {
   if (values.platform === 'all' && values.configuration !== 'Release') {
     throw new Error('All-platform validation requires --configuration Release')
   }
+
   if (values.configuration === 'Release' && values.device) {
     throw new Error('Release compilation does not accept --device')
   }
