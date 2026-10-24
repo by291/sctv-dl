@@ -5,8 +5,13 @@ public struct DownloadsView: View {
     @Bindable private var model: DownloadsModel
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirming: [DownloadCommand] = []
     @State private var selecting = false
+    #if os(iOS)
+        @State private var tabBarInsets = DownloadTabBarInsets()
+        @State private var selectionBarHeight: CGFloat = 0
+    #endif
     private let play: (DownloadTask) -> Void
     private let export: (DownloadTask) -> Void
     private let reauthorize: (DownloadTask) -> Void
@@ -25,6 +30,16 @@ public struct DownloadsView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
+            DownloadSelectionTransition(progress: selecting ? 1 : 0) { progress in
+                page(selectionProgress: progress)
+            }
+        #else
+            page(selectionProgress: selecting ? 1 : 0)
+        #endif
+    }
+
+    private func page(selectionProgress: CGFloat) -> some View {
         List(selection: selectionBinding) {
             VStack(alignment: .leading, spacing: 16) {
                 Text(
@@ -77,7 +92,7 @@ public struct DownloadsView: View {
             }
 
             ForEach(model.isReconciling ? [] : model.visibleTasks) { task in
-                taskCard(task).tag(task.id)
+                taskRow(task, progress: selectionProgress).tag(task.id)
                     .listRowBackground(Color.clear).listRowSeparator(.hidden)
                     .contextMenu { if !selecting { actions(task) } }
             }
@@ -94,19 +109,35 @@ public struct DownloadsView: View {
         .navigationTitle("下载")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
-            .toolbar(selecting ? .hidden : .visible, for: .tabBar)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(
+                    height: max(0, selectionBarHeight - tabBarInsets.height) * selectionProgress)
+            }
+            .overlay(alignment: .bottom) {
+                selectionBar
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.height
+                } action: {
+                    selectionBarHeight = $0
+                }
+                .offset(
+                    y: tabBarInsets.height
+                        + (1 - selectionProgress) * DownloadTabBarVisibility.travelDistance
+                )
+                .opacity(selectionProgress)
+                .allowsHitTesting(selecting)
+                .accessibilityHidden(!selecting)
+            }
+            .background(
+                DownloadTabBarVisibility(progress: selectionProgress, insets: $tabBarInsets)
+            )
             .toolbar(.visible, for: .navigationBar)
-            .environment(
-                \.editMode,
-                Binding(
-                    get: { selecting ? .active : .inactive },
-                    set: { selecting = $0.isEditing }))
         #endif
         .onChange(of: selecting) { _, value in
             if !value { model.setSelection([]) }
         }
         .onChange(of: model.visibleTasks.isEmpty) { _, empty in
-            if empty { selecting = false }
+            if empty { setSelecting(false) }
         }
         .toolbar {
             // Preserve item identity when select-all is inserted or removed during rapid toggles.
@@ -124,16 +155,18 @@ public struct DownloadsView: View {
                     Button(
                         selecting ? "完成" : "选择", systemImage: selecting ? "checkmark" : "checklist"
                     ) {
-                        withAnimation { selecting.toggle() }
+                        setSelecting(!selecting)
                     }
                     .labelStyle(.iconOnly).help(selecting ? "完成" : "选择")
                     .accessibilityIdentifier("downloads-select")
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if selecting { selectionBar }
-        }
+        #if os(macOS)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if selecting { selectionBar }
+            }
+        #endif
         .confirmationDialog(
             "确认执行所选操作？",
             isPresented: Binding(get: { !confirming.isEmpty }, set: { if !$0 { confirming = [] } }),
@@ -150,10 +183,57 @@ public struct DownloadsView: View {
         .task { await model.load() }
     }
 
+    private func setSelecting(_ value: Bool) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
+            selecting = value
+        }
+    }
+
     // A nil binding keeps ordinary row/menu taps out of native selection mode.
     private var selectionBinding: Binding<Set<UUID>>? {
-        guard selecting else { return nil }
-        return Binding(get: { model.selection }, set: { model.setSelection($0) })
+        #if os(iOS)
+            return nil
+        #else
+            guard selecting else { return nil }
+            return Binding(get: { model.selection }, set: { model.setSelection($0) })
+        #endif
+    }
+
+    @ViewBuilder private func taskRow(_ task: DownloadTask, progress: CGFloat) -> some View {
+        #if os(iOS)
+            let selected = model.selection.contains(task.id)
+            // Keep the selection lane in the row so every card follows the same transaction.
+            // Native List editing otherwise schedules its own per-cell transitions.
+            HStack(spacing: 0) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(selected ? PresentationStyle.accent(scheme) : secondaryText)
+                    .frame(width: 32, height: 44)
+                    .frame(width: 44 * progress, alignment: .leading)
+                    .clipped()
+                    .opacity(progress)
+                    .accessibilityHidden(true)
+                taskCard(task, progress: progress)
+            }
+            .overlay {
+                if selecting {
+                    Button {
+                        var selection = model.selection
+                        if selected { selection.remove(task.id) } else { selection.insert(task.id) }
+                        model.setSelection(selection)
+                    } label: {
+                        Color.clear.contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(task.title)
+                    .accessibilityValue(selected ? "已选择" : "未选择")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("select-download-\(task.content.contentID)")
+                }
+            }
+        #else
+            taskCard(task, progress: progress)
+        #endif
     }
 
     private struct BatchAction: Identifiable {
@@ -211,11 +291,16 @@ public struct DownloadsView: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .frame(maxWidth: 600).frame(maxWidth: .infinity)
-        .background(.regularMaterial)
+        .background {
+            Rectangle().fill(.regularMaterial)
+                #if os(iOS)
+                    .padding(.bottom, -tabBarInsets.bottom)
+                #endif
+        }
         .overlay(alignment: .top) { Divider() }
     }
 
-    private func taskCard(_ task: DownloadTask) -> some View {
+    private func taskCard(_ task: DownloadTask, progress: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             let layout =
                 typeSize.isAccessibilitySize
@@ -248,21 +333,30 @@ public struct DownloadsView: View {
                 HStack(alignment: .center, spacing: 8) {
                     taskStatus(task)
                     Spacer(minLength: 4)
-                    if !selecting { cardActions(task) }
+                    fadingCardActions(task, progress: progress)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     taskStatus(task)
-                    if !selecting {
-                        HStack {
-                            Spacer()
-                            cardActions(task)
-                        }
+                    HStack {
+                        Spacer()
+                        fadingCardActions(task, progress: progress)
                     }
                 }
             }
             .frame(minHeight: 44)
         }
         .padding(12).editorialCard()
+    }
+
+    @ViewBuilder private func fadingCardActions(_ task: DownloadTask, progress: CGFloat)
+        -> some View
+    {
+        if progress < 1 {
+            cardActions(task)
+                .opacity(1 - progress)
+                .allowsHitTesting(!selecting)
+                .accessibilityHidden(selecting)
+        }
     }
 
     private func cardActions(_ task: DownloadTask) -> some View {
