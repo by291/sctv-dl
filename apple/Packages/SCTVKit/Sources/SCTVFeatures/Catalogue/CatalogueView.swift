@@ -49,7 +49,6 @@ public struct CatalogueView: View {
         }
         .background(PresentationStyle.canvas(scheme))
         .accessibilityIdentifier("catalogue-scroll")
-        .scrollPosition(id: $model.scrollAnchor)
         .navigationTitle("栏目")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
@@ -125,7 +124,7 @@ public struct CatalogueView: View {
                 ForEach(model.visibleProgrammes) { programme in
                     programmeCard(programme).id(programme.id)
                 }
-            }.scrollTargetLayout()
+            }
         }
     }
 

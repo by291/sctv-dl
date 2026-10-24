@@ -6,7 +6,6 @@ import SCTVCore
 public final class CatalogueModel {
     public var search = ""
     public var favouritesOnly = false
-    public var scrollAnchor: String?
     public var alphabetical = false
     public private(set) var programmes: [Programme] = []
     public private(set) var favouriteIDs: Set<String> = []

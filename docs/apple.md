@@ -19,7 +19,7 @@ Features depend on core service contracts. Application roots construct concrete 
 
 ## Navigation and browsing
 
-The main destinations are 栏目, 资料库 and 下载. iPhone/iPad use adaptive native tabs and navigation stacks; Mac uses a sidebar and independent detail navigation. The Mac player is a separate window backed by the same application-wide player session. Scene storage retains route IDs and archive selection; shared preferences do not own individual windows' navigation.
+The main destinations are 栏目, 资料库 and 下载. Catalogue sorting keeps the current viewport rather than following a programme ID to its new grid position; the navigation stack retains the catalogue scroll offset when returning from a programme. iPhone/iPad use adaptive native tabs and navigation stacks; Mac uses a sidebar and independent detail navigation. The Mac player is a separate window backed by the same application-wide player session. Scene storage retains route IDs and archive selection; shared preferences do not own individual windows' navigation.
 
 Catalogue and broadcast results distinguish an accepted snapshot from a pending refresh. Cached results remain visible while refreshing; explicit acceptance prevents background refresh from changing a selected date or active batch. Requests have query ownership and cancellation, while page generations independently reject stale results. Date acceptance resolves the retained selection before loading its contents. Full episodes and clips use the shared programme rules and Shanghai publication ordering.
 

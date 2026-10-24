@@ -357,6 +357,53 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(clip.waitForExistence(timeout: 5))
         }
 
+        func testCatalogueSortingKeepsViewportAndReturnPosition() {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "--ui-fixtures", "--ui-many-programmes", "-ApplePersistenceIgnoreState", "YES",
+            ]
+            continueAfterFailure = false
+            app.launch()
+            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+            let scroll = app.scrollViews["catalogue-scroll"]
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(
+                forDuration: 0.05,
+                thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)),
+                withVelocity: .slow, thenHoldForDuration: 0.3)
+            let before = XCTAttachment(screenshot: app.screenshot())
+            before.name = "catalogue-before-sort"
+            before.lifetime = .keepAlways
+            add(before)
+            let sort = app.buttons["排序"]
+            XCTAssertTrue(sort.isHittable)
+            let initialY = sort.frame.minY
+            for _ in 0..<2 {
+                sort.tap()
+                let option = app.descendants(matching: .any)["按名称排序"].firstMatch
+                XCTAssertTrue(option.waitForExistence(timeout: 5))
+                option.tap()
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "catalogue-after-sort"
+                shot.lifetime = .keepAlways
+                add(shot)
+                XCTAssertTrue(sort.isHittable)
+                XCTAssertEqual(sort.frame.minY, initialY, accuracy: 3)
+            }
+            scroll.swipeUp()
+            let programme = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "栏目 "))
+                .allElementsBoundByIndex.first { $0.isHittable }
+            XCTAssertNotNil(programme)
+            guard let programme else { return }
+            let name = programme.label
+            let position = programme.frame.minY
+            programme.tap()
+            XCTAssertTrue(app.scrollViews["archive-scroll"].waitForExistence(timeout: 10))
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            let restored = app.buttons[name]
+            XCTAssertTrue(restored.waitForExistence(timeout: 5))
+            XCTAssertEqual(restored.frame.minY, position, accuracy: 3)
+        }
+
         func testCatalogueNativeHeadingAndSearch() {
             let app = XCUIApplication()
             app.launchArguments = [
