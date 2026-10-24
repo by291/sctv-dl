@@ -61,6 +61,7 @@ struct ApplicationSettingsView: View {
     }
     private var resetDirectory: (() -> Void)? {
         #if os(macOS)
+            guard case .external = dependencies.downloads.destination else { return nil }
             return {
                 do { try dependencies.downloads.useManagedDirectory() } catch {
                     warning = error.localizedDescription

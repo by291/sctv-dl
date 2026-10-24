@@ -9,7 +9,8 @@ public struct SettingsView: View {
     private let destinationDescription: String
     private let chooseDirectory: (() -> Void)?
     private let resetDirectory: (() -> Void)?
-    @State private var cacheMessage: String?
+    @State private var showingCacheConfirmation = false
+    @State private var cacheResult: String?
 
     public init(
         model: SettingsModel, clearCache: @escaping () async throws -> Void,
@@ -73,20 +74,17 @@ public struct SettingsView: View {
                 Text("网络设置仅应用于新建的下载任务。").font(.footnote).foregroundStyle(.secondary)
             }
             Section("存储") {
-                LabeledContent("新下载保存到", value: destinationDescription)
-                if let chooseDirectory { Button("选择其他下载目录", action: chooseDirectory) }
-                if let resetDirectory { Button("使用应用下载目录", action: resetDirectory) }
-                Button("清理缓存") {
-                    Task {
-                        do {
-                            try await clearCache()
-                            ArtworkCache.clear()
-                            cacheMessage = "缓存已清理"
-                        } catch { cacheMessage = error.localizedDescription }
-                    }
-                }
-                Text("保留收藏、观看历史、设置和已下载的文件。").font(.footnote).foregroundStyle(.secondary)
-                if let cacheMessage { Text(cacheMessage).font(.callout) }
+                #if os(macOS)
+                    storageLocationRow
+                    storageCacheRow
+                #else
+                    LabeledContent("新下载保存到", value: destinationDescription)
+                    if let chooseDirectory { Button("选择其他下载目录", action: chooseDirectory) }
+                    if let resetDirectory { Button("使用应用下载目录", action: resetDirectory) }
+                    cacheButton
+                    Text("保留收藏、观看历史、设置和已下载的文件。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                #endif
             }
             Section("关于") {
                 LabeledContent("SCTV", value: appVersion)
@@ -104,6 +102,99 @@ public struct SettingsView: View {
         .background(PresentationStyle.canvas(scheme))
         .tint(PresentationStyle.accent(scheme))
         .navigationTitle("设置")
+        .alert(
+            "缓存清理",
+            isPresented: Binding(
+                get: { cacheResult != nil },
+                set: { if !$0 { cacheResult = nil } })
+        ) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(cacheResult ?? "")
+        }
         .task { await model.load() }
+    }
+
+    #if os(macOS)
+        private var storageLocationRow: some View {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("下载位置")
+                    Text(destinationDescription)
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 8) {
+                    if let resetDirectory {
+                        Button("恢复默认", action: resetDirectory)
+                            .help("新下载使用应用下载目录，已有文件保留在原位置")
+                    }
+                    if let chooseDirectory {
+                        Button(action: chooseDirectory) {
+                            Text("更改…").frame(minWidth: 44)
+                        }
+                        .help("选择其他下载目录")
+                        .accessibilityIdentifier("settings-change-directory")
+                    }
+                }
+                .fixedSize()
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .tint(PresentationStyle.accent(scheme))
+            }
+            .padding(.vertical, 4)
+        }
+
+        private var storageCacheRow: some View {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("缓存")
+                    Text("保留收藏、观看历史、设置和已下载的文件。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                cacheButton
+                    .fixedSize()
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                    .tint(PresentationStyle.accent(scheme))
+                    .foregroundStyle(PresentationStyle.accent(scheme))
+            }
+            .padding(.vertical, 4)
+        }
+    #endif
+
+    private var cacheButton: some View {
+        Button {
+            showingCacheConfirmation = true
+        } label: {
+            #if os(macOS)
+                Text("清理").frame(minWidth: 44)
+            #else
+                Text("清理缓存")
+            #endif
+        }
+        .accessibilityLabel("清理缓存")
+        .accessibilityIdentifier("settings-clear-cache")
+        .alert("清理缓存？", isPresented: $showingCacheConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("清理缓存", role: .destructive, action: clearStoredCache)
+        } message: {
+            Text("将清理节目数据和封面缓存。收藏、观看历史、设置和已下载的文件都会保留。")
+        }
+    }
+
+    private func clearStoredCache() {
+        Task {
+            do {
+                try await clearCache()
+                ArtworkCache.clear()
+                cacheResult = "缓存已清理"
+            } catch { cacheResult = error.localizedDescription }
+        }
     }
 }

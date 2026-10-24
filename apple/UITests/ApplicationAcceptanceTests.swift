@@ -224,6 +224,43 @@ final class ApplicationAcceptanceTests: XCTestCase {
         XCTAssertFalse(search.exists)
     }
 
+    #if os(iOS)
+        func testCacheCleanupRequiresConfirmation() {
+            let app = XCUIApplication()
+            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
+            continueAfterFailure = false
+            app.launch()
+            let settings = app.buttons["设置"].firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 15))
+            settings.tap()
+            let clear = app.buttons["settings-clear-cache"]
+            reveal(clear, in: app)
+            XCTAssertTrue(clear.waitForExistence(timeout: 5))
+            let initialClearFrame = clear.frame
+            clear.tap()
+            let confirmation = app.alerts.firstMatch
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.staticTexts["缓存已清理"].exists)
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "ios-cache-confirmation"
+            shot.lifetime = .keepAlways
+            add(shot)
+            confirmation.buttons["取消"].tap()
+            XCTAssertFalse(app.staticTexts["缓存已清理"].exists)
+            clear.tap()
+            confirmation.buttons["清理缓存"].tap()
+            let result = app.alerts.firstMatch
+            XCTAssertTrue(result.staticTexts["缓存已清理"].waitForExistence(timeout: 5))
+            let resultShot = XCTAttachment(screenshot: app.screenshot())
+            resultShot.name = "ios-cache-result"
+            resultShot.lifetime = .keepAlways
+            add(resultShot)
+            result.buttons["好"].tap()
+            XCTAssertFalse(app.staticTexts["缓存已清理"].exists)
+            XCTAssertEqual(clear.frame.minY, initialClearFrame.minY, accuracy: 1)
+        }
+    #endif
+
     func testCatalogueArchiveLibraryAndSettings() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
