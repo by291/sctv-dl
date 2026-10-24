@@ -43,21 +43,41 @@ public enum TransferEvent: Sendable {
 }
 
 public protocol TransferDriver: Sendable {
+    /// Starts a native task for this durable attempt. A thrown error may follow native creation;
+    /// the coordinator must inspect the native snapshot before starting a replacement.
     func enqueue(_ task: DownloadTask) async throws -> NativeTransferID
+
     func cancel(_ id: NativeTransferID) async throws
+
+    /// Stops the native transfer and returns a durable resume reference when the platform permits.
+    /// A `nil` result permits restart only; a thrown error leaves the native outcome uncertain.
     func pause(_ id: NativeTransferID) async throws -> ResumeReference?
+
+    /// Resumes the same durable attempt. Native callbacks can arrive before this method returns.
     func resume(_ task: DownloadTask, from reference: ResumeReference) async throws
         -> NativeTransferID
+
+    /// Returns the current native tasks for reconciliation, without starting additional transfers.
     func snapshot() async throws -> [NativeTransfer]
+
     /// Returns an already adopted callback file by durable task and attempt identity.
     func stagedFile(taskID: UUID, attemptID: UUID) async throws -> StagedFile?
+
     func stagedFiles() async throws -> [StagedFile]
+
     /// Returns a durable terminal failure receipt, including the native task identity.
     func terminalFailure(taskID: UUID, attemptID: UUID) async throws -> TransferEvent?
     func discardTerminalFailure(taskID: UUID, attemptID: UUID) async throws
+
+    /// Deletes resume artifacts not retained by durable records or an in-flight enqueue/pause.
     func pruneResumeData(keepingAttempts: Set<UUID>) async throws
     func discardResumeData(taskID: UUID, attemptID: UUID) async throws
+
+    /// Streams ordered native callbacks; this is an event stream with no initial snapshot.
+    /// The coordinator owns consuming and cancelling its subscription and persisting each event.
     func events() async -> AsyncStream<TransferEvent>
+
+    /// Releases a matching background completion token only after earlier callbacks are durable.
     func acknowledgeDrain(identifier: String, token: UUID) async
 }
 

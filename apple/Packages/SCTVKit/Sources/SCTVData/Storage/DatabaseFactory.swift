@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-public struct DatabaseStores: @unchecked Sendable {
+public struct DatabaseStores: Sendable {
     public let user: DatabaseQueue
     public let runtime: DatabaseQueue
 

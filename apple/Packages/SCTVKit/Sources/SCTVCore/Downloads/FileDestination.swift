@@ -35,9 +35,18 @@ public struct PublishedFile: Codable, Equatable, Sendable {
 }
 
 public protocol FilePublisher: Sendable {
+    /// Validates and publishes attempt-owned staged bytes without overwriting unrelated files.
+    /// Staging remains owned by the caller until a completed record is durably committed.
+    /// Validation, destination access and file-operation failures throw without implying completion.
     func publish(_ staged: StagedFile, for task: DownloadTask) async throws -> PublishedFile
+
+    /// Removes only this attempt's staging artifacts after completion or obsolescence is confirmed.
     func cleanup(_ staged: StagedFile) async throws
+
+    /// Deletes only the matching published file identity. Access and file-operation failures throw.
     func delete(_ file: PublishedFile) async throws
+
+    /// Reports whether the published identity is currently accessible, including external access.
     func exists(_ file: PublishedFile) async -> Bool
 }
 
