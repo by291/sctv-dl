@@ -740,12 +740,24 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 app.alerts["提示"].buttons["好"].tap()
             }
             app.buttons["下载"].firstMatch.tap()
+            if app.windows.firstMatch.frame.width > 600 {
+                XCUIDevice.shared.orientation = .landscapeLeft
+            }
+            defer { XCUIDevice.shared.orientation = .portrait }
+            let firstCard = app.buttons["play-download-31"]
+            let secondCard = app.buttons["play-download-32"]
+            XCTAssertTrue(firstCard.waitForExistence(timeout: 20))
+            XCTAssertTrue(secondCard.waitForExistence(timeout: 20))
+            if app.windows.firstMatch.frame.width >= 800 {
+                XCTAssertEqual(firstCard.frame.minY, secondCard.frame.minY, accuracy: 2)
+                XCTAssertGreaterThan(abs(firstCard.frame.minX - secondCard.frame.minX), 300)
+            }
             let longTitle = app.staticTexts.matching(
                 NSPredicate(format: "label BEGINSWITH %@", "秋日里的城市故事")
             ).firstMatch
             XCTAssertTrue(longTitle.waitForExistence(timeout: 15))
             XCTAssertLessThan(longTitle.frame.height, 55)
-            let cards = XCTAttachment(screenshot: app.screenshot())
+            let cards = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             cards.name = "download-compact-cards"
             cards.lifetime = .keepAlways
             add(cards)
@@ -764,7 +776,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["导出副本"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.buttons["player-back"].exists)
             XCTAssertFalse(app.buttons["批量操作"].exists)
-            let menuShot = XCTAttachment(screenshot: app.screenshot())
+            let menuShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             menuShot.name = "download-secondary-actions"
             menuShot.lifetime = .keepAlways
             add(menuShot)
@@ -772,7 +784,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let confirm = app.buttons["download-confirm-action"].firstMatch
             XCTAssertTrue(confirm.waitForExistence(timeout: 5))
             XCTAssertGreaterThan(confirm.frame.midY, app.buttons["全部"].frame.maxY)
-            let anchorShot = XCTAttachment(screenshot: app.screenshot())
+            let anchorShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             anchorShot.name = "download-single-confirmation-anchor"
             anchorShot.lifetime = .keepAlways
             add(anchorShot)
@@ -797,7 +809,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(deleteAlert.staticTexts["下载记录会保留，之后可以重新下载。"].exists)
             deleteAlert.buttons["取消"].tap()
             XCTAssertTrue(app.staticTexts["已选 2 项"].exists)
-            let shot = XCTAttachment(screenshot: app.screenshot())
+            let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             shot.name = "download-selection-actions"
             shot.lifetime = .keepAlways
             add(shot)
@@ -820,7 +832,8 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 let batchAlert = app.alerts["移除 1 条记录？"]
                 XCTAssertTrue(batchAlert.waitForExistence(timeout: 5))
                 XCTAssertTrue(batchAlert.staticTexts["已下载的文件会保留。"].exists)
-                let confirmationShot = XCTAttachment(screenshot: app.screenshot())
+                let confirmationShot = XCTAttachment(
+                    screenshot: app.windows.firstMatch.screenshot())
                 confirmationShot.name = "download-batch-confirmation-with-hidden-tabs"
                 confirmationShot.lifetime = .keepAlways
                 add(confirmationShot)
@@ -907,7 +920,11 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(row.waitForExistence(timeout: 5))
             let heading = app.staticTexts["继续观看"]
             let headingY = heading.frame.minY
-            row.swipeLeft()
+            if app.windows.firstMatch.frame.width >= 800 {
+                row.press(forDuration: 1)
+            } else {
+                row.swipeLeft()
+            }
             app.buttons["删除记录"].tap()
             XCTAssertTrue(row.waitForNonExistence(timeout: 5))
             let remaining = app.buttons.matching(
@@ -915,7 +932,11 @@ final class ApplicationAcceptanceTests: XCTestCase {
             ).firstMatch
             XCTAssertTrue(remaining.exists)
             XCTAssertEqual(heading.frame.minY, headingY, accuracy: 2)
-            remaining.swipeLeft()
+            if app.windows.firstMatch.frame.width >= 800 {
+                remaining.press(forDuration: 1)
+            } else {
+                remaining.swipeLeft()
+            }
             app.buttons["删除记录"].tap()
             XCTAssertTrue(remaining.waitForNonExistence(timeout: 5))
             XCTAssertTrue(app.staticTexts["故事，留待下次继续"].exists)
@@ -934,11 +955,12 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
             ]
             continueAfterFailure = false
+            XCUIDevice.shared.orientation = .portrait
             app.launch()
             let programme = app.buttons["四川新闻"]
             XCTAssertTrue(programme.waitForExistence(timeout: 15))
             programme.tap()
-            for id in ["31", "32"] {
+            for id in ["30", "31", "32"] {
                 let clip = app.buttons["archive-play-\(id)"]
                 reveal(clip, in: app)
                 clip.tap()
@@ -948,6 +970,19 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 app.buttons["player-back"].firstMatch.tap()
             }
             app.buttons["资料库"].firstMatch.tap()
+            let isTablet = app.windows.firstMatch.frame.width > 600
+            if isTablet { XCUIDevice.shared.orientation = .landscapeLeft }
+            defer { XCUIDevice.shared.orientation = .portrait }
+            let libraryLong = app.buttons.matching(
+                NSPredicate(format: "label BEGINSWITH %@", "秋日里的城市故事")
+            ).firstMatch
+            let libraryShort = app.buttons["城市一刻"]
+            let episode = app.buttons["四川新闻（2026.10.22）"]
+            XCTAssertTrue(libraryShort.waitForExistence(timeout: 5))
+            if isTablet {
+                XCTAssertEqual(libraryLong.frame.minY, libraryShort.frame.minY, accuracy: 2)
+                XCTAssertGreaterThan(episode.frame.minY, libraryShort.frame.minY + 80)
+            }
             let libraryShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
             libraryShot.name = "compact-continuing-cards"
             libraryShot.lifetime = .keepAlways
@@ -969,7 +1004,20 @@ final class ApplicationAcceptanceTests: XCTestCase {
             shot.name = "compact-history-titles"
             shot.lifetime = .keepAlways
             add(shot)
-            long.swipeLeft()
+            if isTablet {
+                XCTAssertEqual(long.frame.minY, short.frame.minY, accuracy: 2)
+                XCTAssertGreaterThan(episode.frame.minY, short.frame.minY + 80)
+                XCUIDevice.shared.orientation = .portrait
+                if app.windows.firstMatch.frame.width < 800 {
+                    XCTAssertEqual(long.frame.minX, short.frame.minX, accuracy: 2)
+                    XCTAssertGreaterThan(abs(long.frame.minY - short.frame.minY), 80)
+                }
+            }
+            if app.windows.firstMatch.frame.width >= 800 {
+                long.press(forDuration: 1)
+            } else {
+                long.swipeLeft()
+            }
             let delete = app.buttons["删除记录"]
             XCTAssertTrue(delete.waitForExistence(timeout: 5))
             delete.tap()
