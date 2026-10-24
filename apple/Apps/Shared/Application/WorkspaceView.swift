@@ -123,7 +123,7 @@ struct WorkspaceView: View {
                     Tab("下载", systemImage: "arrow.down.circle", value: WorkspaceSection.downloads) {
                         downloadsNavigation
                     }
-                }.tabViewStyle(.sidebarAdaptable)
+                }.tabViewStyle(.tabBarOnly)
             #endif
         }
         .tint(PresentationStyle.accent(colorScheme ?? systemScheme))
