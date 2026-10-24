@@ -28,9 +28,11 @@ final class AppDependencies {
                 support = manager.temporaryDirectory.appending(path: UUID().uuidString)
             }
         #endif
+
         root = support.appending(path: "SCTV", directoryHint: .isDirectory)
         let locations = StorageLocations(root: root)
         let stores = try DatabaseFactory.open(at: locations)
+
         var api: any ProgrammeAPI = try ProgrammeHTTPClient(
             identity: InstallationIdentity(location: locations.installationIdentity))
         #if DEBUG
@@ -38,9 +40,11 @@ final class AppDependencies {
                 api = FixtureProgrammeAPI()
             }
         #endif
+
         programmes = CachedProgrammeRepository(api: api, database: stores.runtime)
         favourites = SQLiteFavouriteRepository(database: stores.user)
         history = SQLiteHistoryRepository(database: stores.user)
+
         var playback = PlaybackCoordinator()
         #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-fixtures") {
@@ -48,6 +52,7 @@ final class AppDependencies {
             }
         #endif
         player = PlayerSession(history: history, playback: playback)
+
         settings = SettingsModel(repository: SQLitePreferenceRepository(database: stores.user))
         #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-fixtures"),
@@ -56,6 +61,7 @@ final class AppDependencies {
                 settings.change { $0.appearance = .dark }
             }
         #endif
+
         resolver = PlaybackRequestResolver(
             api: api, history: history)
         cache = CacheMaintenance(database: stores.runtime)
@@ -63,41 +69,7 @@ final class AppDependencies {
         #if os(macOS)
             NativeApplicationDelegate.dependencies = self
         #endif
+
         Task { await downloads.start() }
-    }
-
-}
-
-@MainActor @Observable
-final class ApplicationModel {
-    var dependencies: AppDependencies?
-    var failure: String?
-    init() { prepare() }
-    func prepare() {
-        do {
-            dependencies = try AppDependencies()
-            failure = nil
-        } catch { failure = error.localizedDescription }
-    }
-}
-
-struct ApplicationBootstrap: View {
-    let model: ApplicationModel
-    var body: some View {
-        Group {
-            if ProcessInfo.processInfo.arguments.contains("--media-probe") {
-                MediaProbeView()
-            } else if let dependencies = model.dependencies {
-                WorkspaceView(dependencies: dependencies)
-            } else {
-                ContentUnavailableView {
-                    Label("无法打开资料库", systemImage: "externaldrive.badge.exclamationmark")
-                } description: {
-                    Text(model.failure ?? "")
-                } actions: {
-                    Button("重试", action: model.prepare)
-                }
-            }
-        }
     }
 }

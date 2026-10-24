@@ -5,11 +5,13 @@ import SCTVDownloads
 
 actor BackgroundEventsBridge {
     static let shared = BackgroundEventsBridge()
+
     private var driver: BackgroundSessionDriver?
     private var waiting: [(String, @MainActor @Sendable () -> Void)] = []
 
     func install(_ driver: BackgroundSessionDriver) async {
         self.driver = driver
+
         let callbacks = waiting
         waiting = []
         for (identifier, completion) in callbacks {
@@ -35,6 +37,7 @@ actor BackgroundEventsBridge {
     @MainActor final class NativeApplicationDelegate: NSObject, UIApplicationDelegate {
         private final class CompletionReceipt {
             let callback: () -> Void
+
             init(_ callback: @escaping () -> Void) { self.callback = callback }
         }
 
@@ -51,15 +54,19 @@ actor BackgroundEventsBridge {
 
     @MainActor final class NativeApplicationDelegate: NSObject, NSApplicationDelegate {
         static weak var dependencies: AppDependencies?
+
         private let shutdown = ShutdownDrain()
         private let logger = Logger(subsystem: "dev.sctvdl.apple", category: "lifecycle")
 
         func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
             guard let dependencies = Self.dependencies else { return .terminateNow }
+
             shutdown.start(timeout: .seconds(3)) {
                 await dependencies.settings.flush()
                 await dependencies.player.recorder.flush(dependencies.player.playback)
-                do { try await dependencies.downloads.service.reconcile() } catch {
+                do {
+                    try await dependencies.downloads.service.reconcile()
+                } catch {
                     self.logger.error(
                         "Download reconciliation at quit failed: \(error.localizedDescription, privacy: .public)"
                     )
@@ -72,6 +79,7 @@ actor BackgroundEventsBridge {
                 }
                 sender.reply(toApplicationShouldTerminate: true)
             }
+
             return .terminateLater
         }
     }
