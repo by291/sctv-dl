@@ -1,6 +1,6 @@
 # Apple Client Instructions
 
-These instructions supplement the repository instructions for `apple/`.
+These instructions supplement the [repository instructions](../AGENTS.md) for `apple/`. [Apple Architecture](../docs/apple.md) owns module and lifecycle contracts; [README](README.md) owns setup, checks, dependency resolution and verification scope.
 
 ## Standards and Scope
 
@@ -34,14 +34,16 @@ The ownership and lifecycle rules below are project choices informed by these re
 - Keep view bodies focused on composition. Move multi-step business actions into named methods or the owning model/service. Extract cohesive subviews with explicit inputs and actions; retain navigation and presentation state with their actual owner.
 - Group SwiftUI dynamic properties logically and keep view-owned `@State` private. Avoid duplicating model state merely for presentation; when a preview or animation snapshot is necessary, make its synchronization and lifetime explicit.
 - Share cross-platform interaction rules at their lifecycle owner while keeping platform gestures, native presentation and accessibility in their adapters. Preserve view identity and state lifetime when extracting views.
+- Representable updates must not synchronously publish observable state, including through UIKit/AppKit calls that trigger layout or binding callbacks. Defer such effects out of the update pass, coalesce repeated requests, recheck current ownership/visibility, and cancel pending work on teardown. Do not hide a lifecycle problem behind an arbitrary delay.
 - Keep all player/transfer/file resources with a visible lifecycle owner. Revalidate session, attempt and revision identities after suspension points. An actor does not make a multi-step asynchronous workflow atomic.
 - Prefer compiler-checked `Sendable` conformances. For `@unchecked Sendable`, explain the synchronization or immutability invariant. Consult [Swift actor reentrancy semantics](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0306-actors.md#actor-reentrancy) when reviewing asynchronous state transitions.
 - Make task lifetime, cancellation and error reporting explicit. Cancellation and stale-result rejection solve different problems; preserve both where required. Explain intentional best-effort cleanup and recovery after partial persistence.
 
 ## Product Contracts and Verification
 
-- Write comments, documentation, tests and commit subjects in English. Preserve Chinese product copy and programme names.
 - Do not use unsupported AVURLAsset header options. Media requests follow the shared HTTPS host policy and carry media headers only.
-- Use the checker documented in [README](README.md). Distinguish compilation, package tests, simulator checks, minimum-OS checks and physical-device acceptance.
+- Use the [CI-equivalent checks](README.md#ci-and-unsigned-release-builds) for tooling/package tests, formatting and unsigned macOS/iOS Release compilation. CI must not start simulators or run native UI tests.
+- Use [local native UI checks](README.md#local-native-ui-checks) for affected interaction and lifecycle changes. Check runtime diagnostics for SwiftUI state-update warnings as well as assertions; compilation and a passing test count alone do not establish warning-free behaviour. Report minimum-OS and physical-device acceptance separately.
+- Keep `Packages/SCTVKit/Package.resolved` as the canonical tracked lock. The checker generates the ignored Xcode lock; use `node apple/tool/lockfiles.mjs` from the repository root before direct Xcode use. Preserve locked pin verification and keep machine-specific resolution metadata out of source.
 - Use disposable simulators and fixture media; do not alter existing devices or download complete upstream episodes for verification.
-- Keep build output, recordings, generated test fixtures and local signing settings out of Git. Commit and push only when requested.
+- Keep build output, recordings, generated test fixtures, generated Xcode resolution and local signing settings out of Git. Keep per-run evidence under ignored build output.

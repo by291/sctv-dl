@@ -73,10 +73,6 @@ See [Repository Maintenance](docs/maintenance.md) for verification by change, CI
 
 ## Documentation
 
-The [native Apple client](apple/README.md) supports iOS, iPadOS and macOS 26 with native browsing, library and download flows. Physical-device and minimum-OS acceptance remain pending.
-
-The [Apple implementation plan](docs/superpowers/plans/2026-10-22-apple-client.md) sequences media feasibility, the browsing/playback experience, and durable downloads with platform acceptance gates.
-
 | Document                                      | Responsibility                                                                      |
 | --------------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Web Architecture](docs/architecture.md)      | Shared Vue frontend, Node services, module ownership, storage and player lifecycles |
@@ -89,6 +85,7 @@ The [Apple implementation plan](docs/superpowers/plans/2026-10-22-apple-client.m
 | [Flutter Architecture](docs/flutter.md)       | Flutter product, data boundaries, navigation, native transfers and playback         |
 | [Repository Maintenance](docs/maintenance.md) | Verification scope, CI, dependency updates and documentation ownership              |
 | [Android Setup](android/README.md)            | Toolchain, builds, device tests and performance tooling                             |
+| [Apple Setup](apple/README.md)                | Toolchain, dependency locks, local UI tests and unsigned CI builds                  |
 | [Flutter Setup](flutter/README.md)            | Toolchain, builds, native fixtures and platform limitations                         |
 | [Agent Instructions](AGENTS.md)               | Contribution rules and links to platform-specific coding conventions                |
 

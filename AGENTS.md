@@ -1,6 +1,6 @@
 # Agent Instructions
 
-These instructions apply throughout this repository. `sctv-dl` is a Vue/TypeScript Web app with one Node service for production assets, programme APIs, and MP4 streaming. The frontend lives at the repository root; runtime versions and commands are defined in `package.json`.
+These instructions apply throughout this repository; platform `AGENTS.md` files supplement them within their directories. `sctv-dl` contains a Vue/TypeScript Web app, Tauri desktop app, Kotlin Android client, Flutter client and SwiftUI Apple client. The Web frontend lives at the repository root, with one Node service for assets, programme APIs and MP4 streaming. Web runtime versions and commands are defined in `package.json`; native setup belongs to each platform guide.
 
 ## Task Context
 
@@ -30,9 +30,10 @@ Read only the documents relevant to the change:
 
 ## Code Style
 
-Mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.js`, and the TypeScript configurations. Run the existing tools instead of duplicating their rules.
+Use official language guidance and established ecosystem style guides to assess naming, API design and readability. Existing project code and instructions are not proof of good style. Platform instructions link their language references; repository formatter settings own mechanical choices.
 
-- Separate imports, state, derived values, actions, and lifecycle hooks with blank lines. Separate validation, computation, and state updates inside functions. Comments explain business rules and non-obvious constraints.
+For Web/Node code, mechanical rules belong to `.editorconfig`, `.prettierrc.json`, `eslint.config.js`, and the TypeScript configurations. Run the existing tools instead of duplicating their rules.
+
 - Use `<script setup lang="ts">`, followed by the template and optional scoped styles. Use PascalCase component filenames, `View` suffixes for pages, `useXxx` composables, typed component contracts, and stable string IDs as keys.
 - Keep complex template expressions and multistep mutations in named actions or computed values. Respect feature ownership: shared modules must not depend on feature stores, and browser modules must not import `server/`.
 - Use `@/` for internal browser imports. Keep programme API/model modules independent of consuming features and production server modules independent of `tooling/`. Within features, place pages in `views/`, business components in `components/`, and logic in its responsibility directory. Omit unused directories; keep tests beside their owners. See Architecture for the ownership map.
@@ -70,21 +71,20 @@ Preserve the task's relevant contracts from Architecture and Upstream API. In pa
 
 ## Verification
 
-Run commands from the repository root:
+Choose checks from [Verification by Change](docs/maintenance.md#verification-by-change). Web/Node commands run from the repository root; native commands use the working directory documented by their platform guide. Native-only changes do not automatically require the Web suite.
 
-| Change                          | Checks                                                           |
-| ------------------------------- | ---------------------------------------------------------------- |
-| Application or server behaviour | `pnpm check` and `pnpm build`                                    |
-| UI                              | The above plus browser verification at desktop and narrow widths |
-| Documentation only              | `pnpm format:check`, `pnpm docs:check`, and referenced commands  |
+- Web/Node behaviour: run `pnpm check` and `pnpm build`. Web UI also needs desktop/narrow browser checks, themes, keyboard interaction and loading/empty/error states.
+- Native behaviour: follow the platform README and AGENTS instructions. Add Web checks when browser adapters, shared runtime contracts or Web build/tooling behaviour changes.
+- Workflow changes: run `pnpm ci:lint`, formatting and relevant tooling tests. CI uses checks, tests and compilation that do not require a booted simulator/emulator, connected device or native GUI interaction. Keep native UI/device acceptance as explicit local checks.
+- Documentation only: run `pnpm format:check`, `pnpm docs:check` and `git diff --check`; inspect referenced scripts/configuration for command accuracy. Do not run application builds or device tests merely because their commands appear in documentation.
 
-Add meaningful regression coverage for behaviour changes. Tests are colocated as `*.test.ts`; tooling tests live in `tooling/`. Use disposable fixtures and stub upstream services. Do not add tests that duplicate copy or formatting, or run application tests/builds for documentation-only changes.
+Add meaningful regression coverage for behaviour changes. Web/Node tests are colocated as `*.test.ts`, with root tooling tests in `tooling/`; native tests follow platform ownership. Use disposable fixtures and stub upstream services. Do not test source spelling, formatting or private decomposition.
 
-For UI changes, check affected themes, keyboard interaction, and loading/empty/error states. Validate media with HEAD or a small Range request. Restore temporary preview processes and browser preferences afterward.
+Validate live media with HEAD or a small Range request. Restore temporary preview processes and browser preferences afterward. Keep automated tests, local device acceptance, hosted CI and signed distribution as separate claims.
 
 ## Documentation and Handoff
 
-Keep each subject in its owning document, using the map in README. Update it when a contract, command, or behaviour changes. Extract reusable constraints from completed plans, then remove obsolete plans and execution checklists.
+Keep each subject in its owning document, using the map in README. Update it when a contract, command, or behaviour changes. Extract reusable constraints from completed plans, then remove obsolete plans and execution checklists. Keep reusable verification procedures in platform guides and per-run evidence in ignored build outputs; removing a plan is not evidence that its checks passed.
 
 Review the diff for unrelated changes. Report what changed, what was actually verified, and any checks that could not run.
 

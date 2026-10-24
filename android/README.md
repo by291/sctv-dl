@@ -96,7 +96,7 @@ Run `android/gradlew.bat -p android :benchmark:connectedBenchmarkReleaseAndroidT
 
 [Android CI](../.github/workflows/android.yml) explicitly configures Android command-line tools and installs the pinned SDK with `android-actions/setup-android`, uses JDK 21 and the verified wrapper, checks formatting/unit tests/lint, assembles app and performance APKs, and preserves reports. It does not rely on the runner image providing `sdkmanager` on `PATH`. Connected device tests and physical performance measurements run separately.
 
-A separate CI job resolves and submits the Gradle dependency graph on pushes to `main` and manual runs on `main`, so Dependabot can report vulnerable dependencies. The [Dependabot configuration](../.github/dependabot.yml) checks the Android version catalogue, modules, included build logic, and Gradle Wrapper every week. See [Repository Maintenance](../docs/maintenance.md#ci-and-dependency-updates) for update grouping and security settings.
+A separate CI job resolves and submits the Gradle dependency graph on pushes to `main` and manual runs on `main`, so Dependabot can report vulnerable dependencies. The [Dependabot configuration](../.github/dependabot.yml) checks the Android version catalogue, modules, included build logic, and Gradle Wrapper every week. See [Repository Maintenance](../docs/maintenance.md#dependency-updates) for update grouping and security settings.
 
 ### Dependency Security
 
