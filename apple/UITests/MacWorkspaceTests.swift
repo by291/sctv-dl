@@ -14,6 +14,13 @@
             let downloads = app.buttons["下载"].firstMatch
             downloads.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).click()
             XCTAssertTrue(app.staticTexts["暂无下载"].waitForExistence(timeout: 5))
+            let emptyDownloads = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            emptyDownloads.name = "mac-downloads-empty-centered"
+            emptyDownloads.lifetime = .keepAlways
+            add(emptyDownloads)
+            let contentCenter =
+                (app.splitters.firstMatch.frame.maxX + app.windows.firstMatch.frame.maxX) / 2
+            XCTAssertEqual(app.staticTexts["暂无下载"].frame.midX, contentCenter, accuracy: 4)
             app.buttons["栏目"].firstMatch.coordinate(
                 withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)
             ).click()
