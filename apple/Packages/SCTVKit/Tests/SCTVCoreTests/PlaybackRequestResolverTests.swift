@@ -23,7 +23,7 @@ struct PlaybackRequestResolverTests {
         #expect(request.resumeMilliseconds == 42_000)
         #expect(request.quality == .smooth)
         #expect(request.sources.count == 2)
-        #expect(request.sources.allSatisfy { $0.headers["User-Agent"] == "sctv-dl/0.1.0" })
+        #expect(request.sources.allSatisfy { $0.headers["User-Agent"] == "okhttp/4.12.0" })
         #expect(request.title == item.title)
         #expect(request.cover == item.cover)
         #expect(request.programmeName == programme.name)

@@ -293,7 +293,7 @@ struct WorkspaceView: View {
         let quality = dependencies.settings.value.playbackQuality
         let prepared = DownloadPreparation.prepare(
             contents: contents, programme: programme, broadcast: broadcast,
-            requestedQuality: quality, productVersion: "0.1.0")
+            requestedQuality: quality)
         let requests = prepared.prepared.map {
             $0.request(
                 destination: dependencies.downloads.destination,

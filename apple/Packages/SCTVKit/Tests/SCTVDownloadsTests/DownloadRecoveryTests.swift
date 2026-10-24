@@ -420,8 +420,7 @@ struct Fixture: Sendable {
     func request(contentID: String = "7") throws -> DownloadRequest {
         let ref = try ContentRef(programmeID: "1", dateID: "2", contentID: contentID)
         let source = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/a.mp4")!, quality: .standard,
-            productVersion: "1")
+            url: URL(string: "https://fscgc.scgchc.com/a.mp4")!, quality: .standard)
         return DownloadRequest(
             content: ref, programmeName: "News", broadcastDate: "2026-10-16", title: "Clip",
             cover: nil, source: source, filename: "Clip.mp4", allowsCellular: false,

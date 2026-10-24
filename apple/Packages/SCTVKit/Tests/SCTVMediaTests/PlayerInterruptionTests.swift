@@ -38,7 +38,7 @@ struct PlayerInterruptionTests {
         let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
         let source = try MediaSource(
             url: URL(string: "https://fscgc.scgchc.com/test.mp4")!,
-            quality: .standard, productVersion: "test")
+            quality: .standard)
         let task = Task {
             try await coordinator.open(
                 PlaybackRequest(
@@ -67,7 +67,7 @@ struct PlayerInterruptionTests {
             try MediaSource(
                 url: URL(
                     string: "https://fscgc.scgchc.com/\($0.rawValue).mp4")!,
-                quality: $0, productVersion: "test")
+                quality: $0)
         }
         _ = try await coordinator.open(
             PlaybackRequest(

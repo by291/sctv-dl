@@ -231,13 +231,13 @@ public actor BackgroundSessionDriver: TransferDriver {
         // system control; its delegate cannot enforce the foreground transport's redirect ban.
         let url = try MediaURLPolicy.validate(task.source.url)
         var request = URLRequest(url: url)
-        for header in ["Referer", "User-Agent"] {
-            if let value = task.source.headers[header],
-                !value.contains("\r"), !value.contains("\n")
-            {
-                request.setValue(value, forHTTPHeaderField: header)
-            }
+        if let referer = task.source.headers["Referer"],
+            !referer.contains("\r"), !referer.contains("\n")
+        {
+            request.setValue(referer, forHTTPHeaderField: "Referer")
         }
+        // Saved tasks may contain a UA from an older release. New requests use the current policy.
+        request.setValue(UpstreamRequestProfile.userAgent, forHTTPHeaderField: "User-Agent")
         return request
     }
 

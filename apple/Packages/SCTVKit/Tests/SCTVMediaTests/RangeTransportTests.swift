@@ -13,8 +13,7 @@ struct RangeTransportTests {
 
     private func source(_ name: String) throws -> MediaSource {
         try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/\(name).mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/\(name).mp4")!, quality: .standard)
     }
 
     @Test func acceptsMatchingRange() async throws {

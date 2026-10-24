@@ -56,7 +56,8 @@ final class AppDependencies {
                 settings.change { $0.appearance = .dark }
             }
         #endif
-        resolver = PlaybackRequestResolver(api: api, history: history)
+        resolver = PlaybackRequestResolver(
+            api: api, history: history)
         cache = CacheMaintenance(database: stores.runtime)
         downloads = try DownloadDependencies(stores: stores, root: root)
         #if os(macOS)

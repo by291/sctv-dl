@@ -58,11 +58,9 @@ struct PlayerSessionTests {
     private func request(resume: Int64 = 3000) throws -> PlaybackRequest {
         let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
         let standard = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard)
         let smooth = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/smooth.mp4")!, quality: .smooth,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/smooth.mp4")!, quality: .smooth)
         return PlaybackRequest(
             content: content, title: "测试视频", sources: [standard, smooth], quality: .standard,
             resumeMilliseconds: resume)

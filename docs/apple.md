@@ -47,7 +47,7 @@ Preference edits carry accepted revisions. Failed saves remain visible and retry
 
 ## Playback and files
 
-`SCTVCore/Playback/PlaybackRequestResolver` prepares playback requests through the programme and history protocols. Preparation preserves quality fallback and treats history as optional; resolving a saved entry refreshes programme metadata while retaining that entry's resume position, with completed entries restarting at zero. Missing programmes and upstream failures remain distinct errors.
+`SCTVCore/Playback/PlaybackRequestResolver` prepares playback requests through the programme and history protocols. `SCTVCore/Network/UpstreamRequestProfile` owns the shared upstream User-Agent used by metadata and media requests. Preparation preserves quality fallback and treats history as optional; resolving a saved entry refreshes programme metadata while retaining that entry's resume position, with completed entries restarting at zero. Missing programmes and upstream failures remain distinct errors.
 
 Opening a programme starts paused. One application-wide AVPlayer owns the active session, source replacement, interruption state and cleanup. Tap-time request tokens reject older metadata resolutions. Presentation tokens protect a newer player from an older window or navigation destination's delayed dismissal. Local playback retains a file lease for the session and never silently falls back to an online URL.
 

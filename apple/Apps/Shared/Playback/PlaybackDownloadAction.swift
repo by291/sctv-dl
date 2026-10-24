@@ -13,7 +13,7 @@ extension AppDependencies {
             programme: Programme(
                 id: details.content.programmeID, name: details.programmeName, cover: details.cover),
             broadcast: BroadcastDate(id: details.content.dateID, date: details.broadcastDate),
-            requestedQuality: settings.value.playbackQuality, productVersion: "0.1.0")
+            requestedQuality: settings.value.playbackQuality)
         await downloads.start()
         if let warning = downloads.warning { return warning }
         let result = await downloads.service.start(

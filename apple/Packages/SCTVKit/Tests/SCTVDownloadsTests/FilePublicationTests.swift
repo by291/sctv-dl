@@ -108,8 +108,8 @@ struct FilePublicationTests {
             quality: .standard,
             source: DownloadSource(
                 try MediaSource(
-                    url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard,
-                    productVersion: "test")), filename: "News.mp4", allowsCellular: false,
+                    url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard)),
+            filename: "News.mp4", allowsCellular: false,
             destination: destination, nativeID: nil, state: .queued, createdAt: Date())
         let staged = StagedFile(
             taskID: task.id, attemptID: task.attemptID,

@@ -35,9 +35,9 @@ public struct PlaybackRequestResolver: Sendable {
     ) async throws -> PlaybackRequest {
         let reference = try ContentRef(
             programmeID: programme.id, dateID: broadcast.id, contentID: content.id)
-        let sources = try QualityResolver.variants(content, productVersion: "0.1.0")
+        let sources = try QualityResolver.variants(content)
         let selected = try QualityResolver.resolve(
-            content, requested: quality, productVersion: "0.1.0")
+            content, requested: quality)
         // History is optional: an unavailable history store must not prevent playback.
         let previous = try? await history.entries().first { $0.content == reference }
         let resume =

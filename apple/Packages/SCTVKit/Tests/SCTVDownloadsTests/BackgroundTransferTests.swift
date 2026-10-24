@@ -26,8 +26,26 @@ struct BackgroundTransferTests {
         #expect(newConfiguration.allowsCellularAccess)
         let request = try BackgroundSessionDriver.request(for: original)
         #expect(request.value(forHTTPHeaderField: "Referer") != nil)
-        #expect(request.value(forHTTPHeaderField: "User-Agent") != nil)
+        #expect(request.value(forHTTPHeaderField: "User-Agent") == "okhttp/4.12.0")
         #expect(request.allHTTPHeaderFields?.count == 2)
+    }
+
+    @Test func recreatedSavedTaskUsesCurrentUserAgent() async throws {
+        let fixture = try Fixture()
+        let task = try await fixture.repository.reserve(fixture.request())
+        let encoded = try JSONEncoder().encode(task)
+        var saved = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var source = try #require(saved["source"] as? [String: Any])
+        source["headers"] = ["Referer": "https://scgc.video.play/", "User-Agent": "sctv-dl/0.1.0"]
+        saved["source"] = source
+        let restored = try JSONDecoder().decode(
+            DownloadTask.self, from: JSONSerialization.data(withJSONObject: saved))
+
+        let request = try BackgroundSessionDriver.request(for: restored)
+
+        #expect(restored.source.headers["User-Agent"] == "sctv-dl/0.1.0")
+        #expect(request.value(forHTTPHeaderField: "User-Agent") == "okhttp/4.12.0")
+        #expect(request.value(forHTTPHeaderField: "Referer") == "https://scgc.video.play/")
     }
 
     @Test func invalidResumeOffersRestart() async throws {

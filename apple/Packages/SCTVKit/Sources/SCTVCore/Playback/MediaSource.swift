@@ -5,12 +5,12 @@ public struct MediaSource: Equatable, Sendable {
     public let quality: VideoQuality
     public let headers: [String: String]
 
-    public init(url: URL, quality: VideoQuality, productVersion: String) throws {
+    public init(url: URL, quality: VideoQuality) throws {
         self.url = try MediaURLPolicy.validate(url)
         self.quality = quality
         self.headers = [
             "Referer": "https://scgc.video.play/",
-            "User-Agent": "sctv-dl/\(productVersion)",
+            "User-Agent": UpstreamRequestProfile.userAgent,
         ]
     }
 }

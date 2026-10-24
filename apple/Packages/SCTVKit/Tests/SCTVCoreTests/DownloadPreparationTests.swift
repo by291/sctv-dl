@@ -26,7 +26,7 @@ struct DownloadPreparationTests {
             let result = DownloadPreparation.prepare(
                 contents: [content], programme: Programme(id: "1", name: "News", cover: nil),
                 broadcast: BroadcastDate(id: "2", date: fixture.date),
-                requestedQuality: fixture.requestedQuality, productVersion: "test")
+                requestedQuality: fixture.requestedQuality)
             #expect(result.prepared.first?.filename == fixture.filename)
             #expect(result.prepared.first?.source.quality == fixture.expectedQuality)
         }
@@ -45,7 +45,7 @@ struct DownloadPreparationTests {
 
         let result = DownloadPreparation.prepare(
             contents: [valid, invalid], programme: programme, broadcast: broadcast,
-            requestedQuality: .smooth, productVersion: "1")
+            requestedQuality: .smooth)
         #expect(result.prepared.count == 1)
         #expect(result.prepared.first?.source.quality == .standard)
         #expect(result.prepared.first?.filename == "2026-10-16_News__Clip_标准.mp4")

@@ -35,8 +35,7 @@ struct LocalPlaybackTests {
         let player = PlaybackCoordinator(transport: transport)
         let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
         let source = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard)
         await #expect(throws: (any Error).self) {
             try await player.open(
                 PlaybackRequest(

@@ -53,7 +53,7 @@ public struct DownloadPreparationResult: Sendable {
 public enum DownloadPreparation {
     public static func prepare(
         contents: [ProgrammeContent], programme: Programme, broadcast: BroadcastDate,
-        requestedQuality: VideoQuality, productVersion: String
+        requestedQuality: VideoQuality
     ) -> DownloadPreparationResult {
         var prepared: [PreparedDownload] = []
         var failures: [DownloadItemFailure] = []
@@ -68,7 +68,7 @@ public enum DownloadPreparation {
             }
             do {
                 let source = try QualityResolver.resolve(
-                    content, requested: requestedQuality, productVersion: productVersion)
+                    content, requested: requestedQuality)
                 let filename = safeFilename(
                     date: broadcast.date, title: content.title, quality: source.quality)
                 prepared.append(

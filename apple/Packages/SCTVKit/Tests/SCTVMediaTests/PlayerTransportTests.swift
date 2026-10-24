@@ -13,8 +13,7 @@ struct PlayerTransportTests {
         let coordinator = PlaybackCoordinator(
             transport: URLSessionRangeTransport(configuration: configuration))
         let source = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard)
         let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
 
         _ = try await coordinator.open(
@@ -57,7 +56,7 @@ private final class VideoURLProtocol: URLProtocol, @unchecked Sendable {
             let bounds = input.dropFirst(6).split(separator: "-")
             #expect(input.hasPrefix("bytes="))
             #expect(request.value(forHTTPHeaderField: "Referer") == "https://scgc.video.play/")
-            #expect(request.value(forHTTPHeaderField: "User-Agent") == "sctv-dl/test")
+            #expect(request.value(forHTTPHeaderField: "User-Agent") == "okhttp/4.12.0")
             #expect(request.value(forHTTPHeaderField: "Accept-Encoding") == "identity")
             let start = try #require(UInt64(bounds.first ?? ""))
             let requestedEnd = try #require(UInt64(bounds.last ?? ""))

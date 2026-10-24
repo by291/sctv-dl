@@ -56,8 +56,7 @@ struct MediaProbeView: View {
         do {
             let content = try ContentRef(programmeID: "1", dateID: "2", contentID: "3")
             let source = try MediaSource(
-                url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard,
-                productVersion: "0.1.0")
+                url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard)
             _ = try await playback.open(
                 PlaybackRequest(
                     content: content, title: "合成视频", sources: [source], quality: .standard,

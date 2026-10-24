@@ -1,4 +1,5 @@
 import Foundation
+import SCTVCore
 
 public struct GuestRequestProfile: Sendable {
     public let deviceID: UUID
@@ -16,7 +17,7 @@ public struct GuestRequestProfile: Sendable {
         request.setValue("14", forHTTPHeaderField: "systemVersion")
         request.setValue("android", forHTTPHeaderField: "deviceType")
         request.setValue("9.6.1.5", forHTTPHeaderField: "appVersion")
-        request.setValue("okhttp/4.12.0", forHTTPHeaderField: "User-Agent")
+        request.setValue(UpstreamRequestProfile.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         return request

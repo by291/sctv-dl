@@ -22,8 +22,7 @@ struct ResourceLoaderTests {
         let transport = FixtureTransport()
         let reader = MediaResourceReader(transport: transport)
         let source = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard)
         var delivered = 0
         var peak = 0
         try await reader.read(
@@ -43,8 +42,7 @@ struct ResourceLoaderTests {
         let transport = FixtureTransport()
         let reader = MediaResourceReader(transport: transport)
         let source = try MediaSource(
-            url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard,
-            productVersion: "test")
+            url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard)
         var delivered = 0
         try await reader.read(
             source: source, offset: 0, length: 0, metadata: { _, _ in },
