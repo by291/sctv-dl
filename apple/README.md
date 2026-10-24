@@ -54,7 +54,7 @@ Release mode compiles without signing, using generic iOS or the host Mac archite
 
 ## Current boundaries
 
-The client implements catalogue search/favourites, date archives with explicit snapshot refresh, library/history, appearance and network preferences, durable download state, native background-session integration, file publication/export and local playback. Mac supports external directory authorization and renewal. Platform shells use native navigation and AVKit controls.
+The client implements catalogue search/favourites, date archives with explicit snapshot refresh, library/history, appearance and network preferences, durable download state, native background-session integration, file publication/export and local playback. Mac supports external directory authorization and renewal. Platform shells use native navigation and AVKit playback, with platform-specific SwiftUI transport controls.
 
 Package tests cover media ranges, real AVFoundation fixture sessions, data parsing/storage, snapshot ordering, history, task recovery and file publication. Native UI tests use `--ui-fixtures` to provide deterministic programme data and a synthetic download; the separate `--media-probe` mode verifies loading and seeking. These debug-only fixtures require no upstream traffic and do not verify the operating system's background transfer daemon.
 
