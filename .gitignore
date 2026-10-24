@@ -60,3 +60,6 @@ apple/Packages/SCTVKit/Tests/SCTVDataTests/Fixtures/
 apple/Packages/SCTVKit/Tests/SCTVMediaTests/Fixtures/
 apple/Packages/SCTVKit/Tests/SCTVDownloadsTests/Fixtures/
 apple/Apps/Shared/Fixtures/
+
+# Machine-local Apple signing overrides
+apple/Configuration/Signing.local.xcconfig

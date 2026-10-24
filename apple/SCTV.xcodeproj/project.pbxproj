@@ -31,6 +31,8 @@
 		E83E2E384E55751B9C1CF4C3 /* SCTVUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SCTVUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F10000000000000000000001 /* SCTViOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTViOS.entitlements; sourceTree = "<group>"; };
 		F10000000000000000000002 /* SCTVmacOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SCTVmacOS.entitlements; sourceTree = "<group>"; };
+		F20000000000000000000001 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		F20000000000000000000002 /* Signing.local.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text; path = Signing.local.xcconfig.example; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -77,6 +79,7 @@
 				48EE046028069A9C6DED9844 /* Apps/iOS */,
 				348A629F5CEED032C3E8706E /* Apps/macOS */,
 				59830EBC3A4184110566BF1A /* UITests */,
+				F20000000000000000000003 /* Configuration */,
 				0A3E27B8CA818264D75C8D81 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -97,6 +100,15 @@
 				C09454B5B5BAD86B45B25F7E /* Info.plist */,
 			);
 			path = Apps/iOS;
+			sourceTree = "<group>";
+		};
+		F20000000000000000000003 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				F20000000000000000000001 /* Signing.xcconfig */,
+				F20000000000000000000002 /* Signing.local.xcconfig.example */,
+			);
+			path = Configuration;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -227,6 +239,7 @@
 /* Begin XCBuildConfiguration section */
 		0B0C687DF8B6B8DC790B519C /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F20000000000000000000001 /* Signing.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				ENABLE_TESTABILITY = YES;
@@ -259,6 +272,7 @@
 		};
 		73EBF6644258C120893E685D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F20000000000000000000001 /* Signing.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				ENABLE_TESTABILITY = YES;

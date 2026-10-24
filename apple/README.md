@@ -6,7 +6,15 @@ The approved [design](../docs/superpowers/specs/2026-10-22-apple-client-design.m
 
 ## Build and check
 
-Use Xcode with the required Apple SDKs and Swift 6.2 or newer. Run commands from the repository root. Open `apple/SCTV.xcodeproj` and select the `SCTV` scheme, then choose an iPhone, iPad or My Mac destination. Device signing requires your own development team; no team or credentials are stored in the project.
+Use Xcode with the required Apple SDKs and Swift 6.2 or newer. Run commands from the repository root. Open `apple/SCTV.xcodeproj` and select the `SCTV` scheme, then choose an iPhone, iPad or My Mac destination. Device signing requires your own development team; no team or credentials are committed.
+
+For local signing, copy the template once and replace `YOUR_TEAM_ID` with your Apple Developer Team ID:
+
+```sh
+cp apple/Configuration/Signing.local.xcconfig.example apple/Configuration/Signing.local.xcconfig
+```
+
+`Configuration/Signing.xcconfig` is the shared base configuration for Debug and Release. It optionally includes the Git-ignored `Signing.local.xcconfig`; the application and UI test targets inherit that team on iOS, iPadOS and macOS. Edit the local file when changing teams instead of selecting a team in Xcode's Signing & Capabilities pane, which can write a target override back into `project.pbxproj`. Certificates and private keys remain in the macOS keychain. A fresh checkout without the local file can still use the unsigned build commands below. Signed CI builds can supply `DEVELOPMENT_TEAM` as an `xcodebuild` command-line setting.
 
 Debug builds install as `SCTV Debug`, with bundle identifiers `dev.sctvdl.apple.ios.debug` and `dev.sctvdl.apple.mac.debug`. Release builds retain `SCTV` and the original identifiers without the `.debug` suffix. Both configurations can coexist with separate sandbox data; existing installations under the original identifiers remain associated with Release.
 
