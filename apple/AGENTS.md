@@ -2,11 +2,44 @@
 
 These instructions supplement the repository instructions for `apple/`.
 
+## Standards and Scope
+
+Use the [Swift API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/) for naming and API semantics. Use the [Google Swift Style Guide](https://google.github.io/swift/) for file organization, logical whitespace and documentation, and [Airbnb's Swift Style Guide](https://swift.airbnb.tech/) for additional SwiftUI and callback organization guidance. These community guides are references, not a single mandatory language standard.
+
+Mechanical formatting belongs to [`.swift-format`](.swift-format) and the formatter commands in [README](README.md). Retain the project's four-space indentation and 100-column configuration; do not copy another guide's conflicting formatter settings. Passing lint does not establish clear responsibilities, meaningful names or sufficient logical grouping.
+
+The ownership and lifecycle rules below are project choices informed by these references. Review code against the language guidance and actual call sites, rather than assuming existing code or project instructions are evidence of good style.
+
+## Responsibilities and Organization
+
 - Keep deployment targets at iOS/iPadOS 26 and macOS 26. Use Swift 6 concurrency checking.
 - Application roots compose dependencies. Core values and policies do not import SwiftUI, AVKit or database libraries. Features consume core protocols rather than constructing native services.
-- Keep each file focused on one responsibility. Group dependencies, state, derived values, actions and lifecycle methods with logical blank lines. Inside actions, separate validation, computation, external calls and state commits.
-- Use enums with associated values for mutually exclusive states. Comments explain ownership, cancellation versus stale-result rejection, transaction boundaries and platform restrictions.
+- Name files after their primary type or coherent responsibility. Small related helper types may stay together. Split code when responsibilities change independently, not at an arbitrary line count; moving an oversized type into extensions alone does not resolve mixed responsibilities.
+- Give functions one main level of abstraction. Keep orchestration readable as named steps; extract substantial callbacks and independently meaningful rules. Avoid helpers that merely rename a trivial expression or hide the resource owner.
+- Keep a logical member order. For simple types, group dependencies, state, derived values, initialization, actions and cleanup; for larger types, keep each concern's related members together. Use `// MARK: -` only when it improves navigation.
+- Put a blank line between methods, initializers and computed properties. Closely related single-line stored properties or enum cases may remain adjacent. Within functions, separate meaningful phases such as validation, preparation, external work and state commits; do not separate every statement.
+- Expand nested conditionals and error handling when a one-line form obscures control flow. Simple forwarding methods and obvious early exits can remain concise.
+
+## Names, State and API Contracts
+
+- Prefer clarity at the call site over brevity. Use descriptive argument labels, action verbs for side effects and boolean names that read as predicates. Distinguish request owners, lifecycle tokens, snapshot revisions and playback session IDs; avoid unrelated operations sharing a generic name such as `publish`.
+- Prefer `let`, useful type inference and the narrowest access level needed by callers. Expose read-only state when mutations must preserve an invariant, and provide named actions for those mutations.
+- Use enums with associated values for mutually exclusive states and their payloads. Keep independent dimensions independent. A flag named `isLoading` must not also mean that loading failed and actions remain blocked.
+- Use `guard` for preconditions and early exits. Avoid force unwraps, force casts and `try!` unless an invariant justifies them explicitly. Use `try?` only when failure is intentionally optional or best effort, with the fallback or recovery policy visible.
+- Document public APIs with `///`, emphasizing protocol behavior, errors, optional/boolean results and ownership. Self-explanatory enum cases and unchanged protocol implementations need not repeat existing documentation. Document non-obvious private invariants; do not narrate assignments.
+- State whether guarded writes rejected an outdated revision or failed with an error, whether streams include an initial snapshot, and which owner cancels work or releases a lease. Keep these contracts beside their declarations, not only in architecture prose or tests.
+
+## SwiftUI and Concurrency
+
+- Keep view bodies focused on composition. Move multi-step business actions into named methods or the owning model/service. Extract cohesive subviews with explicit inputs and actions; retain navigation and presentation state with their actual owner.
+- Group SwiftUI dynamic properties logically and keep view-owned `@State` private. Avoid duplicating model state merely for presentation; when a preview or animation snapshot is necessary, make its synchronization and lifetime explicit.
+- Share cross-platform interaction rules at their lifecycle owner while keeping platform gestures, native presentation and accessibility in their adapters. Preserve view identity and state lifetime when extracting views.
 - Keep all player/transfer/file resources with a visible lifecycle owner. Revalidate session, attempt and revision identities after suspension points. An actor does not make a multi-step asynchronous workflow atomic.
+- Prefer compiler-checked `Sendable` conformances. For `@unchecked Sendable`, explain the synchronization or immutability invariant. Consult [Swift actor reentrancy semantics](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0306-actors.md#actor-reentrancy) when reviewing asynchronous state transitions.
+- Make task lifetime, cancellation and error reporting explicit. Cancellation and stale-result rejection solve different problems; preserve both where required. Explain intentional best-effort cleanup and recovery after partial persistence.
+
+## Product Contracts and Verification
+
 - Write comments, documentation, tests and commit subjects in English. Preserve Chinese product copy and programme names.
 - Do not use unsupported AVURLAsset header options. Media requests follow the shared HTTPS host policy and carry media headers only.
 - Use the checker documented in [README](README.md). Distinguish compilation, package tests, simulator checks, minimum-OS checks and physical-device acceptance.
