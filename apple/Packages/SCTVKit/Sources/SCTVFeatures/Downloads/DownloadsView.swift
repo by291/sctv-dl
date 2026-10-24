@@ -110,16 +110,7 @@ public struct DownloadsView: View {
             if empty { setSelecting(false) }
         }
         .toolbar {
-            // Preserve item identity when select-all is inserted or removed during rapid toggles.
-            if selecting {
-                ToolbarItem(id: "downloads-select-all", placement: .cancellationAction) {
-                    Button(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选") {
-                        let all = Set(model.visibleTasks.map(\.id))
-                        model.setSelection(model.selection == all ? [] : all)
-                    }
-                    .help(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选")
-                }
-            }
+            // Keep toolbar membership stable so rapid taps retain the same native hit target.
             if !model.visibleTasks.isEmpty {
                 ToolbarItem(id: "downloads-selection") {
                     Button(
@@ -310,16 +301,20 @@ public struct DownloadsView: View {
         let actions = selecting ? availableBatchActions : (progress > 0 ? departingActions : [])
         return BatchActionBar {
             if actions.isEmpty {
-                Text("请选择要操作的下载任务")
-                    .font(.subheadline).foregroundStyle(secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                HStack(spacing: 12) {
+                    selectAllButton
+                    Text("请选择要操作的下载任务")
+                        .font(.subheadline).foregroundStyle(secondaryText)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
             } else {
                 LazyVGrid(
                     columns: Array(
                         repeating: GridItem(.flexible(), spacing: 12),
-                        count: typeSize.isAccessibilitySize ? 1 : max(1, min(actions.count, 3))),
+                        count: typeSize.isAccessibilitySize ? 1 : min(actions.count + 1, 3)),
                     spacing: 12
                 ) {
+                    selectAllButton
                     ForEach(actions) { item in
                         Button(role: item.destructive ? .destructive : nil) {
                             let commands = model.commands(for: item.action)
@@ -336,6 +331,16 @@ public struct DownloadsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var selectAllButton: some View {
+        Button {
+            let all = Set(model.visibleTasks.map(\.id))
+            model.setSelection(model.selection == all ? [] : all)
+        } label: {
+            Text(model.selection.count == model.visibleTasks.count ? "取消全选" : "全选")
+                .frame(maxWidth: .infinity, minHeight: 32)
         }
     }
 
