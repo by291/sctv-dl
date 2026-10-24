@@ -121,17 +121,18 @@ final class ApplicationAcceptanceTests: XCTestCase {
         XCTAssertTrue(dates.waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["archive-date-3421"].exists)
         activate(dates)
-        XCTAssertTrue(app.staticTexts["2026年10月"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["2026年10月"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["当前选择"].exists)
-        let browser = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        let browser = XCTAttachment(screenshot: app.screenshot())
         browser.name = "archive-monthly-date-browser"
         browser.lifetime = .keepAlways
         add(browser)
         let search = activateSearch(in: app)
-        search.typeText("20170630")
+        enterDateQuery("20170630", in: search)
         let oldest = app.buttons["archive-date-3421"]
         XCTAssertTrue(oldest.waitForExistence(timeout: 5))
-        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "archive-date-search"
         shot.lifetime = .keepAlways
         add(shot)
@@ -141,12 +142,59 @@ final class ApplicationAcceptanceTests: XCTestCase {
         activate(dates)
         XCTAssertTrue(oldest.waitForExistence(timeout: 5))
         XCTAssertTrue(oldest.isHittable)
-        let reopened = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        let reopened = XCTAttachment(screenshot: app.screenshot())
         reopened.name = "archive-date-reopened-at-selection"
         reopened.lifetime = .keepAlways
         add(reopened)
         activate(app.buttons["关闭"])
         XCTAssertFalse(oldest.exists)
+    }
+
+    func testDateMonthNavigationAndEmptySearchInDarkAppearance() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--ui-fixtures", "--ui-many-dates", "--ui-dark", "-ApplePersistenceIgnoreState", "YES",
+        ]
+        continueAfterFailure = false
+        app.launch()
+        #if os(macOS)
+            app.activate()
+            if !app.windows.firstMatch.waitForExistence(timeout: 3) {
+                app.typeKey("n", modifierFlags: .command)
+            }
+        #endif
+        XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
+        activate(app.buttons["四川新闻"])
+        let dates = app.buttons["archive-all-dates"]
+        XCTAssertTrue(dates.waitForExistence(timeout: 10))
+        activate(dates)
+        activate(app.buttons["上个月"])
+        XCTAssertTrue(
+            app.descendants(matching: .any)["2026年9月"].firstMatch.waitForExistence(timeout: 5))
+        activate(app.buttons["下个月"])
+        XCTAssertTrue(
+            app.descendants(matching: .any)["2026年10月"].firstMatch.waitForExistence(timeout: 5))
+        let search = activateSearch(in: app)
+        enterDateQuery("19990101", in: search)
+        XCTAssertEqual(search.value as? String, "19990101")
+        XCTAssertTrue(
+            app.descendants(matching: .any).matching(
+                NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "没有匹配的日期", "没有匹配的日期")
+            )
+            .firstMatch.waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "archive-date-dark-empty-search"
+        shot.lifetime = .keepAlways
+        add(shot)
+        #if os(macOS)
+            app.typeKey(.escape, modifierFlags: [])
+        #else
+            activate(app.buttons["close"])
+            XCTAssertTrue(app.buttons["关闭"].waitForExistence(timeout: 5))
+            activate(app.buttons["关闭"])
+        #endif
+        XCTAssertTrue(dates.exists)
+        XCTAssertFalse(search.exists)
     }
 
     func testCatalogueArchiveLibraryAndSettings() {
@@ -1000,7 +1048,24 @@ final class ApplicationAcceptanceTests: XCTestCase {
         }
     }
 
+    private func enterDateQuery(_ query: String, in field: XCUIElement) {
+        #if os(macOS)
+            for digit in query {
+                field.typeKey(String(digit), modifierFlags: [])
+            }
+        #else
+            field.typeText(query)
+        #endif
+    }
+
     private func activateSearch(in app: XCUIApplication) -> XCUIElement {
+        #if os(macOS)
+            let dateSearch = app.textFields["archive-date-search"]
+            if dateSearch.exists {
+                activate(dateSearch)
+                return dateSearch
+            }
+        #endif
         let search = app.searchFields.firstMatch
         if !search.exists {
             // Adaptive navigation may expose a search button before its text field.

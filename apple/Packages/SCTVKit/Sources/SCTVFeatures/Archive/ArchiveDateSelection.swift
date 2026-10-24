@@ -18,6 +18,16 @@ struct ArchiveDateSelection: View {
                         Label(model.broadcast?.date ?? "全部日期", systemImage: "calendar")
                             .font(.subheadline).monospacedDigit()
                     }
+                    #if os(macOS)
+                        .popover(isPresented: $showingDates, arrowEdge: .bottom) {
+                            MacArchiveDateBrowser(
+                                dates: model.dates, selectedID: model.selectedDateID
+                            ) { date in
+                                showingDates = false
+                                Task { await model.selectDate(date.id) }
+                            }
+                        }
+                    #endif
                     .accessibilityLabel("全部日期")
                     .accessibilityValue(model.broadcast?.date ?? "")
                     .accessibilityIdentifier("archive-all-dates")
@@ -48,12 +58,15 @@ struct ArchiveDateSelection: View {
             }
             // Some programmes have thousands of dates. Construct their rows only
             // while browsing dates, never inside the scrolling archive's picker.
-            .sheet(isPresented: $showingDates) {
-                ArchiveDateBrowser(dates: model.dates, selectedID: model.selectedDateID) { date in
-                    showingDates = false
-                    Task { await model.selectDate(date.id) }
+            #if os(iOS)
+                .sheet(isPresented: $showingDates) {
+                    ArchiveDateBrowser(dates: model.dates, selectedID: model.selectedDateID) {
+                        date in
+                        showingDates = false
+                        Task { await model.selectDate(date.id) }
+                    }
                 }
-            }
+            #endif
         }
     }
 }
