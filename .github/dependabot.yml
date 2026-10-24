@@ -96,6 +96,7 @@ updates:
         patterns: ['*']
         update-types: [minor, patch]
 
+  # The package lock is canonical; apple/tool/lockfiles.mjs generates the Xcode lock.
   - package-ecosystem: swift
     directory: /apple/Packages/SCTVKit
     schedule:

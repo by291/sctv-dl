@@ -19,6 +19,7 @@ cp apple/Configuration/Signing.local.xcconfig.example apple/Configuration/Signin
 Debug builds install as `SCTV Debug`, with bundle identifiers `dev.sctvdl.apple.ios.debug` and `dev.sctvdl.apple.mac.debug`. Release builds retain `SCTV` and the original identifiers without the `.debug` suffix. Both configurations can coexist with separate sandbox data; existing installations under the original identifiers remain associated with Release. The tracked Products reference uses `SCTV Debug.app`, matching the bundle name Xcode writes during Debug development. This reference is shared project metadata and can be committed; configuration-specific `PRODUCT_NAME` and bundle identifiers still determine the actual output. Do not ignore `project.pbxproj` or hide its changes to suppress this metadata update; local signing remains in the ignored xcconfig.
 
 ```sh
+node apple/tool/lockfiles.mjs
 swift apple/tool/make-fixture.swift
 node apple/tool/sync-fixtures.mjs
 swift test --package-path apple/Packages/SCTVKit --scratch-path apple/build/swift
@@ -48,7 +49,9 @@ node apple/tool/check.mjs --platform macos --configuration Release --verify-lock
 node apple/tool/check.mjs --platform ios --configuration Release --verify-lockfiles
 ```
 
-Release mode compiles without signing, using generic iOS or the host Mac architecture. It does not create a distributable signed archive. Locked mode verifies matching checked-in package/application pins and rejects lockfile changes. GRDB and Nuke are pinned to stable releases in both resolutions.
+Release mode compiles without signing, using generic iOS or the host Mac architecture. It does not create a distributable signed archive.
+
+`Packages/SCTVKit/Package.resolved` is the canonical checked-in resolution, with GRDB and Nuke pinned to stable releases. Dependabot updates this file and `Package.swift` together. `node apple/tool/lockfiles.mjs` generates the ignored Xcode resolution from those pins; run it before opening Xcode or after dependency updates when not using the checker. The generated file uses the supported version-2 pin format without copying the package manifest's graph-specific `originHash`. Locked checks reject changes to the canonical file and verify that Xcode retains the same package identities, locations, versions and revisions; Xcode-only metadata changes are allowed. Do not update or commit the generated application lock separately.
 
 [Apple CI](../.github/workflows/apple.yml) uses the `macos-26` runner and Xcode 26.6 for Mac, iPhone and iPad validation, plus unsigned Release compilation. Logs and XCTest bundles are retained on failure. A valid workflow does not establish a successful hosted run.
 

@@ -1,58 +1,15 @@
 import { spawn, execFile } from 'node:child_process'
-import { mkdir, open, stat, readFile } from 'node:fs/promises'
+import { mkdir, open, stat } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify, parseArgs } from 'node:util'
 
+import { prepareApplicationLock, readLockfiles, verifyLockfiles } from './lockfiles.mjs'
+
+export { readLockfiles, verifyLockfiles } from './lockfiles.mjs'
+
 const repository = fileURLToPath(new URL('../../', import.meta.url))
 const executeFile = promisify(execFile)
-
-const lockPaths = [
-  'apple/Packages/SCTVKit/Package.resolved',
-  'apple/SCTV.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved',
-]
-
-export async function readLockfiles(root) {
-  const files = {}
-  const resolutions = []
-  for (const path of lockPaths) {
-    const text = await readFile(resolve(root, path), 'utf8')
-    const lock = JSON.parse(text)
-    if (
-      !Array.isArray(lock.pins) ||
-      lock.pins.length === 0 ||
-      lock.pins.some(
-        (pin) =>
-          typeof pin.identity !== 'string' ||
-          !/^\d+\.\d+\.\d+$/.test(pin.state?.version) ||
-          !/^[a-f0-9]{40}$/.test(pin.state?.revision),
-      )
-    ) {
-      throw new Error(`Invalid stable dependency lockfile: ${path}`)
-    }
-
-    files[path] = text
-    resolutions.push(
-      JSON.stringify(
-        lock.pins.map((pin) => [pin.identity, pin.state.version, pin.state.revision]).sort(),
-      ),
-    )
-  }
-
-  if (resolutions[0] !== resolutions[1]) {
-    throw new Error('Package and application dependency pins differ')
-  }
-
-  return files
-}
-
-export function verifyLockfiles(before, after) {
-  for (const path of lockPaths) {
-    if (before[path] !== after[path]) {
-      throw new Error(`Dependency lockfile changed: ${path}`)
-    }
-  }
-}
 
 export function selectSimulator(inventory, family, major) {
   if (!Array.isArray(inventory?.runtimes)) {
@@ -180,6 +137,7 @@ export function parseOptions(args = process.argv.slice(2)) {
 
 async function main() {
   const values = parseOptions()
+  await prepareApplicationLock(repository)
   const locked = values['verify-lockfiles'] ? await readLockfiles(repository) : null
   const release = values.configuration === 'Release'
   const execute = async (command, args) =>

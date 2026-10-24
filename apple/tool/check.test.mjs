@@ -109,7 +109,14 @@ test('locked validation rejects changed or missing dependency resolution', async
   ]
   const lock = JSON.stringify({
     version: 3,
-    pins: [{ identity: 'grdb.swift', state: { version: '7.11.1', revision: 'a'.repeat(40) } }],
+    pins: [
+      {
+        identity: 'grdb.swift',
+        kind: 'remoteSourceControl',
+        location: 'https://github.com/groue/GRDB.swift.git',
+        state: { version: '7.11.1', revision: 'a'.repeat(40) },
+      },
+    ],
   })
   try {
     await assert.rejects(readLockfiles(directory), /ENOENT/)

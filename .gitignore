@@ -51,6 +51,8 @@ flutter/**/.DS_Store
 
 # Apple native build output and generated shared test fixtures
 apple/build/
+# Derived from the canonical SCTVKit lock before native checks.
+apple/SCTV.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 apple/**/.build/
 apple/**/.swiftpm/
 apple/**/xcuserdata/
