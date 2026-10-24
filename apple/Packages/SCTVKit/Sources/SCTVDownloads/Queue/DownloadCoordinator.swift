@@ -12,7 +12,7 @@ public actor DownloadCoordinator: DownloadService {
     private var pendingEarlyFailures: [UUID: TransferEvent] = [:]
     private var pausingAttempts: Set<UUID> = []
     private var snapshotRevision: UInt64 = 0
-    private var publicationGeneration: UInt64 = 0
+    private var snapshotLoadGeneration: UInt64 = 0
     private var eventTask: Task<Void, Never>?
 
     public init(
@@ -36,11 +36,14 @@ public actor DownloadCoordinator: DownloadService {
                 accepted: [],
                 failures: requests.map { .init(content: $0.content, reason: .batchTooLarge) })
         }
+
         reservingBatches += 1
         defer { reservingBatches -= 1 }
+
         var accepted: [UUID] = []
         var failures: [DownloadItemFailure] = []
         var seen: Set<String> = []
+
         for request in requests {
             let key =
                 "\(request.content.programmeID)/\(request.content.dateID)/\(request.content.contentID)/\(request.source.quality.rawValue)"
@@ -52,7 +55,7 @@ public actor DownloadCoordinator: DownloadService {
                 let reserved = try await repository.reserve(request)
                 accepted.append(reserved.id)
                 enqueuingAttempts.insert(reserved.attemptID)
-                await publish()
+                await broadcastSnapshot()
                 await enqueue(reserved)
                 enqueuingAttempts.remove(reserved.attemptID)
                 if pendingEarlyFailures[reserved.attemptID] != nil {
@@ -65,6 +68,7 @@ public actor DownloadCoordinator: DownloadService {
                     .init(content: request.content, reason: .storage(error.localizedDescription)))
             }
         }
+
         return .init(accepted: accepted, failures: failures)
     }
 
@@ -74,8 +78,10 @@ public actor DownloadCoordinator: DownloadService {
                 accepted: [],
                 failures: commands.map { .init(taskID: $0.taskID, reason: .batchTooLarge) })
         }
+
         var accepted: [UUID] = []
         var failures: [DownloadItemFailure] = []
+
         for command in commands {
             do {
                 guard var task = try await repository.task(command.taskID) else {
@@ -118,6 +124,7 @@ public actor DownloadCoordinator: DownloadService {
                     .init(taskID: command.taskID, reason: .storage(error.localizedDescription)))
             }
         }
+
         return .init(accepted: accepted, failures: failures)
     }
 
@@ -129,7 +136,8 @@ public actor DownloadCoordinator: DownloadService {
             continuation.onTermination = { [weak self] _ in Task { await self?.removeObserver(id) }
             }
         }
-        await publish()
+
+        await broadcastSnapshot()
         return stream
     }
 
@@ -149,6 +157,7 @@ public actor DownloadCoordinator: DownloadService {
                     if let task = try await repository.task(staged.taskID),
                         task.attemptID == staged.attemptID
                     {
+
                         if case .cancelled = task.state {
                             try? await publisher.cleanup(staged)
                         } else {
@@ -167,7 +176,7 @@ public actor DownloadCoordinator: DownloadService {
                 try? await transfer.discardTerminalFailure(
                     taskID: staged.taskID, attemptID: staged.attemptID)
                 if let publishing = try await repository.task(task.id) {
-                    await publish(staged, for: publishing)
+                    await publishFile(staged, for: publishing)
                 }
             case .failed(let taskID, let attemptID, let nativeID, let reason, let resume):
                 guard let task = try await current(taskID, attemptID, nativeID) else {
@@ -210,106 +219,130 @@ public actor DownloadCoordinator: DownloadService {
     }
 
     public func reconcile() async throws {
-        if eventTask == nil {
-            let events = await transfer.events()
-            eventTask = Task { [weak self] in
-                for await event in events {
-                    while !Task.isCancelled {
-                        guard let self else { return }
-                        if await self.receive(event) { break }
-                        try? await Task.sleep(for: .seconds(1))
-                    }
-                }
-            }
-        }
+        await subscribeToTransferEventsIfNeeded()
+
         let tasks = try await repository.all()
         let native = try await transfer.snapshot()
         let nativeByAttempt = Dictionary(grouping: native, by: \.attemptID)
         for task in tasks {
-            if case .completed(let file) = task.state {
-                pendingEarlyFailures.removeValue(forKey: task.attemptID)
-                try? await transfer.discardResumeData(
-                    taskID: task.id, attemptID: task.attemptID)
-                try? await transfer.discardTerminalFailure(
-                    taskID: task.id, attemptID: task.attemptID)
-                if !(await publisher.exists(file)) {
-                    _ = try await change(task, state: .missingFile(file), nativeID: nil)
-                } else {
-                    let staged = StagedFile(
-                        taskID: task.id, attemptID: task.attemptID,
-                        relativePath: "\(task.id.uuidString)/\(task.attemptID.uuidString).mp4")
-                    // Cleanup is retried after launch if a previous completed commit outlived its file effect.
-                    try? await publisher.cleanup(staged)
+            try await reconcile(task, nativeTransfers: nativeByAttempt[task.attemptID, default: []])
+        }
+
+        try await cancelOrphanedTransfers(native, knownAttempts: Set(tasks.map(\.attemptID)))
+        try await cleanupObsoleteStaging()
+        try await pruneUnreferencedResumeData()
+        await broadcastSnapshot()
+    }
+
+    private func subscribeToTransferEventsIfNeeded() async {
+        guard eventTask == nil else { return }
+
+        let events = await transfer.events()
+        eventTask = Task { [weak self] in
+            for await event in events {
+                while !Task.isCancelled {
+                    guard let self else { return }
+                    if await self.receive(event) { break }
+                    try? await Task.sleep(for: .seconds(1))
                 }
-                continue
-            }
-            if case .missingFile(let file) = task.state {
-                if await publisher.exists(file) {
-                    _ = try await change(task, state: .completed(file), nativeID: nil)
-                }
-                continue
-            }
-            if case .publishing(let staged) = task.state {
-                pendingEarlyFailures.removeValue(forKey: task.attemptID)
-                await publish(staged, for: task)
-                continue
-            }
-            if case .cancelled = task.state {
-                for nativeTask in nativeByAttempt[task.attemptID, default: []]
-                where nativeTask.taskID == task.id {
-                    try? await transfer.cancel(nativeTask.id)
-                }
-                continue
-            }
-            if enqueuingAttempts.contains(task.attemptID) { continue }
-            if case .queued = task.state, reservingBatches > 0 { continue }
-            guard task.state.isTransferActive || task.state.isPausedOrFailed else { continue }
-            if try await recoverStaged(taskID: task.id, attemptID: task.attemptID) { continue }
-            if try await recoverTerminalFailure(
-                taskID: task.id, attemptID: task.attemptID,
-                allowUnbound: nativeByAttempt[task.attemptID, default: []].isEmpty)
-            {
-                continue
-            }
-            // A paused or failed attempt can accept durable staged bytes, but an old system task
-            // must not silently turn it back into a running transfer.
-            if task.state.isPausedOrFailed { continue }
-            if pausingAttempts.contains(task.attemptID) { continue }
-            let matches = nativeByAttempt[task.attemptID, default: []].filter {
-                $0.taskID == task.id
-            }
-            if let found = matches.first(where: { $0.id == task.nativeID }) ?? matches.first {
-                let target: DownloadState
-                switch found.state {
-                case .running:
-                    if case .transferring = task.state, task.nativeID == found.id {
-                        target = task.state
-                    } else {
-                        target = .transferring(received: 0, total: nil)
-                    }
-                case .suspended: target = .interrupted(reason: "System transfer suspended")
-                case .completed: target = .interrupted(reason: "Staged callback pending")
-                }
-                if task.nativeID != found.id || task.state != target {
-                    // Recovery attaches only the same durable attempt; it never enqueues a second task.
-                    _ = try await change(task, state: target, nativeID: found.id)
-                }
-            } else if case .transferring = task.state {
-                _ = try await change(
-                    task, state: .interrupted(reason: "System transfer missing"),
-                    nativeID: task.nativeID)
-            } else if case .queued = task.state, reservingBatches == 0,
-                !enqueuingAttempts.contains(task.attemptID)
-            {
-                _ = try await change(
-                    task, state: .interrupted(reason: "Enqueue outcome unknown"), nativeID: nil)
-            } else if case .interrupted = task.state, task.nativeID != nil {
-                _ = try await change(
-                    task, state: .interrupted(reason: "System transfer missing"), nativeID: nil)
             }
         }
-        let known = Set(tasks.map(\.attemptID))
-        for orphan in native where !known.contains(orphan.attemptID) {
+    }
+
+    private func reconcile(_ task: DownloadTask, nativeTransfers: [NativeTransfer]) async throws {
+        if case .completed(let file) = task.state {
+            pendingEarlyFailures.removeValue(forKey: task.attemptID)
+            try? await transfer.discardResumeData(
+                taskID: task.id, attemptID: task.attemptID)
+            try? await transfer.discardTerminalFailure(
+                taskID: task.id, attemptID: task.attemptID)
+            if !(await publisher.exists(file)) {
+                _ = try await change(task, state: .missingFile(file), nativeID: nil)
+            } else {
+                let staged = StagedFile(
+                    taskID: task.id, attemptID: task.attemptID,
+                    relativePath: "\(task.id.uuidString)/\(task.attemptID.uuidString).mp4")
+                // Cleanup is retried after launch if a previous completed commit outlived its file effect.
+                try? await publisher.cleanup(staged)
+            }
+            return
+        }
+
+        if case .missingFile(let file) = task.state {
+            if await publisher.exists(file) {
+                _ = try await change(task, state: .completed(file), nativeID: nil)
+            }
+            return
+        }
+
+        if case .publishing(let staged) = task.state {
+            pendingEarlyFailures.removeValue(forKey: task.attemptID)
+            await publishFile(staged, for: task)
+            return
+        }
+        if case .cancelled = task.state {
+            for nativeTask in nativeTransfers
+            where nativeTask.taskID == task.id {
+                try? await transfer.cancel(nativeTask.id)
+            }
+            return
+        }
+
+        if enqueuingAttempts.contains(task.attemptID) { return }
+        if case .queued = task.state, reservingBatches > 0 { return }
+        guard task.state.isTransferActive || task.state.isPausedOrFailed else { return }
+
+        if try await recoverStaged(taskID: task.id, attemptID: task.attemptID) { return }
+        if try await recoverTerminalFailure(
+            taskID: task.id, attemptID: task.attemptID,
+            allowUnbound: nativeTransfers.isEmpty)
+        {
+            return
+        }
+
+        // A paused or failed attempt can accept durable staged bytes, but an old system task
+        // must not silently turn it back into a running transfer.
+        if task.state.isPausedOrFailed { return }
+        if pausingAttempts.contains(task.attemptID) { return }
+
+        let matches = nativeTransfers.filter {
+            $0.taskID == task.id
+        }
+        if let found = matches.first(where: { $0.id == task.nativeID }) ?? matches.first {
+            let target: DownloadState
+            switch found.state {
+            case .running:
+                if case .transferring = task.state, task.nativeID == found.id {
+                    target = task.state
+                } else {
+                    target = .transferring(received: 0, total: nil)
+                }
+            case .suspended: target = .interrupted(reason: "System transfer suspended")
+            case .completed: target = .interrupted(reason: "Staged callback pending")
+            }
+            if task.nativeID != found.id || task.state != target {
+                // Recovery attaches only the same durable attempt; it never enqueues a second task.
+                _ = try await change(task, state: target, nativeID: found.id)
+            }
+        } else if case .transferring = task.state {
+            _ = try await change(
+                task, state: .interrupted(reason: "System transfer missing"),
+                nativeID: task.nativeID)
+        } else if case .queued = task.state, reservingBatches == 0,
+            !enqueuingAttempts.contains(task.attemptID)
+        {
+            _ = try await change(
+                task, state: .interrupted(reason: "Enqueue outcome unknown"), nativeID: nil)
+        } else if case .interrupted = task.state, task.nativeID != nil {
+            _ = try await change(
+                task, state: .interrupted(reason: "System transfer missing"), nativeID: nil)
+        }
+    }
+
+    private func cancelOrphanedTransfers(
+        _ native: [NativeTransfer], knownAttempts: Set<UUID>
+    ) async throws {
+        for orphan in native where !knownAttempts.contains(orphan.attemptID) {
             if let current = try await repository.task(orphan.taskID),
                 current.attemptID == orphan.attemptID
             {
@@ -317,6 +350,9 @@ public actor DownloadCoordinator: DownloadService {
             }
             try? await transfer.cancel(orphan.id)
         }
+    }
+
+    private func cleanupObsoleteStaging() async throws {
         for staged in try await transfer.stagedFiles() {
             let current = try await repository.task(staged.taskID)
             let isCurrent = current?.attemptID == staged.attemptID
@@ -327,7 +363,11 @@ public actor DownloadCoordinator: DownloadService {
                 try? await publisher.cleanup(staged)
             }
         }
+    }
+
+    private func pruneUnreferencedResumeData() async throws {
         let latestTasks = try await repository.all()
+
         var retainedResumeAttempts = enqueuingAttempts.union(pausingAttempts)
         for task in latestTasks {
             switch task.state {
@@ -337,74 +377,16 @@ public actor DownloadCoordinator: DownloadService {
             default: break
             }
         }
+
         try await transfer.pruneResumeData(keepingAttempts: retainedResumeAttempts)
-        await publish()
     }
 
     private func perform(_ action: DownloadAction, task: DownloadTask) async throws -> Bool {
         switch action {
         case .pause:
-            guard let id = task.nativeID else { return false }
-            guard pausingAttempts.insert(task.attemptID).inserted else { return false }
-            defer { pausingAttempts.remove(task.attemptID) }
-            guard
-                try await change(task, state: .interrupted(reason: "Pause pending"), nativeID: id),
-                let pending = try await repository.task(task.id),
-                pending.attemptID == task.attemptID,
-                pending.revision == task.revision + 1,
-                pending.state == .interrupted(reason: "Pause pending")
-            else { return false }
-            do {
-                let reference = try await transfer.pause(id)
-                // Nil means the platform cannot resume; only restart is offered.
-                let changed = try await change(
-                    pending, state: .paused(resume: reference), nativeID: nil)
-                if changed {
-                    if reference == nil {
-                        try? await transfer.discardResumeData(
-                            taskID: task.id, attemptID: task.attemptID)
-                    }
-                    _ = try? await recoverStaged(taskID: task.id, attemptID: task.attemptID)
-                }
-                return changed
-            } catch {
-                _ = try? await change(
-                    pending, state: .interrupted(reason: "Pause outcome unknown"), nativeID: id)
-                throw DownloadFailure.transfer(error.localizedDescription)
-            }
+            return try await pause(task)
         case .resume:
-            guard case .paused(let reference?) = task.state else { return false }
-            guard enqueuingAttempts.insert(task.attemptID).inserted else { return false }
-            defer { enqueuingAttempts.remove(task.attemptID) }
-            guard try await change(task, state: .queued, nativeID: nil),
-                let queued = try await repository.task(task.id),
-                queued.attemptID == task.attemptID,
-                queued.revision == task.revision + 1,
-                queued.state == .queued
-            else { return false }
-            do {
-                let nativeID = try await transfer.resume(queued, from: reference)
-                do {
-                    if try await !change(
-                        queued, state: .transferring(received: 0, total: nil), nativeID: nativeID)
-                    {
-                        try? await transfer.cancel(nativeID)
-                    } else if try await !recoverStaged(
-                        taskID: task.id, attemptID: task.attemptID)
-                    {
-                        _ = try await recoverTerminalFailure(
-                            taskID: task.id, attemptID: task.attemptID)
-                    }
-                } catch {
-                    try? await transfer.cancel(nativeID)
-                    throw error
-                }
-            } catch {
-                _ = try await change(
-                    queued, state: .interrupted(reason: error.localizedDescription), nativeID: nil)
-                try? await reconcile()
-            }
-            return true
+            return try await resume(task)
         case .retry:
             let fresh = task.replacing(attemptID: UUID(), state: .queued)
             enqueuingAttempts.insert(fresh.attemptID)
@@ -417,7 +399,7 @@ public actor DownloadCoordinator: DownloadService {
             try? await transfer.discardResumeData(taskID: task.id, attemptID: task.attemptID)
             try? await transfer.discardTerminalFailure(
                 taskID: task.id, attemptID: task.attemptID)
-            await publish()
+            await broadcastSnapshot()
             await enqueue(fresh)
             return true
         case .retryPublication:
@@ -425,7 +407,7 @@ public actor DownloadCoordinator: DownloadService {
             guard try await change(task, state: .publishing(staged), nativeID: nil),
                 let publishing = try await repository.task(task.id)
             else { return false }
-            await publish(staged, for: publishing)
+            await publishFile(staged, for: publishing)
             return true
         case .cancel:
             guard try await change(task, state: .cancelled, nativeID: nil) else { return false }
@@ -448,10 +430,66 @@ public actor DownloadCoordinator: DownloadService {
                     taskID: task.id, attemptID: task.attemptID)
                 try? await transfer.discardTerminalFailure(
                     taskID: task.id, attemptID: task.attemptID)
-                await publish()
+                await broadcastSnapshot()
             }
             return removed
         }
+    }
+
+    private func pause(_ task: DownloadTask) async throws -> Bool {
+        guard let id = task.nativeID else { return false }
+        guard pausingAttempts.insert(task.attemptID).inserted else { return false }
+        defer { pausingAttempts.remove(task.attemptID) }
+
+        guard
+            try await change(task, state: .interrupted(reason: "Pause pending"), nativeID: id),
+            let pending = try await repository.task(task.id),
+            pending.attemptID == task.attemptID,
+            pending.revision == task.revision + 1,
+            pending.state == .interrupted(reason: "Pause pending")
+        else { return false }
+
+        do {
+            let reference = try await transfer.pause(id)
+            // Nil means the platform cannot resume; only restart is offered.
+            let changed = try await change(
+                pending, state: .paused(resume: reference), nativeID: nil)
+            if changed {
+                if reference == nil {
+                    try? await transfer.discardResumeData(
+                        taskID: task.id, attemptID: task.attemptID)
+                }
+                _ = try? await recoverStaged(taskID: task.id, attemptID: task.attemptID)
+            }
+            return changed
+        } catch {
+            _ = try? await change(
+                pending, state: .interrupted(reason: "Pause outcome unknown"), nativeID: id)
+            throw DownloadFailure.transfer(error.localizedDescription)
+        }
+    }
+
+    private func resume(_ task: DownloadTask) async throws -> Bool {
+        guard case .paused(let reference?) = task.state else { return false }
+        guard enqueuingAttempts.insert(task.attemptID).inserted else { return false }
+        defer { enqueuingAttempts.remove(task.attemptID) }
+
+        guard try await change(task, state: .queued, nativeID: nil),
+            let queued = try await repository.task(task.id),
+            queued.attemptID == task.attemptID,
+            queued.revision == task.revision + 1,
+            queued.state == .queued
+        else { return false }
+
+        do {
+            let nativeID = try await transfer.resume(queued, from: reference)
+            try await attachNativeTransfer(nativeID, to: queued)
+        } catch {
+            _ = try await change(
+                queued, state: .interrupted(reason: error.localizedDescription), nativeID: nil)
+            try? await reconcile()
+        }
+        return true
     }
 
     private func enqueue(_ task: DownloadTask) async {
@@ -461,22 +499,9 @@ public actor DownloadCoordinator: DownloadService {
                 current.revision == task.revision,
                 current.state == .queued
             else { return }
+
             let id = try await transfer.enqueue(task)
-            do {
-                if try await !change(
-                    task, state: .transferring(received: 0, total: nil), nativeID: id)
-                {
-                    try? await transfer.cancel(id)
-                } else {
-                    if try await !recoverStaged(taskID: task.id, attemptID: task.attemptID) {
-                        _ = try await recoverTerminalFailure(
-                            taskID: task.id, attemptID: task.attemptID)
-                    }
-                }
-            } catch {
-                try? await transfer.cancel(id)
-                throw error
-            }
+            try await attachNativeTransfer(id, to: task)
         } catch {
             // Enqueue may have reached URLSession before throwing. Reconciliation must inspect first.
             _ = try? await change(
@@ -485,7 +510,30 @@ public actor DownloadCoordinator: DownloadService {
         }
     }
 
-    private func publish(_ staged: StagedFile, for task: DownloadTask) async {
+    private func attachNativeTransfer(_ nativeID: NativeTransferID, to task: DownloadTask)
+        async throws
+    {
+        do {
+            guard
+                try await change(
+                    task, state: .transferring(received: 0, total: nil), nativeID: nativeID)
+            else {
+                try? await transfer.cancel(nativeID)
+                return
+            }
+
+            // Callbacks may arrive before the native correlation is durable. Recover bytes first;
+            // a terminal failure must not replace an already staged successful transfer.
+            if try await !recoverStaged(taskID: task.id, attemptID: task.attemptID) {
+                _ = try await recoverTerminalFailure(taskID: task.id, attemptID: task.attemptID)
+            }
+        } catch {
+            try? await transfer.cancel(nativeID)
+            throw error
+        }
+    }
+
+    private func publishFile(_ staged: StagedFile, for task: DownloadTask) async {
         guard publishing.insert(task.id).inserted else { return }
         defer { publishing.remove(task.id) }
         do {
@@ -494,6 +542,7 @@ public actor DownloadCoordinator: DownloadService {
                 current.revision == task.revision,
                 current.state == .publishing(staged)
             else { return }
+
             let file = try await publisher.publish(staged, for: task)
             if try await change(task, state: .completed(file), nativeID: nil) {
                 // Failed cleanup leaves a recoverable staging pointer for reconciliation.
@@ -530,10 +579,11 @@ public actor DownloadCoordinator: DownloadService {
             try await change(task, state: .publishing(staged), nativeID: nil),
             let publishingTask = try await repository.task(taskID)
         else { return false }
+
         pendingEarlyFailures.removeValue(forKey: attemptID)
         try? await transfer.discardResumeData(taskID: taskID, attemptID: attemptID)
         try? await transfer.discardTerminalFailure(taskID: taskID, attemptID: attemptID)
-        await publish(staged, for: publishingTask)
+        await publishFile(staged, for: publishingTask)
         return true
     }
 
@@ -613,17 +663,19 @@ public actor DownloadCoordinator: DownloadService {
         _ task: DownloadTask, state: DownloadState, nativeID: NativeTransferID? = nil
     ) async throws -> Bool {
         let replacement = task.replacing(nativeID: nativeID, state: state)
+
         let committed = try await repository.commit(
             replacement, expectedRevision: task.revision, expectedAttempt: task.attemptID)
-        if committed { await publish() }
+        if committed { await broadcastSnapshot() }
         return committed
     }
 
-    private func publish() async {
-        publicationGeneration &+= 1
-        let generation = publicationGeneration
+    private func broadcastSnapshot() async {
+        snapshotLoadGeneration &+= 1
+        let generation = snapshotLoadGeneration
         guard let tasks = try? await repository.all() else { return }
-        guard generation == publicationGeneration else { return }
+        guard generation == snapshotLoadGeneration else { return }
+
         snapshotRevision &+= 1
         let snapshot = DownloadSnapshot(revision: snapshotRevision, tasks: tasks)
         for continuation in observers.values { continuation.yield(snapshot) }
