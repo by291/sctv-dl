@@ -301,12 +301,13 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
 				"INFOPLIST_FILE[sdk=macosx*]" = Apps/macOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "$(PRODUCT_NAME)";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = dev.sctvdl.apple.ios.debug;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = dev.sctvdl.apple.mac.debug;
+				PRODUCT_NAME = "$(TARGET_NAME) Debug";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
@@ -329,6 +330,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Apps/iOS/Info.plist;
 				"INFOPLIST_FILE[sdk=macosx*]" = Apps/macOS/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SCTV;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.1.0;

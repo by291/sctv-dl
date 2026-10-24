@@ -8,6 +8,8 @@ The approved [design](../docs/superpowers/specs/2026-10-22-apple-client-design.m
 
 Use Xcode with the required Apple SDKs and Swift 6.2 or newer. Run commands from the repository root. Open `apple/SCTV.xcodeproj` and select the `SCTV` scheme, then choose an iPhone, iPad or My Mac destination. Device signing requires your own development team; no team or credentials are stored in the project.
 
+Debug builds install as `SCTV Debug`, with bundle identifiers `dev.sctvdl.apple.ios.debug` and `dev.sctvdl.apple.mac.debug`. Release builds retain `SCTV` and the original identifiers without the `.debug` suffix. Both configurations can coexist with separate sandbox data; existing installations under the original identifiers remain associated with Release.
+
 ```sh
 swift apple/tool/make-fixture.swift
 node apple/tool/sync-fixtures.mjs

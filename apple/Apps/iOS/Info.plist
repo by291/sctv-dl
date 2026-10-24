@@ -31,8 +31,8 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>SCTV</string>
+	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundleName</key>
-	<string>SCTV</string>
+	<string>$(PRODUCT_NAME)</string>
 </dict>
 </plist>
