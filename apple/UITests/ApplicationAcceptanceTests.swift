@@ -847,7 +847,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let short = app.buttons["城市一刻"]
             XCTAssertTrue(long.waitForExistence(timeout: 10))
             XCTAssertTrue(short.exists)
-            XCTAssertLessThan(long.frame.height, 120)
+            XCTAssertLessThan(long.frame.height, 124)
             XCTAssertEqual(long.frame.height, short.frame.height, accuracy: 2)
             let chineseDate = app.staticTexts.matching(
                 NSPredicate(format: "label MATCHES %@", "[0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日")

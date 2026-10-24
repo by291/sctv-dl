@@ -334,7 +334,8 @@ public struct DownloadsView: View {
             let layout =
                 typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-                : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+                : AnyLayout(
+                    HStackLayout(alignment: .center, spacing: PresentationStyle.mediaCardSpacing))
             layout {
                 Artwork(url: task.cover)
                     // Fix both dimensions so title height cannot shrink the fitted artwork.
@@ -385,7 +386,7 @@ public struct DownloadsView: View {
             }
             .frame(minHeight: 44)
         }
-        .padding(12).editorialCard()
+        .padding(PresentationStyle.mediaCardInset).editorialCard()
         #if os(iOS)
             .overlay {
                 RoundedRectangle(cornerRadius: 22)

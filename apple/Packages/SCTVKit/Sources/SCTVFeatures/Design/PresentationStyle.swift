@@ -1,6 +1,9 @@
 import SwiftUI
 
 public enum PresentationStyle {
+    static let mediaCardInset: CGFloat = 12
+    static let mediaCardSpacing: CGFloat = 14
+
     public static func accent(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 1, green: 0.58, blue: 0.43)

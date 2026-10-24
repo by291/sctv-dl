@@ -17,7 +17,9 @@ struct HistoryCard: View {
                 let layout =
                     typeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
-                    : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+                    : AnyLayout(
+                        HStackLayout(
+                            alignment: .center, spacing: PresentationStyle.mediaCardSpacing))
                 layout {
                     Artwork(url: entry.cover)
                         .overlay(alignment: .bottomTrailing) {
@@ -48,7 +50,7 @@ struct HistoryCard: View {
                 .frame(minHeight: typeSize.isAccessibilitySize ? nil : contentHeight)
                 .contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(entry.title)
-        }.padding(10).editorialCard()
+        }.padding(PresentationStyle.mediaCardInset).editorialCard()
             .transition(.opacity)
             .accessibilityHint(entry.completed ? "点击再次观看" : "点击继续观看")
             .accessibilityAction(named: "删除记录", remove)

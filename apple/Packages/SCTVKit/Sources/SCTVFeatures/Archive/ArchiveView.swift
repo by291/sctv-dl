@@ -249,7 +249,9 @@ public struct ArchiveView: View {
                 let layout =
                     vertical
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-                    : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+                    : AnyLayout(
+                        HStackLayout(
+                            alignment: .center, spacing: PresentationStyle.mediaCardSpacing))
                 layout {
                     Artwork(url: content.cover ?? model.programme.cover)
                         .overlay(alignment: .bottomTrailing) {
@@ -274,8 +276,8 @@ public struct ArchiveView: View {
                         .padding(.bottom, vertical && !featured ? 18 : 0)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, vertical ? 0 : 12)
-                .padding(.top, vertical ? 0 : 14)
+                .padding(.horizontal, vertical ? 0 : PresentationStyle.mediaCardInset)
+                .padding(.top, vertical ? 0 : PresentationStyle.mediaCardInset)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -309,10 +311,13 @@ public struct ArchiveView: View {
                     .accessibilityIdentifier("content-actions-\(content.id)")
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, featured ? 16 : PresentationStyle.mediaCardInset)
             .padding(.top, typeSize.isAccessibilitySize ? 0 : 12)
             // Shared episode/clip insets contain the menu's full 44-point hit area.
-            .padding(.bottom, typeSize.isAccessibilitySize ? 6 : 14)
+            .padding(
+                .bottom,
+                typeSize.isAccessibilitySize
+                    ? 6 : (featured ? 14 : PresentationStyle.mediaCardInset))
         }
         .editorialCard()
         .overlay {
