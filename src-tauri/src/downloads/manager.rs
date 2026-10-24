@@ -178,7 +178,7 @@ impl DownloadManager {
 
         let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
-            .user_agent(crate::media::USER_AGENT)
+            .user_agent(crate::upstream::USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .gzip(false)
             .read_timeout(config.idle_timeout)

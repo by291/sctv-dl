@@ -140,7 +140,7 @@ fn guest_headers(device_id: &str) -> Result<HeaderMap> {
     for (name, value) in [
         ("accept", "application/json"),
         ("accept-encoding", "gzip"),
-        ("user-agent", "okhttp/4.12.0"),
+        ("user-agent", crate::upstream::USER_AGENT),
         ("userid", ""),
         ("authorization", ""),
         ("devicebrand", "google"),

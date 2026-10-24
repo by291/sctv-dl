@@ -179,10 +179,7 @@ async fn streams_head_full_and_single_range_shapes_with_media_only_headers() {
     for headers in seen.lock().unwrap().iter() {
         assert_eq!(headers["referer"], "https://scgc.video.play/");
         assert_eq!(headers["accept-encoding"], "identity");
-        assert_eq!(
-            headers["user-agent"],
-            concat!("sctv-dl/", env!("CARGO_PKG_VERSION"))
-        );
+        assert_eq!(headers["user-agent"], "okhttp/4.12.0");
         assert!(!headers.contains_key("deviceid"));
         assert!(!headers.contains_key("cookie"));
         assert!(!headers.contains_key("authorization"));

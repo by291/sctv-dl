@@ -196,10 +196,7 @@ async fn completes_only_after_saving_exact_bytes_and_preserves_media_headers() {
     let server = stub(Router::new().fallback(|request: Request<Body>| async move {
         assert_eq!(request.headers()["referer"], "https://scgc.video.play/");
         assert_eq!(request.headers()["accept-encoding"], "identity");
-        assert_eq!(
-            request.headers()["user-agent"],
-            concat!("sctv-dl/", env!("CARGO_PKG_VERSION"))
-        );
+        assert_eq!(request.headers()["user-agent"], "okhttp/4.12.0");
         assert!(!request.headers().contains_key("deviceid"));
         assert!(!request.headers().contains_key("cookie"));
         Response::builder()

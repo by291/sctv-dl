@@ -93,7 +93,7 @@ impl MediaServer {
     pub async fn bind(config: MediaConfig) -> Result<Self> {
         let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
-            .user_agent(super::USER_AGENT)
+            .user_agent(crate::upstream::USER_AGENT)
             .redirect(reqwest::redirect::Policy::none())
             .gzip(false)
             .read_timeout(config.idle_timeout)

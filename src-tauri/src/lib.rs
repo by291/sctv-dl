@@ -11,6 +11,7 @@ pub mod requests;
 pub mod settings;
 pub mod state;
 pub mod storage;
+mod upstream;
 
 use std::sync::Arc;
 
