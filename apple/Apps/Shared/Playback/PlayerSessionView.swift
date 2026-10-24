@@ -11,6 +11,9 @@ struct PlayerSessionView: View {
     @State private var downloading = false
     @State private var overlay = PlayerOverlayState()
     @State private var titleExpanded = false
+    #if os(macOS)
+        @State private var macPresentation = MacPlayerPresentation()
+    #endif
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var phase
     @Environment(\.colorScheme) private var scheme
@@ -24,14 +27,13 @@ struct PlayerSessionView: View {
         #if os(iOS)
             overlay.fullscreen || verticalSizeClass == .compact
         #else
-            false
+            macPresentation.fullscreen
         #endif
     }
 
     var body: some View {
         GeometryReader { geometry in
-            let wide =
-                geometry.size.width >= 900 && !typeSize.isAccessibilitySize && !videoOnly
+            let wide = geometry.size.width >= 900 && !typeSize.isAccessibilitySize && !videoOnly
             let layout =
                 wide
                 ? AnyLayout(HStackLayout(alignment: .top, spacing: 0))
@@ -66,6 +68,12 @@ struct PlayerSessionView: View {
             .statusBarHidden(videoOnly)
             .background(PlayerBackGesture(enabled: !videoOnly))
         #endif
+        #if os(macOS)
+            .ignoresSafeArea(.container, edges: macPresentation.fullscreen ? .top : [])
+            .onChange(of: macPresentation.error) { _, value in
+                if let value { session.warning = value }
+            }
+        #endif
         .task(id: session.presentationID) {
             downloadMessage = nil
             titleExpanded = false
@@ -97,16 +105,22 @@ struct PlayerSessionView: View {
                     dismiss()
                 }
             #else
-                MacPlayerView(playback: session.playback)
-                    .overlay(alignment: .topTrailing) {
-                        HStack {
-                            PlayerSpeedMenu(playback: session.playback, speed: snapshot?.speed ?? 1)
-                            if session.details?.isLocal == false {
-                                PlayerQualityMenu(session: session, quality: snapshot?.quality)
-                            }
-                        }
-                        .buttonStyle(.bordered).foregroundStyle(.white).padding(12)
-                    }
+                MacPlayerView(
+                    playback: session.playback, presentation: macPresentation, overlay: overlay
+                )
+                .onTapGesture(count: 2) {
+                    overlay.reveal()
+                    macPresentation.toggleFullscreen()
+                }
+                .onContinuousHover { phase in
+                    if case .active = phase { overlay.reveal() }
+                }
+                .overlay { MacPlayerFeedbackView(presentation: macPresentation) }
+                .overlay(alignment: .bottom) {
+                    MacPlayerControlsView(
+                        session: session, snapshot: snapshot, overlay: overlay,
+                        presentation: macPresentation)
+                }
             #endif
             if case .preparing = session.playback.state {
                 ProgressView("正在准备播放")

@@ -20,10 +20,9 @@ struct SCTVApp: App {
                 if let dependencies = model.dependencies {
                     let session = dependencies.player
                     let presentation = session.presentationID
-                    NavigationStack {
-                        PlayerSessionView(
-                            session: session, download: dependencies.downloadCurrentProgramme)
-                    }
+                    PlayerSessionView(
+                        session: session, download: dependencies.downloadCurrentProgramme
+                    )
                     .frame(minWidth: 640, minHeight: 480)
                     .onDisappear {
                         Task {
@@ -34,6 +33,9 @@ struct SCTVApp: App {
                     ContentUnavailableView("请先选择节目", systemImage: "play.rectangle")
                 }
             }
+            .windowStyle(.hiddenTitleBar)
+            .defaultSize(width: 1180, height: 720)
+            .windowManagerRole(.principal)
             .defaultLaunchBehavior(.suppressed)
             .restorationBehavior(.disabled)
             Settings {
