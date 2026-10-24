@@ -65,7 +65,7 @@ final class ApplicationAcceptanceTests: XCTestCase {
             #if os(macOS)
                 app.buttons["Back"].click()
             #else
-                app.navigationBars.buttons.element(boundBy: 0).tap()
+                navigateBack(in: app)
             #endif
             XCTAssertTrue(title.waitForExistence(timeout: 5))
             XCTAssertEqual(explorationTitle(title), previousTitle)
@@ -216,7 +216,9 @@ final class ApplicationAcceptanceTests: XCTestCase {
         #if os(macOS)
             app.typeKey(.escape, modifierFlags: [])
         #else
-            activate(app.buttons["close"])
+            // Compact search has a separate dismissal control; iPad keeps the sheet close visible.
+            let dismissSearch = app.buttons["close"]
+            if dismissSearch.exists && dismissSearch.isHittable { activate(dismissSearch) }
             XCTAssertTrue(app.buttons["关闭"].waitForExistence(timeout: 5))
             activate(app.buttons["关闭"])
         #endif
@@ -419,7 +421,13 @@ final class ApplicationAcceptanceTests: XCTestCase {
             add(expanded)
             title.tap()
             XCTAssertEqual(title.value as? String, "已收起")
-            XCTAssertEqual(title.frame.height, collapsedHeight, accuracy: 2)
+            // Accessibility state changes before the collapse animation finishes.
+            let collapsed = XCTNSPredicateExpectation(
+                predicate: NSPredicate { object, _ in
+                    guard let title = object as? XCUIElement else { return false }
+                    return abs(title.frame.height - collapsedHeight) <= 2
+                }, object: title)
+            XCTAssertEqual(XCTWaiter.wait(for: [collapsed], timeout: 5), .completed)
             let inline = XCTAttachment(screenshot: app.screenshot())
             inline.name = "custom-player-inline"
             inline.lifetime = .keepAlways
@@ -503,16 +511,28 @@ final class ApplicationAcceptanceTests: XCTestCase {
             }
             scroll.swipeUp()
             let programme = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "栏目 "))
-                .allElementsBoundByIndex.first { $0.isHittable }
+                .allElementsBoundByIndex.first {
+                    // A partially clipped card can be hittable while its tap point is in the status bar.
+                    $0.isHittable && $0.frame.minY >= app.navigationBars.firstMatch.frame.maxY
+                        && scroll.frame.contains($0.frame)
+                }
             XCTAssertNotNil(programme)
             guard let programme else { return }
             let name = programme.label
             let position = programme.frame.minY
             programme.tap()
             XCTAssertTrue(app.scrollViews["archive-scroll"].waitForExistence(timeout: 10))
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            navigateBack(in: app)
             let restored = app.buttons[name]
             XCTAssertTrue(restored.waitForExistence(timeout: 5))
+            let returned = XCTNSPredicateExpectation(
+                predicate: NSPredicate { object, _ in
+                    guard let card = object as? XCUIElement else { return false }
+                    return abs(card.frame.minY - position) <= 3
+                }, object: restored)
+            XCTAssertEqual(
+                XCTWaiter.wait(for: [returned], timeout: 5), .completed,
+                "Expected return position \(position), got \(restored.frame.minY)")
             XCTAssertEqual(restored.frame.minY, position, accuracy: 3)
         }
 
@@ -606,8 +626,8 @@ final class ApplicationAcceptanceTests: XCTestCase {
             let secondTitle = app.buttons["play-download-30"]
             XCTAssertTrue(secondTitle.exists)
             let filters = app.buttons["全部"]
-            let firstRow = app.cells.containing(.button, identifier: "play-download-31").firstMatch
-            let secondRow = app.cells.containing(.button, identifier: "play-download-30").firstMatch
+            let firstRow = downloadCard(in: app, contentID: "31", selecting: false)
+            let secondRow = downloadCard(in: app, contentID: "30", selecting: false)
             let originalTitleInset = firstRow.frame.minX - filters.frame.minX
             let originalSecondInset = secondRow.frame.minX - filters.frame.minX
             let originalWidth = firstRow.frame.width
@@ -620,12 +640,8 @@ final class ApplicationAcceptanceTests: XCTestCase {
                 XCTAssertEqual(
                     catalogue.exists && catalogue.isHittable, !usesBottomTabs || !selecting)
                 XCTAssertEqual(app.buttons["下载操作"].firstMatch.exists, !selecting)
-                let firstCard = app.cells.containing(
-                    .button, identifier: selecting ? "select-download-31" : "play-download-31"
-                ).firstMatch
-                let secondCard = app.cells.containing(
-                    .button, identifier: selecting ? "select-download-30" : "play-download-30"
-                ).firstMatch
+                let firstCard = downloadCard(in: app, contentID: "31", selecting: selecting)
+                let secondCard = downloadCard(in: app, contentID: "30", selecting: selecting)
                 XCTAssertEqual(firstCard.frame.width, originalWidth, accuracy: 2)
                 XCTAssertEqual(
                     firstCard.frame.minX - filters.frame.minX - originalTitleInset,
@@ -702,12 +718,17 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(toggle.waitForExistence(timeout: 10))
             for _ in 0..<4 {
                 let initialLabel = toggle.label
+                let initialFrame = toggle.frame
                 toggle.tap(withNumberOfTaps: 6, numberOfTouches: 1)
                 XCTAssertTrue(toggle.exists)
                 XCTAssertTrue(toggle.isHittable)
                 XCTAssertTrue(toggle.isEnabled)
                 XCTAssertTrue(["选择", activeLabel].contains(toggle.label))
-                if expectsEveryTap { XCTAssertEqual(toggle.label, initialLabel) }
+                if expectsEveryTap {
+                    XCTAssertEqual(
+                        toggle.label, initialLabel,
+                        "Toggle moved from \(initialFrame) to \(toggle.frame)")
+                }
                 verify()
                 let expectedLabel = toggle.label == "选择" ? activeLabel : "选择"
                 toggle.tap()
@@ -1144,6 +1165,24 @@ final class ApplicationAcceptanceTests: XCTestCase {
             attachment.name = "large-text-dark-rotated-archive"
             attachment.lifetime = .keepAlways
             add(attachment)
+        }
+    #endif
+
+    #if os(iOS)
+        private func navigateBack(in app: XCUIApplication) {
+            // Adaptive navigation can place this control outside NavigationBar and expose a menu type.
+            let back = app.descendants(matching: .any)["BackButton"].firstMatch
+            XCTAssertTrue(back.waitForExistence(timeout: 5))
+            back.tap()
+        }
+
+        private func downloadCard(
+            in app: XCUIApplication, contentID: String, selecting: Bool
+        ) -> XCUIElement {
+            let identifier = "\(selecting ? "select" : "play")-download-\(contentID)"
+            let row = app.cells.containing(.button, identifier: identifier).firstMatch
+            // Compact downloads use list rows; the wide layout exposes the card button directly.
+            return row.exists ? row : app.buttons[identifier]
         }
     #endif
 

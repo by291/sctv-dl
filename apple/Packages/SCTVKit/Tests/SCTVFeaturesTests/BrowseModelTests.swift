@@ -45,7 +45,10 @@ struct BrowseModelTests {
             programme: await repository.programme, repository: repository, restoredDateID: "removed"
         )
         await model.load()
-        for _ in 0..<50 where model.selectedDateID != "20" {
+        let expectedRefresh = ProgrammeQuery.contents(programmeID: "1", dateID: "20")
+        // Selecting the date precedes the asynchronous refresh; wait for the effect being asserted.
+        for _ in 0..<50 {
+            if await repository.queries.contains(expectedRefresh) { break }
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(model.selectedDateID == "20")
