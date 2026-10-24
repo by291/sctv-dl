@@ -2,6 +2,21 @@ import XCTest
 
 @MainActor
 final class ApplicationAcceptanceTests: XCTestCase {
+    override func record(_ issue: XCTIssue) {
+        guard issue.compactDescription.contains("Modifying state during view update") else {
+            super.record(issue)
+            return
+        }
+
+        // A successful interaction must not hide an invalid SwiftUI state transition.
+        super.record(
+            XCTIssue(
+                type: .assertionFailure, compactDescription: issue.compactDescription,
+                detailedDescription: issue.detailedDescription,
+                sourceCodeContext: issue.sourceCodeContext, associatedError: issue.associatedError,
+                attachments: issue.attachments))
+    }
+
     func testExplorationKeepsGeometryWhenChangingTitle() {
         let app = XCUIApplication()
         app.launchArguments = [

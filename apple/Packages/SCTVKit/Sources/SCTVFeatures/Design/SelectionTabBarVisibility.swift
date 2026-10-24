@@ -27,6 +27,7 @@
             private weak var controlledTabs: UITabBarController?
             private var originalHidden = false
             private var requestedHidden: Bool?
+            private var pendingUpdate: Task<Void, Never>?
 
             override func loadView() {
                 view = UIView()
@@ -36,12 +37,12 @@
             override func viewDidAppear(_ animated: Bool) {
                 super.viewDidAppear(animated)
                 visible = true
-                apply()
+                scheduleUpdate()
             }
 
             override func viewDidLayoutSubviews() {
                 super.viewDidLayoutSubviews()
-                if visible { apply() }
+                scheduleUpdate()
             }
 
             override func viewWillDisappear(_ animated: Bool) {
@@ -53,7 +54,20 @@
             func update(hidden: Bool, animated: Bool) {
                 self.hidden = hidden
                 self.animated = animated
-                if visible { apply() }
+                scheduleUpdate()
+            }
+
+            private func scheduleUpdate() {
+                guard visible, pendingUpdate == nil else { return }
+
+                // Changing tab visibility can synchronously lay out SwiftUI alerts and write
+                // their bindings. Leave the representable update before invoking UIKit.
+                pendingUpdate = Task { @MainActor [weak self] in
+                    guard !Task.isCancelled, let self else { return }
+                    pendingUpdate = nil
+                    guard visible else { return }
+                    apply()
+                }
             }
 
             private func apply() {
@@ -82,6 +96,9 @@
             }
 
             func restore() {
+                pendingUpdate?.cancel()
+                pendingUpdate = nil
+
                 if let controlledTabs {
                     controlledTabs.setTabBarHidden(originalHidden, animated: false)
                 }
