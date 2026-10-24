@@ -173,6 +173,7 @@ struct WorkspaceView: View {
                         .labelStyle(.iconOnly).help("完成")
                     }
                 }
+                .tint(PresentationStyle.accent(colorScheme ?? systemScheme))
             }
             .sheet(item: $sharing.sharing) { FileShareView(file: $0) }
         #endif
