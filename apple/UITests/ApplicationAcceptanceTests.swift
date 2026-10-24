@@ -416,14 +416,59 @@ final class ApplicationAcceptanceTests: XCTestCase {
             app.launch()
             XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
             app.buttons["四川新闻"].tap()
-            let content = app.buttons["content-actions-30"]
-            reveal(content, in: app)
-            content.tap()
-            app.buttons["download-content-30"].tap()
-            XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
-            app.alerts["提示"].buttons["好"].tap()
+            for id in ["30", "31"] {
+                let content = app.buttons["content-actions-\(id)"]
+                reveal(content, in: app)
+                content.tap()
+                app.buttons["download-content-\(id)"].tap()
+                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
+                app.alerts["提示"].buttons["好"].tap()
+            }
             app.buttons["下载"].firstMatch.tap()
-            assertRapidSelectionTaps(app, identifier: "downloads-select", activeLabel: "完成")
+            let title = app.staticTexts["秋日里的城市故事"]
+            XCTAssertTrue(title.waitForExistence(timeout: 10))
+            let secondTitle = app.staticTexts["四川新闻（2026.10.22）"]
+            XCTAssertTrue(secondTitle.exists)
+            let filters = app.buttons["全部"]
+            let originalTitleInset = title.frame.minX - filters.frame.minX
+            let originalSecondInset = secondTitle.frame.minX - filters.frame.minX
+            let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
+            assertRapidSelectionTaps(
+                app, identifier: "downloads-select", activeLabel: "完成", expectsEveryTap: true
+            ) {
+                let selecting = app.buttons["downloads-select"].label == "完成"
+                let catalogue = app.buttons["栏目"].firstMatch
+                XCTAssertEqual(
+                    catalogue.exists && catalogue.isHittable, !usesBottomTabs || !selecting)
+                XCTAssertEqual(app.buttons["下载操作"].firstMatch.exists, !selecting)
+                XCTAssertEqual(
+                    title.frame.minX - filters.frame.minX - originalTitleInset,
+                    secondTitle.frame.minX - filters.frame.minX - originalSecondInset, accuracy: 2)
+                if selecting {
+                    XCTAssertGreaterThan(
+                        title.frame.minX - filters.frame.minX, originalTitleInset + 20)
+                    XCTAssertTrue(app.staticTexts["请选择要操作的下载任务"].isHittable)
+                    let firstSelection = app.buttons["select-download-30"]
+                    let secondSelection = app.buttons["select-download-31"]
+                    firstSelection.tap()
+                    XCTAssertTrue(app.staticTexts["已选 1 项"].exists)
+                    XCTAssertTrue(firstSelection.isSelected)
+                    XCTAssertFalse(secondSelection.isSelected)
+                    firstSelection.tap()
+                    app.buttons["全选"].tap()
+                    XCTAssertTrue(app.staticTexts["已选 2 项"].waitForExistence(timeout: 5))
+                    app.buttons["取消全选"].tap()
+                    XCTAssertTrue(app.staticTexts["已选 0 项"].exists)
+                } else {
+                    XCTAssertEqual(
+                        title.frame.minX - filters.frame.minX, originalTitleInset, accuracy: 2)
+                }
+            }
+            app.buttons["play-download-30"].tap()
+            XCTAssertTrue(app.buttons["player-back"].waitForExistence(timeout: 10))
+            app.buttons["player-back"].tap()
+            XCTAssertTrue(app.buttons["downloads-select"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
         }
 
         func testArchiveSelectionSurvivesRapidTaps() {
@@ -437,20 +482,27 @@ final class ApplicationAcceptanceTests: XCTestCase {
         }
 
         private func assertRapidSelectionTaps(
-            _ app: XCUIApplication, identifier: String, activeLabel: String
+            _ app: XCUIApplication, identifier: String, activeLabel: String,
+            expectsEveryTap: Bool = false,
+            verify: () -> Void = {}
         ) {
             let toggle = app.buttons[identifier]
             XCTAssertTrue(toggle.waitForExistence(timeout: 10))
             for _ in 0..<4 {
+                let initialLabel = toggle.label
                 toggle.tap(withNumberOfTaps: 6, numberOfTouches: 1)
                 XCTAssertTrue(toggle.exists)
                 XCTAssertTrue(toggle.isHittable)
+                XCTAssertTrue(toggle.isEnabled)
                 XCTAssertTrue(["选择", activeLabel].contains(toggle.label))
+                if expectsEveryTap { XCTAssertEqual(toggle.label, initialLabel) }
+                verify()
                 let expectedLabel = toggle.label == "选择" ? activeLabel : "选择"
                 toggle.tap()
                 let changed = XCTNSPredicateExpectation(
                     predicate: NSPredicate(format: "label == %@", expectedLabel), object: toggle)
                 XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+                verify()
             }
             let shot = XCTAttachment(screenshot: app.screenshot())
             shot.name = "\(identifier)-after-rapid-taps"
@@ -500,11 +552,12 @@ final class ApplicationAcceptanceTests: XCTestCase {
             add(menuShot)
             app.navigationBars["下载"].tap()
             let filtersTop = app.buttons["全部"].frame.minY
+            let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
             app.buttons["选择"].tap()
             XCTAssertEqual(app.buttons["全部"].frame.minY, filtersTop, accuracy: 2)
             longTitle.tap()
             XCTAssertTrue(app.staticTexts["已选 1 项"].waitForExistence(timeout: 5))
-            XCTAssertFalse(app.buttons["栏目"].firstMatch.isHittable)
+            XCTAssertEqual(app.buttons["栏目"].firstMatch.isHittable, !usesBottomTabs)
             XCTAssertFalse(menu.exists)
             XCTAssertTrue(app.buttons["删除文件"].isHittable)
             XCTAssertTrue(app.buttons["移除记录"].isHittable)
