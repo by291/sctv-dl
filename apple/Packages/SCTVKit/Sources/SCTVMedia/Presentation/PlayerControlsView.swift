@@ -270,11 +270,10 @@ private struct PlayerOptionsPopover<Option: Hashable>: View {
             .presentationCompactAdaptation(.popover)
         }
         .onChange(of: presented) { _, value in
-            overlay?.isInteracting = value
-            overlay?.reveal()
+            overlay?.setOptionsPresented(value, id: identifier)
         }
         .onDisappear {
-            if presented { overlay?.isInteracting = false }
+            overlay?.setOptionsPresented(false, id: identifier)
         }
     }
 }

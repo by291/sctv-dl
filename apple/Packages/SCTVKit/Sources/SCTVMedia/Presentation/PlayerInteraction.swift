@@ -19,7 +19,13 @@ public final class PlayerOverlayState {
     public var controlsVisible = true
     public var hint: String?
     public var previewMilliseconds: Int64?
-    public var isInteracting = false
+    public var isInteracting: Bool {
+        get { interactionActive || !presentedOptions.isEmpty }
+        set { interactionActive = newValue }
+    }
+    var hasPresentedOptions: Bool { !presentedOptions.isEmpty }
+    private var interactionActive = false
+    private var presentedOptions: Set<String> = []
     public private(set) var activity = 0
     public private(set) var fullscreen = false
     public private(set) var orientationRequest = 0
@@ -44,6 +50,14 @@ public final class PlayerOverlayState {
     public func reveal() {
         controlsVisible = true
         activity &+= 1
+    }
+    func setOptionsPresented(_ presented: Bool, id: String) {
+        if presented { presentedOptions.insert(id) } else { presentedOptions.remove(id) }
+        reveal()
+    }
+    func hideIfIdle(activity expected: Int, playing: Bool, pinned: Bool) {
+        guard activity == expected, playing, !isInteracting, !pinned else { return }
+        controlsVisible = false
     }
     public func requestFullscreen(_ value: Bool) {
         fullscreen = value

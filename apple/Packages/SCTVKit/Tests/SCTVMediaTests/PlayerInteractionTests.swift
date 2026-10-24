@@ -3,6 +3,35 @@ import Testing
 @testable import SCTVMedia
 
 struct PlayerInteractionTests {
+    @Test @MainActor func seekCompletionDoesNotUnpinOptions() {
+        let overlay = PlayerOverlayState()
+        let seek = overlay.beginSeekPreview(at: 1000)
+        overlay.setOptionsPresented(true, id: "speed")
+        overlay.finishSeekPreview(seek)
+        overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
+        #expect(overlay.controlsVisible)
+        overlay.setOptionsPresented(false, id: "speed")
+        overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
+        #expect(!overlay.controlsVisible)
+    }
+    @Test @MainActor func desktopControlsStayVisibleDuringInteractionAndIgnoreOldTimers() {
+        let overlay = PlayerOverlayState()
+        let old = overlay.activity
+        overlay.reveal()
+        overlay.hideIfIdle(activity: old, playing: true, pinned: false)
+        #expect(overlay.controlsVisible)
+        overlay.isInteracting = true
+        overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
+        #expect(overlay.controlsVisible)
+        overlay.isInteracting = false
+        overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: true)
+        #expect(overlay.controlsVisible)
+        overlay.hideIfIdle(activity: overlay.activity, playing: false, pinned: false)
+        #expect(overlay.controlsVisible)
+        overlay.hideIfIdle(activity: overlay.activity, playing: true, pinned: false)
+        #expect(!overlay.controlsVisible)
+    }
+
     @Test @MainActor func releasedSeekKeepsTargetUntilCompletion() {
         let overlay = PlayerOverlayState()
         let token = overlay.beginSeekPreview(at: 8_000)
