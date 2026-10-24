@@ -175,7 +175,10 @@ describe('proxy transport contracts', () => {
     })
     const response = await httpFetch(`${origin}/media?${query}`, {
       method: 'HEAD',
-      headers: { Cookie: 'sctv-dl-device-id=dd6694f8-a985-4dd5-8425-d7c6d811793d' },
+      headers: {
+        Cookie: 'sctv-dl-device-id=dd6694f8-a985-4dd5-8425-d7c6d811793d',
+        'User-Agent': 'untrusted-browser',
+      },
     })
 
     expect(response.status).toBe(200)
@@ -185,6 +188,7 @@ describe('proxy transport contracts', () => {
     expect(response.headers.has('set-cookie')).toBe(false)
     expect(upstream.mock.calls[0]![1].headers).toEqual({
       Referer: 'https://scgc.video.play/',
+      'User-Agent': 'okhttp/4.12.0',
       'Accept-Encoding': 'identity',
     })
     expect(upstream).toHaveBeenCalledWith(

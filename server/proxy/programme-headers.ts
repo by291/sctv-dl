@@ -1,3 +1,4 @@
+import { upstreamUserAgent } from './upstream-profile.ts'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 
@@ -31,7 +32,7 @@ export function programmeHeaders(
   return {
     Accept: 'application/json',
     'Accept-Encoding': 'gzip',
-    'User-Agent': 'okhttp/4.12.0',
+    'User-Agent': upstreamUserAgent,
     userId: '',
     Authorization: '',
     deviceId,

@@ -1,3 +1,4 @@
+import { upstreamUserAgent } from './upstream-profile.ts'
 import { contentDisposition } from './proxy-policy.ts'
 import { programmeHeaders } from './programme-headers.ts'
 
@@ -15,6 +16,7 @@ export function proxyRequestHeaders(
 
   const headers: Record<string, string> = {
     Referer: 'https://scgc.video.play/',
+    'User-Agent': upstreamUserAgent,
     'Accept-Encoding': 'identity',
   }
   if (request.headers.range) {
