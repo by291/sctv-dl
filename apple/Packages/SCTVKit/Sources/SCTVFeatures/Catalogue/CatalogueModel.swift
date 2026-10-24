@@ -14,6 +14,7 @@ public final class CatalogueModel {
     public private(set) var hasAcceptedSnapshot = false
     public private(set) var isLoading = false
 
+    private var explorationID: String?
     private let repository: any ProgrammeRepository
     private let favourites: any FavouriteRepository
     private var lifecycle = UUID()
@@ -35,6 +36,15 @@ public final class CatalogueModel {
             : result
     }
 
+    public var exploration: Programme? {
+        programmes.first { $0.id == explorationID }
+    }
+
+    public func shuffleExploration() {
+        let alternatives = programmes.filter { $0.id != explorationID }
+        explorationID = (alternatives.isEmpty ? programmes : alternatives).randomElement()?.id
+    }
+
     public func load() async {
         guard !running else { return }
         running = true
@@ -49,6 +59,8 @@ public final class CatalogueModel {
                     guard !Task.isCancelled, let self, running, lifecycle == active else { break }
                     if case .catalogue(let values) = update.accepted?.items {
                         programmes = values
+                        // Preserve a valid choice through refreshes and accepted snapshots.
+                        if exploration == nil { shuffleExploration() }
                         hasAcceptedSnapshot = true
                     }
                     pending = update.pending

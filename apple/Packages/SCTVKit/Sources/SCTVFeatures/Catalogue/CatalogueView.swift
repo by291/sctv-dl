@@ -3,7 +3,6 @@ import SwiftUI
 
 public struct CatalogueView: View {
     @Bindable private var model: CatalogueModel
-    @State private var explorationID: String?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
     private let open: (Programme) -> Void
@@ -18,14 +17,10 @@ public struct CatalogueView: View {
         self.settings = settings
     }
 
-    private var exploration: Programme? {
-        model.programmes.first { $0.id == explorationID } ?? model.programmes.first
-    }
-
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                if let programme = exploration {
+                if let programme = model.exploration {
                     explorationCard(programme)
                 }
                 catalogueHeading
@@ -175,9 +170,6 @@ public struct CatalogueView: View {
         ExplorationCard(
             programme: programme, canShuffle: model.programmes.count > 1,
             open: { open(programme) },
-            shuffle: {
-                explorationID =
-                    model.programmes.filter { $0.id != programme.id }.randomElement()?.id
-            })
+            shuffle: model.shuffleExploration)
     }
 }

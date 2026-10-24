@@ -19,8 +19,14 @@ final class ApplicationAcceptanceTests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 15))
         let card = app.descendants(matching: .any)["catalogue-exploration"].firstMatch
         let initial = card.frame
+        let initialTitle = explorationTitle(title)
+        XCTAssertTrue(["四川新闻", "防癌大讲堂"].contains(initialTitle))
+        activate(app.buttons["只看收藏"])
+        XCTAssertEqual(explorationTitle(title), initialTitle)
+        activate(app.buttons["显示全部栏目"])
+        XCTAssertEqual(explorationTitle(title), initialTitle)
         let initialShot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
-        initialShot.name = "editorial-short-title"
+        initialShot.name = "editorial-initial-title"
         initialShot.lifetime = .keepAlways
         add(initialShot)
         XCTAssertTrue(title.isHittable)
@@ -42,27 +48,41 @@ final class ApplicationAcceptanceTests: XCTestCase {
         #else
             shuffleEdge.tap()
         #endif
-        #if os(macOS)
-            XCTAssertEqual(title.value as? String, "防癌大讲堂")
-        #else
-            XCTAssertEqual(title.label, "防癌大讲堂")
-        #endif
+        XCTAssertNotEqual(explorationTitle(title), initialTitle)
         XCTAssertEqual(card.frame.height, initial.height, accuracy: 1)
         XCTAssertEqual(card.frame.width, initial.width, accuracy: 1)
         let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
-        shot.name = "polished-long-title"
+        shot.name = "editorial-shuffled-title"
         shot.lifetime = .keepAlways
         add(shot)
         activate(app.buttons["换一个"])
-        #if os(macOS)
-            XCTAssertEqual(title.value as? String, "四川新闻")
-        #else
-            XCTAssertEqual(title.label, "四川新闻")
-        #endif
+        XCTAssertEqual(explorationTitle(title), initialTitle)
         XCTAssertEqual(card.frame.height, initial.height, accuracy: 1)
-        activate(app.buttons["exploration-cover"])
-        XCTAssertTrue(
-            app.descendants(matching: .any)["完整节目"].firstMatch.waitForExistence(timeout: 10))
+        for _ in 0..<2 {
+            let previousTitle = explorationTitle(title)
+            activate(app.buttons["exploration-cover"])
+            XCTAssertTrue(app.scrollViews["archive-scroll"].waitForExistence(timeout: 10))
+            #if os(macOS)
+                app.buttons["Back"].click()
+            #else
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+            #endif
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+            XCTAssertEqual(explorationTitle(title), previousTitle)
+        }
+        let beforeTabSwitch = explorationTitle(title)
+        activate(app.buttons["资料库"].firstMatch)
+        activate(app.buttons["栏目"].firstMatch)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(explorationTitle(title), beforeTabSwitch)
+    }
+
+    private func explorationTitle(_ title: XCUIElement) -> String {
+        #if os(macOS)
+            title.value as? String ?? ""
+        #else
+            title.label
+        #endif
     }
 
     func testLongArchiveTitlesKeepCompactCardHeight() {
