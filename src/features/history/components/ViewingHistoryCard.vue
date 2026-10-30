@@ -18,6 +18,17 @@ const progress = computed(() => {
 
   return `看到 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 })
+const progressPercent = computed(() => {
+  if (props.entry.completed) {
+    return 100
+  }
+
+  if (!props.entry.durationMs) {
+    return 0
+  }
+
+  return Math.min(100, Math.max(0, (props.entry.positionMs / props.entry.durationMs) * 100))
+})
 </script>
 
 <template>
@@ -41,6 +52,12 @@ const progress = computed(() => {
           fill="currentColor"
         />
       </span>
+      <span
+        class="history-progress"
+        :class="{ completed: entry.completed }"
+        :style="{ width: `${progressPercent}%` }"
+        aria-hidden="true"
+      />
     </button>
     <div class="history-copy">
       <h3>{{ entry.title }}</h3>
@@ -73,30 +90,51 @@ const progress = computed(() => {
   align-items: center;
   gap: 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--radius);
+  padding: 14px;
   background: var(--panel);
 }
 .history-cover {
   position: relative;
   border: 0;
   padding: 0;
-  width: 144px;
+  width: 148px;
   flex-shrink: 0;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 4px;
+  background: var(--subtle);
 }
 .history-cover-play {
   position: absolute;
-  inset: 0;
+  bottom: 8px;
+  left: 8px;
   display: grid;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  background: #00000020;
-  color: white;
+  border-radius: 50%;
+  border: 1px solid #ffffff33;
+  background: color-mix(in srgb, var(--rail) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+.history-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+}
+.history-progress.completed {
+  background: var(--green);
 }
 .history-cover:hover .history-cover-play {
-  background: #00000040;
+  background: var(--accent-fill);
+  transform: scale(1.05);
 }
 .history-copy {
   flex: 1;
@@ -104,13 +142,16 @@ const progress = computed(() => {
 }
 .history-copy h3 {
   font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .history-copy p,
-.history-copy span {
-  font-size: 13px;
+.history-copy > span {
+  font-size: 12px;
   color: var(--muted);
-  line-height: 1.8;
+  line-height: 1.7;
+  font-variant-numeric: tabular-nums;
 }
 .history-actions {
   display: flex;
@@ -124,10 +165,7 @@ const progress = computed(() => {
     padding: 12px;
   }
   .history-cover {
-    position: relative;
-    border: 0;
-    padding: 0;
-    width: 100px;
+    width: 104px;
   }
   .history-actions {
     width: 100%;

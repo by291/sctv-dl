@@ -17,6 +17,15 @@ const emit = defineEmits<{
   change: []
 }>()
 
+const shuffleTheme = {
+  textColorText: 'var(--hero-text)',
+  textColorTextHover: 'var(--hero-text)',
+  textColorTextPressed: 'var(--hero-text)',
+  textColorTextFocus: 'var(--hero-text)',
+  fontSizeMedium: '14px',
+  heightMedium: '40px',
+}
+
 const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.programme.id)
 </script>
 
@@ -40,11 +49,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
       >
         {{ programme.name }}
       </h2>
-      <p class="feature-description">
-        浏览播出日历，选择整期或精彩片段。
-        <br />
-        让每次回看，都触手可及。
-      </p>
+      <p class="feature-description">浏览播出日历，回看或下载整期节目与精彩片段。</p>
       <div class="feature-actions">
         <RouterLink
           :to="`/programmes/${programme.id}`"
@@ -57,6 +62,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
         <NButton
           text
           :disabled="!canChange"
+          :theme-overrides="shuffleTheme"
           aria-label="换一个栏目"
           @click="emit('change')"
         >
@@ -79,139 +85,132 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
         :alt="programme.name"
       />
     </RouterLink>
-    <span
-      class="feature-orbit orbit-one"
-      aria-hidden="true"
-    />
-    <span
-      class="feature-orbit orbit-two"
-      aria-hidden="true"
-    />
   </section>
 </template>
 
 <style scoped>
 .featured-card {
+  --focus: var(--hero-text);
+
   position: relative;
   display: flex;
-  min-height: 224px;
+  align-items: center;
+  gap: clamp(24px, 4vw, 56px);
+  min-height: 248px;
   overflow: clip;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--hero);
-  transition: box-shadow 200ms ease;
+  padding: clamp(24px, 3.2vw, 40px);
 }
 .featured-copy {
   position: relative;
   z-index: 2;
   min-width: 0;
   flex: 1;
-  padding: 24px 28px;
 }
 .feature-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--hero-label);
 }
 .feature-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .featured-title {
   display: -webkit-box;
   overflow: hidden;
-  margin: 12px 0 9px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  margin: 13px 0 10px;
+  font-size: clamp(30px, 3.6cqw, 44px);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: var(--hero-text);
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 .feature-description {
-  font-size: 14px;
+  max-width: 42ch;
+  font-size: 15px;
   line-height: 1.8;
-  color: var(--muted);
+  color: var(--hero-muted);
 }
 .feature-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
-  margin-top: 19px;
+  gap: 18px;
+  margin-top: 24px;
 }
 .feature-link {
   display: inline-flex;
+  min-height: 42px;
   align-items: center;
-  gap: 19px;
-  font-size: 16px;
+  gap: 10px;
+  border-radius: 5px;
+  background: var(--accent-fill);
+  padding: 0 18px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--hero-link);
+  color: #fff;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.feature-link svg {
+  transition: transform var(--motion-normal) var(--motion-ease);
 }
 .featured-visual {
   position: relative;
   z-index: 2;
-  margin-right: 24px;
-  width: 34%;
-  max-width: 264px;
+  width: clamp(240px, 34%, 380px);
+  aspect-ratio: 16 / 9;
   flex-shrink: 0;
-  rotate: -5deg;
-  align-self: center;
   overflow: hidden;
-  border-radius: 10px;
-  border: 4px solid #ffffff90;
-  box-shadow: 0 16px 26px #5e433524;
+  border-radius: var(--radius);
+  border: 1px solid var(--hero-line);
+  box-shadow: 0 24px 48px #0000003d;
 }
 .featured-image {
-  aspect-ratio: 16 / 9;
-  height: auto;
+  height: 100%;
   animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
-.feature-orbit {
-  pointer-events: none;
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid #cdad9c38;
-}
-.orbit-one {
-  top: -44px;
-  right: -10px;
-  width: 330px;
-  height: 330px;
-}
-.orbit-two {
-  top: -90px;
-  right: -58px;
-  width: 420px;
-  height: 420px;
-}
 @media (hover: hover) {
-  .featured-card:hover {
-    box-shadow: 0 8px 25px #0000000c;
+  .feature-link:hover {
+    background: var(--accent-fill-hover);
+  }
+  .feature-link:hover svg {
+    transform: translateX(3px);
+  }
+  .featured-visual:hover :deep(.cover-photo) {
+    transform: scale(1.02);
   }
 }
-@container workspace (width < 960px) {
-  .featured-copy {
-    padding-left: 24px;
+@container workspace (width < 860px) {
+  .featured-card {
+    gap: 28px;
   }
   .featured-title {
-    font-size: 23px;
+    font-size: clamp(26px, 4cqw, 34px);
   }
   .featured-visual {
-    margin-right: 20px;
+    width: clamp(200px, 34%, 300px);
   }
 }
-@container workspace (width < 600px) {
+@container workspace (width < 620px) {
   .featured-card {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(96px, 24cqw, 144px);
-    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) clamp(96px, 26cqw, 150px);
+    align-items: center;
     gap: 4px 16px;
-    padding: 16px;
+    min-height: 0;
+    padding: 18px;
   }
   .featured-copy {
     display: contents;
@@ -222,19 +221,21 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   }
   .featured-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 22px;
+    line-height: 1.25;
   }
   .feature-description {
     display: none;
   }
   .feature-actions {
     grid-column: 1 / -1;
-    gap: 20px;
-    margin-top: 4px;
+    gap: 16px;
+    margin-top: 12px;
   }
   .feature-link {
     min-height: 44px;
-    gap: 10px;
+    padding-inline: 16px;
+    font-size: 14px;
   }
   .feature-actions :deep(.n-button) {
     min-height: 44px;
@@ -242,9 +243,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   .featured-visual {
     grid-column: 2;
     grid-row: 1 / span 2;
-    margin: 0;
     width: 100%;
-    border-width: 2px;
   }
 }
 </style>

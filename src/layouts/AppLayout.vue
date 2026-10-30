@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
         aria-label="sctv-dl 首页"
       >
         <span class="brand-icon">
-          <Tv :size="23" />
+          <Tv :size="22" />
         </span>
         <!-- prettier-ignore -->
         <span>sctv<span class="brand-dash">-dl</span><small class="brand-description">电视节目下载</small></span>
@@ -94,8 +94,8 @@ onBeforeUnmount(() => {
         >
           <component
             :is="link.icon"
-            :size="19"
-            :stroke-width="1.7"
+            :size="18"
+            :stroke-width="1.8"
           />
           <span>{{ link.label }}</span>
           <NBadge
@@ -139,91 +139,107 @@ onBeforeUnmount(() => {
   display: flex;
   height: 100dvh;
   overflow: hidden;
+  background: var(--bg);
 }
 .sidebar {
+  --focus: var(--rail-text);
+
   display: flex;
   height: 100%;
-  width: 232px;
+  width: 240px;
   flex-shrink: 0;
   flex-direction: column;
-  border-right: 1px solid var(--line);
-  background: var(--panel);
-  padding: 36px 20px 20px;
+  border-right: 1px solid var(--rail-line);
+  background: var(--rail);
+  padding: 28px 14px 18px;
   overflow-y: auto;
   overscroll-behavior: none;
+  color: var(--rail-text);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 0 11px;
-  font-size: 24px;
+  padding: 0 10px;
+  font-size: 23px;
   line-height: 1.2;
   font-weight: 800;
-  letter-spacing: -0.8px;
+  letter-spacing: -0.7px;
+  color: var(--rail-text);
 }
 .brand-dash {
-  color: var(--accent);
+  color: var(--hero-link);
 }
 .brand-description {
   display: block;
-  margin-top: 6px;
-  font-size: 14px;
+  margin-top: 5px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: normal;
-  color: var(--muted);
+  color: var(--rail-muted);
 }
 .brand-icon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--accent);
-  color: white;
+  color: #fff;
 }
 .primary-nav {
   display: grid;
-  gap: 8px;
-  margin-top: 40px;
+  gap: 4px;
+  margin-top: 34px;
 }
 .nav-link {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  border-radius: 8px;
-  padding: 13px 15px;
-  font-size: 16px;
+  border-radius: 5px;
+  padding: 11px 12px 11px 14px;
+  font-size: 15px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--rail-muted);
   transition:
-    background 150ms ease,
-    color 150ms ease;
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.nav-link.active {
+  background: var(--rail-active);
+  font-weight: 600;
+  color: var(--rail-text);
+}
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 .nav-count {
   position: absolute;
-  top: 7px;
-  right: 8px;
-}
-.nav-link.active {
-  background: var(--accent-soft);
-  font-weight: 600;
-  color: var(--accent);
+  top: 6px;
+  right: 7px;
 }
 .sidebar-bottom {
   margin-top: auto;
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
+  border-top: 1px solid var(--rail-line);
+  padding-top: 16px;
 }
 .version {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 0;
-  font-size: 13px;
-  color: var(--muted);
+  padding: 8px 14px 0;
+  font-size: 12px;
+  color: var(--rail-muted);
+  font-variant-numeric: tabular-nums;
 }
 .connection {
   display: flex;
@@ -231,29 +247,36 @@ onBeforeUnmount(() => {
   gap: 7px;
   padding-inline: 14px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--rail-muted);
+}
+.sidebar .status-dot {
+  background: #8dbb9d;
+}
+.sidebar .status-dot.offline {
+  background: #e0a15a;
 }
 @media (hover: hover) {
   .nav-link:hover {
-    background: var(--subtle);
+    background: var(--rail-hover);
+    color: var(--rail-text);
   }
   .nav-link.active:hover {
-    background: var(--accent-soft);
+    background: var(--rail-active);
   }
 }
 @media (width < 1250px) {
   .sidebar {
-    width: 216px;
-    padding-inline: 15px;
+    width: 220px;
+    padding-inline: 12px;
   }
 }
 @media (width < 1020px) {
   .sidebar {
-    width: 200px;
-    padding-inline: 10px;
+    width: 204px;
+    padding-inline: 8px;
   }
   .brand {
-    gap: 8px;
+    gap: 9px;
     font-size: 21px;
   }
 }
@@ -263,15 +286,15 @@ onBeforeUnmount(() => {
   }
   .sidebar {
     z-index: 20;
-    height: 64px;
+    height: 62px;
     width: 100%;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
-    padding: 0 16px;
+    border-bottom: 1px solid var(--rail-line);
+    padding: 0 14px;
   }
   .brand {
     min-height: 44px;
@@ -286,28 +309,40 @@ onBeforeUnmount(() => {
   .brand-icon {
     width: 32px;
     height: 32px;
-    border-radius: 10px;
+    border-radius: 5px;
   }
   .primary-nav {
     display: flex;
-    gap: 4px;
+    gap: 2px;
     margin-top: 0;
   }
   .nav-link {
     min-height: 44px;
     flex-direction: column;
     justify-content: center;
-    gap: 3px;
-    padding: 6px 8px;
-    font-size: 12px;
+    gap: 2px;
+    padding: 5px 8px;
+    font-size: 11px;
     line-height: 1.3;
+    color: var(--rail-muted);
+  }
+  .nav-link.active {
+    background: transparent;
+  }
+  .nav-link.active::before {
+    top: auto;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    width: auto;
+    height: 2px;
   }
   .with-downloads .nav-link {
     flex-direction: column;
     justify-content: center;
-    gap: 3px;
-    padding: 6px 9px;
-    font-size: 12px;
+    gap: 2px;
+    padding: 5px 8px;
+    font-size: 11px;
     line-height: 1.3;
   }
   .nav-count {
@@ -315,9 +350,9 @@ onBeforeUnmount(() => {
     right: 0;
   }
 }
-@media (width < 440px) {
+@media (width < 380px) {
   .sidebar {
-    padding-inline: 12px;
+    padding-inline: 10px;
   }
   .brand-icon {
     display: none;

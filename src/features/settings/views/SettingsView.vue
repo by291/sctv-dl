@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { NButton, NRadioGroup, NRadioButton, NPopconfirm } from 'naive-ui'
-import { SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
+import { Database, History, SlidersHorizontal, Palette, Radio, RefreshCw } from '@lucide/vue'
 
 import { usePlatform } from '@/shared/platform/usePlatform'
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
@@ -92,7 +92,10 @@ onMounted(() => {
 
     <div class="settings-sections">
       <section class="settings-card">
-        <div class="settings-title"><h2 class="settings-heading">本地记录</h2></div>
+        <div class="settings-title">
+          <History :size="20" />
+          <h2 class="settings-heading">本地记录</h2>
+        </div>
         <div class="setting-row">
           <div class="setting-description">
             <h3 class="setting-label">观看历史</h3>
@@ -119,7 +122,10 @@ onMounted(() => {
         </div>
       </section>
       <section class="settings-card">
-        <div class="settings-title"><h2 class="settings-heading">节目缓存</h2></div>
+        <div class="settings-title">
+          <Database :size="20" />
+          <h2 class="settings-heading">节目缓存</h2>
+        </div>
         <div class="setting-row">
           <div class="setting-description">
             <h3 class="setting-label">栏目、日期和节目列表</h3>
@@ -266,46 +272,51 @@ onMounted(() => {
 <style scoped>
 .settings-sections {
   display: grid;
-  gap: 22px;
+  gap: 0;
 }
 .settings-card {
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 24px;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  padding: 26px 0;
+}
+.settings-card:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.settings-card:last-child {
+  padding-bottom: 0;
 }
 .settings-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 19px;
+  gap: 9px;
+  padding-bottom: 14px;
   color: var(--muted);
 }
 .settings-heading {
-  font-size: 18px;
-  line-height: inherit;
-  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.4;
+  font-weight: 700;
   color: var(--text);
 }
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 25px;
-  padding-top: 22px;
+  gap: 24px;
+  padding-top: 16px;
 }
 .setting-description {
-  max-width: 450px;
+  max-width: 480px;
 }
 .setting-label {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
 }
 .setting-help {
-  margin-top: 7px;
-  font-size: 14px;
-  line-height: 1.9;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.8;
   color: var(--muted);
 }
 .download-directory {
@@ -321,20 +332,20 @@ onMounted(() => {
   margin-right: 7px;
 }
 @media (width < 760px) {
-  .settings-sections {
-    gap: 16px;
-  }
   .settings-card {
-    padding: 16px;
+    padding: 20px 0;
+  }
+  .settings-card:first-child {
+    padding-top: 2px;
   }
   .settings-title {
-    padding-bottom: 14px;
+    padding-bottom: 12px;
   }
   .setting-row {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
-    padding-top: 18px;
+    padding-top: 14px;
   }
   .setting-description {
     max-width: none;

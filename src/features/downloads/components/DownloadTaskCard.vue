@@ -305,37 +305,48 @@ onDeactivated(() => {
 <style scoped>
 .download-task {
   display: grid;
-  grid-template-columns: 18px 160px minmax(0, 1fr) auto;
+  grid-template-columns: 18px 148px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 20px;
-  padding: 24px;
+  gap: 18px;
+  padding: 18px 20px;
   background: var(--panel);
 }
 .download-task + .download-task {
   border-top: 1px solid var(--line);
 }
 .download-task.is-selected {
-  background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--panel));
 }
 .download-cover {
   position: relative;
-  width: 160px;
+  width: 148px;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 0;
   padding: 0;
+  background: var(--subtle);
 }
 .cover-play {
   position: absolute;
-  inset: 0;
+  bottom: 8px;
+  left: 8px;
   display: grid;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  color: white;
-  background: #00000020;
+  border-radius: 50%;
+  border: 1px solid #ffffff33;
+  background: color-mix(in srgb, var(--rail) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 .download-cover:hover .cover-play {
-  background: #00000040;
+  background: var(--accent-fill);
+  transform: scale(1.05);
 }
 .download-cover:disabled {
   cursor: wait;
@@ -351,7 +362,7 @@ onDeactivated(() => {
   overflow: hidden;
   overflow-wrap: anywhere;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.5;
   font-weight: 600;
 }
 .download-metadata {
@@ -359,13 +370,13 @@ onDeactivated(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 12px;
   color: var(--muted);
 }
 .quality-label {
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--subtle);
 }
 .download-state {
@@ -412,7 +423,7 @@ onDeactivated(() => {
   .download-task {
     grid-template-columns: 18px 128px minmax(0, 1fr);
     gap: 16px;
-    padding: 20px;
+    padding: 16px;
   }
   .download-cover {
     width: 128px;
@@ -426,7 +437,7 @@ onDeactivated(() => {
   .download-task {
     grid-template-columns: 18px minmax(0, 1fr) auto;
     gap: 12px;
-    padding: 16px;
+    padding: 14px;
   }
   .download-cover {
     width: 100%;

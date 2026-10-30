@@ -12,6 +12,18 @@ const emit = defineEmits<{ refresh: [] }>()
 const refreshButtonTheme = { heightMedium: '42px' }
 
 const options = computed(() => props.dates.map((item) => ({ label: item.date, value: item.date })))
+const recentDates = computed(() =>
+  props.dates.slice(0, 7).map((item) => {
+    const date = new Date(`${item.date}T00:00:00`)
+
+    return {
+      value: item.date,
+      day: String(date.getDate()).padStart(2, '0'),
+      month: `${date.getMonth() + 1}月`,
+      weekday: date.toLocaleDateString('zh-CN', { weekday: 'short' }),
+    }
+  }),
+)
 </script>
 
 <template>
@@ -48,17 +60,20 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   <div
     v-if="dates.length"
     class="recent-dates"
+    role="group"
+    aria-label="最近播出日期"
   >
     <span class="recent-label">最近播出</span>
     <button
-      v-for="date in dates.slice(0, 7)"
-      :key="date.id"
+      v-for="date in recentDates"
+      :key="date.value"
       class="date-button"
-      :class="{ active: date.date === selectedDate }"
-      :aria-pressed="date.date === selectedDate"
-      @click="selectedDate = date.date"
+      :class="{ active: date.value === selectedDate }"
+      :aria-pressed="date.value === selectedDate"
+      @click="selectedDate = date.value"
     >
-      {{ date.date.slice(5).replace('-', '月') }}日
+      <span class="date-day">{{ date.day }}</span>
+      <span class="date-meta">{{ date.month }} {{ date.weekday }}</span>
     </button>
   </div>
 </template>
@@ -69,7 +84,7 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 24px;
+  padding: 18px 22px 12px;
 }
 .date-heading {
   font-size: 16px;
@@ -87,41 +102,66 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
 .recent-dates {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 0 24px 20px;
+  align-items: stretch;
+  gap: 6px;
+  padding: 0 22px 18px;
 }
 .recent-label {
-  margin-right: 10px;
-  font-size: 14px;
+  align-self: center;
+  margin-right: 8px;
+  font-size: 12px;
   color: var(--muted);
 }
 .date-button {
-  border-radius: 6px;
+  display: flex;
+  min-width: 60px;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  border-radius: 5px;
   border: 1px solid transparent;
-  background: var(--subtle);
-  padding: 7px 10px;
-  font-size: 14px;
+  background: transparent;
+  padding: 7px 9px;
   color: var(--muted);
   transition:
-    color 140ms ease,
-    background-color 140ms ease,
-    border-color 140ms ease;
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+.date-day {
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.date-meta {
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 .date-button.active {
-  border-color: #dc4f4135;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-color: var(--rail);
+  background: var(--rail);
+  color: var(--hero-muted);
+}
+.date-button.active .date-day {
+  color: var(--hero-text);
 }
 @media (hover: hover) {
   .date-button:hover {
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--subtle);
+    color: var(--text);
+  }
+  .date-button.active:hover {
+    border-color: var(--rail);
+    background: var(--rail);
+    color: var(--hero-muted);
   }
 }
 @media (width < 760px) {
   .date-toolbar {
-    padding: 16px;
+    padding: 16px 16px 12px;
   }
   .date-heading,
   .recent-label {
@@ -138,14 +178,16 @@ const options = computed(() => props.dates.map((item) => ({ label: item.date, va
   .recent-dates {
     flex-wrap: nowrap;
     overflow-x: auto;
-    margin-top: -8px;
-    padding: 8px 16px 16px;
+    gap: 4px;
+    margin-top: -4px;
+    padding: 6px 16px 14px;
     scrollbar-width: thin;
   }
   .date-button {
-    min-height: 44px;
+    min-width: 56px;
+    min-height: 48px;
     flex-shrink: 0;
-    padding: 8px 12px;
+    padding: 6px 8px;
   }
 }
 </style>

@@ -69,17 +69,17 @@ const fetchedLabel = computed(() =>
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 11px 14px;
   margin-bottom: 16px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 .programme-update-copy {
   flex: 1 1 240px;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.7;
 }
 @media (width < 760px) {
   .programme-update {

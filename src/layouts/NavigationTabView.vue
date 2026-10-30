@@ -144,24 +144,24 @@ onDeactivated(() => {
 .main-content {
   container: workspace / inline-size;
   width: 100%;
-  max-width: 1460px;
+  max-width: 1440px;
   flex: 1;
   margin: 0 auto;
-  padding: clamp(24px, 2.6vw, 38px) var(--page-gutter) 40px;
+  padding: clamp(26px, 2.8vw, 44px) var(--page-gutter) 48px;
 }
 @media (width < 760px) {
   .mobile-connection-warning {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 40px;
+    min-height: 38px;
     padding: 8px 16px;
     background: var(--subtle);
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12px;
   }
   .main-content {
-    padding: 20px 16px 28px;
+    padding: 22px 16px 32px;
   }
 }
 </style>

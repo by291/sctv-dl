@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   NConfigProvider,
   NGlobalStyle,
@@ -8,17 +9,20 @@ import {
   dateZhCN,
 } from 'naive-ui'
 
-import { themeOverrides } from '@/theme/naive-ui-theme'
+import { darkThemeOverrides, lightThemeOverrides } from '@/theme/naive-ui-theme'
 import { useAppTheme } from '@/theme/useAppTheme'
 import AppLayout from '@/layouts/AppLayout.vue'
 
 const { isDark } = useAppTheme()
+const activeThemeOverrides = computed(() =>
+  isDark.value ? darkThemeOverrides : lightThemeOverrides,
+)
 </script>
 
 <template>
   <NConfigProvider
     :theme="isDark ? darkTheme : null"
-    :theme-overrides="themeOverrides"
+    :theme-overrides="activeThemeOverrides"
     :locale="zhCN"
     :date-locale="dateZhCN"
   >

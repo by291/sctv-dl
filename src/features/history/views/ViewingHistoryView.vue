@@ -145,25 +145,35 @@ async function remove(entry: HistoryEntry): Promise<void> {
 
 <style scoped>
 .history-search {
-  max-width: 480px;
-  margin-bottom: 20px;
-}
-.history-results,
-.history-day {
-  display: grid;
-  gap: 12px;
+  max-width: 440px;
+  margin-bottom: 22px;
 }
 .history-results {
-  gap: 24px;
+  display: grid;
+  gap: 30px;
+}
+.history-day {
+  display: grid;
+  gap: 10px;
 }
 .history-day h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.history-day h2::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
 }
 .history-warning {
   margin-bottom: 16px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 </style>

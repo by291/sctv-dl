@@ -369,27 +369,29 @@ onDeactivated(() => {
 <style scoped>
 .download-total {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 .download-notice {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 .download-tabs {
   display: flex;
-  gap: 28px;
+  gap: 24px;
   overflow-x: auto;
-  padding: 4px 4px 0;
-  margin-bottom: 16px;
+  padding: 0;
+  margin-bottom: 18px;
   border-bottom: 1px solid var(--line);
 }
 .download-filter {
   flex-shrink: 0;
-  padding: 12px 0;
+  padding: 11px 2px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--muted);
   font-size: 14px;
+  transition: color var(--motion-fast) var(--motion-ease);
 }
 .download-filter[aria-pressed='true'] {
   color: var(--accent);
@@ -403,14 +405,18 @@ onDeactivated(() => {
   outline-offset: -3px !important;
 }
 .filter-count {
-  margin-left: 8px;
+  margin-left: 7px;
+  border-radius: var(--radius-sm);
+  background: var(--subtle);
+  padding: 1px 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .download-list-count {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .download-service-error {
   display: flex;
@@ -424,14 +430,15 @@ onDeactivated(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 68px;
+  height: 60px;
   gap: 16px;
-  padding: 8px 24px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--subtle) 45%, var(--panel));
 }
 .download-list-panel {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   overflow: clip;
   background: var(--panel);
 }
@@ -458,7 +465,7 @@ onDeactivated(() => {
   gap: 8px;
   width: 100%;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
 }
 .batch-failures {
@@ -471,7 +478,7 @@ onDeactivated(() => {
 }
 .download-empty {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 .download-list {
@@ -482,15 +489,18 @@ onDeactivated(() => {
 }
 @media (width < 1100px) {
   .download-list-header {
-    padding-inline: 20px;
+    padding-inline: 16px;
   }
 }
 @media (width < 760px) {
   .page-heading {
     flex-wrap: wrap;
   }
+  .download-tabs {
+    gap: 20px;
+  }
   .download-list-header {
-    padding-inline: 16px;
+    padding-inline: 14px;
     gap: 8px;
   }
   .batch-actions :deep(.n-button) {

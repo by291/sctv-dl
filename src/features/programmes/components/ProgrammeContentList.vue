@@ -113,7 +113,7 @@ function toggleContentSort() {
               class="thumbnail-play"
             >
               <Play
-                :size="fullEpisode ? 24 : 15"
+                :size="18"
                 fill="currentColor"
               />
             </span>
@@ -195,13 +195,13 @@ function toggleContentSort() {
 <style scoped>
 .content-list {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   animation: content-reveal var(--motion-normal) var(--motion-ease);
 }
 .content-group {
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--panel);
 }
 .full-episode-group {
@@ -222,9 +222,9 @@ function toggleContentSort() {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 64px;
+  min-height: 58px;
   border-bottom: 1px solid var(--line);
-  padding: 12px 24px;
+  padding: 10px 20px;
 }
 .content-sort {
   margin-right: -8px;
@@ -236,72 +236,74 @@ function toggleContentSort() {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.5;
   font-weight: 600;
 }
 .group-count {
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--subtle);
-  padding: 2px 7px;
+  padding: 1px 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 .content-row {
   display: grid;
-  grid-template-columns: 208px minmax(0, 1fr) 20px;
+  grid-template-columns: 200px minmax(0, 1fr) 18px;
   grid-template-areas: 'thumbnail info selection';
   align-items: start;
-  gap: 24px;
+  gap: 22px;
   border-bottom: 1px solid var(--line);
-  padding: 20px 24px;
+  padding: 18px 20px;
   transition:
-    color 140ms ease,
-    background-color 140ms ease,
-    border-color 140ms ease;
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
 }
 .content-row:last-child {
   border-bottom: 0;
 }
 .content-row.checked {
-  background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--panel));
 }
 .content-row.full-episode-card {
-  grid-template-columns: 288px minmax(0, 1fr) 20px;
+  grid-template-columns: 300px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 24px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--panel);
-  padding: 24px;
+  padding: 22px;
 }
 .full-episode-card.checked {
-  background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--panel));
 }
 .full-episode-card .content-thumbnail {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 .full-episode-card .content-info {
   align-self: center;
 }
 .content-category {
-  margin-bottom: 10px;
+  margin-bottom: 9px;
   color: var(--accent);
-  font-size: 13px;
-  line-height: 1.5;
-  font-weight: 500;
-}
-.full-episode-card .content-title {
-  font-size: 22px;
+  font-size: 12px;
   line-height: 1.5;
   font-weight: 600;
 }
+.full-episode-card .content-title {
+  font-size: 21px;
+  line-height: 1.45;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
 .full-episode-card .content-actions {
-  margin-top: 20px;
+  margin-top: 18px;
   padding-top: 0;
 }
 .content-checkbox {
@@ -316,19 +318,37 @@ function toggleContentSort() {
   align-self: start;
   position: relative;
   aspect-ratio: 16 / 9;
-  width: 208px;
+  width: 200px;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: 4px;
   border: 0;
   padding: 0;
+  background: var(--subtle);
 }
 .thumbnail-play {
   position: absolute;
-  inset: 0;
+  bottom: 8px;
+  left: 8px;
   display: grid;
+  width: clamp(24px, 13%, 40px);
+  aspect-ratio: 1;
   place-items: center;
-  background: #00000020;
-  color: white;
+  border-radius: 50%;
+  border: 1px solid #ffffff33;
+  background: color-mix(in srgb, var(--rail) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+.thumbnail-play :deep(svg) {
+  width: 50%;
+  height: 50%;
+}
+.full-episode-card .thumbnail-play {
+  bottom: 12px;
+  left: 12px;
 }
 .content-info {
   grid-area: info;
@@ -348,7 +368,7 @@ function toggleContentSort() {
   flex-wrap: wrap;
   gap: 4px 6px;
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -359,6 +379,7 @@ function toggleContentSort() {
 .content-unavailable {
   margin-bottom: 7px;
   color: var(--muted);
+  font-size: 13px;
 }
 .content-title {
   display: -webkit-box;
@@ -369,7 +390,7 @@ function toggleContentSort() {
   padding: 0;
   background: transparent;
   color: var(--text);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.5;
   font-weight: 500;
   text-align: left;
@@ -393,18 +414,24 @@ function toggleContentSort() {
   margin-top: auto;
   padding-top: 8px;
 }
+@media (hover: hover) {
+  .content-thumbnail:hover .thumbnail-play {
+    background: var(--accent-fill);
+    transform: scale(1.05);
+  }
+}
 @media (width < 1020px) {
   .content-row.full-episode-card {
-    grid-template-columns: 220px minmax(0, 1fr) 20px;
+    grid-template-columns: 236px minmax(0, 1fr) 18px;
     gap: 20px;
   }
   .full-episode-card .content-title {
-    font-size: 20px;
+    font-size: 19px;
   }
 }
 @media (width < 760px) {
   .group-toolbar {
-    min-height: 60px;
+    min-height: 56px;
     padding: 8px 16px;
   }
   .content-sort {
@@ -413,10 +440,10 @@ function toggleContentSort() {
     margin-right: -12px;
   }
   .content-row {
-    grid-template-columns: 88px minmax(0, 1fr) 20px;
+    grid-template-columns: 88px minmax(0, 1fr) 18px;
     align-items: start;
     gap: 12px;
-    padding: 16px;
+    padding: 14px 16px;
   }
   .content-checkbox {
     min-height: 44px;
@@ -435,31 +462,31 @@ function toggleContentSort() {
   }
   .content-title {
     padding: 0;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.5;
   }
   .content-publication {
-    font-size: 12px;
+    font-size: 11px;
   }
   .content-publication time {
     white-space: normal;
   }
   .content-row.full-episode-card {
-    grid-template-columns: minmax(0, 1fr) 20px;
+    grid-template-columns: minmax(0, 1fr) 18px;
     grid-template-areas:
       'thumbnail selection'
       'info selection';
-    gap: 16px;
-    padding: 16px;
+    gap: 14px;
+    padding: 14px;
   }
   .full-episode-card .content-title {
-    font-size: 18px;
+    font-size: 17px;
   }
   .content-actions {
     padding-top: 12px;
   }
   .full-episode-card .content-actions {
-    margin-top: 16px;
+    margin-top: 14px;
   }
 }
 </style>

@@ -34,9 +34,10 @@ const tabTheme = {
   tabTextColorLine: 'var(--muted)',
   tabTextColorActiveLine: 'var(--text)',
   tabTextColorHoverLine: 'var(--text)',
+  barColor: 'var(--accent)',
   tabFontWeightActive: '600',
-  tabFontSizeMedium: '16px',
-  tabGapMediumLine: '24px',
+  tabFontSizeMedium: '15px',
+  tabGapMediumLine: '26px',
   tabPaddingMediumLine: 'var(--library-tab-padding)',
   tabBorderColor: 'var(--line)',
 }
@@ -123,17 +124,6 @@ onActivated(async () => {
         :can-change="canChange"
         @change="chooseAnother"
       />
-      <div class="library-stat">
-        <h2 class="library-stat-heading">节目概览</h2>
-        <div class="library-stat-row">
-          <span>全部栏目</span>
-          <strong class="library-stat-value">{{ store.programmes.length }}</strong>
-        </div>
-        <div class="library-stat-row">
-          <span>已收藏</span>
-          <strong class="library-stat-value">{{ settings.favourites.length }}</strong>
-        </div>
-      </div>
     </div>
 
     <div class="library-toolbar">
@@ -250,100 +240,66 @@ onActivated(async () => {
   position: relative;
 }
 .library-tabs :deep(.n-tabs-tab:focus-visible) {
-  outline: 3px solid #e99389;
+  outline: 2px solid var(--focus);
   outline-offset: -3px;
 }
 .library-tabs .filter-count {
   position: absolute;
   top: 50%;
   left: 100%;
-  margin-left: 8px;
+  margin-left: 7px;
   translate: 0 -50%;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--subtle);
-  padding: 2px 5px;
-  font-size: 14px;
+  padding: 1px 6px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--muted);
   transition:
-    color 140ms ease,
-    background-color 140ms ease;
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease);
 }
 .library-tabs :deep(.n-tabs-tab--active) .filter-count {
   background: var(--accent-soft);
   color: var(--accent);
 }
 .library-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 224px;
-  gap: 20px;
-  margin-bottom: 31px;
-}
-.library-stat {
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 20px 24px;
-}
-.library-stat-heading {
-  margin-bottom: 12px;
-  font-size: 16px;
-  font-weight: 700;
-}
-.library-stat-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-block: 4px;
-  font-size: 14px;
-  color: var(--muted);
-}
-.library-stat-value {
-  font-size: 22px;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+  margin-bottom: 30px;
 }
 .library-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 .library-filters {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 3px;
 }
 .library-search {
-  width: 200px !important;
+  width: 224px !important;
 }
 .library-sort {
-  width: 148px !important;
+  width: 144px !important;
 }
 .programme-grid {
   display: grid;
   /* Keep filtered results at the same thumbnail size as the complete catalogue. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-  column-gap: 20px;
-  row-gap: 22px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 212px), 1fr));
+  column-gap: 22px;
+  row-gap: 26px;
 }
 .list-footer {
   display: flex;
   justify-content: space-between;
-  padding-top: 25px;
-  font-size: 14px;
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  font-size: 13px;
   color: var(--muted);
-}
-@container workspace (width < 960px) {
-  .library-stat {
-    display: none;
-  }
-  .library-intro {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 @container workspace (width < 720px) {
   .library-tabs {
@@ -353,7 +309,7 @@ onActivated(async () => {
   .library-toolbar {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 14px;
     border: 0;
   }
   .library-filters {
@@ -366,7 +322,7 @@ onActivated(async () => {
 }
 @media (width < 760px) {
   .library-intro {
-    margin-bottom: 20px;
+    margin-bottom: 22px;
   }
   .library-filters {
     gap: 8px;
@@ -380,12 +336,13 @@ onActivated(async () => {
   }
   .programme-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px 12px;
+    gap: 18px 12px;
   }
   .list-footer {
     flex-direction: column;
     gap: 4px;
-    padding-top: 20px;
+    margin-top: 24px;
+    padding-top: 14px;
   }
 }
 </style>

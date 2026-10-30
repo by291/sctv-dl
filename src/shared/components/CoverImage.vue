@@ -55,6 +55,7 @@ watch(
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 400ms var(--motion-ease);
 }
 .cover-fallback {
   display: flex;
@@ -65,7 +66,7 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(125deg, var(--subtle), var(--accent-soft));
+  background: linear-gradient(135deg, var(--subtle), var(--accent-soft));
   padding: 12px;
   text-align: center;
   color: var(--muted);
@@ -74,7 +75,7 @@ watch(
   width: 100%;
   flex-shrink: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

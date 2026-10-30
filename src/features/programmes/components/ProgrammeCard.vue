@@ -27,7 +27,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
         :alt="programme.name"
       />
       <span class="cover-open">
-        <ArrowUpRight :size="20" />
+        <ArrowUpRight :size="19" />
       </span>
     </RouterLink>
 
@@ -55,10 +55,6 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
       >
         {{ programme.name }}
       </h3>
-      <ArrowUpRight
-        class="caption-arrow"
-        :size="18"
-      />
     </RouterLink>
   </article>
 </template>
@@ -66,105 +62,116 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
 <style scoped>
 .programme-card {
   position: relative;
-  overflow: hidden;
-  border-radius: 11px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  transition:
-    transform 200ms ease,
-    box-shadow 200ms ease;
+  min-width: 0;
 }
 .programme-cover {
   position: relative;
   display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--subtle);
+  transition: border-color var(--motion-fast) var(--motion-ease);
 }
 .programme-image {
-  aspect-ratio: 16 / 9;
+  height: 100%;
 }
 .cover-open {
   position: absolute;
-  inset: 0;
+  right: 9px;
+  bottom: 9px;
   display: grid;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  background: #13192633;
-  color: white;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ffffff33;
+  background: color-mix(in srgb, var(--rail) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: #fff;
   opacity: 0;
-  transition: opacity 200ms ease;
+  transform: translateY(2px);
+  transition:
+    opacity var(--motion-normal) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-normal) var(--motion-ease);
 }
 .favourite-button {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 9px;
+  right: 9px;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   place-items: center;
-  border-radius: 7px;
-  border: 1px solid #ffffff50;
-  backdrop-filter: blur(8px);
-  background: #17223145;
-  color: white;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ffffff5c;
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--rail) 62%, transparent);
+  color: #fff;
   transition:
-    color 140ms ease,
-    background-color 140ms ease,
-    border-color 140ms ease;
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 .favourite-button.saved {
-  background: #ffffffdf;
-  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  transform: rotate(-3deg);
 }
 .favourite-button.saved :deep(svg) {
   animation: favourite-pop 220ms var(--motion-ease);
 }
 .programme-caption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 16px;
+  display: block;
+  padding: 10px 2px 0;
 }
 .programme-name {
   display: -webkit-box;
-  min-width: 0;
-  flex: 1;
   overflow: hidden;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.45;
   font-weight: 600;
   overflow-wrap: anywhere;
+  transition: color var(--motion-fast) var(--motion-ease);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.caption-arrow {
-  color: #b2b8c0;
-}
 @media (hover: hover) {
-  .programme-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px #20232a0d;
+  .programme-cover:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   }
   .programme-cover:hover .cover-open {
     opacity: 1;
+    transform: none;
+  }
+  .cover-open:hover {
+    background: var(--accent-fill);
+  }
+  .programme-cover:hover :deep(.cover-photo) {
+    transform: scale(1.025);
+  }
+  .programme-card:hover .programme-name {
+    color: var(--accent);
   }
   .favourite-button:hover {
-    background: #ffffffdf;
+    border-color: #fff;
+    background: #fff;
     color: var(--accent);
   }
 }
 @media (width < 760px) {
   .favourite-button {
-    top: 8px;
-    right: 8px;
+    top: 7px;
+    right: 7px;
     width: 44px;
     height: 44px;
   }
   .programme-caption {
-    padding-inline: 12px;
-  }
-}
-@media (width < 440px) {
-  .caption-arrow {
-    display: none;
+    padding-top: 8px;
   }
 }
 </style>

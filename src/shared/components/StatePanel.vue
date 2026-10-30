@@ -49,12 +49,12 @@ defineEmits<{ retry: [] }>()
 <style scoped>
 .state-panel {
   display: flex;
-  min-height: 285px;
+  min-height: 260px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  padding: 40px 20px;
+  gap: 12px;
+  padding: 36px 20px;
   text-align: center;
   color: var(--muted);
   animation: content-reveal var(--motion-normal) var(--motion-ease);
@@ -63,13 +63,13 @@ defineEmits<{ retry: [] }>()
   color: var(--accent);
 }
 .state-title {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text);
 }
 .state-description {
-  max-width: 470px;
-  font-size: 14px;
+  max-width: 44ch;
+  font-size: 13px;
   line-height: 1.8;
 }
 </style>
