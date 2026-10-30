@@ -30,6 +30,14 @@ const sortOptions = [
   { label: '默认排序', value: 'default' },
   { label: '按名称排序', value: 'name' },
 ]
+const refreshButtonTheme = {
+  textColor: 'var(--muted)',
+  textColorHover: 'var(--accent)',
+  textColorPressed: 'var(--accent)',
+  textColorFocus: 'var(--accent)',
+  heightMedium: '36px',
+  fontSizeMedium: '14px',
+}
 const tabTheme = {
   tabTextColorLine: 'var(--muted)',
   tabTextColorActiveLine: 'var(--text)',
@@ -96,8 +104,10 @@ onActivated(async () => {
         <h1>节目库</h1>
       </div>
       <NButton
+        class="library-refresh"
         :loading="store.refreshing"
-        secondary
+        quaternary
+        :theme-overrides="refreshButtonTheme"
         @click="store.load(true)"
       >
         <template #icon><RefreshCw :size="16" /></template>
@@ -226,6 +236,9 @@ onActivated(async () => {
 </template>
 
 <style scoped>
+.library-refresh {
+  min-height: 36px;
+}
 .library-tabs {
   --library-tab-padding: 9px 0 12px;
   margin-bottom: -1px;
@@ -321,6 +334,9 @@ onActivated(async () => {
   }
 }
 @media (width < 760px) {
+  .library-refresh {
+    min-height: 44px;
+  }
   .library-intro {
     margin-bottom: 22px;
   }

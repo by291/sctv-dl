@@ -72,6 +72,7 @@ const menuOptions = computed(() =>
       label: downloadActionLabel(action),
       icon: () => h(actionIcons[action], { size: 16 }),
       disabled: props.busy,
+      props: action === 'deleteFile' ? { style: { color: 'var(--accent)' } } : undefined,
     })),
 )
 const showProgress = computed(
