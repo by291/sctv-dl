@@ -33,6 +33,8 @@ const programmes = useProgrammeCatalogueStore()
 const tasks = useDownloadTasksStore()
 const downloads = platform.downloads
 const appVersion = import.meta.env.APP_VERSION
+// Only the macOS Tauri shell hides its title bar; Windows keeps the native bar.
+const overlayTitleBar = platform.kind === 'tauri' && /Macintosh|Mac OS X/i.test(navigator.userAgent)
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
@@ -66,8 +68,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <aside class="sidebar">
+  <div
+    class="app-shell"
+    :class="{ 'overlay-title-bar': overlayTitleBar }"
+  >
+    <aside
+      class="sidebar"
+      data-tauri-drag-region
+    >
       <RouterLink
         to="/"
         class="brand"
@@ -155,6 +163,11 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overscroll-behavior: none;
   color: var(--rail-text);
+}
+/* The macOS overlay title bar floats traffic lights over the rail. The extra
+   top padding clears them and leaves the sidebar padding as a drag region. */
+.app-shell.overlay-title-bar .sidebar {
+  padding-top: 52px;
 }
 .brand {
   display: flex;
@@ -295,6 +308,10 @@ onBeforeUnmount(() => {
     border-right: 0;
     border-bottom: 1px solid var(--rail-line);
     padding: 0 14px;
+  }
+  .app-shell.overlay-title-bar .sidebar {
+    height: 90px;
+    padding-top: 28px;
   }
   .brand {
     min-height: 44px;

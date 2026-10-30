@@ -84,34 +84,55 @@ async fn confirm_dialog<R: Runtime>(
 }
 
 pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem, MenuItemKind, PredefinedMenuItem};
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
-    let menu = Menu::default(app)?;
+    // Keep the platform's localized quit label while routing it through the exit controller.
     let quit_text = PredefinedMenuItem::quit(app, None)?.text()?;
-    let mut replaced = false;
-    for item in menu.items()? {
-        if let MenuItemKind::Submenu(submenu) = item {
-            for (index, item) in submenu.items()?.into_iter().enumerate() {
-                if let MenuItemKind::Predefined(item) = item
-                    && item.text()? == quit_text
-                {
-                    // Predefined IDs are instance-specific. Match the platform-provided Quit label.
-                    // macOS's predefined Quit invokes terminate: without ExitRequested.
-                    replaced = true;
-                    submenu.remove_at(index)?;
-                    submenu.insert(
-                        &MenuItem::with_id(app, "quit", item.text()?, true, Some("CmdOrCtrl+Q"))?,
-                        index,
-                    )?;
-                }
-            }
-        }
-    }
+    let quit = MenuItem::with_id(app, "quit", quit_text, true, Some("CmdOrCtrl+Q"))?;
 
-    if cfg!(any(target_os = "macos", target_os = "windows")) && !replaced {
-        return Err(std::io::Error::other("default Quit menu was not found").into());
-    }
+    let undo = PredefinedMenuItem::undo(app, None)?;
+    let redo = PredefinedMenuItem::redo(app, None)?;
+    let cut = PredefinedMenuItem::cut(app, None)?;
+    let copy = PredefinedMenuItem::copy(app, None)?;
+    let paste = PredefinedMenuItem::paste(app, None)?;
+    let select_all = PredefinedMenuItem::select_all(app, None)?;
+    let edit_rule = PredefinedMenuItem::separator(app)?;
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[&undo, &redo, &edit_rule, &cut, &copy, &paste, &select_all],
+    )?;
 
+    let minimize = PredefinedMenuItem::minimize(app, None)?;
+    let maximize = PredefinedMenuItem::maximize(app, None)?;
+    let close = PredefinedMenuItem::close_window(app, None)?;
+    let window_rule = PredefinedMenuItem::separator(app)?;
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[&minimize, &maximize, &window_rule, &close],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let application = {
+        let about = PredefinedMenuItem::about(app, None, None)?;
+        let hide = PredefinedMenuItem::hide(app, None)?;
+        let about_rule = PredefinedMenuItem::separator(app)?;
+        let hide_rule = PredefinedMenuItem::separator(app)?;
+        Submenu::with_items(
+            app,
+            "SCTV DL",
+            true,
+            &[&about, &about_rule, &hide, &hide_rule, &quit],
+        )?
+    };
+
+    #[cfg(not(target_os = "macos"))]
+    let application = Submenu::with_items(app, "File", true, &[&quit])?;
+
+    let menu = Menu::with_items(app, &[&application, &edit, &window])?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         if event.id().as_ref() == "quit" {
