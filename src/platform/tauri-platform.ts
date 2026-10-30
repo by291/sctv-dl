@@ -6,6 +6,7 @@ import { createTauriHistory } from '@/features/history/api/history.tauri'
 import { createTauriProgrammeCache } from '@/features/programmes/api/programme-cache.tauri'
 
 import { prepareNativeExit } from '@/platform/exit.tauri'
+import { createTauriWindowControls } from '@/platform/window-controls.tauri'
 
 import type { AppPlatform } from '@/shared/platform/ports'
 
@@ -22,6 +23,7 @@ export function createTauriPlatform(): AppPlatform {
     settings: createTauriSettings(),
     history: history.port,
     programmeCache: programmeCache.port,
+    windowControls: createTauriWindowControls(),
     prepareExit: prepareNativeExit,
     async dispose() {
       await playback.dispose()

@@ -85,6 +85,15 @@ export interface SettingsPort {
   subscribe(listener: (value: Settings) => void): Promise<() => void>
 }
 
+// Native window chrome is owned by the shell; the web build omits this port.
+export interface WindowControlsPort {
+  minimize(): Promise<void>
+  toggleMaximize(): Promise<void>
+  close(): Promise<void>
+  isMaximized(): Promise<boolean>
+  onResized(listener: () => void): Promise<() => void>
+}
+
 export interface AppPlatform {
   kind: 'web' | 'tauri'
   programmes: ProgrammeApi
@@ -93,6 +102,7 @@ export interface AppPlatform {
   settings: SettingsPort
   history: HistoryPort
   programmeCache: ProgrammeCachePort
+  windowControls?: WindowControlsPort
   prepareExit?(prepare: () => Promise<boolean>): Promise<() => void>
   dispose(): Promise<void>
 }

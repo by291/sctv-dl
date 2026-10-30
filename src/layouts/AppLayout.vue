@@ -8,6 +8,7 @@ import { Tv, Library, Download, Settings2, History } from '@lucide/vue'
 import { useProgrammeCatalogueStore } from '@/features/programmes/stores/useProgrammeCatalogueStore'
 import { useDownloadTasksStore } from '@/features/downloads/stores/useDownloadTasksStore'
 import NavigationTabView from '@/layouts/NavigationTabView.vue'
+import WindowTitleBar from '@/layouts/WindowTitleBar.vue'
 import { navigationTab } from '@/shared/navigation/navigation-tab'
 import type { NavigationTab } from '@/shared/navigation/navigation-tab'
 import { usePlatform } from '@/shared/platform/usePlatform'
@@ -33,8 +34,12 @@ const programmes = useProgrammeCatalogueStore()
 const tasks = useDownloadTasksStore()
 const downloads = platform.downloads
 const appVersion = import.meta.env.APP_VERSION
-// Only the macOS Tauri shell hides its title bar; Windows keeps the native bar.
+const windowControls = platform.windowControls
+// macOS keeps its native traffic lights over the content; Windows replaces the
+// native frame with the app-owned title bar and window controls.
 const overlayTitleBar = platform.kind === 'tauri' && /Macintosh|Mac OS X/i.test(navigator.userAgent)
+const windowsFrameless =
+  platform.kind === 'tauri' && /Windows|Win32|Win64/i.test(navigator.userAgent) && !!windowControls
 
 const links = [
   { to: '/', label: '节目库', icon: Library },
@@ -70,91 +75,107 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="app-shell"
-    :class="{ 'overlay-title-bar': overlayTitleBar }"
+    :class="{ 'overlay-title-bar': overlayTitleBar, 'windows-frameless': windowsFrameless }"
   >
-    <aside
-      class="sidebar"
-      data-tauri-drag-region
-    >
-      <RouterLink
-        to="/"
-        class="brand"
-        aria-label="sctv-dl 首页"
-      >
-        <span class="brand-icon">
-          <Tv :size="22" />
-        </span>
-        <!-- prettier-ignore -->
-        <span>sctv<span class="brand-dash">-dl</span><small class="brand-description">电视节目下载</small></span>
-      </RouterLink>
-      <nav
-        class="primary-nav"
-        :class="{ 'with-downloads': downloads.kind === 'native' }"
-        aria-label="主导航"
+    <WindowTitleBar
+      v-if="windowsFrameless && windowControls"
+      :controls="windowControls"
+    />
+    <div class="app-body">
+      <aside
+        class="sidebar"
+        data-tauri-drag-region
       >
         <RouterLink
-          v-for="link in links"
-          :key="link.to"
-          :to="destinations[navigationTab(link.to)]"
-          class="nav-link"
-          :class="{ active: isActive(link.to) }"
-          :aria-label="link.to === '/downloads' ? downloadNavigationLabel : undefined"
+          to="/"
+          class="brand"
+          aria-label="sctv-dl 首页"
         >
-          <component
-            :is="link.icon"
-            :size="18"
-            :stroke-width="1.8"
-          />
-          <span>{{ link.label }}</span>
-          <NBadge
-            v-if="link.to === '/downloads' && tasks.activeCount"
-            class="nav-count"
-            :value="tasks.activeCount"
-            :max="99"
-            aria-hidden="true"
-          />
+          <span class="brand-icon">
+            <Tv :size="22" />
+          </span>
+          <!-- prettier-ignore -->
+          <span>sctv<span class="brand-dash">-dl</span><small class="brand-description">电视节目下载</small></span>
         </RouterLink>
-      </nav>
-      <div class="sidebar-bottom">
-        <div
-          class="connection"
-          role="status"
+        <nav
+          class="primary-nav"
+          :class="{ 'with-downloads': downloads.kind === 'native' }"
+          aria-label="主导航"
         >
-          <span
-            class="status-dot"
-            :class="{ offline: programmes.serviceStatus.error }"
-            aria-hidden="true"
-          />
-          {{ connectionLabel }}
+          <RouterLink
+            v-for="link in links"
+            :key="link.to"
+            :to="destinations[navigationTab(link.to)]"
+            class="nav-link"
+            :class="{ active: isActive(link.to) }"
+            :aria-label="link.to === '/downloads' ? downloadNavigationLabel : undefined"
+          >
+            <component
+              :is="link.icon"
+              :size="18"
+              :stroke-width="1.8"
+            />
+            <span>{{ link.label }}</span>
+            <NBadge
+              v-if="link.to === '/downloads' && tasks.activeCount"
+              class="nav-count"
+              :value="tasks.activeCount"
+              :max="99"
+              aria-hidden="true"
+            />
+          </RouterLink>
+        </nav>
+        <div class="sidebar-bottom">
+          <div
+            class="connection"
+            role="status"
+          >
+            <span
+              class="status-dot"
+              :class="{ offline: programmes.serviceStatus.error }"
+              aria-hidden="true"
+            />
+            {{ connectionLabel }}
+          </div>
+          <div class="version">
+            {{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v{{ appVersion }}
+          </div>
         </div>
-        <div class="version">
-          {{ platform.kind === 'tauri' ? 'Desktop' : 'Web' }} · v{{ appVersion }}
-        </div>
-      </div>
-    </aside>
-    <KeepAlive :max="4">
-      <NavigationTabView
-        :key="activeTab"
-        :route="route"
-        :warning="programmes.serviceStatus.error ? connectionLabel : ''"
-      />
-    </KeepAlive>
+      </aside>
+      <KeepAlive :max="4">
+        <NavigationTabView
+          :key="activeTab"
+          :route="route"
+          :warning="programmes.serviceStatus.error ? connectionLabel : ''"
+        />
+      </KeepAlive>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .app-shell {
+  --sidebar-width: 240px;
+
   display: flex;
   height: 100dvh;
+  flex-direction: column;
   overflow: hidden;
   background: var(--bg);
+}
+.app-body {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 .sidebar {
   --focus: var(--rail-text);
 
   display: flex;
   height: 100%;
-  width: 240px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   flex-direction: column;
   border-right: 1px solid var(--rail-line);
@@ -278,14 +299,18 @@ onBeforeUnmount(() => {
   }
 }
 @media (width < 1250px) {
+  .app-shell {
+    --sidebar-width: 220px;
+  }
   .sidebar {
-    width: 220px;
     padding-inline: 12px;
   }
 }
 @media (width < 1020px) {
+  .app-shell {
+    --sidebar-width: 204px;
+  }
   .sidebar {
-    width: 204px;
     padding-inline: 8px;
   }
   .brand {
@@ -295,6 +320,9 @@ onBeforeUnmount(() => {
 }
 @media (width < 760px) {
   .app-shell {
+    --sidebar-width: 100%;
+  }
+  .app-body {
     flex-direction: column;
   }
   .sidebar {

@@ -83,6 +83,13 @@ async fn confirm_dialog<R: Runtime>(
     receive.await.unwrap_or(false)
 }
 
+#[cfg(target_os = "windows")]
+pub fn install_menu<R: Runtime>(_app: &AppHandle<R>) -> tauri::Result<()> {
+    // The Windows shell owns its title bar; a native menu bar would sit below it.
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
 pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
