@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useTemplateRef } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { NButton, NModal, NSpin } from 'naive-ui'
 
 import ProgrammeVideoPlayer from '@/features/programmes/components/ProgrammeVideoPlayer.vue'
@@ -18,6 +18,11 @@ const props = defineProps<{
 }>()
 
 const videoPlayer = useTemplateRef('videoPlayer')
+const contextLabel = computed(() => {
+  const metadata = props.input?.metadata
+
+  return metadata ? `${metadata.programmeName} ${metadata.broadcastDate}` : ''
+})
 const {
   displayedContent,
   session,
@@ -49,12 +54,20 @@ const {
     @after-leave="clearPreview"
   >
     <template #header>
-      <span
-        class="preview-title"
-        :title="displayedContent?.title"
-      >
-        {{ displayedContent?.title }}
-      </span>
+      <div class="preview-heading">
+        <span
+          class="preview-title"
+          :title="displayedContent?.title"
+        >
+          {{ displayedContent?.title }}
+        </span>
+        <span
+          v-if="contextLabel"
+          class="preview-context"
+        >
+          {{ contextLabel }}
+        </span>
+      </div>
     </template>
     <ProgrammeVideoPlayer
       v-if="displayedContent && url"
@@ -123,12 +136,36 @@ const {
 :global(.preview-modal) {
   width: min(860px, calc(100vw - 32px)) !important;
 }
+:global(.preview-modal .n-card-header) {
+  padding: 16px 18px 12px;
+}
+:global(.preview-modal .n-card-content) {
+  padding: 0 18px 18px;
+}
 :global(.preview-modal .n-card-header__main) {
+  min-width: 0;
+}
+.preview-heading {
   min-width: 0;
 }
 .preview-title {
   display: block;
   overflow: hidden;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preview-context {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -136,18 +173,22 @@ const {
   display: grid;
   place-items: center;
   aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: var(--subtle);
 }
 .preview-retry {
   margin-top: 12px;
 }
 .preview-quality-notice {
   padding-top: 12px;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.7;
   color: var(--muted);
 }
 .preview-error {
   padding-top: 12px;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.7;
   color: var(--accent);
 }
 @media (width < 760px) {
@@ -156,7 +197,7 @@ const {
   }
   :global(.preview-modal.n-card > .n-card-header) {
     align-items: flex-start;
-    padding: 12px 12px 8px;
+    padding: 12px 12px 10px;
   }
   :global(.preview-modal.n-card > .n-card-content) {
     padding: 0 12px 12px;
@@ -171,6 +212,9 @@ const {
   :global(.preview-modal .n-card-header__main) {
     font-size: 16px;
     line-height: 1.5;
+  }
+  .preview-title {
+    font-size: 15px;
   }
 }
 </style>

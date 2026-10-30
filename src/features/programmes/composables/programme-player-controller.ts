@@ -52,7 +52,8 @@ function createPlayerOptions(container: HTMLDivElement, options: PlayerOptions):
     poster: options.poster || '',
     type: 'mp4',
     lang: 'zh-cn',
-    theme: '#dc4f41',
+    // The player surface stays dark in both themes, so controls use the brighter accent.
+    theme: '#e46455',
     autoplay: false,
     playsInline: true,
     setting: true,

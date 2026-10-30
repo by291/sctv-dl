@@ -98,6 +98,9 @@ const status = computed(() =>
       ? 'error'
       : 'default',
 )
+const activeState = computed(() =>
+  ['queued', 'running', 'pausing', 'finalizing'].includes(props.task.state),
+)
 
 function bytes(value: number): string {
   if (value < 1024) {
@@ -199,11 +202,17 @@ onDeactivated(() => {
           :class="{
             'is-saved': task.state === 'completed',
             'is-error': task.state === 'failed' || task.state === 'missing',
+            'is-active': activeState,
           }"
         >
           <Check
             v-if="task.state === 'completed'"
             :size="14"
+            aria-hidden="true"
+          />
+          <span
+            v-else
+            class="state-dot"
             aria-hidden="true"
           />
           {{ labels[task.state] }}
@@ -393,6 +402,16 @@ onDeactivated(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.state-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+.is-active {
+  color: var(--accent);
 }
 .is-saved {
   color: var(--green);

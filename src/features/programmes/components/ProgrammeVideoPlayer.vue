@@ -67,7 +67,7 @@ onBeforeUnmount(controller.dispose)
   container: programme-player / inline-size;
   aspect-ratio: 16 / 9;
   width: 100%;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: #08090b;
   --art-font-size: 14px;
 }
