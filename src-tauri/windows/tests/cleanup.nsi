@@ -112,6 +112,41 @@ Section
   Push "$EXEDIR\profile"
   Call SctvClearPrivateData
   !insertmacro AssertPath "$EXEDIR\profile\episode.mp4" "present"
+
+  ; An absent path needs no warning, but an invalid path cannot be verified absent.
+  StrCpy $SctvPreservedData 0
+  Push "$EXEDIR\missing-profile"
+  Call SctvClearPrivateData
+  ${If} $SctvPreservedData != 0
+    FileWrite $9 "FAIL: missing profile reported as preserved$\r$\n"
+    SetErrorLevel 1
+    Goto done
+  ${EndIf}
+
+  Push "$EXEDIR\invalid<profile"
+  Call SctvClearPrivateData
+  ${If} $SctvPreservedData != 1
+    FileWrite $9 "FAIL: profile probe error was treated as absence$\r$\n"
+    SetErrorLevel 1
+    Goto done
+  ${EndIf}
+
+  ; A failed delete leaves the remaining file and reports incomplete cleanup.
+  StrCpy $SctvPreservedData 0
+  CreateDirectory "$EXEDIR\protected-profile"
+  !insertmacro WriteFixture "$EXEDIR\protected-profile\desktop.json"
+  ; FileOpen shares reads but denies deletion for the lifetime of this handle.
+  FileOpen $7 "$EXEDIR\protected-profile\desktop.json" r
+  Push "$EXEDIR\protected-profile"
+  Call SctvClearPrivateData
+  FileClose $7
+  !insertmacro AssertPath "$EXEDIR\protected-profile\desktop.json" "present"
+  ${If} $SctvPreservedData != 1
+    FileWrite $9 "FAIL: undeletable profile was not reported$\r$\n"
+    SetErrorLevel 1
+    Goto done
+  ${EndIf}
+
   FileWrite $9 "PASS: normal uninstall, upgrade, unrelated values, stale installation, and download preservation$\r$\n"
   done:
   FileClose $9
