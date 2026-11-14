@@ -263,3 +263,29 @@ it('releases a subscription that arrives after disposal without loading settings
   expect(store.theme).toBe('system')
   expect(store.favourites).toEqual([])
 })
+
+it('drains the last admitted edit and accepts new edits after exit is cancelled', async () => {
+  const store = useSettingsStore()
+  const save = vi.fn<SettingsPort['save']>().mockResolvedValue(undefined)
+  await store.hydrate({
+    load: async () => ({
+      value: { theme: 'system', quality: 'standard', favourites: [] },
+      persisted: true,
+    }),
+    save,
+    subscribe: async () => () => {},
+  })
+
+  store.theme = 'dark'
+  store.setExitPreparation(true)
+  store.theme = 'light'
+  await store.flush()
+  expect(save.mock.calls.map(([value]) => value.theme)).toEqual(['dark'])
+  expect(store.theme).toBe('dark')
+
+  store.setExitPreparation(false)
+  store.theme = 'light'
+  await store.flush()
+  expect(save.mock.calls.map(([value]) => value.theme)).toEqual(['dark', 'light'])
+  store.$dispose()
+})

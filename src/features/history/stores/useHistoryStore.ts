@@ -14,6 +14,7 @@ export const useHistoryStore = defineStore('history', () => {
   const error = ref('')
   const persisted = ref(true)
   const warning = ref<string | null>(null)
+  const isPreparingExit = ref(false)
   const captures = new Set<() => Promise<void>>()
   let port: HistoryPort | undefined
   let unsubscribe: (() => void) | undefined
@@ -117,6 +118,10 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function action(run: (current: HistoryPort) => Promise<void>): Promise<void> {
+    if (isPreparingExit.value) {
+      return
+    }
+
     const current = port
     const version = connectionVersion
     if (!current) {
@@ -152,6 +157,11 @@ export const useHistoryStore = defineStore('history', () => {
     await Promise.all([...captures].map((capture) => capture()))
   }
 
+  // Pause history edits while native exit waits for its final decision.
+  function setExitPreparation(value: boolean): void {
+    isPreparingExit.value = value
+  }
+
   onScopeDispose(() => {
     detach()
     captures.clear()
@@ -163,6 +173,7 @@ export const useHistoryStore = defineStore('history', () => {
     error,
     persisted,
     warning,
+    isPreparingExit,
     attach,
     detach,
     remove: (content: ContentRef) => action((current) => current.remove(content)),
@@ -170,5 +181,6 @@ export const useHistoryStore = defineStore('history', () => {
     reload,
     registerCapture,
     captureActive,
+    setExitPreparation,
   }
 })

@@ -139,3 +139,25 @@ it('ends a history session whose retry finishes after disposal', async () => {
   expect(port.end).toHaveBeenCalledExactlyOnceWith('late-retry')
   expect(port.record).not.toHaveBeenCalled()
 })
+
+it('saves one exit capture and resumes periodic recording only after exit is cancelled', async () => {
+  const port = fixture()
+  let preparingExit = false
+  const history = usePlaybackHistory(port, metadata, {
+    capture: () => snapshot,
+    isPreparingExit: () => preparingExit,
+  })
+  await history.ready
+
+  preparingExit = true
+  await history.captureAndSave({ forExit: true })
+  history.update({ ...snapshot, positionMs: 310000 }, 'pause')
+  await history.settled()
+  expect(port.record.mock.calls.map(([, sample]) => sample.positionMs)).toEqual([300000])
+
+  preparingExit = false
+  history.update({ ...snapshot, positionMs: 320000 }, 'pause')
+  await history.settled()
+  expect(port.record.mock.calls.map(([, sample]) => sample.positionMs)).toEqual([300000, 320000])
+  await history.dispose()
+})

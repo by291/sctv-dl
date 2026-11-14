@@ -2,14 +2,16 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { prepareNativeExit } from '@/platform/exit.tauri'
 
+type ExitEvent = string | { cancelled: string }
+
 const bridge = vi.hoisted(() => ({
   invoke: vi.fn(),
-  receive: undefined as undefined | { onmessage: (value: string) => void },
+  receive: undefined as undefined | { onmessage: (value: ExitEvent) => void },
 }))
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: bridge.invoke,
   Channel: class {
-    onmessage: (value: string) => void = () => {}
+    onmessage: (value: ExitEvent) => void = () => {}
     constructor() {
       bridge.receive = this
     }
@@ -58,4 +60,29 @@ it('unsubscribes once and ignores events after disposal', async () => {
   expect(
     bridge.invoke.mock.calls.filter(([command]) => command === 'unsubscribe_exit'),
   ).toHaveLength(1)
+})
+
+it('keeps edits frozen after acknowledging until the matching attempt is cancelled', async () => {
+  const setPreparing = vi.fn()
+  const prepare = vi.fn(async () => {
+    expect(setPreparing).toHaveBeenLastCalledWith(true)
+
+    return true
+  })
+  const stop = await prepareNativeExit(prepare, setPreparing)
+
+  bridge.receive!.onmessage('current')
+  await vi.waitFor(() =>
+    expect(bridge.invoke).toHaveBeenCalledWith('complete_exit_preparation', {
+      requestId: 'current',
+      saved: true,
+    }),
+  )
+
+  bridge.receive!.onmessage({ cancelled: 'old' })
+  expect(setPreparing.mock.calls).toEqual([[true]])
+
+  bridge.receive!.onmessage({ cancelled: 'current' })
+  expect(setPreparing.mock.calls).toEqual([[true], [false]])
+  stop()
 })

@@ -13,11 +13,16 @@ import type {
 
 const PROGRESS_WRITE_INTERVAL_MS = 5_000
 
+interface CaptureOptions {
+  capture?: () => PlaybackSnapshot | null
+  isPreparingExit?: () => boolean
+}
+
 // Track settled playback samples and persist them under one history session.
 export function usePlaybackHistory(
   port: HistoryPort,
   metadata: HistoryMetadata,
-  capture?: () => PlaybackSnapshot | null,
+  { capture, isPreparingExit = () => false }: CaptureOptions = {},
 ) {
   const warning = ref('')
   let sessionId: string | null = null
@@ -118,6 +123,11 @@ export function usePlaybackHistory(
 
     latest = value
 
+    // Exit takes one explicit sample before freezing native write admission.
+    if (isPreparingExit()) {
+      return
+    }
+
     if (reason === 'seek' || reason === 'pause' || reason === 'ended') {
       void save()
     } else if (
@@ -130,9 +140,13 @@ export function usePlaybackHistory(
   }
 
   // Save the latest settled progress before the current player is released.
-  async function captureAndSave() {
-    if (disposed) {
+  async function captureAndSave({ forExit = false } = {}) {
+    if (disposed || (isPreparingExit() && !forExit)) {
       return
+    }
+
+    if (forExit) {
+      await ready
     }
 
     const value = capture?.()
@@ -146,12 +160,12 @@ export function usePlaybackHistory(
 
   // Retry the original failed sample or save the current one.
   async function retry() {
-    if (disposed) {
+    if (disposed || isPreparingExit()) {
       return
     }
 
     await queue
-    if (disposed) {
+    if (disposed || isPreparingExit()) {
       return
     }
 
@@ -159,7 +173,7 @@ export function usePlaybackHistory(
       await begin()
     }
 
-    if (disposed) {
+    if (disposed || isPreparingExit()) {
       return
     }
 

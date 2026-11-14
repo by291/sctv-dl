@@ -3,7 +3,7 @@ pub mod macos;
 mod preparation;
 mod shell;
 
-pub use preparation::ExitPreparation;
+pub use preparation::{ExitEvent, ExitPreparation};
 pub use shell::{install_menu, request_exit};
 
 use std::{
@@ -64,6 +64,7 @@ impl ExitController {
         Ok(OperationGuard { _admission: guard })
     }
 
+    /// Claims the native exit decision until the request is committed or dropped.
     pub fn begin(self: &Arc<Self>) -> Option<ExitRequest> {
         self.closing
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -73,6 +74,7 @@ impl ExitController {
         })
     }
 
+    /// Reports whether platform exit events may close the application.
     pub fn committed(&self) -> bool {
         self.committed.load(Ordering::SeqCst)
     }
@@ -88,6 +90,7 @@ pub struct ExitRequest {
 }
 
 impl ExitRequest {
+    /// Coordinates exit when there is no frontend persistence to drain.
     pub async fn complete<F, Fut>(self, downloads: &DownloadManager, confirm: F) -> bool
     where
         F: FnOnce() -> Fut,
@@ -130,13 +133,14 @@ impl ExitRequest {
         G: FnOnce(AppError) -> Force,
         Force: Future<Output = bool>,
     {
-        // Drain frontend save queues before refusing new preference writes.
+        // Let the frontend freeze edits and drain its queues while IPC can still save.
         let saved = prepare.await;
         self.controller.frozen.store(true, Ordering::SeqCst);
 
         // Existing picker/prepare/save work must settle before the final task snapshot.
         let _operations = self.controller.operations.clone().write_owned().await;
-        if (!saved || downloads.has_active()) && !confirm(saved).await {
+        let needs_confirmation = !saved || downloads.has_active();
+        if needs_confirmation && !confirm(saved).await {
             return false;
         }
 
@@ -148,6 +152,7 @@ impl ExitRequest {
         }
 
         downloads.shutdown().await;
+
         self.controller.committed.store(true, Ordering::SeqCst);
         true
     }

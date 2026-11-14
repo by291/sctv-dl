@@ -141,8 +141,11 @@ export interface AppPlatform {
   history: HistoryPort
   programmeCache: ProgrammeCachePort
   windowControls?: WindowControlsPort
-  // Register the callback that drains persistence before native exit.
-  prepareExit?(prepare: () => Promise<boolean>): Promise<() => void>
+  // Register the persistence drain and reversible edit freeze for native exit.
+  prepareExit?(
+    prepare: () => Promise<boolean>,
+    setPreparing: (value: boolean) => void,
+  ): Promise<() => void>
   // Release resources owned by the platform adapters.
   dispose(): Promise<void>
 }

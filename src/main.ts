@@ -28,6 +28,30 @@ void startWithRecovery(root, async () => {
   let stopExit: (() => void) | undefined
   let disposal: Promise<void> | undefined
 
+  function setExitPreparation(value: boolean): void {
+    settings.setExitPreparation(value)
+    history.setExitPreparation(value)
+    // The player dialog is teleported outside the app root.
+    document.body.inert = value
+  }
+
+  async function prepareForExit(): Promise<boolean> {
+    await history.captureActive()
+
+    return flushPersistence([
+      {
+        getWriteRevision: settings.getWriteRevision,
+        flush: settings.flush,
+        isPersisted: async () => settings.persisted,
+      },
+      {
+        getWriteRevision: platform.history.getWriteRevision,
+        flush: platform.history.flush,
+        isPersisted: async () => (await platform.history.list()).persisted,
+      },
+    ])
+  }
+
   function disposeApplication(): Promise<void> {
     // Startup recovery and unmount share the same owner and may both request cleanup.
     disposal ??= (async () => {
@@ -41,22 +65,7 @@ void startWithRecovery(root, async () => {
   }
 
   try {
-    stopExit = await platform.prepareExit?.(async () => {
-      await history.captureActive()
-
-      return flushPersistence([
-        {
-          getWriteRevision: settings.getWriteRevision,
-          flush: settings.flush,
-          isPersisted: async () => settings.persisted,
-        },
-        {
-          getWriteRevision: platform.history.getWriteRevision,
-          flush: platform.history.flush,
-          isPersisted: async () => (await platform.history.list()).persisted,
-        },
-      ])
-    })
+    stopExit = await platform.prepareExit?.(prepareForExit, setExitPreparation)
 
     await settings.hydrate(platform.settings)
     await history.attach(platform.history)

@@ -216,9 +216,14 @@ export function useProgrammePreview(
       current.history = usePlaybackHistory(
         platform.history,
         { ...pinned.metadata, content: { ...pinned.metadata.content } },
-        () => capture(current),
+        {
+          capture: () => capture(current),
+          isPreparingExit: () => historyStore.isPreparingExit,
+        },
       )
-      current.unregisterCapture = historyStore.registerCapture(() => captureAndSave(current))
+      current.unregisterCapture = historyStore.registerCapture(
+        () => current.history?.captureAndSave({ forExit: true }) ?? Promise.resolve(),
+      )
     }
 
     void loadPreview()

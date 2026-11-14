@@ -6,6 +6,10 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use super::{ExitController, ExitPreparation};
 use crate::downloads::DownloadManager;
 
+// A stalled webview must reach the native unsaved-changes dialog.
+const FRONTEND_PREPARATION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Runs the shared desktop exit workflow for a menu or window close request.
 pub fn request_exit<R: Runtime>(app: &AppHandle<R>) {
     let controller = app.state::<Arc<ExitController>>();
     let Some(request) = controller.begin() else {
@@ -15,16 +19,19 @@ pub fn request_exit<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let downloads = app.state::<DownloadManager>();
-        let prepare = app.state::<ExitPreparation>();
+        let preparation = app.state::<ExitPreparation>();
+        let frontend = preparation.attempt();
+
         if request
             .complete_with_recovery(
                 &downloads,
-                prepare.prepare(Duration::from_secs(5)),
+                frontend.prepare(FRONTEND_PREPARATION_TIMEOUT),
                 |saved| confirm_exit(&app, saved, downloads.has_active()),
                 |_| confirm_force_exit(&app),
             )
             .await
         {
+            frontend.commit();
             app.exit(0);
         }
     });
@@ -84,12 +91,14 @@ async fn confirm_dialog<R: Runtime>(
 }
 
 #[cfg(target_os = "windows")]
+/// Leaves window chrome to the application's Windows title bar.
 pub fn install_menu<R: Runtime>(_app: &AppHandle<R>) -> tauri::Result<()> {
     // The Windows shell owns its title bar; a native menu bar would sit below it.
     Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
+/// Installs native shortcuts and routes Quit through the exit controller.
 pub fn install_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 

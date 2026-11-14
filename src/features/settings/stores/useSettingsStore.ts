@@ -21,6 +21,7 @@ export const useSettingsStore = defineStore('settings', () => {
   let snapshotRevision = 0
   let localEditRevision = 0
   let applyingSnapshot = false
+  let isPreparingExit = false
 
   let pendingSaveCount = 0
   let saveQueue = Promise.resolve()
@@ -155,9 +156,16 @@ export const useSettingsStore = defineStore('settings', () => {
     return computed({
       get: () => value.value[key],
       set: (next: Settings[K]) => {
-        value.value[key] = next
+        if (!isPreparingExit) {
+          value.value[key] = next
+        }
       },
     })
+  }
+
+  // Keep pending saves drainable while pausing new local preferences during exit.
+  function setExitPreparation(value: boolean): void {
+    isPreparingExit = value
   }
 
   const quality = preference('quality')
@@ -185,6 +193,7 @@ export const useSettingsStore = defineStore('settings', () => {
     toggleFavourite,
     hydrate,
     flush,
+    setExitPreparation,
     getWriteRevision: () => localEditRevision,
   }
 })
