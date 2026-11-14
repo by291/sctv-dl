@@ -676,187 +676,185 @@ void main() {
   for (final edge in [0, 1]) {
     for (final reduced in [false, true]) {
       for (final featured in [false, true]) {
-        testWidgets(
-          'Android predictive back cancels and commits edge=$edge reduced=$reduced featured=$featured',
-          (tester) async {
-            tester.view.physicalSize = const Size(390, 844);
-            tester.view.devicePixelRatio = 1;
-            addTearDown(tester.view.resetPhysicalSize);
-            addTearDown(tester.view.resetDevicePixelRatio);
-            final harness = RouteHarness();
-            await harness.mount(tester, '/', reducedMotion: reduced);
-            await tester.pumpAndSettle();
-            final libraryScroll = tester
-                .widget<CustomScrollView>(find.byType(CustomScrollView))
-                .controller!;
-            libraryScroll.jumpTo(35);
-            await tester.pump();
-            final source = featured
-                ? find.text('查看节目')
-                : find.byType(ProgrammeCard);
-            final sourceBounds = tester.getRect(source);
-            final coverTag = '${featured ? 'exploration' : 'catalogue'}-1';
-            final sourceHero = find.byWidgetPredicate(
-              (widget) => widget is Hero && widget.tag == coverTag,
-            );
-            final sourceCover = reduced ? null : tester.getRect(sourceHero);
-            await tester.tap(source);
-            await tester.pumpAndSettle();
-            final archive = find.byType(ArchivePage);
-            final archiveState = tester.state(archive);
-            final archiveBounds = tester.getRect(archive);
-            final route = ModalRoute.of(tester.element(archive))!;
-            final archiveCover = reduced ? null : tester.getRect(sourceHero);
+        testWidgets('Android predictive back cancels and commits '
+            'edge=$edge reduced=$reduced featured=$featured', (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final harness = RouteHarness();
+          await harness.mount(tester, '/', reducedMotion: reduced);
+          await tester.pumpAndSettle();
+          final libraryScroll = tester
+              .widget<CustomScrollView>(find.byType(CustomScrollView))
+              .controller!;
+          libraryScroll.jumpTo(35);
+          await tester.pump();
+          final source = featured
+              ? find.text('查看节目')
+              : find.byType(ProgrammeCard);
+          final sourceBounds = tester.getRect(source);
+          final coverTag = '${featured ? 'exploration' : 'catalogue'}-1';
+          final sourceHero = find.byWidgetPredicate(
+            (widget) => widget is Hero && widget.tag == coverTag,
+          );
+          final sourceCover = reduced ? null : tester.getRect(sourceHero);
+          await tester.tap(source);
+          await tester.pumpAndSettle();
+          final archive = find.byType(ArchivePage);
+          final archiveState = tester.state(archive);
+          final archiveBounds = tester.getRect(archive);
+          final route = ModalRoute.of(tester.element(archive))!;
+          final archiveCover = reduced ? null : tester.getRect(sourceHero);
 
-            Future<void> gesture(String method, [double? progress]) async {
-              await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-                'flutter/backgesture',
-                const StandardMethodCodec().encodeMethodCall(
-                  MethodCall(
-                    method,
-                    progress == null
-                        ? null
-                        : <String, Object>{
-                            'touchOffset': <double>[
-                              edge == 0
-                                  ? 5 + 180 * progress
-                                  : 385 - 180 * progress,
-                              350 + 90 * progress,
-                            ],
-                            'progress': progress,
-                            'swipeEdge': edge,
-                          },
-                  ),
+          Future<void> gesture(String method, [double? progress]) async {
+            await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+              'flutter/backgesture',
+              const StandardMethodCodec().encodeMethodCall(
+                MethodCall(
+                  method,
+                  progress == null
+                      ? null
+                      : <String, Object>{
+                          'touchOffset': <double>[
+                            edge == 0
+                                ? 5 + 180 * progress
+                                : 385 - 180 * progress,
+                            350 + 90 * progress,
+                          ],
+                          'progress': progress,
+                          'swipeEdge': edge,
+                        },
                 ),
-                (_) {},
-              );
-              await tester.pump();
-            }
+              ),
+              (_) {},
+            );
+            await tester.pump();
+          }
 
-            await gesture('startBackGesture', 0);
-            double? previousDistance;
-            var previousRotation = 0.0;
-            for (final progress in [.1, .2, .3, .4, .5, .6, .7, .8]) {
-              await gesture('updateBackGestureProgress', progress);
-              if (!reduced) {
-                final flightBounds = tester.getRect(
-                  find.byKey(const ValueKey('programme-cover-flight')),
-                );
-                final distance =
-                    (flightBounds.center - sourceCover!.center).distance;
-                final expectedBounds = Rect.lerp(
-                  archiveCover,
-                  sourceCover,
-                  progress,
-                )!;
-                expect(
-                  (flightBounds.center - expectedBounds.center).distance,
-                  lessThan(.01),
-                  reason: 'The cover must follow system progress without easing during a drag',
-                );
-                if (previousDistance != null) {
-                  expect(distance, lessThan(previousDistance));
-                }
-                previousDistance = distance;
-                final rotation = tester
-                    .widget<Transform>(
-                      find
-                          .descendant(
-                            of: find.byKey(
-                              const ValueKey('programme-cover-flight'),
-                            ),
-                            matching: find.byType(Transform),
-                          )
-                          .first,
-                    )
-                    .transform
-                    .entry(1, 0);
-                if (featured) {
-                  expect(rotation, lessThan(previousRotation));
-                } else {
-                  expect(rotation, 0);
-                }
-                previousRotation = rotation;
-                expect(
-                  flightBounds.width,
-                  lessThanOrEqualTo(
-                    sourceCover.width > archiveCover!.width
-                        ? sourceCover.width
-                        : archiveCover.width,
-                  ),
-                );
+          await gesture('startBackGesture', 0);
+          double? previousDistance;
+          var previousRotation = 0.0;
+          for (final progress in [.1, .2, .3, .4, .5, .6, .7, .8]) {
+            await gesture('updateBackGestureProgress', progress);
+            if (!reduced) {
+              final flightBounds = tester.getRect(
+                find.byKey(const ValueKey('programme-cover-flight')),
+              );
+              final distance =
+                  (flightBounds.center - sourceCover!.center).distance;
+              final expectedBounds = Rect.lerp(
+                archiveCover,
+                sourceCover,
+                progress,
+              )!;
+              expect(
+                (flightBounds.center - expectedBounds.center).distance,
+                lessThan(.01),
+                reason: 'The cover must follow system progress without easing during a drag',
+              );
+              if (previousDistance != null) {
+                expect(distance, lessThan(previousDistance));
               }
-            }
-            await gesture('updateBackGestureProgress', 0.45);
-            expect(route.popGestureInProgress, isTrue);
-            expect(tester.state(archive), same(archiveState));
-            expect(
-              find.byKey(const ValueKey('programme-cover-flight')),
-              reduced ? findsNothing : findsOneWidget,
-            );
-            expect(
-              tester.getRect(archive),
-              reduced ? archiveBounds : isNot(archiveBounds),
-            );
-            final draggedBounds = tester.getRect(archive);
-            expect(draggedBounds.size, archiveBounds.size);
-            expect(draggedBounds.top, archiveBounds.top);
-            if (!reduced) {
+              previousDistance = distance;
+              final rotation = tester
+                  .widget<Transform>(
+                    find
+                        .descendant(
+                          of: find.byKey(
+                            const ValueKey('programme-cover-flight'),
+                          ),
+                          matching: find.byType(Transform),
+                        )
+                        .first,
+                  )
+                  .transform
+                  .entry(1, 0);
+              if (featured) {
+                expect(rotation, lessThan(previousRotation));
+              } else {
+                expect(rotation, 0);
+              }
+              previousRotation = rotation;
               expect(
-                draggedBounds.left,
-                edge == 0
-                    ? greaterThan(archiveBounds.left)
-                    : lessThan(archiveBounds.left),
+                flightBounds.width,
+                lessThanOrEqualTo(
+                  sourceCover.width > archiveCover!.width
+                      ? sourceCover.width
+                      : archiveCover.width,
+                ),
               );
             }
-            await gesture('updateBackGestureProgress', 0.08);
-            await gesture('cancelBackGesture');
-            await tester.pumpAndSettle();
-            expect(harness.router.state.uri.path, '/programme/1');
-            expect(tester.state(archive), same(archiveState));
-            expect(tester.getRect(archive), archiveBounds);
-            if (!reduced) expect(tester.getRect(sourceHero), archiveCover);
-            expect(route.popGestureInProgress, isFalse);
+          }
+          await gesture('updateBackGestureProgress', 0.45);
+          expect(route.popGestureInProgress, isTrue);
+          expect(tester.state(archive), same(archiveState));
+          expect(
+            find.byKey(const ValueKey('programme-cover-flight')),
+            reduced ? findsNothing : findsOneWidget,
+          );
+          expect(
+            tester.getRect(archive),
+            reduced ? archiveBounds : isNot(archiveBounds),
+          );
+          final draggedBounds = tester.getRect(archive);
+          expect(draggedBounds.size, archiveBounds.size);
+          expect(draggedBounds.top, archiveBounds.top);
+          if (!reduced) {
+            expect(
+              draggedBounds.left,
+              edge == 0
+                  ? greaterThan(archiveBounds.left)
+                  : lessThan(archiveBounds.left),
+            );
+          }
+          await gesture('updateBackGestureProgress', 0.08);
+          await gesture('cancelBackGesture');
+          await tester.pumpAndSettle();
+          expect(harness.router.state.uri.path, '/programme/1');
+          expect(tester.state(archive), same(archiveState));
+          expect(tester.getRect(archive), archiveBounds);
+          if (!reduced) expect(tester.getRect(sourceHero), archiveCover);
+          expect(route.popGestureInProgress, isFalse);
 
-            final controller = tester.widget<ArchivePage>(archive).controller;
-            controller.enterSelection();
-            await tester.pumpAndSettle();
-            await gesture('startBackGesture', 0);
-            expect(route.popGestureInProgress, isFalse);
-            await gesture('commitBackGesture');
-            await tester.pumpAndSettle();
-            expect(controller.selectionMode, isFalse);
-            expect(tester.state(archive), same(archiveState));
+          final controller = tester.widget<ArchivePage>(archive).controller;
+          controller.enterSelection();
+          await tester.pumpAndSettle();
+          await gesture('startBackGesture', 0);
+          expect(route.popGestureInProgress, isFalse);
+          await gesture('commitBackGesture');
+          await tester.pumpAndSettle();
+          expect(controller.selectionMode, isFalse);
+          expect(tester.state(archive), same(archiveState));
 
-            await gesture('startBackGesture', 0);
-            await gesture('updateBackGestureProgress', 0.65);
-            expect(route.popGestureInProgress, isTrue);
-            final releaseBounds = tester.getRect(archive);
-            final flight = find.byKey(const ValueKey('programme-cover-flight'));
-            final releaseCover = reduced ? null : tester.getRect(flight);
-            final releaseProgress = route.animation!.value;
-            await gesture('commitBackGesture');
-            expect(route.animation!.value, releaseProgress);
-            expect(tester.getRect(archive), releaseBounds);
-            if (!reduced) expect(tester.getRect(flight), releaseCover);
-            await tester.pump(const Duration(milliseconds: 32));
-            final settlingBounds = tester.getRect(archive);
-            expect(settlingBounds.size, archiveBounds.size);
-            if (!reduced) {
-              expect(
-                (settlingBounds.left - archiveBounds.left).abs(),
-                greaterThan((releaseBounds.left - archiveBounds.left).abs()),
-              );
-            }
-            await tester.pumpAndSettle();
-            expect(harness.router.state.uri.path, '/');
-            expect(libraryScroll.offset, 35);
-            expect(tester.getRect(source), sourceBounds);
-            if (!reduced) expect(tester.getRect(sourceHero), sourceCover);
-            expect(tester.takeException(), isNull);
-            await harness.close(tester);
-          },
-        );
+          await gesture('startBackGesture', 0);
+          await gesture('updateBackGestureProgress', 0.65);
+          expect(route.popGestureInProgress, isTrue);
+          final releaseBounds = tester.getRect(archive);
+          final flight = find.byKey(const ValueKey('programme-cover-flight'));
+          final releaseCover = reduced ? null : tester.getRect(flight);
+          final releaseProgress = route.animation!.value;
+          await gesture('commitBackGesture');
+          expect(route.animation!.value, releaseProgress);
+          expect(tester.getRect(archive), releaseBounds);
+          if (!reduced) expect(tester.getRect(flight), releaseCover);
+          await tester.pump(const Duration(milliseconds: 32));
+          final settlingBounds = tester.getRect(archive);
+          expect(settlingBounds.size, archiveBounds.size);
+          if (!reduced) {
+            expect(
+              (settlingBounds.left - archiveBounds.left).abs(),
+              greaterThan((releaseBounds.left - archiveBounds.left).abs()),
+            );
+          }
+          await tester.pumpAndSettle();
+          expect(harness.router.state.uri.path, '/');
+          expect(libraryScroll.offset, 35);
+          expect(tester.getRect(source), sourceBounds);
+          if (!reduced) expect(tester.getRect(sourceHero), sourceCover);
+          expect(tester.takeException(), isNull);
+          await harness.close(tester);
+        });
       }
     }
   }
@@ -1606,7 +1604,8 @@ class RouteHistory implements HistoryRepository {
   }
 
   @override
-  Future<void> save(ViewingEntry entry) async => entries.add(entry);
+  SaveViewingCheckpoint openSession(ContentRef ref) =>
+      (entry) async => entries.add(entry);
 
   @override
   Stream<List<ViewingEntry>> watchHistory() => Stream.value(entries);

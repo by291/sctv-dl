@@ -49,21 +49,36 @@ class PlaybackSnapshot {
   final bool ended;
 }
 
+/// Opens an independently owned playback session for an accepted input.
 abstract interface class PlaybackBackend {
+  /// Opens the input at its initial position in a paused state.
   Future<PlaybackSession> open(PlaybackInput input);
 }
 
+/// Controls one native playback allocation and observes its current state.
 abstract interface class PlaybackSession {
   String get id;
   PlaybackSnapshot get value;
   Stream<PlaybackSnapshot> get changes;
 
+  /// Requests playback for the current source.
   Future<void> play();
+
+  /// Pauses playback while retaining the current position.
   Future<void> pause();
+
+  /// Moves playback to the requested position.
   Future<void> seek(Duration position);
+
+  /// Sets the desired playback rate.
   Future<void> setSpeed(double speed);
+
+  /// Switches to another accepted source at the current position.
   Future<void> selectSource(VideoSource source);
+
+  /// Requests the platform's picture-in-picture window.
   Future<void> enterPictureInPicture();
 
+  /// Releases native playback and closes session observation.
   Future<void> dispose();
 }

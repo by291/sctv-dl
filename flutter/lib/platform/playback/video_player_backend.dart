@@ -30,19 +30,12 @@ class VideoPlayerBackend implements PlaybackBackend {
 
     var resolved = input;
     if (input.localLocation case final String location) {
-      final stored = DownloadFileLocation.parse(location);
-      final path = switch (stored) {
-        ContentFileLocation(:final uri) => uri.toString(),
-        PrivateFileLocation(:final documents, :final relativePath) =>
-          '${(documents ? await getApplicationDocumentsDirectory() : await getApplicationSupportDirectory()).path}/$relativePath',
-      };
-
       resolved = PlaybackInput(
         title: input.title,
         sources: input.sources,
         selection: input.selection,
         initialPosition: input.initialPosition,
-        localLocation: path,
+        localLocation: await _localPlaybackPath(location),
         preferredQuality: input.preferredQuality,
       );
     }
@@ -63,6 +56,18 @@ class VideoPlayerBackend implements PlaybackBackend {
         );
       }
       Error.throwWithStackTrace(error, stack);
+    }
+  }
+
+  Future<String> _localPlaybackPath(String location) async {
+    switch (DownloadFileLocation.parse(location)) {
+      case ContentFileLocation(:final uri):
+        return uri.toString();
+      case PrivateFileLocation(:final documents, :final relativePath):
+        final directory = documents
+            ? await getApplicationDocumentsDirectory()
+            : await getApplicationSupportDirectory();
+        return '${directory.path}/$relativePath';
     }
   }
 }
@@ -183,17 +188,24 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
     if (_nativeReleaseFailed) {
       throw StateError('The previous decoder could not be released');
     }
+
     surface.value = null;
     previous?.removeListener(_publish);
+
     // Official controllers have immutable sources. Waiting for native release
     // keeps two decoders and their forward buffers from overlapping on a switch.
-    if (previous != null) await _releaseNative(previous);
+    if (previous != null) {
+      await _releaseNative(previous);
+    }
     _controller = null;
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
 
     final next = _create(source);
     _controller = next;
     next.addListener(_publish);
+
     // Disposal cancels our wait even if the decoder never reports readiness.
     // Native disposal still owns cancellation of its transport and allocation.
     final expired = Completer<void>();
@@ -205,18 +217,28 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
     } finally {
       deadline.cancel();
     }
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
 
     await _audio?.configure();
-    if (position > Duration.zero) await next.seekTo(position);
+    if (position > Duration.zero) {
+      await next.seekTo(position);
+    }
     await next.setPlaybackSpeed(speed);
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
+
     surface.value = next;
   }
 
   void _publish() {
     final native = _controller?.value;
-    if (_disposed || _switching || native == null) return;
+    if (_disposed || _switching || native == null) {
+      return;
+    }
+
     // AVKit's system controls change AVPlayer directly. The official plugin
     // reports the rate but does not restart its Dart position timer or update
     // its native play intent. Reconcile only iOS PiP transitions: Android's
@@ -226,8 +248,11 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
         _pendingPlaybackWrites == 0 &&
         native.isPlaying != _value.playing &&
         native.isPlaying != _playIntent) {
-      unawaited(_setPlaying(native.isPlaying).catchError(_reportError));
+      unawaited(
+        _setPlaying(playing: native.isPlaying).catchError(_reportError),
+      );
     }
+
     final duration = native.duration;
     final ended =
         native.isCompleted ||
@@ -254,19 +279,22 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
   }
 
   void _reportError(Object error, StackTrace stack) {
-    if (!_disposed) _changes.addError(error, stack);
+    if (!_disposed) {
+      _changes.addError(error, stack);
+    }
   }
 
   void _updateWakelock() {
     final state = WidgetsBinding.instance.lifecycleState;
+    final shouldKeepScreenOn =
+        !_disposed &&
+        value.playing &&
+        !_inPip &&
+        (state == null || state == AppLifecycleState.resumed);
+
     unawaited(
       _wakelock
-          .setEnabled(
-            !_disposed &&
-                value.playing &&
-                !_inPip &&
-                (state == null || state == AppLifecycleState.resumed),
-          )
+          .setEnabled(enabled: shouldKeepScreenOn)
           .catchError(_reportError),
     );
   }
@@ -276,22 +304,26 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
 
   @override
   Future<void> play() async {
-    if (_disposed) return;
-    await _setPlaying(true);
+    if (_disposed) {
+      return;
+    }
+
+    await _setPlaying(playing: true);
   }
 
   @override
   Future<void> pause() async {
-    await _setPlaying(false);
+    await _setPlaying(playing: false);
   }
 
-  Future<void> _setPlaying(bool playing) {
+  Future<void> _setPlaying({required bool playing}) {
     _playIntent = playing;
     final revision = ++_playbackRevision;
     final native = _controller;
     if (_disposed || native == null || (_switching && playing)) {
       return Future.value();
     }
+
     _pendingPlaybackWrites++;
     final write = _playbackWrites.then((_) async {
       try {
@@ -302,37 +334,50 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
         }
         if (playing) {
           await _audio?.activate();
-          if (_disposed || revision != _playbackRevision) return;
+          if (_disposed || revision != _playbackRevision) {
+            return;
+          }
           if (native.value.isCompleted ||
               native.value.position >= native.value.duration) {
             await native.seekTo(Duration.zero);
           }
-          if (!_disposed && revision == _playbackRevision) await native.play();
+          if (!_disposed && revision == _playbackRevision) {
+            await native.play();
+          }
         } else {
           await native.pause();
-          if (!_inPip) await _audio?.deactivate();
+          if (!_inPip) {
+            await _audio?.deactivate();
+          }
         }
       } finally {
         _pendingPlaybackWrites--;
       }
     });
     _playbackWrites = write.catchError((Object _) {});
+
     return write;
   }
 
   @override
   Future<void> seek(Duration position) async {
-    if (!_disposed && !_switching) await _controller?.seekTo(position);
+    if (!_disposed && !_switching) {
+      await _controller?.seekTo(position);
+    }
   }
 
   @override
   Future<void> setSpeed(double speed) async {
-    if (!_disposed && !_switching) await _controller?.setPlaybackSpeed(speed);
+    if (!_disposed && !_switching) {
+      await _controller?.setPlaybackSpeed(speed);
+    }
   }
 
   @override
   Future<void> selectSource(VideoSource source) async {
-    if (_disposed || _switching || source.url == _source?.url) return;
+    if (_disposed || _switching || source.url == _source?.url) {
+      return;
+    }
     if (!input.sources.any((candidate) => candidate.url == source.url) ||
         !isAllowedMediaUrl(source.url)) {
       throw const FormatException('Source was not part of this selection');
@@ -350,12 +395,24 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
     try {
       await _playbackWrites;
       await _pip.release();
-      await _restore(source, position, speed, playing);
-      if (!_disposed) _source = source;
+      await _restore(
+        source,
+        position: position,
+        speed: speed,
+        wasPlaying: playing,
+      );
+      if (!_disposed) {
+        _source = source;
+      }
     } catch (error) {
       if (!_disposed) {
         try {
-          await _restore(previous, position, speed, playing);
+          await _restore(
+            previous,
+            position: position,
+            speed: speed,
+            wasPlaying: playing,
+          );
         } catch (rollback) {
           _reportError(rollback, StackTrace.current);
           throw StateError(
@@ -373,15 +430,17 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
   }
 
   Future<void> _restore(
-    VideoSource source,
-    Duration position,
-    double speed,
-    bool playing,
-  ) async {
+    VideoSource source, {
+    required Duration position,
+    required double speed,
+    required bool wasPlaying,
+  }) async {
     await _replace(source, position, speed);
-    if (!_disposed && playing && _playIntent) {
+    if (!_disposed && wasPlaying && _playIntent) {
       await _audio?.activate();
-      if (!_disposed && _playIntent) await _controller?.play();
+      if (!_disposed && _playIntent) {
+        await _controller?.play();
+      }
     }
   }
 
@@ -400,7 +459,9 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
       }
       await _pip.enter(native, input.title);
     } finally {
-      if (!wasPlaying) await pause();
+      if (!wasPlaying) {
+        await pause();
+      }
     }
   }
 
@@ -430,9 +491,11 @@ class _VideoSession with WidgetsBindingObserver implements PlaybackSession {
       await cleanup(native.pause);
     }
     await cleanup(() async {
-      if (native != null) await _releaseNative(native);
+      if (native != null) {
+        await _releaseNative(native);
+      }
     });
-    await cleanup(() => _wakelock.setEnabled(false));
+    await cleanup(() => _wakelock.setEnabled(enabled: false));
     await cleanup(() async => _audio?.dispose());
     await cleanup(_changes.close);
     surface.dispose();

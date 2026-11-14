@@ -152,6 +152,30 @@ void main() {
     controller.dispose();
   });
 
+  test('a replacement opened after route release is disposed without restoring speed', () async {
+    final first = FakeSession();
+    final replacement = FakeSession();
+    final backend = RetryBackend(first);
+    final controller = PlaybackController(
+      input: input,
+      backend: backend,
+      history: MemoryHistory(),
+    );
+    await controller.initialize();
+    first.emit(playing: true, speed: 1.5);
+    first.emit(error: 'Decoder failed');
+
+    final retry = controller.retry();
+    await backend.replacementRequested.future;
+    await controller.release();
+    backend.replacement.complete(replacement);
+    await retry;
+
+    expect(replacement.value.speed, 1);
+    expect(replacement.disposeCalls, 1);
+    controller.dispose();
+  });
+
   test('backgrounding during retry cancels the earlier play intent', () async {
     final first = FakeSession();
     final replacement = FakeSession();
@@ -229,12 +253,18 @@ void main() {
     );
     await controller.initialize();
     session.emit(playing: true);
-    controller.holdControls(true, reason: PlayerControlHold.accessibility);
-    controller.holdControls(true, reason: PlayerControlHold.menu);
-    controller.holdControls(false, reason: PlayerControlHold.menu);
+    controller.holdControls(
+      held: true,
+      reason: PlayerControlHold.accessibility,
+    );
+    controller.holdControls(held: true, reason: PlayerControlHold.menu);
+    controller.holdControls(held: false, reason: PlayerControlHold.menu);
     await tester.pump(const Duration(seconds: 5));
     expect(controller.controlsVisible, isTrue);
-    controller.holdControls(false, reason: PlayerControlHold.accessibility);
+    controller.holdControls(
+      held: false,
+      reason: PlayerControlHold.accessibility,
+    );
     await tester.pump(const Duration(milliseconds: 3501));
     expect(controller.controlsVisible, isFalse);
     await tester.runAsync(controller.release);
@@ -311,10 +341,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 3501));
     expect(controller.controlsVisible, isFalse);
     controller.showControls();
-    controller.holdControls(true);
+    controller.holdControls(held: true);
     await tester.pump(const Duration(seconds: 10));
     expect(controller.controlsVisible, isTrue);
-    controller.holdControls(false);
+    controller.holdControls(held: false);
     session.emit(playing: false);
     await tester.pump(const Duration(seconds: 10));
     expect(controller.controlsVisible, isTrue);
@@ -446,7 +476,8 @@ class FakeSession implements PlaybackSession {
 class MemoryHistory implements HistoryRepository {
   final entries = <ViewingEntry>[];
   @override
-  Future<void> save(ViewingEntry entry) async => entries.add(entry);
+  SaveViewingCheckpoint openSession(ContentRef ref) =>
+      (entry) async => entries.add(entry);
   @override
   Future<List<ViewingEntry>> loadHistory() async => entries;
   @override
@@ -461,10 +492,14 @@ class RetryBackend implements PlaybackBackend {
   RetryBackend(this.first);
   final FakeSession first;
   final replacement = Completer<PlaybackSession>();
+  final replacementRequested = Completer<void>();
   bool opened = false;
   @override
   Future<PlaybackSession> open(PlaybackInput input) async {
-    if (opened) return replacement.future;
+    if (opened) {
+      replacementRequested.complete();
+      return replacement.future;
+    }
     opened = true;
     return first;
   }

@@ -6,6 +6,9 @@ import '../../domain/playback/player_environment.dart';
 import 'playback_controller.dart';
 import 'player_environment_controller.dart';
 
+const _dragActivationDistance = 18.0;
+const _dragAxisRatio = 1.2;
+
 enum _Drag { seek, brightness, volume }
 
 /// This layer sits beneath controls, so buttons and sliders own their arenas.
@@ -64,17 +67,23 @@ class _PlayerGesturesState extends State<PlayerGestures>
     playerEpoch = player.gestureEpoch;
     player.addListener(_playerChanged);
 
-    if (widget.fullscreen) _run(_enter());
+    if (widget.fullscreen) {
+      _run(_enter());
+    }
   }
 
   void _playerChanged() {
-    if (playerEpoch == player.gestureEpoch) return;
+    if (playerEpoch == player.gestureEpoch) {
+      return;
+    }
 
     playerEpoch = player.gestureEpoch;
     generation++;
     blocked = true;
     drag = null;
-    if (mounted) setState(() => hud = null);
+    if (mounted) {
+      setState(() => hud = null);
+    }
   }
 
   void _run(Future<void> work) {
@@ -105,7 +114,9 @@ class _PlayerGesturesState extends State<PlayerGestures>
   Future<void> _enter() async {
     final token = generation;
     await effects?.enterFullscreen();
-    if (!mounted || !widget.fullscreen || token != generation) return;
+    if (!mounted || !widget.fullscreen || token != generation) {
+      return;
+    }
 
     _scheduleHint();
   }
@@ -148,12 +159,16 @@ class _PlayerGesturesState extends State<PlayerGestures>
     pixelRatio = view.devicePixelRatio;
 
     _cancel();
-    if (widget.fullscreen) _scheduleHint();
+    if (widget.fullscreen) {
+      _scheduleHint();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _cancel();
+    if (state != AppLifecycleState.resumed) {
+      _cancel();
+    }
 
     // An inactive window can remain visible during OS focus changes. Cancel
     // its gesture, but keep brightness ownership until it actually backgrounds.
@@ -168,11 +183,15 @@ class _PlayerGesturesState extends State<PlayerGestures>
 
   void _show(String text) {
     hudTimer?.cancel();
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() => hud = text);
     hudTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => hud = null);
+      if (mounted) {
+        setState(() => hud = null);
+      }
     });
   }
 
@@ -184,7 +203,7 @@ class _PlayerGesturesState extends State<PlayerGestures>
     final wasDragging = drag != null;
     drag = null;
     if (wasDragging) {
-      player.holdControls(false, reason: PlayerControlHold.gesture);
+      player.holdControls(held: false, reason: PlayerControlHold.gesture);
     }
 
     movement = Offset.zero;
@@ -193,7 +212,9 @@ class _PlayerGesturesState extends State<PlayerGestures>
 
     _run(player.cancelGestures());
     playerEpoch = player.gestureEpoch;
-    if (mounted) setState(() => hud = null);
+    if (mounted) {
+      setState(() => hud = null);
+    }
   }
 
   void _down(PointerDownEvent event, Size size) {
@@ -225,10 +246,14 @@ class _PlayerGesturesState extends State<PlayerGestures>
   Future<void> _changeVolume(double delta) async {
     final token = generation;
     volumeChanges = volumeChanges.catchError((Object _) {}).then((_) async {
-      if (token != generation) return;
+      if (token != generation) {
+        return;
+      }
 
       final current = await widget.environment!.volume();
-      if (token != generation) return;
+      if (token != generation) {
+        return;
+      }
 
       if (lastVolume != null && (current - lastVolume!).abs() > .001) {
         volumeRemainder = 0;
@@ -237,11 +262,15 @@ class _PlayerGesturesState extends State<PlayerGestures>
 
       await widget.environment!.setVolume(target);
       final actual = await widget.environment!.volume();
-      if (token != generation) return;
+      if (token != generation) {
+        return;
+      }
 
       volumeRemainder = target - actual;
       lastVolume = actual;
-      if (mounted) _show('音量 ${(actual * 100).round()}%');
+      if (mounted) {
+        _show('音量 ${(actual * 100).round()}%');
+      }
     });
     await volumeChanges;
   }
@@ -249,42 +278,62 @@ class _PlayerGesturesState extends State<PlayerGestures>
   String _time(Duration value) =>
       '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
 
+  _Drag? _classifyDrag(Size size) {
+    if (movement.distance < _dragActivationDistance) {
+      return null;
+    }
+
+    final horizontal = movement.dx.abs();
+    final vertical = movement.dy.abs();
+    if (horizontal > vertical * _dragAxisRatio) {
+      return _Drag.seek;
+    }
+    if (!widget.fullscreen || vertical <= horizontal * _dragAxisRatio) {
+      return null;
+    }
+
+    // iOS owns system volume through its native control; the right drag stays free.
+    if (origin.dx < size.width / 2) {
+      return _Drag.brightness;
+    }
+    return widget.environment?.supportsVolumeDrag == true ? _Drag.volume : null;
+  }
+
+  void _showSeekPreview(double fraction) {
+    final offset = player.previewSeek(fraction);
+    final target = player.seekPreview;
+    final total = player.value.duration;
+    if (offset == null || target == null || total == null) {
+      return;
+    }
+
+    final direction = offset.isNegative ? '−' : '+';
+    final seconds =
+        (offset.inMilliseconds.abs() / Duration.millisecondsPerSecond).round();
+    _show('$direction$seconds 秒 · ${_time(target)} / ${_time(total)}');
+  }
+
   void _updateDrag(DragUpdateDetails details, Size size) {
     if (playerEpoch != player.gestureEpoch) {
       _playerChanged();
       return;
     }
-    if (blocked) return;
+    if (blocked) {
+      return;
+    }
 
     movement += details.delta;
     if (drag == null) {
-      if (movement.distance < 18) return;
-      if (movement.dx.abs() > movement.dy.abs() * 1.2) {
-        drag = _Drag.seek;
-      } else if (widget.fullscreen &&
-          movement.dy.abs() > movement.dx.abs() * 1.2) {
-        if (origin.dx < size.width / 2) {
-          drag = _Drag.brightness;
-        } else if (widget.environment?.supportsVolumeDrag == true) {
-          drag = _Drag.volume;
-        } else {
-          return;
-        }
-      } else {
+      drag = _classifyDrag(size);
+      if (drag == null) {
         return;
       }
-      player.holdControls(true, reason: PlayerControlHold.gesture);
+      player.holdControls(held: true, reason: PlayerControlHold.gesture);
     }
 
     switch (drag) {
       case _Drag.seek:
-        player.previewSeek(movement.dx / size.width);
-        final target = player.seekPreview;
-        if (target != null) {
-          _show(
-            '${movement.dx >= 0 ? '+' : '−'}${(movement.dx.abs() / size.width * (player.value.duration!.inSeconds.clamp(0, 120))).round()} 秒 · ${_time(target)} / ${_time(player.value.duration!)}',
-          );
-        }
+        _showSeekPreview(movement.dx / size.width);
       case _Drag.brightness:
         final token = generation;
         _run(() async {
@@ -305,10 +354,14 @@ class _PlayerGesturesState extends State<PlayerGestures>
     // its own axis and generation, and old completions cannot release its hold.
     final completedDrag = drag;
     drag = null;
-    player.holdControls(false, reason: PlayerControlHold.gesture);
+    player.holdControls(held: false, reason: PlayerControlHold.gesture);
 
-    if (completedDrag == _Drag.seek) await player.finishSeek(commit: true);
-    if (completedDrag == _Drag.volume) await volumeChanges;
+    if (completedDrag == _Drag.seek) {
+      await player.finishSeek(commit: true);
+    }
+    if (completedDrag == _Drag.volume) {
+      await volumeChanges;
+    }
   }
 
   @override
@@ -357,26 +410,34 @@ class _PlayerGesturesState extends State<PlayerGestures>
               excludeFromSemantics: true,
               onTap: enabled
                   ? () {
-                      if (!blocked) player.toggleControls();
+                      if (!blocked) {
+                        player.toggleControls();
+                      }
                     }
                   : null,
               onDoubleTap: enabled
                   ? () {
-                      if (!blocked) _run(player.togglePlayback());
+                      if (!blocked) {
+                        _run(player.togglePlayback());
+                      }
                     }
                   : null,
               onLongPressStart: enabled
                   ? (_) {
                       if (!blocked) {
                         _run(player.beginTemporarySpeed());
-                        if (player.temporarySpeed) _show('2× 快进中');
+                        if (player.temporarySpeed) {
+                          _show('2× 快进中');
+                        }
                       }
                     }
                   : null,
               onLongPressEnd: enabled ? (_) => _cancel() : null,
               onLongPressCancel: enabled
                   ? () {
-                      if (player.temporarySpeed) _cancel();
+                      if (player.temporarySpeed) {
+                        _cancel();
+                      }
                     }
                   : null,
               onPanUpdate: enabled && widget.fullscreen
@@ -390,7 +451,9 @@ class _PlayerGesturesState extends State<PlayerGestures>
                   : null,
               onHorizontalDragCancel: enabled && !widget.fullscreen
                   ? () {
-                      if (drag != null) _cancel();
+                      if (drag != null) {
+                        _cancel();
+                      }
                     }
                   : null,
               onPanEnd: enabled && widget.fullscreen
@@ -398,7 +461,9 @@ class _PlayerGesturesState extends State<PlayerGestures>
                   : null,
               onPanCancel: enabled && widget.fullscreen
                   ? () {
-                      if (drag != null) _cancel();
+                      if (drag != null) {
+                        _cancel();
+                      }
                     }
                   : null,
               child: Stack(

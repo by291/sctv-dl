@@ -23,7 +23,7 @@ class PlayerControlsVisibility {
   bool visible = true;
   bool _stopped = false;
 
-  bool hold(bool held, PlayerControlHold reason) =>
+  bool hold(PlayerControlHold reason, {required bool held}) =>
       held ? _holds.add(reason) : _holds.remove(reason);
 
   bool detach(PlayerControlHold reason) => _holds.remove(reason);
@@ -39,7 +39,9 @@ class PlayerControlsVisibility {
   }
 
   void update({required bool uninterruptedPlayback}) {
-    if (_stopped) return;
+    if (_stopped) {
+      return;
+    }
 
     if (!uninterruptedPlayback || _holds.isNotEmpty) {
       show();

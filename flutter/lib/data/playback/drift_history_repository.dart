@@ -3,15 +3,20 @@ import '../../domain/programmes/programme.dart';
 import '../database/record_database.dart';
 import '../programmes/programme_codec.dart';
 
+const _historyCollection = 'viewing_history';
+const _historyLimit = 500;
+
 class DriftHistoryRepository implements HistoryRepository {
   DriftHistoryRepository(this._database);
 
   final RecordDatabase _database;
 
   Future<void> _writes = Future<void>.value();
+  int _clearGeneration = 0;
+  final _removalGenerations = <ContentRef, int>{};
 
   Future<void> _serialize(Future<void> Function() action) {
-    final saved = _writes.then((_) => _database.transaction(action));
+    final saved = _writes.then((_) => action());
     _writes = saved.then<void>((_) {}, onError: (Object _, StackTrace _) {});
 
     return saved;
@@ -19,47 +24,71 @@ class DriftHistoryRepository implements HistoryRepository {
 
   @override
   Future<List<ViewingEntry>> loadHistory() async =>
-      _decodeRows(await _database.all('viewing_history'));
+      _decodeRows(await _database.all(_historyCollection));
 
   @override
   Stream<List<ViewingEntry>> watchHistory() =>
-      _database.watch('viewing_history').map(_decodeRows);
+      _database.watch(_historyCollection).map(_decodeRows);
 
   @override
-  Future<void> save(ViewingEntry entry) => _serialize(() async {
+  SaveViewingCheckpoint openSession(ContentRef ref) {
+    final clearGeneration = _clearGeneration;
+    final removalGeneration = _removalGenerations[ref];
+
+    return (entry) => _serialize(() async {
+      // A player can queue a checkpoint before its deletion reaches this lane.
+      // Check the session's identity here, after earlier deletions have committed.
+      if (clearGeneration != _clearGeneration ||
+          removalGeneration != _removalGenerations[ref]) {
+        return;
+      }
+
+      if (entry.selection.ref != ref) {
+        throw ArgumentError(
+          'Viewing checkpoint does not belong to this session',
+        );
+      }
+
+      await _database.transaction(() => _save(entry));
+    });
+  }
+
+  Future<void> _save(ViewingEntry entry) async {
     if (entry.position.isNegative || (entry.duration?.isNegative ?? false)) {
       throw const FormatException('Invalid viewing position');
     }
 
-    final duration = entry.duration;
-    final completed =
-        entry.completed ||
-        (duration != null &&
-            duration > Duration.zero &&
-            entry.position.inMicroseconds >= duration.inMicroseconds * .95);
-
-    await _database.write('viewing_history', entry.selection.ref.key, {
+    await _database.write(_historyCollection, entry.selection.ref.key, {
       'version': 1,
       'selection': encodeSelection(entry.selection),
       'positionUs': entry.position.inMicroseconds,
-      'durationUs': duration?.inMicroseconds,
+      'durationUs': entry.duration?.inMicroseconds,
       'viewedAt': entry.viewedAt.toUtc().toIso8601String(),
-      'completed': completed,
+      'completed': entry.completed,
     });
 
     final all = await loadHistory();
-    for (final stale in all.skip(500)) {
-      await _database.remove('viewing_history', stale.selection.ref.key);
+    for (final stale in all.skip(_historyLimit)) {
+      await _database.remove(_historyCollection, stale.selection.ref.key);
     }
+  }
+
+  @override
+  Future<void> remove(ContentRef ref) => _serialize(() async {
+    await _database.remove(_historyCollection, ref.key);
+    _removalGenerations.update(
+      ref,
+      (generation) => generation + 1,
+      ifAbsent: () => 1,
+    );
   });
 
   @override
-  Future<void> remove(ContentRef ref) =>
-      _serialize(() => _database.remove('viewing_history', ref.key));
-
-  @override
-  Future<void> clear() =>
-      _serialize(() => _database.clearCollection('viewing_history'));
+  Future<void> clear() => _serialize(() async {
+    await _database.clearCollection(_historyCollection);
+    _clearGeneration++;
+    _removalGenerations.clear();
+  });
 
   List<ViewingEntry> _decodeRows(Map<String, Map<String, Object?>> rows) {
     final entries = <ViewingEntry>[];
@@ -70,7 +99,9 @@ class DriftHistoryRepository implements HistoryRepository {
         );
         final position = row['positionUs'] as int;
         final duration = row['durationUs'] as int?;
-        if (position < 0 || (duration != null && duration < 0)) continue;
+        if (position < 0 || (duration != null && duration < 0)) {
+          continue;
+        }
 
         entries.add(
           ViewingEntry(
@@ -91,10 +122,10 @@ class DriftHistoryRepository implements HistoryRepository {
       }
     }
 
-    entries.sort((a, b) {
-      final time = b.viewedAt.compareTo(a.viewedAt);
+    entries.sort((left, right) {
+      final time = right.viewedAt.compareTo(left.viewedAt);
       return time == 0
-          ? a.selection.ref.key.compareTo(b.selection.ref.key)
+          ? left.selection.ref.key.compareTo(right.selection.ref.key)
           : time;
     });
 

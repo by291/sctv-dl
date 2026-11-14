@@ -33,11 +33,11 @@ class MemoryHistory implements HistoryRepository {
   }
 
   @override
-  Future<void> save(ViewingEntry entry) async {
+  SaveViewingCheckpoint openSession(ContentRef ref) => (entry) async {
     entries.removeWhere((value) => value.selection.ref == entry.selection.ref);
     entries.insert(0, entry);
     _changes.add(List.unmodifiable(entries));
-  }
+  };
 
   Future<void> close() => _changes.close();
 }

@@ -17,13 +17,17 @@ class PlaybackInputResolver {
 
   Future<Programme> programme(String id, {required RequestScope scope}) async {
     scope.throwIfCancelled();
-    if (!RegExp(r'^\d+$').hasMatch(id)) throw const FormatException('栏目编号无效');
+    if (!RegExp(r'^\d+$').hasMatch(id)) {
+      throw const FormatException('栏目编号无效');
+    }
 
     final cached = await programmes.cachedProgrammes();
     scope.throwIfCancelled();
 
     final existing = cached?.items.where((item) => item.id == id).firstOrNull;
-    if (existing != null) return existing;
+    if (existing != null) {
+      return existing;
+    }
 
     final fresh = await programmes.refreshProgrammes(scope: scope);
     scope.throwIfCancelled();
@@ -78,7 +82,9 @@ class PlaybackInputResolver {
     final date = dates.items
         .where((date) => date.id == contentRef.dateId)
         .firstOrNull;
-    if (date == null) throw StateError('播出日期已不可用');
+    if (date == null) {
+      throw StateError('播出日期已不可用');
+    }
 
     var contents = await programmes.cachedContents(
       contentRef.programmeId,
@@ -95,7 +101,9 @@ class PlaybackInputResolver {
     final content = contents.items
         .where((item) => item.id == contentRef.contentId)
         .firstOrNull;
-    if (content == null) throw StateError('节目已不可用');
+    if (content == null) {
+      throw StateError('节目已不可用');
+    }
 
     final position = await resumePosition(contentRef, scope: scope);
     scope.throwIfCancelled();

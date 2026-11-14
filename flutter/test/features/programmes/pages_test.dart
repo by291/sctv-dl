@@ -25,7 +25,7 @@ class EmptyHistory implements HistoryRepository {
   @override
   Stream<List<ViewingEntry>> watchHistory() => Stream.value(entries);
   @override
-  Future<void> save(ViewingEntry entry) async {}
+  SaveViewingCheckpoint openSession(ContentRef ref) => (_) async {};
   @override
   Future<void> remove(ContentRef ref) async {
     if (removeError case final error?) throw error;

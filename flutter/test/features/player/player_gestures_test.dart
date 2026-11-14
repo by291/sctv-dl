@@ -127,12 +127,12 @@ void main() {
     session.blockRestore = true;
     final restoring = player.endTemporarySpeed();
     await tester.pump();
-    player.holdControls(true, reason: PlayerControlHold.gesture);
+    player.holdControls(held: true, reason: PlayerControlHold.gesture);
     session.restoreGate.complete();
     await restoring;
     await tester.pump(const Duration(seconds: 4));
     expect(player.controlsVisible, isTrue);
-    player.holdControls(false, reason: PlayerControlHold.gesture);
+    player.holdControls(held: false, reason: PlayerControlHold.gesture);
     await tester.pump(const Duration(seconds: 4));
     expect(player.controlsVisible, isFalse);
     await tester.runAsync(player.release);

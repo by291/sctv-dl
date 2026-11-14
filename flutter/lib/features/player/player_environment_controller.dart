@@ -16,10 +16,14 @@ class PlayerEnvironmentController {
     // A resumed route must capture its base after the previous window's queued
     // restoration, rather than retaining an override that is about to be reset.
     _changes = _changes.catchError((Object _) {}).then((_) async {
-      if (generation != _generation) return;
+      if (generation != _generation) {
+        return;
+      }
 
       final initial = await environment.beginBrightness();
-      if (generation != _generation) return;
+      if (generation != _generation) {
+        return;
+      }
 
       brightnessValue = initial;
     });
@@ -28,14 +32,18 @@ class PlayerEnvironmentController {
 
   Future<void> changeBrightness(double delta) async {
     final current = brightnessValue;
-    if (current == null) return;
+    if (current == null) {
+      return;
+    }
 
     final target = (current + delta).clamp(0.0, 1.0);
     brightnessValue = target;
 
     final generation = _generation;
     _changes = _changes.catchError((Object _) {}).then((_) async {
-      if (generation == _generation) await environment.setBrightness(target);
+      if (generation == _generation) {
+        await environment.setBrightness(target);
+      }
     });
     await _changes;
   }

@@ -94,7 +94,7 @@ class _PlayerOptionsButtonState<T> extends State<PlayerOptionsButton<T>> {
     required double height,
     required TextStyle style,
   }) async {
-    controller.holdControls(true, reason: PlayerControlHold.menu);
+    controller.holdControls(held: true, reason: PlayerControlHold.menu);
 
     final overlay =
         Navigator.of(buttonContext).overlay!.context.findRenderObject()!
@@ -167,7 +167,7 @@ class _PlayerOptionsButtonState<T> extends State<PlayerOptionsButton<T>> {
         await onSelected(chosen);
       }
     } finally {
-      controller.holdControls(false, reason: PlayerControlHold.menu);
+      controller.holdControls(held: false, reason: PlayerControlHold.menu);
     }
   }
 }

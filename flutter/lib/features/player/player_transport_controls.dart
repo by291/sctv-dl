@@ -189,7 +189,7 @@ class _PlayerTransportControlsState extends State<PlayerTransportControls> {
                     _time(Duration(milliseconds: position.round())),
                 onChangeStart: canSeek
                     ? (_) => controller.holdControls(
-                        true,
+                        held: true,
                         reason: PlayerControlHold.seek,
                       )
                     : null,
@@ -205,7 +205,7 @@ class _PlayerTransportControlsState extends State<PlayerTransportControls> {
                         } finally {
                           if (mounted) setState(() => seeking = null);
                           controller.holdControls(
-                            false,
+                            held: false,
                             reason: PlayerControlHold.seek,
                           );
                         }

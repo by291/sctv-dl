@@ -10,6 +10,8 @@ import 'player_controls_visibility.dart';
 
 export 'player_controls_visibility.dart' show PlayerControlHold;
 
+const _maximumSeekGestureSpan = Duration(minutes: 2);
+
 /// Owns one pinned playback route. A committed route exit releases its session
 /// after the transition; an active PiP session retains ownership until it stops.
 class PlaybackController extends ChangeNotifier {
@@ -69,18 +71,27 @@ class PlaybackController extends ChangeNotifier {
   int _pendingSpeedChanges = 0;
   Object? _speedFailure;
 
-  void previewSeek(double fraction) {
+  /// Previews a seek and returns its clamped offset from where the drag started.
+  Duration? previewSeek(double fraction) {
     final duration = value.duration;
-    if (_released || duration == null || duration <= Duration.zero) return;
+    if (_released || duration == null || duration <= Duration.zero) {
+      return null;
+    }
 
-    _seekOrigin ??= value.position;
-    final sensitivity = duration.inMilliseconds.clamp(0, 120000);
-    seekPreview = Duration(
-      milliseconds: (_seekOrigin!.inMilliseconds + fraction * sensitivity)
+    final origin = _seekOrigin ?? value.position;
+    _seekOrigin = origin;
+    final span = duration < _maximumSeekGestureSpan
+        ? duration
+        : _maximumSeekGestureSpan;
+    final target = Duration(
+      microseconds: (origin.inMicroseconds + fraction * span.inMicroseconds)
           .round()
-          .clamp(0, duration.inMilliseconds),
+          .clamp(0, duration.inMicroseconds),
     );
-    holdControls(true, reason: PlayerControlHold.seek);
+    seekPreview = target;
+    holdControls(held: true, reason: PlayerControlHold.seek);
+
+    return target - origin;
   }
 
   Future<void> finishSeek({required bool commit}) async {
@@ -90,9 +101,13 @@ class PlaybackController extends ChangeNotifier {
 
     // Retire this preview before awaiting a native seek; the next preview owns
     // its own hold even when this write is still pending.
-    if (target != null) holdControls(false, reason: PlayerControlHold.seek);
+    if (target != null) {
+      holdControls(held: false, reason: PlayerControlHold.seek);
+    }
 
-    if (commit && target != null) await seek(target);
+    if (commit && target != null) {
+      await seek(target);
+    }
   }
 
   Future<void> _queueSpeed(double speed) {
@@ -101,12 +116,18 @@ class PlaybackController extends ChangeNotifier {
 
     return _speedChanges = _speedChanges.then((_) async {
       try {
-        if (owned == null || owned != session) return;
+        if (owned == null || owned != session) {
+          return;
+        }
 
         await owned.setSpeed(speed);
-        if (owned == session) _speedFailure = null;
+        if (owned == session) {
+          _speedFailure = null;
+        }
       } catch (error) {
-        if (owned == session) _speedFailure = error;
+        if (owned == session) {
+          _speedFailure = error;
+        }
         if (!_released && owned == session) {
           message = '播放速度调整失败：$error';
           _notify();
@@ -118,19 +139,23 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> beginTemporarySpeed() async {
-    if (_released || !value.playing || temporarySpeed) return;
+    if (_released || !value.playing || temporarySpeed) {
+      return;
+    }
 
     temporarySpeed = true;
-    holdControls(true, reason: PlayerControlHold.gesture);
+    holdControls(held: true, reason: PlayerControlHold.gesture);
 
     await _queueSpeed(2);
   }
 
   Future<void> endTemporarySpeed() async {
-    if (!temporarySpeed) return;
+    if (!temporarySpeed) {
+      return;
+    }
 
     temporarySpeed = false;
-    holdControls(false, reason: PlayerControlHold.gesture);
+    holdControls(held: false, reason: PlayerControlHold.gesture);
 
     await _queueSpeed(selectedSpeed);
   }
@@ -161,14 +186,19 @@ class PlaybackController extends ChangeNotifier {
   bool get canRetry =>
       !loading && (session == null || value.error != null || _streamFailed);
 
+  /// Opens the accepted input paused.
   Future<void> initialize() => _initialize(input);
+
+  bool _ownsOpening(int generation) => !_released && generation == _generation;
 
   Future<void> _initialize(
     PlaybackInput opening, {
     double speed = 1,
     bool resumePlayback = false,
   }) async {
-    if (_released || loading || session != null) return;
+    if (_released || loading || session != null) {
+      return;
+    }
 
     final generation = ++_generation;
     loading = true;
@@ -177,24 +207,24 @@ class PlaybackController extends ChangeNotifier {
 
     try {
       final opened = await backend.open(opening);
-
-      Object? openingSpeedFailure;
-      if (speed != 1) {
-        try {
-          await opened.setSpeed(speed);
-        } catch (error) {
-          openingSpeedFailure = error;
-          message = '播放速度恢复失败：$error';
-        }
+      if (!_ownsOpening(generation)) {
+        await _disposeUnclaimed(opened);
+        return;
       }
-      if (_released || generation != _generation) {
-        await opened.dispose();
+
+      final openingSpeedFailure = await _restoreOpeningSpeed(opened, speed);
+      // Restoring speed crosses the native boundary and can race route release.
+      if (!_ownsOpening(generation)) {
+        await _disposeUnclaimed(opened);
         return;
       }
 
       session = opened;
       selectedSpeed = speed;
       _speedFailure = openingSpeedFailure;
+      if (openingSpeedFailure != null) {
+        message = '播放速度恢复失败：$openingSpeedFailure';
+      }
       _streamFailed = false;
       _subscription = opened.changes.listen(
         _accept,
@@ -206,15 +236,18 @@ class PlaybackController extends ChangeNotifier {
       );
       _accept(opened.value);
 
-      if (resumePlayback && !_backgrounded && !_exiting) {
+      if (resumePlayback &&
+          _ownsOpening(generation) &&
+          !_backgrounded &&
+          !_exiting) {
         await opened.play();
       }
     } catch (error) {
-      if (!_released && generation == _generation) {
+      if (_ownsOpening(generation)) {
         message = '无法打开视频，请重试：$error';
       }
     } finally {
-      if (!_released && generation == _generation) {
+      if (_ownsOpening(generation)) {
         loading = false;
         _updateVisibility();
         _notify();
@@ -222,11 +255,41 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
+  Future<Object?> _restoreOpeningSpeed(
+    PlaybackSession opened,
+    double speed,
+  ) async {
+    if (speed == 1) {
+      return null;
+    }
+
+    try {
+      await opened.setSpeed(speed);
+      return null;
+    } catch (error) {
+      return error;
+    }
+  }
+
+  Future<void> _disposeUnclaimed(PlaybackSession opened) async {
+    try {
+      await opened.dispose();
+    } catch (error) {
+      _reportCleanupFailure(error);
+    }
+  }
+
+  /// Replaces the failed native session and restores the last usable playback state.
   Future<void> retry() async {
-    if (_released || loading) return;
+    if (_released || loading) {
+      return;
+    }
 
     loading = true;
     await cancelGestures();
+    if (_released) {
+      return;
+    }
 
     final resume = _lastUsable;
     final source = resume?.source;
@@ -245,7 +308,6 @@ class PlaybackController extends ChangeNotifier {
       initialPosition: resume?.position ?? input.initialPosition,
     );
 
-    loading = true;
     ++_generation;
     _controls.cancelTimer();
     _notify();
@@ -294,9 +356,13 @@ class PlaybackController extends ChangeNotifier {
       );
     }
 
-    if (snapshot.inPip && !value.inPip) unawaited(cancelGestures());
+    if (snapshot.inPip && !value.inPip) {
+      unawaited(cancelGestures());
+    }
     value = snapshot;
-    if (temporarySpeed && !snapshot.playing) unawaited(endTemporarySpeed());
+    if (temporarySpeed && !snapshot.playing) {
+      unawaited(endTemporarySpeed());
+    }
 
     if (_released) {
       // Release owns cleanup until its pending native writes and history settle.
@@ -307,7 +373,10 @@ class PlaybackController extends ChangeNotifier {
       return;
     }
 
-    if (wasPlaying && !snapshot.playing || snapshot.ended) _saveHistory();
+    final didPause = wasPlaying && !snapshot.playing;
+    if (didPause || snapshot.ended) {
+      _saveHistory();
+    }
     _historyWriter.saveAdvancingProgress(snapshot);
 
     _updateVisibility();
@@ -344,7 +413,9 @@ class PlaybackController extends ChangeNotifier {
 
     try {
       await cancelGestures();
-      if (_released) return;
+      if (_released) {
+        return;
+      }
 
       _requireRestoredSpeed();
       await session!.selectSource(source);
@@ -361,7 +432,9 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> enterPictureInPicture() => _action(() async {
     await cancelGestures();
-    if (_released) return;
+    if (_released) {
+      return;
+    }
 
     _requireRestoredSpeed();
     _pipRequested = true;
@@ -392,14 +465,17 @@ class PlaybackController extends ChangeNotifier {
     await flushHistory();
   }
 
-  void holdControls(
-    bool hold, {
+  /// Updates the visibility hold owned by the given interaction.
+  void holdControls({
+    required bool held,
     PlayerControlHold reason = PlayerControlHold.interaction,
   }) {
     // A losing gesture or a removed touch-focused control may release a hold
     // it never owned. Such releases must not undo a surface hide operation.
-    final changed = _controls.hold(hold, reason);
-    if (!changed) return;
+    final changed = _controls.hold(reason, held: held);
+    if (!changed) {
+      return;
+    }
 
     showControls();
   }
@@ -408,11 +484,15 @@ class PlaybackController extends ChangeNotifier {
   /// while the widget tree is locked, so visibility notifications stay with the
   /// already scheduled hide timer rather than rebuilding the disposing tree.
   void detachControlHold(PlayerControlHold reason) {
-    if (_controls.detach(reason)) _updateVisibility();
+    if (_controls.detach(reason)) {
+      _updateVisibility();
+    }
   }
 
   void toggleControls() {
-    if (_released) return;
+    if (_released) {
+      return;
+    }
 
     _controls.toggle();
     _updateVisibility();
@@ -420,7 +500,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   void showControls() {
-    if (_released) return;
+    if (_released) {
+      return;
+    }
 
     _controls.show();
     _updateVisibility();
@@ -428,7 +510,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   void _updateVisibility() {
-    if (_released) return;
+    if (_released) {
+      return;
+    }
 
     _controls.update(
       uninterruptedPlayback:
@@ -442,7 +526,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   Future<void> _action(Future<void> Function() action) async {
-    if (_released || session == null) return;
+    if (_released || session == null) {
+      return;
+    }
 
     try {
       await action();
@@ -464,7 +550,9 @@ class PlaybackController extends ChangeNotifier {
     await cancelGestures();
 
     try {
-      if (!value.inPip) await session?.pause();
+      if (!value.inPip) {
+        await session?.pause();
+      }
     } catch (error) {
       message = '无法暂停播放：$error';
       _notify();
@@ -517,7 +605,9 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> _disposeSession() {
     final pending = _sessionDisposal;
-    if (pending != null) return pending;
+    if (pending != null) {
+      return pending;
+    }
 
     final disposal = _disposeOwnedSession();
     _sessionDisposal = disposal;
@@ -540,7 +630,9 @@ class PlaybackController extends ChangeNotifier {
   }
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   @override

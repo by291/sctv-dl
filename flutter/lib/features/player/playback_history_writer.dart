@@ -2,17 +2,21 @@ import '../../domain/playback/history_repository.dart';
 import '../../domain/playback/playback_backend.dart';
 import '../../domain/programmes/programme.dart';
 
+const _checkpointInterval = Duration(seconds: 5);
+
 /// Owns checkpoint throttling and write ordering for one accepted selection.
 class PlaybackHistoryWriter {
   PlaybackHistoryWriter({
     required this.selection,
-    required this.repository,
+    required HistoryRepository repository,
     required this.now,
     required this.onError,
-  });
+  }) : _saveCheckpoint = selection == null
+           ? null
+           : repository.openSession(selection.ref);
 
   final ProgrammeSelection? selection;
-  final HistoryRepository repository;
+  final SaveViewingCheckpoint? _saveCheckpoint;
   final DateTime Function() now;
   final void Function(Object) onError;
 
@@ -20,32 +24,31 @@ class PlaybackHistoryWriter {
   DateTime? _lastProgressSave;
   Duration _lastSavedPosition = Duration.zero;
 
+  /// Records advancing playback after the checkpoint interval has elapsed.
   void saveAdvancingProgress(PlaybackSnapshot snapshot) {
-    if (snapshot.playing &&
-        snapshot.position > _lastSavedPosition &&
-        (_lastProgressSave == null ||
-            now().difference(_lastProgressSave!) >=
-                const Duration(seconds: 5))) {
+    final lastSave = _lastProgressSave;
+    final isDue =
+        lastSave == null || now().difference(lastSave) >= _checkpointInterval;
+    if (snapshot.playing && snapshot.position > _lastSavedPosition && isDue) {
       save(snapshot);
     }
   }
 
+  /// Queues an immediate checkpoint for a pause, seek, background or exit.
   void save(PlaybackSnapshot snapshot) {
     final accepted = selection;
-    if (accepted == null || !snapshot.initialized) return;
+    final saveCheckpoint = _saveCheckpoint;
+    if (accepted == null || saveCheckpoint == null || !snapshot.initialized) {
+      return;
+    }
 
-    final duration = snapshot.duration;
     final viewedAt = now();
     final entry = ViewingEntry(
       selection: accepted,
       position: snapshot.position,
-      duration: duration,
+      duration: snapshot.duration,
       viewedAt: viewedAt,
-      completed:
-          snapshot.ended ||
-          duration != null &&
-              duration > Duration.zero &&
-              snapshot.position.inMilliseconds >= duration.inMilliseconds * .95,
+      completed: snapshot.ended,
     );
 
     _lastProgressSave = viewedAt;
@@ -53,8 +56,9 @@ class PlaybackHistoryWriter {
 
     // Serialize saves so an older progress write cannot replace exit progress.
     // A repository failure is reported without poisoning later checkpoints.
-    _writes = _writes.then((_) => repository.save(entry)).catchError(onError);
+    _writes = _writes.then((_) => saveCheckpoint(entry)).catchError(onError);
   }
 
+  /// Waits for all checkpoints that have been queued so far.
   Future<void> flush() => _writes;
 }

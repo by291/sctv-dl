@@ -147,30 +147,33 @@ void main() {
     await player.release();
     player.dispose();
   });
-  test('unknown durations reject seeking and long videos use a two-minute full-width range', () async {
-    final session = fixtures.FakeSession();
-    final player = PlaybackController(
-      input: fixtures.input,
-      backend: fixtures.FakeBackend(session),
-      history: fixtures.MemoryHistory(),
-    );
-    await player.initialize();
-    session.emit(duration: null);
-    player.previewSeek(.5);
-    expect(player.seekPreview, isNull);
-    session.emit(duration: Duration.zero);
-    player.previewSeek(.5);
-    await player.finishSeek(commit: true);
-    expect(session.seekCalls, 0);
-    session.emit(
-      duration: const Duration(minutes: 10),
-      position: const Duration(minutes: 5),
-    );
-    player.previewSeek(.5);
-    expect(player.seekPreview, const Duration(minutes: 6));
-    await player.release();
-    player.dispose();
-  });
+  test(
+    'seek requires a duration and caps long videos at a two-minute range',
+    () async {
+      final session = fixtures.FakeSession();
+      final player = PlaybackController(
+        input: fixtures.input,
+        backend: fixtures.FakeBackend(session),
+        history: fixtures.MemoryHistory(),
+      );
+      await player.initialize();
+      session.emit(duration: null);
+      player.previewSeek(.5);
+      expect(player.seekPreview, isNull);
+      session.emit(duration: Duration.zero);
+      player.previewSeek(.5);
+      await player.finishSeek(commit: true);
+      expect(session.seekCalls, 0);
+      session.emit(
+        duration: const Duration(minutes: 10),
+        position: const Duration(minutes: 5),
+      );
+      player.previewSeek(.5);
+      expect(player.seekPreview, const Duration(minutes: 6));
+      await player.release();
+      player.dispose();
+    },
+  );
   test(
     'source requests are guarded while delayed boost restoration drains',
     () async {
@@ -210,9 +213,12 @@ void main() {
       expect(player.seekPreview, const Duration(seconds: 75));
       await player.finishSeek(commit: false);
       expect(session.seekCalls, 0);
-      player.previewSeek(2);
+
+      final boundedOffset = player.previewSeek(2);
       expect(player.seekPreview, const Duration(seconds: 100));
+      expect(boundedOffset, const Duration(seconds: 50));
       await player.finishSeek(commit: true);
+
       expect(session.seekCalls, 1);
       expect(session.value.position, const Duration(seconds: 100));
       await player.release();

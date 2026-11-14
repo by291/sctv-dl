@@ -70,7 +70,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   void _updateFocusHold() {
     controller.holdControls(
-      controlsFocused &&
+      held:
+          controlsFocused &&
           FocusManager.instance.highlightMode == FocusHighlightMode.traditional,
       reason: PlayerControlHold.focus,
     );
@@ -82,7 +83,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
     accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     controller.holdControls(
-      accessibleNavigation,
+      held: accessibleNavigation,
       reason: PlayerControlHold.accessibility,
     );
   }
@@ -166,6 +167,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       final surface = _surface();
       final inPip = controller.value.inPip;
       final videoOnly = fullscreen || inPip;
+      final fullscreenSurface = inPip ? surface : SafeArea(child: surface);
 
       return PopScope<Object?>(
         canPop: !fullscreen || inPip,
@@ -180,7 +182,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           backgroundColor: videoOnly ? Colors.black : null,
           appBar: videoOnly ? null : AppBar(title: const Text('播放')),
           body: videoOnly
-              ? (inPip ? surface : SafeArea(child: surface))
+              ? fullscreenSurface
               : SafeArea(
                   top: false,
                   child: LayoutBuilder(
@@ -399,7 +401,7 @@ class _SystemVolumeInteractionState extends State<_SystemVolumeInteraction> {
   bool focused = false;
 
   void updateHold() => widget.controller.holdControls(
-    pointers.isNotEmpty || focused,
+    held: pointers.isNotEmpty || focused,
     reason: PlayerControlHold.systemVolume,
   );
 
