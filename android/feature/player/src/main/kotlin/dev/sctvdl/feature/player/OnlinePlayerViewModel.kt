@@ -8,6 +8,7 @@ import dev.sctvdl.domain.common.AppError
 import dev.sctvdl.domain.common.ErrorKind
 import dev.sctvdl.domain.history.ViewingTarget
 import dev.sctvdl.domain.media.videoVariants
+import dev.sctvdl.domain.programme.ContentRef
 import dev.sctvdl.domain.programme.ProgrammeSelection
 import dev.sctvdl.domain.repository.HistoryRepository
 import dev.sctvdl.domain.repository.ProgrammeRepository
@@ -33,11 +34,14 @@ internal class OnlinePlayerViewModel @Inject constructor(
     val uiState = mutableState.asStateFlow()
 
     private var job: Job? = null
-    private var key: Triple<String, String, String>? = null
+    private var key: ContentRef? = null
 
-    fun open(programmeId: String, dateId: String, contentId: String, selection: PlaybackSelection? = null) {
-        val currentKey = Triple(programmeId, dateId, contentId)
-        if (key == currentKey) return
+    /** Open a content reference while retaining the accepted selection when it matches. */
+    fun open(currentKey: ContentRef, selection: PlaybackSelection? = null) {
+        val (programmeId, dateId, contentId) = currentKey
+        if (key == currentKey) {
+            return
+        }
 
         key = currentKey
         job?.cancel()
@@ -57,6 +61,7 @@ internal class OnlinePlayerViewModel @Inject constructor(
             var broadcastDate = accepted?.broadcastDate
 
             launch { repository.refreshContents(programmeId, dateId) }
+
             combine(
                 repository.observeContents(programmeId, dateId),
                 settings.settings,
@@ -70,11 +75,15 @@ internal class OnlinePlayerViewModel @Inject constructor(
                 ->
                 val content = selectedContent ?: resource.data?.firstOrNull { it.id == contentId }
                 val variants = content?.let(::videoVariants).orEmpty()
+
                 if (context == null && content != null) {
                     val programme = programmes.data?.firstOrNull { it.id == programmeId }
                     val date = dates.data?.firstOrNull { it.id == dateId }
-                    if (programme != null && date != null) context = ProgrammeSelection(programme, date, content)
+                    if (programme != null && date != null) {
+                        context = ProgrammeSelection(programme, date, content)
+                    }
                 }
+
                 // Metadata may arrive after the source. Attach recording then without moving an already opened player.
                 val resume = if (recorder == null && context != null) {
                     PlaybackHistoryRecorder(history, ViewingTarget.Online(requireNotNull(context)), viewModelScope)
@@ -82,6 +91,7 @@ internal class OnlinePlayerViewModel @Inject constructor(
                 } else {
                     0L
                 }
+
                 if (source == null && content != null && variants.isNotEmpty()) {
                     selectedContent = content
                     source =
@@ -89,14 +99,16 @@ internal class OnlinePlayerViewModel @Inject constructor(
                             content.id,
                             content.title,
                             variants,
-                            startPositionMs =
-                            saved["positionMs"] ?: resume
+                            startPositionMs = saved["positionMs"] ?: resume
                         )
                 }
+
                 if (programmeName == null) {
                     programmeName = programmes.data?.firstOrNull { it.id == programmeId }?.name
                 }
-                if (broadcastDate == null) broadcastDate = dates.data?.firstOrNull { it.id == dateId }?.date
+                if (broadcastDate == null) {
+                    broadcastDate = dates.data?.firstOrNull { it.id == dateId }?.date
+                }
 
                 val error = when {
                     source != null -> null
@@ -115,7 +127,11 @@ internal class OnlinePlayerViewModel @Inject constructor(
                     context,
                     recorder
                 )
-            }.collect { if (key == currentKey) mutableState.value = it }
+            }.collect {
+                if (key == currentKey) {
+                    mutableState.value = it
+                }
+            }
         }
     }
 

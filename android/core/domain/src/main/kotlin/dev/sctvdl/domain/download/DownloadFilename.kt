@@ -19,7 +19,9 @@ fun safeDownloadFilename(date: LocalDate, title: String, quality: Quality, suffi
                 codePoint <= 0xffff -> 3
                 else -> 4
             }
-            if (bytes + width > budget) break
+            if (bytes + width > budget) {
+                break
+            }
 
             bytes += width
             end += Character.charCount(codePoint)

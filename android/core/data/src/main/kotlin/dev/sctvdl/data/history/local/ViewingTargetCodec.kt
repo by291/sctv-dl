@@ -16,7 +16,12 @@ internal object ViewingTargetCodec {
 
     fun key(key: ViewingKey): String = when (key) {
         is ViewingKey.Content -> json.encodeToString(
-            listOf("content", key.ref.programmeId, key.ref.dateId, key.ref.contentId)
+            listOf(
+                "content",
+                key.ref.programmeId,
+                key.ref.dateId,
+                key.ref.contentId
+            )
         )
         is ViewingKey.LegacyDownload -> "legacy:" + key.taskId
     }

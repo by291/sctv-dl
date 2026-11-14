@@ -10,11 +10,15 @@ interface PlaybackHost {
     val pictureInPicture: StateFlow<Boolean>
     val supportsPictureInPicture: Boolean
 
+    /** Expose the destination-owned session to Activity lifecycle and PiP callbacks. */
     fun bindPlayer(session: PlayerSession)
 
+    /** Stop Activity callbacks for this session before the destination releases it. */
     fun unbindPlayer(session: PlayerSession)
 
+    /** Apply the committed destination’s fullscreen window policy. */
     fun fullscreen(enabled: Boolean)
 
+    /** Request PiP for the bound session and report whether the host accepted it. */
     fun enterPictureInPicture(): Boolean
 }

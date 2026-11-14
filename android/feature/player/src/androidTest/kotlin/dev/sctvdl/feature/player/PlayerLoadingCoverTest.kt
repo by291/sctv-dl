@@ -194,7 +194,9 @@ class PlayerLoadingCoverTest {
         for (y in 0 until pixels.height step 2) {
             for (x in 0 until pixels.width step 2) {
                 val color = pixels[x, y]
-                if (color.blue > 0.5f && color.red < 0.1f && color.green < 0.1f) count++
+                if (color.blue > 0.5f && color.red < 0.1f && color.green < 0.1f) {
+                    count++
+                }
             }
         }
         return count

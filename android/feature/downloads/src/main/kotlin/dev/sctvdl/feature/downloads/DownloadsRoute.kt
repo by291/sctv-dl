@@ -9,6 +9,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.feature.downloads.platform.openDownloadFile
 import dev.sctvdl.feature.downloads.platform.openSystemDownloads
+import dev.sctvdl.feature.downloads.platform.shareDownloadFile
 import kotlinx.coroutines.launch
 
 // Keep the original SavedStateHandle owner key across package/type moves.
@@ -41,8 +42,8 @@ fun DownloadsRoute(
         model::retry,
         model::remove,
         onLocalPlayback,
-        { task -> model.withFile(task.id) { openDownloadFile(context, it, true, model::showMessage) } },
-        { task -> model.withFile(task.id) { openDownloadFile(context, it, false, model::showMessage) } },
+        { task -> model.withFile(task.id) { shareDownloadFile(context, it, model::showMessage) } },
+        { task -> model.withFile(task.id) { openDownloadFile(context, it, model::showMessage) } },
         { openSystemDownloads(context, model::showMessage) },
         model::beginSelection, model::exitSelection, model::selectAll, model::toggle,
         onReload = model::reload,

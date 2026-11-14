@@ -35,7 +35,9 @@ class ManagedDownloadJobService : JobService() {
             try {
                 do {
                     runtime.reconcile()
-                    if (!runtime.hasWork(owner)) break
+                    if (!runtime.hasWork(owner)) {
+                        break
+                    }
                     delay(1000)
                 } while (true)
                 running.remove(params.jobId)

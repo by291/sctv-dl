@@ -42,7 +42,9 @@ class NavigationMotionTest {
             navigator = navigation
             Box(
                 Modifier.fillMaxSize().onSizeChanged {
-                    if (route == AppRoute.Catalogue) heights.add(it.height)
+                    if (route == AppRoute.Catalogue) {
+                        heights.add(it.height)
+                    }
                 }
             ) {
                 Text("Page ${route::class.simpleName}")

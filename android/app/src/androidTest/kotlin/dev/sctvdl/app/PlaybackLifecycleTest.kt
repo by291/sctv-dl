@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
@@ -48,52 +49,14 @@ class PlaybackLifecycleTest {
             scenario.onActivity { activity ->
                 host = ObservingActivityHost(ActivityPlaybackHost(activity))
                 activity.setContent {
-                    SctvAppTheme(AppSettings()) {
-                        Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-                            AppNavigationShell(onBackCommitted = activity::pausePlayerForDismissal) {
-                                    route,
-                                    navigator,
-                                    _
-                                ->
-                                pop = navigator.back
-                                when (route) {
-                                    AppRoute.Catalogue -> Box(
-                                        Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Button(onClick = {
-                                            navigator.open(AppRoute.Playback("fixture", "fixture", "host"))
-                                        }) {
-                                            Text("Open host fixture")
-                                        }
-                                    }
-                                    is AppRoute.Playback -> PlayerRoute(
-                                        route.programmeId,
-                                        route.dateId,
-                                        route.contentId,
-                                        PlaybackSelection(
-                                            "fixture",
-                                            "fixture",
-                                            ProgrammeContent(
-                                                "host",
-                                                "Host lifecycle fixture",
-                                                standardUrl = "https://fixture.invalid/host.mp4"
-                                            ),
-                                            "Host fixture",
-                                            LocalDate.of(2026, 1, 1)
-                                        ),
-                                        true,
-                                        host,
-                                        navigator.back,
-                                        {}
-                                    )
-                                    else -> Unit
-                                }
-                            }
-                        }
-                    }
+                    PlaybackNavigationFixture(
+                        host = host,
+                        onBackCommitted = activity::pausePlayerForDismissal,
+                        onNavigatorReady = { navigateBack -> pop = navigateBack }
+                    )
                 }
             }
+
             requireNotNull(device.wait(Until.findObject(By.text("Open host fixture")), 5_000)).click()
             requireNotNull(device.wait(Until.findObject(By.desc("全屏播放")), 5_000)).click()
             requireNotNull(device.wait(Until.findObject(By.desc("退出全屏")), 5_000))
@@ -106,6 +69,7 @@ class PlaybackLifecycleTest {
                         ViewCompat.getRootWindowInsets(activity.window.decorView)
                     ).isVisible(WindowInsetsCompat.Type.statusBars())
                 )
+
                 pop()
                 // Sample after the pop has been composed, while NavDisplay still draws its outgoing entry.
                 Choreographer.getInstance().postFrameCallback {
@@ -115,6 +79,7 @@ class PlaybackLifecycleTest {
                     }
                 }
             }
+
             assertTrue("The exit transition must produce frames", duringExit.await(3, TimeUnit.SECONDS))
             assertTrue("The outgoing player must survive the leave animation", aliveDuringExit)
             assertTrue("Navigation must eventually dispose the player", host.unbound.await(5, TimeUnit.SECONDS))
@@ -131,6 +96,58 @@ class PlaybackLifecycleTest {
         }
     }
 }
+
+@Composable
+private fun PlaybackNavigationFixture(
+    host: PlaybackHost,
+    onBackCommitted: () -> Unit,
+    onNavigatorReady: (() -> Unit) -> Unit
+) {
+    SctvAppTheme(AppSettings()) {
+        Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
+            AppNavigationShell(onBackCommitted = onBackCommitted) { route, navigator, _ ->
+                onNavigatorReady(navigator.back)
+                when (route) {
+                    AppRoute.Catalogue -> Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Button(onClick = {
+                            navigator.open(AppRoute.Playback("fixture", "fixture", "host"))
+                        }) {
+                            Text("Open host fixture")
+                        }
+                    }
+
+                    is AppRoute.Playback -> PlayerRoute(
+                        programmeId = route.programmeId,
+                        dateId = route.dateId,
+                        contentId = route.contentId,
+                        selection = fixtureSelection,
+                        wifiOnly = true,
+                        host = host,
+                        onBack = navigator.back,
+                        onDownload = {}
+                    )
+
+                    else -> Unit
+                }
+            }
+        }
+    }
+}
+
+private val fixtureSelection = PlaybackSelection(
+    programmeId = "fixture",
+    dateId = "fixture",
+    content = ProgrammeContent(
+        "host",
+        "Host lifecycle fixture",
+        standardUrl = "https://fixture.invalid/host.mp4"
+    ),
+    programmeName = "Host fixture",
+    broadcastDate = LocalDate.of(2026, 1, 1)
+)
 
 private class ObservingActivityHost(private val delegate: PlaybackHost) : PlaybackHost by delegate {
     var session: PlayerSession? = null

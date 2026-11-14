@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.baselineprofile)
 }
+
 android {
     namespace = "dev.sctvdl.baselineprofile"
     compileSdk = 37
@@ -17,6 +18,7 @@ android {
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
 }
+
 baselineProfile { useConnectedDevices = true }
 dependencies {
     implementation(libs.benchmark)

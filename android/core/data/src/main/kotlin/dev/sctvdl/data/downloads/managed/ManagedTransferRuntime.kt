@@ -56,7 +56,9 @@ internal class ManagedTransferRuntime @Inject constructor(
     override suspend fun stop(task: DownloadTask) {
         transitions.mutex.withLock {
             val current = store.get(task.id) ?: return@withLock
-            if (current.attemptId != task.attemptId || !current.userPaused) return@withLock
+            if (current.attemptId != task.attemptId || !current.userPaused) {
+                return@withLock
+            }
             access.block(task.attemptId)
             if (current.mediaChecked) {
                 gateway.enqueue(current)
@@ -74,13 +76,17 @@ internal class ManagedTransferRuntime @Inject constructor(
 
     suspend fun hasWork(owner: ExecutionOwner): Boolean = store.all().any { task ->
         val deferred = task.attemptId in deferredCleanup || task.attemptId in deferredTransfers
-        if (task.owner != DownloadOwner.Media3 || deferred) return@any false
+        if (task.owner != DownloadOwner.Media3 || deferred) {
+            return@any false
+        }
         when {
             task.cleanupPending || task.state == DownloadState.Finalizing ->
                 owner == ExecutionOwner.Foreground || owner == ExecutionOwner.LocalJob
             !task.state.isActive || task.userPaused -> false
             owner == ExecutionOwner.Foreground -> DownloadNetworkPolicy.allows(task.wifiOnly, access.status())
-            owner == ExecutionOwner.WifiJob -> task.wifiOnly && DownloadNetworkPolicy.allows(true, access.status())
+            owner == ExecutionOwner.WifiJob ->
+                task.wifiOnly &&
+                    DownloadNetworkPolicy.allows(wifiOnly = true, network = access.status())
             owner == ExecutionOwner.UnrestrictedJob -> !task.wifiOnly && access.status().connected
             else -> false
         }
@@ -99,14 +105,20 @@ internal class ManagedTransferRuntime @Inject constructor(
 
     override suspend fun reconcile() = reconciliation.withLock {
         val tasks = store.all().filter { it.owner == DownloadOwner.Media3 }
-        if (tasks.isEmpty()) return@withLock
+        if (tasks.isEmpty()) {
+            return@withLock
+        }
 
         val snapshots = gateway.snapshots().associateBy { it.attemptId }
         for (original in tasks) {
             var task = store.get(original.id)?.takeIf { it.attemptId == original.attemptId } ?: continue
             try {
-                if (reconcileLocalResources(task)) continue
-                if (!task.state.isActive || task.attemptId in deferredTransfers) continue
+                if (reconcileLocalResources(task)) {
+                    continue
+                }
+                if (!task.state.isActive || task.attemptId in deferredTransfers) {
+                    continue
+                }
 
                 if (!permitsExecution(task)) {
                     waitForExecution(task)
@@ -114,27 +126,40 @@ internal class ManagedTransferRuntime @Inject constructor(
                 }
 
                 task = checkMedia(task) ?: continue
+
                 gateway.enqueue(task)
-                gateway.allow(task, true)
+                gateway.allow(task, permitted = true)
                 recordTransfer(task, snapshots[task.attemptId])
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: Exception) {
-                if (task.cleanupPending) deferredCleanup += task.attemptId
-                if (task.state.isActive && !task.userPaused) {
-                    val transient = failure is java.io.IOException || !access.permits(task)
-                    if (transient) deferredTransfers += task.attemptId
-                    update(task) {
-                        it.copy(
-                            state = if (transient) DownloadState.Waiting else DownloadState.Failed,
-                            reason = if (transient) "网络中断，等待系统重试" else "下载准备失败，请重试",
-                            reasonCode = DownloadReason.Network
-                        )
-                    }
-                }
+                deferAfterFailure(task, failure)
             }
         }
+
         scheduler.reconcile()
+    }
+
+    private suspend fun deferAfterFailure(task: DownloadTask, failure: Exception) {
+        if (task.cleanupPending) {
+            deferredCleanup += task.attemptId
+        }
+        if (!task.state.isActive || task.userPaused) {
+            return
+        }
+
+        val canRetryWithLaterLease = failure is java.io.IOException || !access.permits(task)
+        val nextState = if (canRetryWithLaterLease) DownloadState.Waiting else DownloadState.Failed
+        val reason = if (canRetryWithLaterLease) "网络中断，等待系统重试" else "下载准备失败，请重试"
+
+        // Reconciliation may run again under the same lease. Wait for a new one before retrying.
+        if (canRetryWithLaterLease) {
+            deferredTransfers += task.attemptId
+        }
+
+        update(task) {
+            it.copy(state = nextState, reason = reason, reasonCode = DownloadReason.Network)
+        }
     }
 
     /** Local cleanup/publication needs a host lease but never a network lease. */
@@ -167,7 +192,9 @@ internal class ManagedTransferRuntime @Inject constructor(
         }
 
         if (task.cacheComplete && task.state == DownloadState.Finalizing) {
-            if (access.hasLocalLease()) publication.publish(task.target)
+            if (access.hasLocalLease()) {
+                publication.publish(task.target)
+            }
             return true
         }
 
@@ -176,7 +203,9 @@ internal class ManagedTransferRuntime @Inject constructor(
 
     private suspend fun permitsExecution(task: DownloadTask): Boolean = transitions.mutex.withLock {
         val latest = store.get(task.id)
-        if (latest?.attemptId != task.attemptId || latest.revision != task.revision) return@withLock false
+        if (latest?.attemptId != task.attemptId || latest.revision != task.revision) {
+            return@withLock false
+        }
         if (latest.userPaused) access.block(latest.attemptId) else access.unblock(latest.attemptId)
         access.permits(latest)
     }
@@ -184,7 +213,7 @@ internal class ManagedTransferRuntime @Inject constructor(
     private suspend fun waitForExecution(task: DownloadTask) {
         if (task.mediaChecked) {
             gateway.enqueue(task)
-            gateway.allow(task, false)
+            gateway.allow(task, permitted = false)
         }
 
         update(task) {
@@ -202,7 +231,9 @@ internal class ManagedTransferRuntime @Inject constructor(
     }
 
     private suspend fun checkMedia(task: DownloadTask): DownloadTask? {
-        if (task.mediaChecked) return task
+        if (task.mediaChecked) {
+            return task
+        }
 
         val identity = MediaPreflight(OkHttpMediaProbe(access.client(task))).inspect(task.url)
         return update(task) {
@@ -283,7 +314,9 @@ internal class ManagedTransferRuntime @Inject constructor(
         transitions.mutex.withLock {
             val latest = store.get(task.id) ?: return@withLock null
             // Progress and probe responses may finish after pause, cancel, or a replacement attempt.
-            if (latest.attemptId != task.attemptId || latest.revision != task.revision) return@withLock null
+            if (latest.attemptId != task.attemptId || latest.revision != task.revision) {
+                return@withLock null
+            }
             change(latest).copy(revision = latest.revision + 1).also { store.update(it) }
         }
 }

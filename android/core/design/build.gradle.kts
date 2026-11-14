@@ -1,6 +1,7 @@
 plugins {
     id("sctv.android.compose")
 }
+
 android { namespace = "dev.sctvdl.design" }
 dependencies {
     implementation(libs.compose.animation)

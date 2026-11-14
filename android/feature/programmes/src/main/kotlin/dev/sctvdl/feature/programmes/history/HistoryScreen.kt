@@ -219,5 +219,9 @@ private fun groupHistory(entries: List<ViewingEntry>): List<Pair<String, List<Vi
                 else -> "更早"
             }
         }
-    return listOf("今天", "昨天", "更早").mapNotNull { label -> groups[label]?.let { label to it } }
+    return listOf(
+        "今天",
+        "昨天",
+        "更早"
+    ).mapNotNull { label -> groups[label]?.let { label to it } }
 }

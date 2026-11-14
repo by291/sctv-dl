@@ -3,14 +3,17 @@ plugins {
     id("sctv.android.hilt")
     alias(libs.plugins.serialization)
 }
+
 android {
     namespace = "dev.sctvdl.data"
 }
+
 androidComponents {
     onVariants { variant ->
         variant.deviceTests.values.forEach { it.sources.assets?.addStaticSourceDirectory("$projectDir/schemas") }
     }
 }
+
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
     implementation(project(":core:domain"))

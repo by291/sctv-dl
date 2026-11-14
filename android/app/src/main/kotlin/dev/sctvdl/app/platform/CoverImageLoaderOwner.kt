@@ -44,7 +44,9 @@ class CoverImageLoaderOwner @Inject constructor(
             // DiskCache.shutdown aborts old editors. Only image directories are deleted.
             root.listFiles()?.filter { it.name != next }?.forEach { check(it.deleteRecursively()) }
             val legacyCache = context.cacheDir.resolve("image_cache")
-            if (legacyCache.exists()) check(legacyCache.deleteRecursively())
+            if (legacyCache.exists()) {
+                check(legacyCache.deleteRecursively())
+            }
         }
     }
 

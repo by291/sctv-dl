@@ -28,7 +28,11 @@ internal class ProgrammeTestNavigator(val open: (ProgrammeTestRoute) -> Unit, va
 internal fun ProgrammeNavigationFixture(content: @Composable (ProgrammeTestRoute, ProgrammeTestNavigator) -> Unit) {
     val stack = remember { mutableStateListOf<ProgrammeTestRoute>(ProgrammeTestRoute.Catalogue) }
     val transition = remember { ProgrammeCoverTransitionState() }
-    val back: () -> Unit = { if (stack.size > 1) stack.removeLastOrNull() }
+    val back: () -> Unit = {
+        if (stack.size > 1) {
+            stack.removeLastOrNull()
+        }
+    }
     val navigator = ProgrammeTestNavigator({ stack.add(it) }, back)
     // Keep the selected cover and list state when the catalogue leaves, as the app shell does.
     val entries = rememberDecoratedNavEntries(

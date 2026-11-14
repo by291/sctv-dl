@@ -59,6 +59,7 @@ android {
     }
     lint { abortOnError = true }
 }
+
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
@@ -103,6 +104,7 @@ dependencies {
     debugImplementation(libs.compose.test.manifest)
     debugImplementation(libs.compose.tooling)
 }
+
 baselineProfile {
     mergeIntoMain = true
     automaticGenerationDuringBuild = false

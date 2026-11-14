@@ -116,7 +116,9 @@ class DownloadManagerRepositoryTest {
         val rows = FakeDownloadStore()
         val store = object : DownloadStore by rows {
             override suspend fun reserve(task: DownloadTask): Boolean {
-                if (task.contentId == "2") throw IllegalStateException("temporary storage failure")
+                if (task.contentId == "2") {
+                    throw IllegalStateException("temporary storage failure")
+                }
                 return rows.reserve(task)
             }
         }

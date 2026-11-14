@@ -40,7 +40,9 @@ class ObservationRecoveryTest {
         val repository = object : ProgrammeRepository by source {
             override fun observeProgrammes() = flow {
                 emit(source.catalogue.value)
-                if (fail) throw IOException("Database read failed")
+                if (fail) {
+                    throw IOException("Database read failed")
+                }
                 emitAll(source.catalogue)
             }
         }
@@ -68,7 +70,9 @@ class ObservationRecoveryTest {
         val repository = object : ProgrammeRepository by source {
             override fun observeDates(programmeId: String) = flow {
                 emit(source.observeDates(programmeId).value)
-                if (fail) throw IOException("Database read failed")
+                if (fail) {
+                    throw IOException("Database read failed")
+                }
                 emitAll(source.observeDates(programmeId))
             }
         }
@@ -100,13 +104,17 @@ class ObservationRecoveryTest {
         val repository = object : ProgrammeRepository by source {
             override fun observeProgrammes() = flow {
                 emit(source.catalogue.value)
-                if (fail) throw IOException("Context failed")
+                if (fail) {
+                    throw IOException("Context failed")
+                }
                 emitAll(source.catalogue)
             }
 
             override fun observeContents(programmeId: String, dateId: String) = flow {
                 emit(source.observeContents(programmeId, dateId).value)
-                if (fail) throw IOException("Contents failed")
+                if (fail) {
+                    throw IOException("Contents failed")
+                }
                 emitAll(source.observeContents(programmeId, dateId))
             }
         }

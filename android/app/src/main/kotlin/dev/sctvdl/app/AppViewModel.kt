@@ -34,7 +34,9 @@ internal class AppViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState(downloadMessage = messages.value))
 
     fun enqueue(requests: List<DownloadRequest>) {
-        if (requests.isEmpty()) return
+        if (requests.isEmpty()) {
+            return
+        }
 
         viewModelScope.launch {
             try {
@@ -57,7 +59,9 @@ internal class AppViewModel @Inject constructor(
 
     fun acknowledgeMessage(id: Long) {
         // A dismissed snackbar may finish after a newer download result has already arrived.
-        if (messages.value?.id != id) return
+        if (messages.value?.id != id) {
+            return
+        }
 
         saved["downloadMessage"] = null
         messages.value = null

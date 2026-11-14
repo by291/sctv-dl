@@ -159,7 +159,9 @@ class LibraryExplorationTest {
                 if (open == null) {
                     device.waitForIdle()
                     open = device.findObject(By.desc("查看栏目四川新闻联播与天府大地的每一份精彩故事"))
-                    if (open == null) device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, 0.5f)
+                    if (open == null) {
+                        device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, 0.5f)
+                    }
                 }
             }
             assertNotNull("Exploration action must remain reachable at 200% text", open)

@@ -36,7 +36,9 @@ internal class LocalPlayerViewModel @Inject constructor(
     private var job: Job? = null
 
     fun open(taskId: String) {
-        if (this.taskId == taskId) return
+        if (this.taskId == taskId) {
+            return
+        }
 
         this.taskId = taskId
         observe(taskId)

@@ -29,7 +29,9 @@ class FavouriteFailureTest {
             override fun observeIds() = ids
 
             override suspend fun toggle(id: String) {
-                if (fail) throw IOException("Storage unavailable")
+                if (fail) {
+                    throw IOException("Storage unavailable")
+                }
                 ids.value = if (id in ids.value) ids.value - id else ids.value + id
             }
         }

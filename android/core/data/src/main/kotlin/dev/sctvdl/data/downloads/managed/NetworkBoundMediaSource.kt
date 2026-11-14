@@ -26,7 +26,9 @@ internal class NetworkBoundMediaSource(private val task: DownloadTask, private v
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        if (!access.permits(task)) throw IOException("Download execution permission withdrawn")
+        if (!access.permits(task)) {
+            throw IOException("Download execution permission withdrawn")
+        }
         return requireNotNull(delegate).read(buffer, offset, length)
     }
 

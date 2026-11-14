@@ -85,7 +85,6 @@ internal fun AppNavigationShell(
     val coverTransition = remember { ProgrammeCoverTransitionState() }
     val navigation = rememberAppNavigation(downloadsRequest, onBackCommitted)
     val stacks = navigation.stacks
-    val tabs = PrimaryDestinations.map { it.route }
     val selected = navigation.selected
     val current = navigation.current
     val isPlayer = current is AppRoute.Playback || current is AppRoute.LocalPlayback
@@ -114,40 +113,15 @@ internal fun AppNavigationShell(
                                 key = route,
                                 contentKey = "$index:$route",
                                 metadata = mapOf(PRIMARY_DESTINATION_KEY to index)
-                            ) {
-                                val animationScope = LocalNavAnimatedContentScope.current
-                                CompositionLocalProvider(
-                                    LocalProgrammeCoverAnimationScope provides animationScope
-                                ) {
-                                    val destination = it as AppRoute
-
-                                    // Navigation and its reserved space leave with their page, without resizing it first.
-                                    Scaffold(bottomBar = {
-                                        if (!rail && destination in tabs) {
-                                            PrimaryNavigationBar(
-                                                sharedScope = requireNotNull(LocalNavigationSharedScope.current),
-                                                selected = selected,
-                                                onSelect = navigation::select
-                                            )
-                                        }
-                                    }) { destinationPadding ->
-                                        val scrollsBehindNavigation = destination is AppRoute.Archive ||
-                                            (destination == AppRoute.Catalogue && rail)
-                                        val bottomPadding = destinationPadding.calculateBottomPadding()
-
-                                        // A bottom bar bounds the library; beside a rail, lists own the system inset.
-                                        Box(
-                                            Modifier.fillMaxSize().padding(
-                                                bottom = if (scrollsBehindNavigation) 0.dp else bottomPadding
-                                            ).consumeWindowInsets(destinationPadding)
-                                        ) {
-                                            content(
-                                                destination,
-                                                navigator,
-                                                if (scrollsBehindNavigation) bottomPadding else 0.dp
-                                            )
-                                        }
-                                    }
+                            ) { entry ->
+                                val destination = entry as AppRoute
+                                NavigationEntryContent(
+                                    destination = destination,
+                                    isRailVisible = rail,
+                                    selected = selected,
+                                    onSelect = navigation::select
+                                ) { bottomPadding ->
+                                    content(destination, navigator, bottomPadding)
                                 }
                             }
                         }
@@ -221,6 +195,44 @@ internal fun AppNavigationShell(
 }
 
 @Composable
+private fun NavigationEntryContent(
+    destination: AppRoute,
+    isRailVisible: Boolean,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    content: @Composable (Dp) -> Unit
+) {
+    val animationScope = LocalNavAnimatedContentScope.current
+    CompositionLocalProvider(
+        LocalProgrammeCoverAnimationScope provides animationScope
+    ) {
+        // Navigation and its reserved space leave with their page, without resizing it first.
+        Scaffold(bottomBar = {
+            if (!isRailVisible && PrimaryDestinations.any { it.route == destination }) {
+                PrimaryNavigationBar(
+                    sharedScope = requireNotNull(LocalNavigationSharedScope.current),
+                    selected = selected,
+                    onSelect = onSelect
+                )
+            }
+        }) { destinationPadding ->
+            val scrollsBehindNavigation = destination is AppRoute.Archive ||
+                (destination == AppRoute.Catalogue && isRailVisible)
+            val bottomPadding = destinationPadding.calculateBottomPadding()
+
+            // A bottom bar bounds the library; beside a rail, lists own the system inset.
+            Box(
+                Modifier.fillMaxSize().padding(
+                    bottom = if (scrollsBehindNavigation) 0.dp else bottomPadding
+                ).consumeWindowInsets(destinationPadding)
+            ) {
+                content(if (scrollsBehindNavigation) bottomPadding else 0.dp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun PrimaryNavigationBar(sharedScope: SharedTransitionScope, selected: Int, onSelect: (Int) -> Unit) {
     val animationScope = LocalNavAnimatedContentScope.current
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -242,7 +254,11 @@ private fun PrimaryNavigationBar(sharedScope: SharedTransitionScope, selected: I
             NavigationBarItem(
                 selected = selected == index,
                 // Keep the shared visual unchanged while both entries wait for the native transition to settle.
-                onClick = { if (interactive) onSelect(index) },
+                onClick = {
+                    if (interactive) {
+                        onSelect(index)
+                    }
+                },
                 icon = { Icon(destination.icon, null) },
                 label = { Text(destination.label) },
                 modifier = Modifier.testTag("tab-${destination.route::class.simpleName}")

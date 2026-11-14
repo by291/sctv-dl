@@ -93,7 +93,9 @@ internal class CatalogueViewModel @Inject constructor(
     }
 
     private fun observeCatalogue() {
-        if (observationJob?.isActive == true) return
+        if (observationJob?.isActive == true) {
+            return
+        }
         observationJob = viewModelScope.launch {
             repository.observeProgrammes().onReadFailure {
                 snapshot.fail(it)
@@ -149,7 +151,9 @@ internal class CatalogueViewModel @Inject constructor(
 
     fun refresh() {
         observeCatalogue()
-        if (refreshJob?.isActive == true) return
+        if (refreshJob?.isActive == true) {
+            return
+        }
 
         refreshJob = viewModelScope.launch { repository.refreshProgrammes() }
     }

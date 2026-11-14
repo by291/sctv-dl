@@ -90,7 +90,9 @@ internal fun ArchiveContentPlaceholder() {
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
                     ) {
                         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (!largeText) SkeletonBlock(Modifier.width(104.dp).aspectRatio(4f / 3f))
+                            if (!largeText) {
+                                SkeletonBlock(Modifier.width(104.dp).aspectRatio(4f / 3f))
+                            }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SkeletonBlock(Modifier.fillMaxWidth().height(titleHeight))
                                 SkeletonBlock(Modifier.fillMaxWidth(0.7f).height(titleHeight))

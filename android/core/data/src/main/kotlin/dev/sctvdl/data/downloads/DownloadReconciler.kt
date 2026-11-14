@@ -19,7 +19,9 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
         }
 
     suspend fun resolve(task: DownloadTask, snapshots: List<SystemDownloadSnapshot>): DownloadTask {
-        if (task.state == DownloadState.Cancelled) return task
+        if (task.state == DownloadState.Cancelled) {
+            return task
+        }
 
         if (task.systemId == null && task.reasonCode == DownloadReason.Ambiguous) {
             return if (matching(
@@ -39,7 +41,9 @@ internal class DownloadReconciler(private val gateway: PlatformDownloadGateway) 
         val snapshot = if (task.systemId != null) {
             snapshots.firstOrNull { it.id == task.systemId }
         } else {
-            if (task.state != DownloadState.Preparing) return task
+            if (task.state != DownloadState.Preparing) {
+                return task
+            }
 
             val candidates = matching(task, snapshots)
             when (candidates.size) {

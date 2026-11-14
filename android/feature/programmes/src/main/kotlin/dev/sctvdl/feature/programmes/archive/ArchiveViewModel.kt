@@ -66,7 +66,9 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     private fun observeProgrammeContext() {
-        if (contextJob?.isActive == true) return
+        if (contextJob?.isActive == true) {
+            return
+        }
         contextJob = viewModelScope.launch {
             repository.observeProgrammes().onReadFailure { error ->
                 mutableState.update { it.copy(contextError = error) }
@@ -129,7 +131,9 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     private fun observeDates(programmeId: String) {
-        if (datesJob?.isActive == true) return
+        if (datesJob?.isActive == true) {
+            return
+        }
         datesJob = viewModelScope.launch {
             repository.observeDates(programmeId).onReadFailure { error ->
                 if (uiState.value.programmeId == programmeId) {
@@ -138,7 +142,9 @@ internal class ArchiveViewModel @Inject constructor(
                 }
             }.collect { resource ->
                 // Cancellation can race a final emission from the previous archive observer.
-                if (uiState.value.programmeId != programmeId) return@collect
+                if (uiState.value.programmeId != programmeId) {
+                    return@collect
+                }
 
                 presentDates(datesSnapshot.observe(resource))
             }
@@ -152,6 +158,7 @@ internal class ArchiveViewModel @Inject constructor(
         if (dates != null) {
             val selected = dates.firstOrNull { it.id == (uiState.value.date?.id ?: requestedDateId) }
                 ?: dates.firstOrNull()
+            // An accepted empty date list invalidates the previous date's contents and selection.
             if (selected == null) {
                 contentsJob?.cancel()
                 contentsRefreshJob?.cancel()
@@ -166,6 +173,7 @@ internal class ArchiveViewModel @Inject constructor(
                 mutableState.update { it.copy(date = selected) }
             }
         }
+
         publishUpdateFlag()
     }
 
@@ -205,24 +213,29 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     private fun observeContents(programmeId: String, dateId: String) {
-        if (contentsJob?.isActive == true) return
+        if (contentsJob?.isActive == true) {
+            return
+        }
         contentsJob = viewModelScope.launch {
             repository.observeContents(programmeId, dateId).onReadFailure { error ->
-                if (uiState.value.programmeId == programmeId && uiState.value.date?.id == dateId) {
+                if (ownsContents(programmeId, dateId)) {
                     contentsSnapshot.fail(error)
                     presentContents(contentsSnapshot.resource)
                 }
             }.collect { resource ->
                 // Both identities must still match before an old request can publish its rows.
-                if (uiState.value.programmeId != programmeId ||
-                    uiState.value.date?.id != dateId
-                ) {
+                if (!ownsContents(programmeId, dateId)) {
                     return@collect
                 }
 
                 presentContents(contentsSnapshot.observe(resource))
             }
         }
+    }
+
+    private fun ownsContents(programmeId: String, dateId: String): Boolean {
+        val current = uiState.value
+        return current.programmeId == programmeId && current.date?.id == dateId
     }
 
     private fun presentContents(resource: CachedResource<List<ProgrammeContent>>) {
@@ -239,7 +252,9 @@ internal class ArchiveViewModel @Inject constructor(
 
     fun applyUpdates() {
         // Accepting new rows during batch selection would change the items under the user's checkboxes.
-        if (uiState.value.selectionMode) return
+        if (uiState.value.selectionMode) {
+            return
+        }
 
         val dateId = uiState.value.date?.id
         mutableState.update { current ->
@@ -248,7 +263,9 @@ internal class ArchiveViewModel @Inject constructor(
         presentDates(datesSnapshot.accept())
 
         // A changed date owns a new content snapshot and request, never the previous date's pending rows.
-        if (dateId == uiState.value.date?.id) presentContents(contentsSnapshot.accept())
+        if (dateId == uiState.value.date?.id) {
+            presentContents(contentsSnapshot.accept())
+        }
     }
 
     private fun publishUpdateFlag() {
@@ -263,7 +280,9 @@ internal class ArchiveViewModel @Inject constructor(
 
     fun refresh() {
         val current = uiState.value
-        if (current.programmeId.isBlank()) return
+        if (current.programmeId.isBlank()) {
+            return
+        }
 
         observeProgrammeContext()
         observeDates(current.programmeId)
@@ -275,13 +294,17 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     private fun refreshDates(programmeId: String) {
-        if (datesRefreshJob?.isActive == true) return
+        if (datesRefreshJob?.isActive == true) {
+            return
+        }
 
         datesRefreshJob = viewModelScope.launch { repository.refreshDates(programmeId) }
     }
 
     private fun refreshContents(programmeId: String, dateId: String) {
-        if (contentsRefreshJob?.isActive == true) return
+        if (contentsRefreshJob?.isActive == true) {
+            return
+        }
 
         contentsRefreshJob = viewModelScope.launch { repository.refreshContents(programmeId, dateId) }
     }
@@ -293,7 +316,9 @@ internal class ArchiveViewModel @Inject constructor(
     fun retryFavourites() = favouriteActions.retry()
 
     fun toggleClipSort() {
-        if (uiState.value.selectionMode) return
+        if (uiState.value.selectionMode) {
+            return
+        }
 
         mutableState.update { it.copy(clipSortAscending = !it.clipSortAscending) }
         saved["clipSortAscending"] = uiState.value.clipSortAscending
@@ -319,7 +344,9 @@ internal class ArchiveViewModel @Inject constructor(
     }
 
     fun toggleContent(id: String) {
-        if (id !in selectableIds(uiState.value.contents.data.orEmpty())) return
+        if (id !in selectableIds(uiState.value.contents.data.orEmpty())) {
+            return
+        }
 
         mutableState.update {
             it.copy(

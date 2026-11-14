@@ -162,7 +162,9 @@ class ArchiveSortingTest {
             )
             assertNotNull(device.wait(Until.findObject(By.textContains("18:40:05")), 5_000))
             repeat(12) {
-                if (!button.isFocused) device.pressKeyCode(KeyEvent.KEYCODE_TAB)
+                if (!button.isFocused) {
+                    device.pressKeyCode(KeyEvent.KEYCODE_TAB)
+                }
             }
             assertTrue("The sort action must participate in keyboard focus traversal", button.isFocused)
             device.pressKeyCode(KeyEvent.KEYCODE_ENTER)

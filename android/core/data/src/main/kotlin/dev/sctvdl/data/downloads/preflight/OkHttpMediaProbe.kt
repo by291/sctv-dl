@@ -30,7 +30,9 @@ internal class OkHttpMediaProbe @Inject constructor(private val client: OkHttpCl
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(e)
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e)
+                    }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
@@ -51,7 +53,9 @@ internal class OkHttpMediaProbe @Inject constructor(private val client: OkHttpCl
                         )
                     }
 
-                    if (continuation.isActive) continuation.resume(result)
+                    if (continuation.isActive) {
+                        continuation.resume(result)
+                    }
                 }
             })
         }

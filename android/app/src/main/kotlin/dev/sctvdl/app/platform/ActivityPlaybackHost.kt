@@ -20,12 +20,16 @@ class ActivityPlaybackHost(private val activity: MainActivity) : PlaybackHost {
         private var lastVolume: Int? = null
 
         override fun captureBrightness() {
-            if (enteringBrightness == null) enteringBrightness = activity.window.attributes.screenBrightness
+            if (enteringBrightness == null) {
+                enteringBrightness = activity.window.attributes.screenBrightness
+            }
         }
 
         override fun adjustBrightness(delta: Float): Int {
             val attributes = activity.window.attributes
-            if (enteringBrightness == null) enteringBrightness = attributes.screenBrightness
+            if (enteringBrightness == null) {
+                enteringBrightness = attributes.screenBrightness
+            }
             val current = attributes.screenBrightness.takeIf { it >= 0f } ?: (
                 Settings.System.getInt(
                     activity.contentResolver,
@@ -43,7 +47,9 @@ class ActivityPlaybackHost(private val activity: MainActivity) : PlaybackHost {
             val maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             // Re-read the native level for every move; physical key changes win over our fractional remainder.
-            if (lastVolume != current) volumeRemainder = 0f
+            if (lastVolume != current) {
+                volumeRemainder = 0f
+            }
             val adjustment = delta * maximum + volumeRemainder
             val steps = adjustment.toInt()
             volumeRemainder = adjustment - steps

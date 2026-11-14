@@ -17,32 +17,32 @@ internal data class DownloadBatchOutcome(
     val failures: Map<String, AppError>
 )
 
-internal suspend fun runDownloadBatch(
-    repository: DownloadRepository,
-    action: DownloadAction,
-    targets: List<DownloadTarget>,
-    requestConsent: suspend (String) -> Boolean
-): DownloadBatchOutcome {
+internal data class DownloadBatchRequest(
+    val repository: DownloadRepository,
+    val action: DownloadAction,
+    val targets: List<DownloadTarget>,
+    val requestConsent: suspend (String) -> Boolean
+)
+
+internal suspend fun runDownloadBatch(request: DownloadBatchRequest): DownloadBatchOutcome {
     val applied = mutableSetOf<String>()
     val skipped = mutableSetOf<String>()
     val failures = mutableMapOf<String, AppError>()
-    for (target in targets.distinct()) {
+
+    for (target in request.targets.distinct()) {
         try {
-            var result = repository.perform(target, action)
-            if (result is DownloadActionResult.ConsentRequired) {
-                val token = result.token
-                try {
-                    result = repository.completeFileConsent(target, token, requestConsent(token))
-                } finally {
-                    // Dismissal/cancellation must consume the Activity consent token as well.
-                    withContext(NonCancellable) { repository.completeFileConsent(target, token, false) }
-                }
+            val result = request.repository.perform(target, request.action)
+            val outcome = if (result is DownloadActionResult.ConsentRequired) {
+                request.resolveFileConsent(target, result.token)
+            } else {
+                result
             }
-            when (result) {
+
+            when (outcome) {
                 DownloadActionResult.Applied -> applied += target.id
                 DownloadActionResult.Skipped -> skipped += target.id
                 is DownloadActionResult.ConsentRequired -> {
-                    repository.completeFileConsent(target, result.token, false)
+                    request.repository.completeFileConsent(target, outcome.token, granted = false)
                     skipped += target.id
                 }
             }
@@ -52,7 +52,23 @@ internal suspend fun runDownloadBatch(
             failures[target.id] = (failure as? AppException)?.error ?: AppError(ErrorKind.Download, "操作未完成，请重试")
         }
     }
+
     return DownloadBatchOutcome(applied, skipped, failures)
+}
+
+private suspend fun DownloadBatchRequest.resolveFileConsent(
+    target: DownloadTarget,
+    token: String
+): DownloadActionResult {
+    try {
+        val granted = requestConsent(token)
+        return repository.completeFileConsent(target, token, granted = granted)
+    } finally {
+        // A dismissed or cancelled prompt must discard the repository's one-time token.
+        withContext(NonCancellable) {
+            repository.completeFileConsent(target, token, granted = false)
+        }
+    }
 }
 
 internal val DownloadAction.label: String get() = when (this) {

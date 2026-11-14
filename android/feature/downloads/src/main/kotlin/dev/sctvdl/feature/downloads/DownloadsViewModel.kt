@@ -55,7 +55,9 @@ internal class DownloadsViewModel @Inject constructor(
                 working
             )
         }.catch { failure ->
-            if (failure is CancellationException) throw failure
+            if (failure is CancellationException) {
+                throw failure
+            }
             emit(DownloadsUiState(loading = false, error = "读取下载记录失败，请重试"))
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DownloadsUiState())
@@ -100,10 +102,19 @@ internal class DownloadsViewModel @Inject constructor(
         targets: List<DownloadTarget>,
         requestConsent: suspend (String) -> Boolean
     ) {
-        if (busy.value) return
+        if (busy.value) {
+            return
+        }
         busy.value = true
         try {
-            val result = runDownloadBatch(repository, action, targets, requestConsent)
+            val result = runDownloadBatch(
+                DownloadBatchRequest(
+                    repository = repository,
+                    action = action,
+                    targets = targets,
+                    requestConsent = requestConsent
+                )
+            )
             saved["taskMessage"] =
                 "已完成 ${result.appliedIds.size} 项，跳过 ${result.skippedIds.size} 项，失败 ${result.failures.size} 项"
             saved["downloadSelection"] =

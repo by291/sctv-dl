@@ -74,6 +74,8 @@ class FakeDownloads : DownloadRepository {
     }
 
     override suspend fun reconcile() {
-        if (markMissing) tasks.value = tasks.value.map { it.copy(state = DownloadState.Missing) }
+        if (markMissing) {
+            tasks.value = tasks.value.map { it.copy(state = DownloadState.Missing) }
+        }
     }
 }

@@ -130,7 +130,9 @@ internal class Media3TransferGateway(
                             updates.tryEmit(snapshot(download))
                         }
                     })
-                    if (isInitialized) initialized.complete(Unit)
+                    if (isInitialized) {
+                        initialized.complete(Unit)
+                    }
                 }
             }
             currentCoroutineContext().ensureActive()
@@ -297,7 +299,9 @@ internal class Media3TransferGateway(
 
     override suspend fun shutdown() = withContext(NonCancellable) {
         initialization.withLock {
-            if (closed) return@withLock
+            if (closed) {
+                return@withLock
+            }
             closed = true
             val owned = resources
             resources = null

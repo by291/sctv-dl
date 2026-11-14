@@ -22,7 +22,9 @@ class FavouriteStateTest {
         val repository = object : FavouriteRepository {
             override fun observeIds() = flow {
                 emit(values.value)
-                if (fail) throw IOException("Read failed")
+                if (fail) {
+                    throw IOException("Read failed")
+                }
                 emitAll(values)
             }
 
@@ -47,7 +49,9 @@ class FavouriteStateTest {
         var fail = true
         val repository = object : FavouriteRepository {
             override fun observeIds() = flow {
-                if (fail) throw IOException("Read failed")
+                if (fail) {
+                    throw IOException("Read failed")
+                }
                 emit(setOf("1"))
             }
 

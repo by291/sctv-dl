@@ -120,6 +120,8 @@ private class TestDownloads(private val cancelReconcile: Boolean = false) : Down
     override suspend fun removeRecord(taskId: String) = Unit
 
     override suspend fun reconcile() {
-        if (cancelReconcile) throw CancellationException("Cancelled")
+        if (cancelReconcile) {
+            throw CancellationException("Cancelled")
+        }
     }
 }

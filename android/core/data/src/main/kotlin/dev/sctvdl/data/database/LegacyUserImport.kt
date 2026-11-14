@@ -11,7 +11,9 @@ internal class LegacyUserImport @Inject constructor(
 ) {
     suspend fun ensureImported() = users.withTransaction {
         // The destination marker survives backup and makes restored deletions authoritative.
-        if (users.history().metadata("legacy_favourites_imported") != null) return@withTransaction
+        if (users.history().metadata("legacy_favourites_imported") != null) {
+            return@withTransaction
+        }
         legacy.favourites().allIds().forEach { users.favourites().addFavourite(FavouriteEntity(it)) }
         users.history().putMetadata(UserMetadata("legacy_favourites_imported", "1"))
     }

@@ -25,9 +25,17 @@ fun supportedActions(task: DownloadTask): Set<DownloadAction> = buildSet {
         add(DownloadAction.Publish)
         add(DownloadAction.Cancel)
     } else {
-        if (task.reasonCode != DownloadReason.Ambiguous && !task.cleanupPending) add(DownloadAction.RemoveRecord)
-        if (task.state == DownloadState.Completed && task.contentUri != null) add(DownloadAction.DeleteFile)
-        if (task.state in setOf(DownloadState.Failed, DownloadState.Missing, DownloadState.Cancelled) &&
+        if (task.reasonCode != DownloadReason.Ambiguous && !task.cleanupPending) {
+            add(DownloadAction.RemoveRecord)
+        }
+        if (task.state == DownloadState.Completed && task.contentUri != null) {
+            add(DownloadAction.DeleteFile)
+        }
+        if (task.state in setOf(
+                DownloadState.Failed,
+                DownloadState.Missing,
+                DownloadState.Cancelled
+            ) &&
             task.reasonCode != DownloadReason.Ambiguous && !task.cleanupPending
         ) {
             add(DownloadAction.Retry)

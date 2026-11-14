@@ -50,6 +50,8 @@ internal class RoomHistoryRepository(private val database: SctvUserDatabase, sco
         database.withTransaction {
             val key = ViewingTargetCodec.key(entry.key)
             val current = dao.session(key)
+
+            // Deletion invalidates queued writes; a newer session supersedes the previous player.
             if (entry.key != session.key || current?.deletionGeneration != session.deletionGeneration ||
                 current.sessionGeneration != session.sessionGeneration
             ) {
@@ -57,15 +59,9 @@ internal class RoomHistoryRepository(private val database: SctvUserDatabase, sco
             }
 
             val duration = entry.durationMs?.takeIf { it > 0 }
-            val position = entry.positionMs.coerceAtLeast(0).let {
-                if (duration ==
-                    null
-                ) {
-                    it
-                } else {
-                    it.coerceAtMost(duration)
-                }
-            }
+            val nonnegativePosition = entry.positionMs.coerceAtLeast(0)
+            val position = duration?.let(nonnegativePosition::coerceAtMost) ?: nonnegativePosition
+
             dao.put(
                 HistoryEntity(
                     key,
@@ -109,7 +105,10 @@ internal class RoomHistoryRepository(private val database: SctvUserDatabase, sco
                 result.completeExceptionally(failure)
             }
         }
-        if (sent.isFailure) result.completeExceptionally(IllegalStateException("History writer unavailable"))
+
+        if (sent.isFailure) {
+            result.completeExceptionally(IllegalStateException("History writer unavailable"))
+        }
         return result
     }
 

@@ -225,7 +225,9 @@ class ProgrammeCoverTransitionTest {
             val screenshot = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
             result = findCover(screenshot, region)
             screenshot.recycle()
-            if (result == null) Thread.sleep(30)
+            if (result == null) {
+                Thread.sleep(30)
+            }
         }
         return requireNotNull(result) { "The real cover must be decoded before navigation" }
     }
@@ -261,7 +263,9 @@ class ProgrammeCoverTransitionTest {
                 }
             }
         }
-        if (right <= left || bottom <= top) return null
+        if (right <= left || bottom <= top) {
+            return null
+        }
         val rectangle = Rect(left, top, right, bottom)
         val firstX = left + rectangle.width() / 4
         val lastX = right - rectangle.width() / 4

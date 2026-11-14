@@ -106,7 +106,9 @@ internal class DownloadManagerGateway @Inject constructor(@ApplicationContext pr
         // The provider may not expose a local URI until the waiting job creates its file.
         val path = description?.substringBefore('\n') ?: return null
         val prefix = "Downloads/sctv-dl/"
-        if (!path.startsWith(prefix)) return null
+        if (!path.startsWith(prefix)) {
+            return null
+        }
         val filename = path.removePrefix(prefix)
         if (filename.isBlank() || filename in setOf(".", "..") ||
             filename.contains(Regex("[\\p{Cntrl}/\\\\]"))

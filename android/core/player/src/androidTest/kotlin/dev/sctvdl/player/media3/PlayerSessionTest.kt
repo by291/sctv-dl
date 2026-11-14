@@ -180,7 +180,9 @@ class PlayerSessionTest {
                 } finally {
                     screenshot.recycle()
                 }
-                if (!visible) Thread.sleep(50)
+                if (!visible) {
+                    Thread.sleep(50)
+                }
             }
             assertTrue("Decoded video blacked out the page background: ${Integer.toHexString(pixel)}", visible)
         } finally {
@@ -246,7 +248,9 @@ class PlayerSessionTest {
             val screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
             try {
                 pixel = screenshot.getPixel(point.x.toInt(), point.y.toInt())
-                if (matches(pixel)) return
+                if (matches(pixel)) {
+                    return
+                }
             } finally {
                 screenshot.recycle()
             }
@@ -347,7 +351,9 @@ class PlayerSessionTest {
         while (System.nanoTime() < deadline) {
             var ready = false
             onMain { ready = condition() }
-            if (ready) return
+            if (ready) {
+                return
+            }
             Thread.sleep(50)
         }
         throw AssertionError("Local Media3 preparation timed out")
@@ -416,7 +422,9 @@ class PlayerSessionTest {
         } finally {
             codec.stop()
             codec.release()
-            if (started) muxer.stop()
+            if (started) {
+                muxer.stop()
+            }
             muxer.release()
         }
         return file

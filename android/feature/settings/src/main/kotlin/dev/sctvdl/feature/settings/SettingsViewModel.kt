@@ -45,12 +45,16 @@ internal class SettingsViewModel @Inject constructor(
     }
 
     private fun observeSettings() {
-        if (observation?.isActive == true) return
+        if (observation?.isActive == true) {
+            return
+        }
         observation = viewModelScope.launch {
             try {
                 repository.settings.collect {
                     mutableSettings.value = it
-                    if (failedUpdate == null) mutableError.value = null
+                    if (failedUpdate == null) {
+                        mutableError.value = null
+                    }
                 }
             } catch (failure: CancellationException) {
                 throw failure
@@ -77,7 +81,9 @@ internal class SettingsViewModel @Inject constructor(
     }
 
     private fun maintain(action: suspend () -> String) {
-        if (mutableMaintenance.value.busy) return
+        if (mutableMaintenance.value.busy) {
+            return
+        }
         mutableMaintenance.value = StorageSettingsState(busy = true)
         viewModelScope.launch {
             try {
@@ -102,13 +108,17 @@ internal class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             writes.withLock {
                 try {
-                    repository.update(repository.settings.first().update())
+                    // Apply each change to the latest saved settings so queued edits compose.
+                    val current = repository.settings.first()
+                    repository.update(current.update())
+
                     failedUpdate = null
                     mutableError.value = null
                     observeSettings()
                 } catch (failure: CancellationException) {
                     throw failure
                 } catch (_: Exception) {
+                    // Retain the edit so retry applies it to the then-current settings.
                     failedUpdate = update
                     mutableError.value = AppError(ErrorKind.Storage, "设置未保存，请重试")
                 }

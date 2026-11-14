@@ -101,7 +101,9 @@ fun PlayerVideo(
                     false
                 }.onFocusChanged {
                     controls.focused = it.hasFocus
-                    if (it.hasFocus) interact()
+                    if (it.hasFocus) {
+                        interact()
+                    }
                 }.focusable()
             } else {
                 Modifier
@@ -136,7 +138,9 @@ fun PlayerVideo(
                     }, onTogglePlay, onSeek,
                     onTemporarySpeed, gestureEnvironment, {
                         gestureInteracting = it
-                        if (it) controls.registerInteraction()
+                        if (it) {
+                            controls.registerInteraction()
+                        }
                     }, { hud = it }
                 )
             )

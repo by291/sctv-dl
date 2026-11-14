@@ -17,6 +17,8 @@ import dev.sctvdl.player.media3.PlayerSession
 import dev.sctvdl.player.model.PlaybackSource
 import kotlinx.coroutines.delay
 
+private const val PLAYBACK_SAMPLE_INTERVAL_MS = 500L
+
 /** Binds a session to the destination entry; disposal follows the navigation leave animation. */
 @Composable
 internal fun rememberPlaybackSession(
@@ -35,23 +37,29 @@ internal fun rememberPlaybackSession(
 
     // Keep one player and artwork node during entry; only start media after resume/settings restoration.
     LaunchedEffect(source.id, source.variants, source.localUri, sourcePrepared) {
-        if (sourcePrepared) session.controller.setSource(source, initialQuality)
+        if (sourcePrepared) {
+            session.controller.setSource(source, initialQuality)
+        }
     }
 
     LaunchedEffect(session, sourcePrepared) {
-        if (!sourcePrepared) return@LaunchedEffect
+        if (!sourcePrepared) {
+            return@LaunchedEffect
+        }
         while (true) {
             session.controller.tick()
             onPosition(session.controller.state.value.positionMs)
             currentHistory?.onProgress(session.controller.state.value)
-            delay(500)
+            delay(PLAYBACK_SAMPLE_INTERVAL_MS)
         }
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         session.controller.endTemporarySpeed()
         host.gestureEnvironment?.restoreBrightness()
-        if (currentPrepared) currentHistory?.flush(session.controller.state.value)
+        if (currentPrepared) {
+            currentHistory?.flush(session.controller.state.value)
+        }
     }
 
     LifecycleResumeEffect(fullscreen) {

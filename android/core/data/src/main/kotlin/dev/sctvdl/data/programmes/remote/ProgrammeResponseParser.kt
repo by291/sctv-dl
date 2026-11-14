@@ -76,7 +76,9 @@ internal class ProgrammeResponseParser {
 
     private fun id(row: JsonObject): String {
         val value = row.getValue("id").jsonPrimitive
-        if (value.isString) return value.content.also { require(it.matches(Regex("\\d+"))) }
+        if (value.isString) {
+            return value.content.also { require(it.matches(Regex("\\d+"))) }
+        }
 
         // Parse the JSON token exactly. A floating-point conversion would destroy large IDs.
         val integer = value.content.toBigDecimal().toBigIntegerExact()

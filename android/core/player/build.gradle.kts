@@ -1,6 +1,7 @@
 plugins {
     id("sctv.android.compose")
 }
+
 android { namespace = "dev.sctvdl.player" }
 dependencies {
     implementation(project(":core:domain"))

@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.spotless)
 }
+
 spotless {
     kotlin {
         target("**/src/**/*.kt")
@@ -39,6 +40,7 @@ val moduleDependencies = tasks.register("checkModuleDependencies") {
     group = "verification"
     description = "Checks the actual Gradle project dependencies against Android module ownership."
 }
+
 gradle.projectsEvaluated {
     val sharedUi = setOf(":core:domain", ":core:design", ":core:ui")
     val allowed = mapOf(

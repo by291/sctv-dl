@@ -102,7 +102,9 @@ class SettingsInteractionTest {
                             } finally {
                                 pressed.recycle()
                             }
-                            if (!shaded) SystemClock.sleep(16)
+                            if (!shaded) {
+                                SystemClock.sleep(16)
+                            }
                         }
                         assertTrue("The card edge must show a visible held press", shaded)
                         scenario.onActivity { assertEquals(0, changes) }

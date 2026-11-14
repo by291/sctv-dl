@@ -85,7 +85,12 @@ internal fun DownloadsScreen(
     val selectedCount = visible.count { it.id in state.selection }
     val allSelected = visible.isNotEmpty() && selectedCount == visible.size
     val act: (DownloadAction, List<DownloadTarget>) -> Unit = { action, targets ->
-        if (action in setOf(DownloadAction.Cancel, DownloadAction.DeleteFile, DownloadAction.RemoveRecord)) {
+        if (action in setOf(
+                DownloadAction.Cancel,
+                DownloadAction.DeleteFile,
+                DownloadAction.RemoveRecord
+            )
+        ) {
             // Keep the selected attempt identities while the repository continues to emit newer snapshots.
             confirmation = action to targets
         } else {
@@ -93,7 +98,11 @@ internal fun DownloadsScreen(
         }
     }
 
-    BackHandler(state.selecting) { if (!blocked) onExitSelection() }
+    BackHandler(state.selecting) {
+        if (!blocked) {
+            onExitSelection()
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         PrimaryTopAppBar(

@@ -35,7 +35,9 @@ class SettingsViewModelTest {
             override val settings = values
 
             override suspend fun update(settings: AppSettings) {
-                if (fail) throw IOException("Storage unavailable")
+                if (fail) {
+                    throw IOException("Storage unavailable")
+                }
                 values.value = settings
             }
         }
@@ -65,7 +67,9 @@ class SettingsViewModelTest {
         val repository = object : SettingsRepository {
             override val settings = flow {
                 emit(values.value)
-                if (fail) throw IOException("Read failed")
+                if (fail) {
+                    throw IOException("Read failed")
+                }
                 emitAll(values)
             }
 

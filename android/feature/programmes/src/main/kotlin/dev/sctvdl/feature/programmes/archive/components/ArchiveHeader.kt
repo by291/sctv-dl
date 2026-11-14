@@ -118,7 +118,9 @@ internal fun BroadcastDates(
     val scroll = rememberLazyListState()
     LaunchedEffect(selected?.id) {
         val index = recent.indexOfFirst { it.id == selected?.id }
-        if (index >= 0) scroll.animateScrollToItem(index)
+        if (index >= 0) {
+            scroll.animateScrollToItem(index)
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -137,7 +139,11 @@ internal fun BroadcastDates(
             items(recent, key = { it.id }) { date ->
                 FilterChip(
                     selected = date.id == selected?.id,
-                    onClick = { if (date.id != selected?.id) onDate(date) },
+                    onClick = {
+                        if (date.id != selected?.id) {
+                            onDate(date)
+                        }
+                    },
                     label = {
                         Column(Modifier.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(date.date.format(RecentDateLabel))

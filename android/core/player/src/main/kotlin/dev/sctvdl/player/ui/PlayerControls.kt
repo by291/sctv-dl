@@ -73,7 +73,13 @@ internal fun PlayerControls(
     menuMaxHeight: Dp
 ) {
     val speedOptions = remember {
-        listOf(0.75f, 1f, 1.25f, 1.5f, 2f).associateWith { "${it.toString().removeSuffix(".0")}×" }
+        listOf(
+            0.75f,
+            1f,
+            1.25f,
+            1.5f,
+            2f
+        ).associateWith { "${it.toString().removeSuffix(".0")}×" }
     }
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum")
     val textMeasurer = rememberTextMeasurer()
@@ -199,7 +205,9 @@ internal fun PlayerControls(
                                 label = variant.quality.label,
                                 selected = variant.quality == state.quality,
                                 onClick = {
-                                    if (variant.quality != state.quality) onQuality(variant.quality)
+                                    if (variant.quality != state.quality) {
+                                        onQuality(variant.quality)
+                                    }
                                     qualityMenu = false
                                     onInteraction()
                                 }

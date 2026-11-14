@@ -2,6 +2,7 @@ plugins {
     id("sctv.android.compose")
     id("sctv.android.hilt")
 }
+
 android { namespace = "dev.sctvdl.feature.downloads" }
 dependencies {
     implementation(project(":core:domain"))

@@ -65,7 +65,9 @@ class PredictiveNavigationTest {
             commits++
         }, onNavigator = { navigator = it }, onEnter = { active.add(it) }, onDispose = {
             active.remove(it)
-            if (it is AppRoute.Archive) disposed.countDown()
+            if (it is AppRoute.Archive) {
+                disposed.countDown()
+            }
         }).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.text("Page Catalogue")), 5_000))
             scenario.onActivity { navigator.open(AppRoute.Archive("fixture")) }
@@ -142,7 +144,9 @@ class PredictiveNavigationTest {
         val disposed = CountDownLatch(1)
 
         showRoutes(onNavigator = { navigator = it }, onDispose = {
-            if (it == AppRoute.Catalogue) disposed.countDown()
+            if (it == AppRoute.Catalogue) {
+                disposed.countDown()
+            }
         }).use { scenario ->
             assertTrue(device.wait(Until.hasObject(By.text("Page Catalogue")), 5_000))
             device.waitForIdle()
@@ -181,7 +185,9 @@ class PredictiveNavigationTest {
         var snapshot = emptySet<AppRoute>()
         while (SystemClock.uptimeMillis() < deadline) {
             scenario.onActivity { snapshot = active.toSet() }
-            if (snapshot == expected) return
+            if (snapshot == expected) {
+                return
+            }
             SystemClock.sleep(16)
         }
         assertEquals("The navigation transition must settle", expected, snapshot)

@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.sctvdl.domain.download.DownloadRequest
+import dev.sctvdl.domain.programme.ContentRef
 
 // Keep the original SavedStateHandle owner key across package/type moves.
 private const val ONLINE_PLAYER_VIEW_MODEL_KEY =
@@ -25,7 +26,10 @@ fun PlayerRoute(
     val model: OnlinePlayerViewModel = hiltViewModel(key = ONLINE_PLAYER_VIEW_MODEL_KEY)
     val state by model.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(programmeId, dateId, contentId) { model.open(programmeId, dateId, contentId, selection) }
+    val reference = ContentRef(programmeId, dateId, contentId)
+    LaunchedEffect(reference) {
+        model.open(reference, selection)
+    }
 
     val preview = selection?.takeIf {
         it.programmeId == programmeId && it.dateId == dateId && it.content.id == contentId

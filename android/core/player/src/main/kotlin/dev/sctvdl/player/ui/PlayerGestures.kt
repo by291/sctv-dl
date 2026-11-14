@@ -20,10 +20,17 @@ internal fun Modifier.observePlayerPointers(pointers: PlayerGesturePointers): Mo
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             pointers.count = event.changes.count { it.pressed }
-            if (pointers.count > 1) pointers.cancelActive?.invoke()
+            if (pointers.count > 1) {
+                pointers.cancelActive?.invoke()
+            }
         }
     }
 }
+
+private const val GESTURE_EDGE_DP = 24
+private const val MAX_SCRUB_DISTANCE_MS = 120_000L
+
+private enum class GestureMode { AwaitingDirection, LongPress, Seek, AdjustControls }
 
 /** Installed on the blank surface behind controls, so controls and menus keep their own input. */
 internal fun Modifier.playerGestures(
@@ -44,26 +51,28 @@ internal fun Modifier.playerGestures(
     var previousTap = 0L
     awaitEachGesture {
         val down = awaitFirstDown()
-        if (pointers.count > 1) return@awaitEachGesture
-        val edge = 24 * density
+        if (pointers.count > 1) {
+            return@awaitEachGesture
+        }
+        val edge = GESTURE_EDGE_DP * density
         if (down.position.x < edge || down.position.x > size.width - edge ||
             down.position.y < edge || down.position.y > size.height - edge
         ) {
             return@awaitEachGesture
         }
+
         val origin = down.position
         val start = position()
         val length = duration()?.takeIf { it > 0 }
-        var axis = 0
+        var mode = GestureMode.AwaitingDirection
         var target: Long? = null
-        var longPress = false
-        var cancelled = false
-        var boosting = false
+        var isCancelled = false
+        var isBoosting = false
         var lastPosition = origin
         val cancelGesture = {
-            cancelled = true
-            if (boosting) {
-                boosting = false
+            isCancelled = true
+            if (isBoosting) {
+                isBoosting = false
                 onTemporarySpeed(false)
             }
             onInteraction(false)
@@ -71,65 +80,68 @@ internal fun Modifier.playerGestures(
         }
         pointers.cancelActive = cancelGesture
         onInteraction(true)
+
         try {
             while (true) {
-                val timeout = if (axis != 0 || longPress) {
+                val timeout = if (mode != GestureMode.AwaitingDirection) {
                     Long.MAX_VALUE
                 } else {
-                    (
-                        down.uptimeMillis + viewConfiguration.longPressTimeoutMillis - SystemClock.uptimeMillis()
-                        ).coerceAtLeast(1)
+                    val deadline = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
+                    (deadline - SystemClock.uptimeMillis()).coerceAtLeast(1)
                 }
                 val event = withTimeoutOrNull(timeout) {
                     awaitPointerEvent(PointerEventPass.Main)
                 }
-                if (cancelled) break
+                if (isCancelled) {
+                    break
+                }
+                if (event == null && mode == GestureMode.AwaitingDirection) {
+                    // Timeout before a drag commits to long press, even if playback is paused.
+                    mode = GestureMode.LongPress
+                    isBoosting = startPlaybackBoost(playing, onTemporarySpeed, onHud)
+                }
                 if (event == null) {
-                    if (axis == 0 && !longPress) {
-                        longPress = true
-                        if (playing()) {
-                            boosting = true
-                            onTemporarySpeed(true)
-                            onHud("2× 倍速播放")
-                        }
-                    }
                     continue
                 }
                 if (event.changes.size != 1 || event.changes.any { it.isConsumed }) {
-                    cancelled = true
+                    isCancelled = true
                     break
                 }
                 val change = event.changes.first()
-                if (!change.pressed) break
-                val displacement = change.position - origin
-                if (axis == 0 && !longPress && displacement.getDistance() > viewConfiguration.touchSlop) {
-                    axis = if (abs(displacement.x) > abs(displacement.y)) 1 else 2
-                    if (axis == 2 && !fullscreen) {
-                        cancelled = true
-                        break
-                    }
+                if (!change.pressed) {
+                    break
                 }
-                if (axis == 1 && length != null) {
-                    target =
-                        (start + displacement.x / size.width * minOf(length, 120_000L)).toLong().coerceIn(0, length)
-                    val offset = target - start
-                    val sign = if (offset >= 0) "+" else "−"
-                    onHud("进度 ${playbackTime(target)} / ${playbackTime(length)} ($sign${playbackTime(abs(offset))})")
+                val displacement = change.position - origin
+                val shouldCommitDirection = mode == GestureMode.AwaitingDirection &&
+                    displacement.getDistance() > viewConfiguration.touchSlop
+                if (shouldCommitDirection) {
+                    mode = dragMode(displacement.x, displacement.y)
+                }
+
+                // Inline playback must leave vertical drags to the surrounding page.
+                if (mode == GestureMode.AdjustControls && !fullscreen) {
+                    isCancelled = true
+                    break
+                }
+
+                if (mode == GestureMode.Seek && length != null) {
+                    val scrubDistance = minOf(length, MAX_SCRUB_DISTANCE_MS)
+                    val requested = start + displacement.x / size.width * scrubDistance
+                    target = requested.toLong().coerceIn(0, length)
+                    onHud(seekFeedback(target, start, length))
                     change.consume()
-                } else if (axis == 2) {
+                } else if (mode == GestureMode.AdjustControls) {
                     val delta = (lastPosition.y - change.position.y) / size.height
-                    val percent = if (origin.x < size.width / 2f) {
-                        environment?.adjustBrightness(delta)?.let { "亮度 $it%" }
-                    } else {
-                        environment?.adjustVolume(delta)?.let { "音量 $it%" }
-                    }
-                    onHud(percent)
+                    val adjustsBrightness = origin.x < size.width / 2f
+                    onHud(adjustControl(environment, delta, adjustsBrightness))
                     change.consume()
                 }
                 lastPosition = change.position
             }
-            if (!cancelled && axis == 1) target?.let(onSeek)
-            if (!cancelled && axis == 0 && !longPress) {
+            if (!isCancelled && mode == GestureMode.Seek) {
+                target?.let(onSeek)
+            }
+            if (!isCancelled && mode == GestureMode.AwaitingDirection) {
                 val now = down.uptimeMillis
                 if (previousTap > 0 && now - previousTap <= viewConfiguration.doubleTapTimeoutMillis) {
                     previousTap = 0
@@ -141,7 +153,39 @@ internal fun Modifier.playerGestures(
             }
         } finally {
             cancelGesture()
-            if (pointers.cancelActive === cancelGesture) pointers.cancelActive = null
+            if (pointers.cancelActive === cancelGesture) {
+                pointers.cancelActive = null
+            }
         }
     }
 }
+
+private fun startPlaybackBoost(
+    playing: () -> Boolean,
+    onTemporarySpeed: (Boolean) -> Unit,
+    onHud: (String?) -> Unit
+): Boolean {
+    if (!playing()) {
+        return false
+    }
+
+    onTemporarySpeed(true)
+    onHud("2× 倍速播放")
+    return true
+}
+
+private fun dragMode(horizontal: Float, vertical: Float): GestureMode =
+    if (abs(horizontal) > abs(vertical)) GestureMode.Seek else GestureMode.AdjustControls
+
+private fun seekFeedback(position: Long, start: Long, duration: Long): String {
+    val offset = position - start
+    val sign = if (offset >= 0) "+" else "−"
+    return "进度 ${playbackTime(position)} / ${playbackTime(duration)} ($sign${playbackTime(abs(offset))})"
+}
+
+private fun adjustControl(environment: PlayerGestureEnvironment?, delta: Float, adjustsBrightness: Boolean): String? =
+    if (adjustsBrightness) {
+        environment?.adjustBrightness(delta)?.let { "亮度 $it%" }
+    } else {
+        environment?.adjustVolume(delta)?.let { "音量 $it%" }
+    }

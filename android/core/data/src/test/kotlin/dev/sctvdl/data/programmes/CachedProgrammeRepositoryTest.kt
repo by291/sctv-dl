@@ -49,12 +49,16 @@ class CachedProgrammeRepositoryTest {
         override suspend fun programmes() = """{"rs":200,"data":{"records":[]}}"""
 
         override suspend fun dates(programmeId: String): String {
-            if (failure) throw IOException("offline")
+            if (failure) {
+                throw IOException("offline")
+            }
             return response
         }
 
         override suspend fun contents(programmeId: String, dateId: String): String {
-            if (dateId == "1") slow.await()
+            if (dateId == "1") {
+                slow.await()
+            }
             return """{"rs":200,"data":[{"id":"$dateId","title":"$dateId"}]}"""
         }
     }

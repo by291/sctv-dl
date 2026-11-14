@@ -56,7 +56,9 @@ internal class HistoryViewModel @Inject constructor(
                     false
                 )
             }.catch { failure ->
-                if (failure is CancellationException) throw failure
+                if (failure is CancellationException) {
+                    throw failure
+                }
                 mutableState.update { it.copy(loading = false, error = "无法读取观看记录，请重试") }
             }.collect { mutableState.value = it }
         }

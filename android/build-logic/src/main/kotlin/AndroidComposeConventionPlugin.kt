@@ -20,8 +20,14 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
 
             // The shared BOM keeps Compose artifact versions aligned across modules.
             dependencies.add("implementation", dependencies.platform(libs.findLibrary("compose-bom").get()))
-            listOf("compose-ui", "compose-material3", "compose-icons", "compose-preview").forEach {
-                dependencies.add("implementation", libs.findLibrary(it).get())
+            val composeLibraries = listOf(
+                "compose-ui",
+                "compose-material3",
+                "compose-icons",
+                "compose-preview"
+            )
+            composeLibraries.forEach { library ->
+                dependencies.add("implementation", libs.findLibrary(library).get())
             }
 
             // Runtime inspection tooling belongs in debug builds to avoid adding it to release dependencies.

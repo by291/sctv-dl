@@ -53,7 +53,9 @@ internal class FakeDownloadGateway : PlatformDownloadGateway {
     override fun destinationFor(filename: String) = "file:///downloads/$filename"
 
     override suspend fun enqueue(request: PlatformDownloadRequest): Long {
-        if (failEnqueue) throw IllegalStateException("system unavailable")
+        if (failEnqueue) {
+            throw IllegalStateException("system unavailable")
+        }
         requests.add(request)
         val id = requests.size.toLong()
         snapshots.add(
@@ -72,7 +74,9 @@ internal class FakeDownloadGateway : PlatformDownloadGateway {
     override suspend fun queryOwned() = snapshots.toList()
 
     override suspend fun remove(id: Long) {
-        if (failRemove) throw IllegalStateException("system unavailable")
+        if (failRemove) {
+            throw IllegalStateException("system unavailable")
+        }
         removed.add(id)
         snapshots.removeAll {
             it.id == id

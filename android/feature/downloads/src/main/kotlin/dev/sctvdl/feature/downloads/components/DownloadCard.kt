@@ -339,7 +339,9 @@ private fun DownloadFileMenu(
     val fileActions = listOf(DownloadAction.DeleteFile, DownloadAction.RemoveRecord).filter { it in actions }
     var expanded by remember { mutableStateOf(false) }
 
-    if (fileActions.isEmpty()) return
+    if (fileActions.isEmpty()) {
+        return
+    }
 
     Box {
         IconButton(onClick = { expanded = true }, enabled = !busy) { Icon(Icons.Outlined.MoreVert, "文件操作") }

@@ -72,7 +72,9 @@ class PlaybackCoverTest {
                                     } else {
                                         Modifier.offset(24.dp, 220.dp).size(120.dp, 90.dp)
                                     }
-                                    if (player) Box(bounds.background(Color.Green))
+                                    if (player) {
+                                        Box(bounds.background(Color.Green))
+                                    }
                                     PlaybackCover(
                                         reference,
                                         cover.toURI().toString(),
@@ -130,7 +132,9 @@ class PlaybackCoverTest {
         for (y in 0 until pixels.height step 2) {
             for (x in 0 until pixels.width step 2) {
                 val color = pixels[x, y]
-                if (color.blue > 0.2f && color.blue > color.red * 2) count++
+                if (color.blue > 0.2f && color.blue > color.red * 2) {
+                    count++
+                }
             }
         }
         return count

@@ -11,16 +11,16 @@ import kotlinx.coroutines.flow.update
 
 /** Owns playback intent independently of decoder preparation and rolls a failed quality switch back once. */
 class PlaybackController(private val backend: PlaybackBackend, private val initialQuality: Quality = Quality.Standard) {
-    private data class Context(val uri: String, val quality: Quality?, val position: Long, val speed: Float)
+    private data class SourceState(val uri: String, val quality: Quality?, val position: Long, val speed: Float)
 
-    private data class Switch(val target: Context, val previous: Context?, val recovering: Boolean = false)
+    private data class Switch(val target: SourceState, val previous: SourceState?, val recovering: Boolean = false)
 
     private val mutableState = MutableStateFlow(PlaybackState())
     val state = mutableState.asStateFlow()
 
     private var token = 0L
-    private var current: Context? = null
-    private var usable: Context? = null
+    private var current: SourceState? = null
+    private var usable: SourceState? = null
     private var pending: Switch? = null
     private var desiredPlaying = false
     private var released = false
@@ -29,17 +29,23 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     init {
         backend.setListener { callbackToken, snapshot ->
             // Replaced media and released sessions cannot commit a pending quality or trigger recovery.
-            if (callbackToken == token && !released) apply(snapshot)
+            if (callbackToken == token && !released) {
+                apply(snapshot)
+            }
         }
         backend.setExternalPlaybackListener { playing ->
-            if (!playing) endTemporarySpeed()
+            if (!playing) {
+                endTemporarySpeed()
+            }
             desiredPlaying = playing
             mutableState.update { it.copy(playWhenReady = playing) }
         }
     }
 
     fun setSource(source: PlaybackSource, preferredQuality: Quality = initialQuality) {
-        if (released) return
+        if (released) {
+            return
+        }
 
         endTemporarySpeed()
         val variants = source.variants.distinctBy { it.url }
@@ -60,27 +66,32 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
             token++
             mutableState.update { it.copy(error = "暂无可播放的视频") }
         } else {
-            load(Context(uri, selected?.quality, source.startPositionMs, 1f))
+            load(SourceState(uri, selected?.quality, source.startPositionMs, 1f))
         }
     }
 
     fun selectQuality(quality: Quality) {
-        if (released || quality == (pending?.target?.quality ?: state.value.quality)) return
+        if (released || quality == (pending?.target?.quality ?: state.value.quality)) {
+            return
+        }
 
         endTemporarySpeed()
         val variant = state.value.variants.firstOrNull { it.quality == quality } ?: return
+
+        // Rapid switches keep the last playable source as their common recovery baseline.
         val previous = if (usable != null && pending == null && state.value.error == null) {
             current?.copy(position = backend.positionMs, speed = state.value.speed)
         } else {
             pending?.previous ?: usable
         }
-        val target = Context(variant.url, quality, previous?.position ?: state.value.positionMs, state.value.speed)
+        val target = SourceState(variant.url, quality, previous?.position ?: state.value.positionMs, state.value.speed)
+
         pending = Switch(target, previous)
         mutableState.update { it.copy(phase = PlaybackPhase.Switching, notice = null) }
         load(target)
     }
 
-    private fun load(context: Context) {
+    private fun load(context: SourceState) {
         current = context
         token++
         mutableState.update {
@@ -104,7 +115,9 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     fun setSpeed(speed: Float) {
-        if (released || speed !in 0.5f..2f) return
+        if (released || speed !in 0.5f..2f) {
+            return
+        }
 
         temporarySpeed = false
         backend.speed = speed
@@ -117,29 +130,39 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     fun beginTemporarySpeed() {
-        if (released || !state.value.playing) return
+        if (released || !state.value.playing) {
+            return
+        }
         temporarySpeed = true
         backend.speed = 2f
     }
 
     fun endTemporarySpeed() {
-        if (!temporarySpeed) return
+        if (!temporarySpeed) {
+            return
+        }
         temporarySpeed = false
         backend.speed = state.value.speed
     }
 
     fun togglePlay() {
-        if (released) return
+        if (released) {
+            return
+        }
 
         endTemporarySpeed()
         desiredPlaying = state.value.ended || !desiredPlaying
-        if (desiredPlaying && state.value.ended) backend.seekTo(0)
+        if (desiredPlaying && state.value.ended) {
+            backend.seekTo(0)
+        }
         backend.playWhenReady = desiredPlaying
         tick()
     }
 
     fun seekTo(positionMs: Long) {
-        if (released) return
+        if (released) {
+            return
+        }
 
         val duration = state.value.durationMs?.takeIf { it > 0 } ?: return
         val position = positionMs.coerceIn(0, duration)
@@ -152,7 +175,9 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     fun retry() {
-        if (released) return
+        if (released) {
+            return
+        }
         endTemporarySpeed()
         val context = current ?: return
 
@@ -162,14 +187,20 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     fun tick() {
-        if (!released) apply(backend.snapshot())
+        if (!released) {
+            apply(backend.snapshot())
+        }
     }
 
     private fun apply(snapshot: PlaybackBackendSnapshot) {
-        if (!snapshot.playing) endTemporarySpeed()
+        if (!snapshot.playing) {
+            endTemporarySpeed()
+        }
         val operation = pending
+
         if (snapshot.error != null && operation != null) {
             val previous = operation.previous
+            // If the recovery itself fails, leave the source available for explicit retry.
             if (!operation.recovering && previous != null) {
                 pending = Switch(previous, previous, recovering = true)
                 mutableState.update { it.copy(phase = PlaybackPhase.Recovering, notice = "清晰度切换失败，正在恢复原视频") }
@@ -180,6 +211,8 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
             pending = null
             mutableState.update { it.copy(phase = PlaybackPhase.Normal) }
         }
+
+        // Only the backend's ready state can commit the requested quality.
         if (snapshot.ready && snapshot.error == null) {
             usable = current?.copy(position = snapshot.positionMs, speed = state.value.speed)
             current = usable
@@ -192,15 +225,15 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
                 )
             }
         }
+
+        val position = if (snapshot.error != null) {
+            current?.position ?: snapshot.positionMs
+        } else {
+            snapshot.positionMs
+        }
         mutableState.update {
             it.copy(
-                positionMs = if (snapshot.error !=
-                    null
-                ) {
-                    current?.position ?: snapshot.positionMs
-                } else {
-                    snapshot.positionMs
-                },
+                positionMs = position,
                 durationMs = snapshot.durationMs,
                 playing = snapshot.playing,
                 buffering = snapshot.buffering,
@@ -214,7 +247,9 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
     }
 
     fun pauseForDismissal() {
-        if (released) return
+        if (released) {
+            return
+        }
         endTemporarySpeed()
         desiredPlaying = false
         backend.playWhenReady = false
@@ -223,11 +258,15 @@ class PlaybackController(private val backend: PlaybackBackend, private val initi
 
     fun onBackground(inPictureInPicture: Boolean) {
         endTemporarySpeed()
-        if (!inPictureInPicture) pauseForDismissal()
+        if (!inPictureInPicture) {
+            pauseForDismissal()
+        }
     }
 
     fun release() {
-        if (released) return
+        if (released) {
+            return
+        }
         pauseForDismissal()
         released = true
         pending = null

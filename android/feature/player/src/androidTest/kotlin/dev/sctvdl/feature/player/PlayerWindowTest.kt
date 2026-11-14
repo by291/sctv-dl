@@ -56,7 +56,9 @@ class PlayerWindowTest {
                 if (fullscreen == null) {
                     device.waitForIdle()
                     fullscreen = device.findObject(By.desc("全屏播放"))
-                    if (fullscreen == null) device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, 0.7f)
+                    if (fullscreen == null) {
+                        device.findObject(By.scrollable(true))?.scroll(Direction.DOWN, 0.7f)
+                    }
                 }
             }
             assertNotNull("Landscape fullscreen action must be reachable", fullscreen)

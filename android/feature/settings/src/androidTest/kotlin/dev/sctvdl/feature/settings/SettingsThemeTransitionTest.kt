@@ -50,7 +50,11 @@ class SettingsThemeTransitionTest {
                 activity.setContent {
                     SctvAppTheme(settings) {
                         val palette = Palette(MaterialTheme.colorScheme)
-                        SideEffect { if (frames.lastOrNull() != palette) frames.add(palette) }
+                        SideEffect {
+                            if (frames.lastOrNull() != palette) {
+                                frames.add(palette)
+                            }
+                        }
                         DisposableEffect(Unit) {
                             compositions++
                             onDispose { disposals++ }
@@ -123,7 +127,9 @@ class SettingsThemeTransitionTest {
                 previous = current
             }
             // Colour frames emit no accessibility events; quantized shades may repeat during slow transitions.
-            if (current != null && SystemClock.uptimeMillis() - lastChange >= settlingMillis) return
+            if (current != null && SystemClock.uptimeMillis() - lastChange >= settlingMillis) {
+                return
+            }
             SystemClock.sleep(16)
         }
         error("The theme must reach a stable palette")

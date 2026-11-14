@@ -52,7 +52,9 @@ internal fun PlayerChoiceMenu(
 ) {
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = expanded
-    if (!visibility.currentState && !visibility.targetState) return
+    if (!visibility.currentState && !visibility.targetState) {
+        return
+    }
 
     val density = LocalDensity.current
     val gapPx = with(density) { 4.dp.roundToPx() }
@@ -94,7 +96,9 @@ internal fun PlayerChoiceMenuItem(label: String, selected: Boolean, onClick: () 
     val bringIntoView = remember { BringIntoViewRequester() }
 
     LaunchedEffect(selected) {
-        if (selected) bringIntoView.bringIntoView()
+        if (selected) {
+            bringIntoView.bringIntoView()
+        }
     }
 
     DropdownMenuItem(

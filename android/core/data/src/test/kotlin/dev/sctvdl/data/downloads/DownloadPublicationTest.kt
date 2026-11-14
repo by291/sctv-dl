@@ -67,7 +67,9 @@ class DownloadPublicationTest {
         }
 
         override suspend fun copyCached(task: DownloadTask, pendingUri: String): Long {
-            if (failCopy) error("Disk full")
+            if (failCopy) {
+                error("Disk full")
+            }
             return 4096
         }
 

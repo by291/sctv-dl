@@ -21,7 +21,9 @@ internal fun DownloadFeedback(
                 duration = SnackbarDuration.Short
             )
             onConsumed(it.id)
-            if (result == SnackbarResult.ActionPerformed) onOpenDownloads()
+            if (result == SnackbarResult.ActionPerformed) {
+                onOpenDownloads()
+            }
         }
     }
 }

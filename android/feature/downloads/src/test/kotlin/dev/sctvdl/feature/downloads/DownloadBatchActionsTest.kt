@@ -20,10 +20,14 @@ class DownloadBatchActionsTest {
                 }
         }
         val result = runDownloadBatch(
-            repository,
-            DownloadAction.Pause,
-            listOf("first", "second", "changed", "third").map { DownloadTarget(it, "attempt") }
-        ) { false }
+            DownloadBatchRequest(
+                repository = repository,
+                action = DownloadAction.Pause,
+                targets = listOf("first", "second", "changed", "third").map { DownloadTarget(it, "attempt") },
+                requestConsent = { false }
+            )
+        )
+
         assertEquals(setOf("first", "third"), result.appliedIds)
         assertEquals(setOf("changed"), result.skippedIds)
         assertEquals(setOf("second"), result.failures.keys)

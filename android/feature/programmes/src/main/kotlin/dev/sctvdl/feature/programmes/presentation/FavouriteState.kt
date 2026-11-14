@@ -29,18 +29,24 @@ internal class FavouriteState(private val repository: FavouriteRepository, priva
     }
 
     private fun observe() {
-        if (observation?.isActive == true) return
+        if (observation?.isActive == true) {
+            return
+        }
         observation = scope.launch {
             try {
                 repository.observeIds().collect {
                     mutableIds.value = it
-                    if (failedToggleId == null) mutableError.value = null
+                    if (failedToggleId == null) {
+                        mutableError.value = null
+                    }
                 }
             } catch (failure: CancellationException) {
                 throw failure
             } catch (_: Exception) {
                 // Let catalogue data render even when the first membership read fails.
-                if (mutableIds.value == null) mutableIds.value = emptySet()
+                if (mutableIds.value == null) {
+                    mutableIds.value = emptySet()
+                }
                 mutableError.value = AppError(ErrorKind.Storage, "无法读取收藏，请重试")
             }
         }
@@ -70,7 +76,9 @@ internal class FavouriteState(private val repository: FavouriteRepository, priva
         scope.launch {
             writes.withLock {
                 // Repeated retry taps must not toggle confirmed membership back after the first succeeds.
-                if (failedToggleId == id) saveToggle(id)
+                if (failedToggleId == id) {
+                    saveToggle(id)
+                }
             }
         }
     }

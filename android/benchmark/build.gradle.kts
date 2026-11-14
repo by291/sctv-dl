@@ -20,9 +20,11 @@ android {
     targetProjectPath = ":app"
     experimentalProperties["android.experimental.self-instrumenting"] = true
 }
+
 androidComponents {
     beforeVariants(selector().all()) { it.enable = it.buildType == "benchmarkRelease" }
 }
+
 dependencies {
     implementation(libs.benchmark)
     implementation(libs.android.test.junit)

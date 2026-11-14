@@ -52,7 +52,9 @@ internal fun ProgrammeSpotlightPlaceholder() {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             SkeletonBlock(Modifier.width(labelSize * 4).height(labelHeight))
                             SkeletonBlock(Modifier.fillMaxWidth(0.8f).height(titleHeight))
-                            if (wide) SkeletonBlock(Modifier.fillMaxWidth(0.9f).height(bodyHeight))
+                            if (wide) {
+                                SkeletonBlock(Modifier.fillMaxWidth(0.9f).height(bodyHeight))
+                            }
                         }
                         if (!largeText) {
                             SpotlightCoverFrame(availableWidth) { modifier -> SkeletonBlock(modifier) }

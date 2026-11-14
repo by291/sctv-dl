@@ -24,7 +24,9 @@ internal class ExecutionLease(private val release: () -> Unit) : AutoCloseable {
     private val closed = java.util.concurrent.atomic.AtomicBoolean()
 
     override fun close() {
-        if (closed.compareAndSet(false, true)) release()
+        if (closed.compareAndSet(false, true)) {
+            release()
+        }
     }
 }
 
@@ -69,7 +71,9 @@ internal class DownloadNetworkAccess @Inject constructor(
     }
 
     @Synchronized fun acquire(owner: ExecutionOwner): ExecutionLease {
-        if (owners.isEmpty()) connectivity.registerDefaultNetworkCallback(callback)
+        if (owners.isEmpty()) {
+            connectivity.registerDefaultNetworkCallback(callback)
+        }
         val id = UUID.randomUUID().toString()
         owners[id] = owner
         return ExecutionLease { release(id) }
@@ -78,7 +82,9 @@ internal class DownloadNetworkAccess @Inject constructor(
     @Synchronized private fun release(id: String) {
         owners.remove(id)
         cancelDisallowed()
-        if (owners.isEmpty()) connectivity.unregisterNetworkCallback(callback)
+        if (owners.isEmpty()) {
+            connectivity.unregisterNetworkCallback(callback)
+        }
     }
 
     fun hasLocalLease(): Boolean = owners.values.any {
@@ -101,14 +107,18 @@ internal class DownloadNetworkAccess @Inject constructor(
     }
 
     fun client(task: DownloadTask): OkHttpClient {
-        if (!permits(task)) throw IOException("No permitted download execution/network")
+        if (!permits(task)) {
+            throw IOException("No permitted download execution/network")
+        }
         val network = connectivity.activeNetwork ?: throw IOException("Network unavailable")
         val caps = connectivity.getNetworkCapabilities(network) ?: throw IOException("Network unavailable")
         val calls = ConcurrentHashMap.newKeySet<okhttp3.Call>()
-        val builder = baseClient.newBuilder().eventListener(object : okhttp3.EventListener() {
+        val listener = object : okhttp3.EventListener() {
             override fun callStart(call: okhttp3.Call) {
                 calls += call
-                if (!permits(task) || connectivity.activeNetwork != network) call.cancel()
+                if (!permits(task) || connectivity.activeNetwork != network) {
+                    call.cancel()
+                }
             }
 
             override fun callEnd(call: okhttp3.Call) {
@@ -118,34 +128,56 @@ internal class DownloadNetworkAccess @Inject constructor(
             override fun callFailed(call: okhttp3.Call, ioe: IOException) {
                 calls -= call
             }
-        }).dispatcher(Dispatcher()).connectionPool(ConnectionPool())
-            .followRedirects(false).followSslRedirects(false)
-        // Binding physical interfaces under an active VPN would bypass it. Unrestricted VPN work uses the default route.
+        }
+        val builder = baseClient.newBuilder()
+        builder.eventListener(listener)
+        builder.dispatcher(Dispatcher()).connectionPool(ConnectionPool())
+        builder.followRedirects(false).followSslRedirects(false)
+
+        // Unrestricted VPN work must stay on the default route to preserve the VPN.
+
         if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
             builder.socketFactory(network.socketFactory).dns { host -> network.getAllByName(host).toList() }
         }
         builder.addInterceptor { chain ->
-            if (!permits(task) || connectivity.activeNetwork != network) throw IOException("Download network changed")
+            if (!permits(task) || connectivity.activeNetwork != network) {
+                throw IOException("Download network changed")
+            }
+
             val original = chain.request()
-            if (UpstreamUrlPolicy.media(original.url.toString()) == null) throw IOException("Unsupported media URL")
-            val position =
-                original.header("Range")?.substringAfter("bytes=")?.substringBefore('-')?.toLongOrNull() ?: 0L
-            val request = original.newBuilder().header("Referer", UpstreamUrlPolicy.REFERER)
-                .header("User-Agent", UpstreamRequestProfile.USER_AGENT).apply {
-                    if (position > 0) (task.mediaEtag ?: task.mediaLastModified)?.let { header("If-Range", it) }
-                }.build()
+            if (UpstreamUrlPolicy.media(original.url.toString()) == null) {
+                throw IOException("Unsupported media URL")
+            }
+
+            val rangeStart = original.header("Range")?.substringAfter("bytes=")?.substringBefore('-')
+            val position = rangeStart?.toLongOrNull() ?: 0L
+            val mediaRequest = original.newBuilder()
+                .header("Referer", UpstreamUrlPolicy.REFERER)
+                .header("User-Agent", UpstreamRequestProfile.USER_AGENT)
+
+            // Match ResumeValidator's ETag precedence when asking for the remaining bytes.
+            if (position > 0) {
+                val validator = task.mediaEtag ?: task.mediaLastModified
+                validator?.let { mediaRequest.header("If-Range", it) }
+            }
+
+            val request = mediaRequest.build()
             val response = chain.proceed(request)
             try {
                 if (request.method == "GET") {
                     ResumeValidator.validate(
                         MediaIdentity(task.totalBytes, task.mediaEtag, task.mediaLastModified, task.acceptsRanges),
                         position,
-                        response.code,
-                        response.header("Content-Range"),
-                        response.header("ETag"),
-                        response.header("Last-Modified")
+                        MediaResponse(
+                            status = response.code,
+                            contentRange = response.header("Content-Range"),
+                            etag = response.header("ETag"),
+                            lastModified = response.header("Last-Modified")
+                        )
                     )
-                    if (response.code !in listOf(200, 206)) throw IOException("Media HTTP ${response.code}")
+                    if (response.code !in listOf(200, 206)) {
+                        throw IOException("Media HTTP ${response.code}")
+                    }
                 }
                 response
             } catch (failure: Exception) {
@@ -153,6 +185,7 @@ internal class DownloadNetworkAccess @Inject constructor(
                 throw failure
             }
         }
+
         val client = builder.build()
         clients.put(task.attemptId, Connection(task, network, client, calls))?.close()
         return client

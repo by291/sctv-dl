@@ -67,7 +67,9 @@ class PrimaryTopBarTest {
         while (node != null) {
             val bounds = node.visibleBounds
             if (bounds.height() in (48 * density).roundToInt()..(120 * density).roundToInt()) {
-                if (toolbar == null || bounds.width() > toolbar.width()) toolbar = bounds
+                if (toolbar == null || bounds.width() > toolbar.width()) {
+                    toolbar = bounds
+                }
             }
             node = node.parent
         }

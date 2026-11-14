@@ -44,6 +44,7 @@ internal class ManagedDownloadRepository(
         var queued = 0
         var fallbacks = 0
         val failures = mutableListOf<DownloadFailure>()
+
         for (request in requests) {
             val variant = resolveVideo(request.content, request.requestedQuality)
             val url = variant?.url?.let(UpstreamUrlPolicy::media)
@@ -51,6 +52,7 @@ internal class ManagedDownloadRepository(
                 failures += DownloadFailure(request.content.id, AppError(ErrorKind.NoVideo, "该节目没有可下载的视频"))
                 continue
             }
+
             val id = UUID.randomUUID().toString()
             val task = DownloadTask(
                 id = id,
@@ -74,12 +76,20 @@ internal class ManagedDownloadRepository(
                 cacheKey = id,
                 selection = request.selection
             )
+
             try {
-                if (transitions.mutex.withLock { store.reserve(task) }) {
-                    queued++
-                    if (variant.quality != request.requestedQuality) fallbacks++
-                } else {
-                    failures += DownloadFailure(task.contentId, AppError(ErrorKind.Download, "该节目已在队列中，或旧系统任务需要先处理"))
+                // Reserve content and quality before the transfer host can observe this task.
+                if (!transitions.mutex.withLock { store.reserve(task) }) {
+                    failures += DownloadFailure(
+                        task.contentId,
+                        AppError(ErrorKind.Download, "该节目已在队列中，或旧系统任务需要先处理")
+                    )
+                    continue
+                }
+
+                queued++
+                if (variant.quality != request.requestedQuality) {
+                    fallbacks++
                 }
             } catch (failure: CancellationException) {
                 throw failure
@@ -87,7 +97,10 @@ internal class ManagedDownloadRepository(
                 failures += DownloadFailure(task.contentId, AppError(ErrorKind.Storage, "无法保存下载任务，请重试"))
             }
         }
-        if (queued > 0) control.start()
+
+        if (queued > 0) {
+            control.start()
+        }
         return BatchDownloadResult(queued, fallbacks, failures)
     }
 
@@ -96,18 +109,24 @@ internal class ManagedDownloadRepository(
 
         // Native stop/start runs after persistence and outside the mutation lock, which stop also acquires.
         transition.stopTask?.let { control.stop(it) }
-        if (transition.start) control.start()
+        if (transition.start) {
+            control.start()
+        }
         return transition.result
     }
 
     private suspend fun applyAction(target: DownloadTarget, action: DownloadAction): ActionTransition {
         var task = store.get(target.id) ?: return ActionTransition.skipped
-        if (task.attemptId != target.attemptId) return ActionTransition.skipped
+        if (task.attemptId != target.attemptId) {
+            return ActionTransition.skipped
+        }
         if (task.owner == DownloadOwner.LegacySystem) {
             legacy.reconcile()
             task = store.get(target.id) ?: return ActionTransition.skipped
         }
-        if (task.attemptId != target.attemptId || action !in supportedActions(task)) return ActionTransition.skipped
+        if (task.attemptId != target.attemptId || action !in supportedActions(task)) {
+            return ActionTransition.skipped
+        }
 
         return when (action) {
             DownloadAction.Pause -> {
@@ -134,7 +153,9 @@ internal class ManagedDownloadRepository(
             DownloadAction.DeleteFile -> ActionTransition(result = deleteFile(task))
             DownloadAction.RemoveRecord -> {
                 // Keep the durable row until private-cache removal succeeds. Public files are independent.
-                if (task.owner == DownloadOwner.Media3) control.remove(task)
+                if (task.owner == DownloadOwner.Media3) {
+                    control.remove(task)
+                }
                 store.remove(task.id)
                 ActionTransition()
             }
@@ -142,8 +163,12 @@ internal class ManagedDownloadRepository(
     }
 
     private suspend fun replaceAttempt(task: DownloadTask): ActionTransition {
-        if (UpstreamUrlPolicy.media(task.url) == null) return ActionTransition.skipped
-        if (task.owner == DownloadOwner.Media3) control.remove(task)
+        if (UpstreamUrlPolicy.media(task.url) == null) {
+            return ActionTransition.skipped
+        }
+        if (task.owner == DownloadOwner.Media3) {
+            control.remove(task)
+        }
 
         val attempt = UUID.randomUUID().toString()
         val replacement = task.copy(
@@ -224,10 +249,12 @@ internal class ManagedDownloadRepository(
         token: String,
         granted: Boolean
     ): DownloadActionResult = transitions.mutex.withLock {
+        // Consume even a declined or obsolete grant so it cannot be reused later.
         val uri = consents.consume(token, target) ?: return@withLock DownloadActionResult.Skipped
         val task = store.get(target.id) ?: return@withLock DownloadActionResult.Skipped
-        val matchesFile = task.contentUri == uri && task.state == DownloadState.Completed
-        if (!granted || task.attemptId != target.attemptId || !matchesFile) {
+        val isSameCompletedFile = task.contentUri == uri && task.state == DownloadState.Completed
+
+        if (!granted || task.attemptId != target.attemptId || !isSameCompletedFile) {
             return@withLock DownloadActionResult.Skipped
         }
         deleteFile(task)

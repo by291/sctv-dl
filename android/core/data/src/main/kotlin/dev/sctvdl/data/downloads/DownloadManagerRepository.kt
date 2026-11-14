@@ -109,7 +109,11 @@ internal class DownloadManagerRepository(
             try {
                 // Reserve the identity and planned filename before any system job can be created.
                 val reserved = transitions.withLock {
-                    store.reserve(task).also { if (it) submitting.add(task.id) }
+                    store.reserve(task).also {
+                        if (it) {
+                            submitting.add(task.id)
+                        }
+                    }
                 }
                 if (!reserved) {
                     failures.add(
@@ -160,10 +164,7 @@ internal class DownloadManagerRepository(
                     }
                 }
 
-                if (submitted) {
-                    queued++
-                    if (variant.quality != request.requestedQuality) fallbacks++
-                } else {
+                if (!submitted) {
                     failures.add(
                         DownloadFailure(
                             task.contentId,
@@ -173,6 +174,12 @@ internal class DownloadManagerRepository(
                             )
                         )
                     )
+                    continue
+                }
+
+                queued++
+                if (variant.quality != request.requestedQuality) {
+                    fallbacks++
                 }
             } catch (error: CancellationException) {
                 withContext(NonCancellable) {
@@ -192,7 +199,9 @@ internal class DownloadManagerRepository(
                 }
 
                 // Cancelling one preparation reports that item; cancelling the batch propagates to its caller.
-                if (!currentCoroutineContext().isActive) throw error
+                if (!currentCoroutineContext().isActive) {
+                    throw error
+                }
                 failures.add(DownloadFailure(task.contentId, AppError(ErrorKind.Download, "已取消下载")))
             } catch (error: Exception) {
                 val mapped = when (error) {
@@ -201,6 +210,13 @@ internal class DownloadManagerRepository(
                     else -> AppError(ErrorKind.Download, "无法创建下载任务，请重试")
                 }
 
+                val reasonCode = if (mapped.kind == ErrorKind.Http) {
+                    DownloadReason.Http
+                } else {
+                    DownloadReason.Storage
+                }
+
+                failures.add(DownloadFailure(task.contentId, mapped))
                 if (submittedId == null) {
                     transitions.withLock {
                         store.get(task.id)?.takeUnless {
@@ -210,22 +226,19 @@ internal class DownloadManagerRepository(
                                 it.copy(
                                     state = DownloadState.Failed,
                                     reason = mapped.message,
-                                    reasonCode = if (mapped.kind == ErrorKind.Http) {
-                                        DownloadReason.Http
-                                    } else {
-                                        DownloadReason.Storage
-                                    }
+                                    reasonCode = reasonCode
                                 )
                             )
                         }
                     }
-                } else {
-                    // The platform already owns the transfer; its planned destination allows later recovery.
-                    queued++
-                    if (variant.quality != request.requestedQuality) fallbacks++
+                    continue
                 }
 
-                failures.add(DownloadFailure(task.contentId, mapped))
+                // The platform already owns the transfer; its planned destination allows later recovery.
+                queued++
+                if (variant.quality != request.requestedQuality) {
+                    fallbacks++
+                }
             } finally {
                 submitting.remove(task.id)
             }
@@ -238,7 +251,9 @@ internal class DownloadManagerRepository(
         withContext(NonCancellable) {
             transitions.withLock {
                 val task = store.get(taskId) ?: return@withLock
-                if (!task.state.isActive) return@withLock
+                if (!task.state.isActive) {
+                    return@withLock
+                }
 
                 task.systemId?.let { gateway.remove(it) }
                 store.update(
@@ -356,7 +371,9 @@ internal class DownloadManagerRepository(
                 for (task in store.all()) {
                     if (task.id !in submitting) {
                         val updated = reconciler.resolve(task, snapshots)
-                        if (updated != task) store.update(updated)
+                        if (updated != task) {
+                            store.update(updated)
+                        }
                     }
                 }
             }

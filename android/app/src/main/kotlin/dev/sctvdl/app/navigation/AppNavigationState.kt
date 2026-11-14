@@ -67,11 +67,20 @@ internal fun rememberAppNavigation(downloadsRequest: Int, onBackCommitted: () ->
     val selection = rememberSaveable { mutableIntStateOf(0) }
     val currentBackCommitted by rememberUpdatedState(onBackCommitted)
     val navigation = remember {
-        AppNavigationState(listOf(catalogue, downloads, settings), selection) { currentBackCommitted() }
+        AppNavigationState(
+            listOf(
+                catalogue,
+                downloads,
+                settings
+            ),
+            selection
+        ) { currentBackCommitted() }
     }
 
     LaunchedEffect(downloadsRequest) {
-        if (downloadsRequest > 0) navigation.showDownloads()
+        if (downloadsRequest > 0) {
+            navigation.showDownloads()
+        }
     }
     return navigation
 }

@@ -48,7 +48,9 @@ internal class MediaStoreDownloadFiles @Inject constructor(
                 while (true) {
                     currentCoroutineContext().ensureActive()
                     val count = source.read(buffer)
-                    if (count < 0) break
+                    if (count < 0) {
+                        break
+                    }
                     destination.write(buffer, 0, count)
                     total += count
                 }
@@ -86,7 +88,9 @@ internal class MediaStoreDownloadFiles @Inject constructor(
         val finalized = resolver.query(parsed, arrayOf(MediaStore.Downloads.IS_PENDING), null, null, null)?.use {
             it.moveToFirst() && it.getInt(0) == 0
         } == true
-        if (!finalized) return@withContext false
+        if (!finalized) {
+            return@withContext false
+        }
         // Android 10 updates the provider's SIZE column asynchronously after close/finalization.
         // Verify the actual owned file, not delayed scanner metadata.
         val bytes = resolver.openFileDescriptor(parsed, "r")?.use { it.statSize } ?: return@withContext false

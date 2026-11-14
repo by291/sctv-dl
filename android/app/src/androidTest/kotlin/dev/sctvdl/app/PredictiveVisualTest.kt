@@ -262,7 +262,9 @@ class PredictiveVisualTest {
                 val current = during.getPixel(x, y)
                 val difference = abs(Color.red(original) - Color.red(current)) +
                     abs(Color.green(original) - Color.green(current)) + abs(Color.blue(original) - Color.blue(current))
-                if (difference > 30) changed++
+                if (difference > 30) {
+                    changed++
+                }
                 samples++
             }
         }

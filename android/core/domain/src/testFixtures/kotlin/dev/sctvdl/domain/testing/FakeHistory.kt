@@ -18,7 +18,9 @@ class FakeHistory : HistoryRepository {
     override fun observeEntries() = entries
 
     override suspend fun begin(target: ViewingTarget): HistorySession {
-        if (fail) error("Storage unavailable")
+        if (fail) {
+            error("Storage unavailable")
+        }
         return HistorySession(target.key, generation, ++generation, entries.value.find { it.key == target.key })
     }
 
@@ -28,7 +30,9 @@ class FakeHistory : HistoryRepository {
                 it.completeExceptionally(IllegalStateException("Disk full"))
             }
         }
-        if (session.sessionGeneration != generation) return CompletableDeferred(HistoryWriteResult.Invalidated)
+        if (session.sessionGeneration != generation) {
+            return CompletableDeferred(HistoryWriteResult.Invalidated)
+        }
         writes += entry
         entries.value = listOf(entry) + entries.value.filter { it.key != entry.key }
         return CompletableDeferred(HistoryWriteResult.Saved)

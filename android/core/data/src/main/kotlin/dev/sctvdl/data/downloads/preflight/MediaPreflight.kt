@@ -36,7 +36,9 @@ internal class MediaPreflight(private val probe: MediaProbe) {
         var response = probe.request(target, "HEAD", null)
         val range = response.status == 405 || response.status == 501
         // Some upstream hosts reject HEAD; probe one byte instead of buffering the MP4 response.
-        if (range) response = probe.request(target, "GET", "bytes=0-0")
+        if (range) {
+            response = probe.request(target, "GET", "bytes=0-0")
+        }
 
         if (response.status !in listOf(200, 206)) {
             throw AppException(

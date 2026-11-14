@@ -63,18 +63,17 @@ internal fun PlaybackContent(
     coverReference: ContentRef? = null,
     sourcePrepared: Boolean = true
 ) {
-    val currentHistory by rememberUpdatedState(history)
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var downloadSheet by rememberSaveable(source.id) { mutableStateOf(false) }
 
+    val currentHistory by rememberUpdatedState(history)
     val session = rememberPlaybackSession(source, initialQuality, sourcePrepared, fullscreen, host, history, onPosition)
     val playback by session.controller.state.collectAsStateWithLifecycle()
     val pip by host.pictureInPicture.collectAsStateWithLifecycle()
 
     val canDownload = onDownload != null && source.localUri == null && source.variants.isNotEmpty()
 
-    BackHandler(fullscreen && !pip) { fullscreen = false }
-
+    val scroll = rememberScrollState()
     val back = {
         if (fullscreen) {
             fullscreen = false
@@ -84,7 +83,7 @@ internal fun PlaybackContent(
         }
     }
 
-    val scroll = rememberScrollState()
+    BackHandler(fullscreen && !pip) { fullscreen = false }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val videoHeight = inlinePlayerHeight(maxWidth, maxHeight, LocalDensity.current.fontScale)
