@@ -1,13 +1,16 @@
-use std::{io, sync::Arc};
+use std::{io, path::Path, sync::Arc};
 
 use same_file::Handle;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::super::journal::ReservationRecord;
+use super::super::{
+    file_identity::{FileAccess, is_missing_or_replaced},
+    journal::ReservationRecord,
+};
 use super::{
     DownloadDirectory, MAX_RECORD_BYTES, Reservation,
-    artifacts::{invalid, remove_owned_file},
+    artifacts::{invalid, remove_owned_file, remove_verified_file},
 };
 
 const RECOVERY_RECORD_VERSION: u8 = 1;
@@ -77,30 +80,19 @@ impl DownloadDirectory {
         record.validate()?;
 
         let journal = self.root.join(format!(".sctv-dl-{}.json", record.id));
-        if !std::fs::symlink_metadata(&journal)?.is_file() {
-            return Err(invalid("下载恢复记录已被替换"));
-        }
-
-        let disk = crate::storage::read_json::<ReservationRecord>(&journal, MAX_RECORD_BYTES)?
-            .ok_or_else(|| invalid("下载恢复记录缺失"))?;
-        disk.validate()?;
-        if disk.id != record.id
-            || disk.checkpoint.task_id != record.checkpoint.task_id
-            || disk.checkpoint.attempt_id != record.checkpoint.attempt_id
-            || disk.checkpoint.file_identity != record.checkpoint.file_identity
-        {
-            return Err(invalid("下载恢复记录身份不匹配"));
-        }
+        let disk = Self::read_owned_journal(record, &journal)?
+            .ok_or_else(|| invalid("Download recovery journal is missing"))?;
 
         let temporary = self.root.join(format!(".sctv-dl-{}.part", record.id));
         let file = record
             .checkpoint
             .file_identity
-            .open_verified(&temporary, true)?;
+            .open_verified(&temporary, FileAccess::ReadWrite)?;
         if file.metadata()?.len() < record.checkpoint.committed_bytes {
-            return Err(invalid("下载文件短于已保存的进度"));
+            return Err(invalid("Download is shorter than its committed checkpoint"));
         }
 
+        // Data written after the indexed checkpoint is not safe to publish or append to.
         file.set_len(record.checkpoint.committed_bytes)?;
         file.sync_all()?;
 
@@ -126,6 +118,36 @@ impl DownloadDirectory {
         })
     }
 
+    /// Finishes cancellation even if an earlier attempt already removed the owned partial.
+    pub(in crate::downloads) fn cancel_recovered(
+        &self,
+        record: &ReservationRecord,
+    ) -> io::Result<()> {
+        record.validate()?;
+        let journal = self.root.join(format!(".sctv-dl-{}.json", record.id));
+        let temporary = self.root.join(format!(".sctv-dl-{}.part", record.id));
+        let checkpoint = &record.checkpoint;
+
+        // Validate first so a conflicting journal never authorizes deletion. A missing journal
+        // is safe here because the private index already records the exact partial identity.
+        Self::read_owned_journal(record, &journal)?;
+        let remove = remove_verified_file(&temporary, |candidate| {
+            checkpoint
+                .file_identity
+                .open_verified(candidate, FileAccess::ReadOnly)
+                .map(drop)
+        });
+        if let Err(error) = remove
+            && !is_missing_or_replaced(&error)
+        {
+            return Err(error);
+        }
+
+        Self::remove_owned_journal(record, &journal)?;
+        self.release_name(&record.filename);
+        Ok(())
+    }
+
     /// Removes a recognized publication journal only after the index records completion.
     pub fn complete_recovered(&self, record: &ReservationRecord) -> io::Result<()> {
         record.validate()?;
@@ -133,43 +155,74 @@ impl DownloadDirectory {
         record
             .checkpoint
             .file_identity
-            .open_verified(&self.root.join(&record.filename), false)?;
+            .open_verified(&self.root.join(&record.filename), FileAccess::ReadOnly)?;
 
         let journal = self.root.join(format!(".sctv-dl-{}.json", record.id));
-        let Some(disk) =
-            crate::storage::read_json::<ReservationRecord>(&journal, MAX_RECORD_BYTES)?
-        else {
+        if Self::read_owned_journal(record, &journal)?.is_none() {
             return Ok(());
-        };
-        if !std::fs::symlink_metadata(&journal)?.is_file()
-            || disk.id != record.id
-            || disk.checkpoint.task_id != record.checkpoint.task_id
-            || disk.checkpoint.attempt_id != record.checkpoint.attempt_id
-            || disk.checkpoint.file_identity != record.checkpoint.file_identity
-        {
-            return Err(invalid("下载发布记录身份不匹配"));
         }
 
         let temporary = self.root.join(format!(".sctv-dl-{}.part", record.id));
-        match record
-            .checkpoint
-            .file_identity
-            .open_verified(&temporary, false)
-        {
-            Ok(file) => {
-                drop(file);
-                std::fs::remove_file(&temporary)?;
-            }
+        let remove = remove_verified_file(&temporary, |candidate| {
+            record
+                .checkpoint
+                .file_identity
+                .open_verified(candidate, FileAccess::ReadOnly)
+                .map(drop)
+        });
+        match remove {
+            Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => return Err(error),
         }
 
-        std::fs::remove_file(&journal)?;
+        Self::remove_owned_journal(record, &journal)?;
+        self.release_name(&record.filename);
+        Ok(())
+    }
+
+    fn read_owned_journal(
+        record: &ReservationRecord,
+        journal: &Path,
+    ) -> io::Result<Option<ReservationRecord>> {
+        match std::fs::symlink_metadata(journal) {
+            Ok(metadata) if metadata.is_file() => {}
+            Ok(_) => return Err(invalid("Download journal was replaced")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        }
+
+        let disk = crate::storage::read_json::<ReservationRecord>(journal, MAX_RECORD_BYTES)?;
+        let Some(disk) = disk else {
+            return Ok(None);
+        };
+        disk.validate()?;
+        if disk.id != record.id
+            || disk.checkpoint.task_id != record.checkpoint.task_id
+            || disk.checkpoint.attempt_id != record.checkpoint.attempt_id
+            || disk.checkpoint.file_identity != record.checkpoint.file_identity
+        {
+            return Err(invalid("Download journal identity changed"));
+        }
+
+        Ok(Some(disk))
+    }
+
+    fn remove_owned_journal(record: &ReservationRecord, journal: &Path) -> io::Result<()> {
+        match remove_verified_file(journal, |candidate| {
+            Self::read_owned_journal(record, candidate)?
+                .map(|_| ())
+                .ok_or_else(|| io::ErrorKind::NotFound.into())
+        }) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
+
+    fn release_name(&self, filename: &str) {
         self.reserved
             .lock()
             .unwrap()
-            .remove(&record.filename.to_lowercase());
-
-        Ok(())
+            .remove(&filename.to_lowercase());
     }
 }

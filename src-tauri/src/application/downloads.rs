@@ -5,7 +5,7 @@ use tauri::{AppHandle, Runtime};
 use crate::{
     downloads::{
         DownloadAction, DownloadActionRequest, DownloadActionResult, DownloadManager,
-        DownloadRequest, DownloadStart, PreparedDownload,
+        DownloadRequest, DownloadStart, PreparedDownload, RetryTarget,
     },
     error::{AppError, ErrorCode, Result},
     lifecycle::ExitController,
@@ -94,6 +94,7 @@ pub struct DownloadActionService<'a> {
 }
 
 impl<'a> DownloadActionService<'a> {
+    /// Connects action admission to programme, download, and playback ownership.
     pub fn new(
         state: &'a AppState,
         downloads: &'a DownloadManager,
@@ -108,6 +109,7 @@ impl<'a> DownloadActionService<'a> {
         }
     }
 
+    /// Applies the requested action to the current attempt after revalidating its state.
     pub async fn act<R: Runtime>(
         &self,
         app: AppHandle<R>,
@@ -115,12 +117,6 @@ impl<'a> DownloadActionService<'a> {
     ) -> Result<DownloadActionResult> {
         // Retain admission through source refresh and transfer it to the action owner.
         let operation = Arc::new(self.lifecycle.enter().await?);
-        let task = self.downloads.task(&request.task_id)?;
-        if task.attempt_id != request.attempt_id {
-            return Ok(DownloadActionResult::Skipped {
-                message: "任务已更新，请刷新后重试".into(),
-            });
-        }
 
         if matches!(
             request.action,
@@ -141,7 +137,21 @@ impl<'a> DownloadActionService<'a> {
             request.action,
             DownloadAction::Resume | DownloadAction::Restart
         ) {
-            Some(self.refresh_source(task).await?)
+            let task = match self.downloads.retry_target(&request)? {
+                RetryTarget::Eligible(task) => task,
+                RetryTarget::Skipped(result) => return Ok(result),
+            };
+
+            match self.refresh_source(*task).await {
+                Ok(source) => Some(source),
+                Err(error) => {
+                    // A stale operation stays skipped even when source refresh also failed.
+                    return match self.downloads.retry_target(&request)? {
+                        RetryTarget::Eligible(_) => Err(error),
+                        RetryTarget::Skipped(result) => Ok(result),
+                    };
+                }
+            }
         } else {
             None
         };

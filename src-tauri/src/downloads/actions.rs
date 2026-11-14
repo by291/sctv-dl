@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::{
     errors::{storage, with_rollback},
-    manager::{Control, Inner, Job},
+    manager::{Control, Inner, Job, TransferMode},
     records::Admission,
     *,
 };
@@ -13,6 +13,11 @@ use crate::{
     lifecycle::OperationGuard,
     media::policy,
 };
+
+pub(crate) enum RetryTarget {
+    Eligible(Box<DownloadTask>),
+    Skipped(DownloadActionResult),
+}
 
 impl DownloadManager {
     /// Owns the action after dispatch so IPC cancellation cannot release exit admission early.
@@ -31,12 +36,31 @@ impl DownloadManager {
         .map_err(|error| AppError::with_source(ErrorCode::Storage, "下载操作异常终止", error))?
     }
 
+    /// Retrieves the latest task state, regardless of the attempt.
     pub fn task(&self, id: &str) -> Result<DownloadTask> {
         self.inner.records.available()?;
-        self.list()
-            .into_iter()
-            .find(|task| task.id == id)
+        self.inner
+            .records
+            .find(id, None)
+            .map(|(stored, _)| stored.task)
             .ok_or_else(|| AppError::new(ErrorCode::NotFound, "下载任务不存在"))
+    }
+
+    /// Checks whether refreshing the source is useful without admitting an attempt yet.
+    pub(crate) fn retry_target(&self, request: &DownloadActionRequest) -> Result<RetryTarget> {
+        self.inner.records.available()?;
+        let Some((stored, _)) = self
+            .inner
+            .records
+            .find(&request.task_id, Some(&request.attempt_id))
+        else {
+            return Ok(RetryTarget::Skipped(skipped("任务已更新，请刷新后重试")));
+        };
+
+        match retry_rejection(request.action, &stored.task) {
+            Some(result) => Ok(RetryTarget::Skipped(result)),
+            None => Ok(RetryTarget::Eligible(Box::new(stored.task))),
+        }
     }
 }
 
@@ -137,11 +161,7 @@ impl Inner {
                     .reservation
                     .as_ref()
                     .ok_or_else(|| AppError::new(ErrorCode::Storage, "下载恢复信息缺失"))?;
-                directory
-                    .recover_reservation(reservation)
-                    .map_err(storage)?
-                    .cleanup()
-                    .map_err(storage)?;
+                directory.cancel_recovered(reservation).map_err(storage)?;
 
                 let task = self.records.change_blocking(
                     &request.task_id,
@@ -176,21 +196,11 @@ impl Inner {
         prepared: Option<PreparedDownload>,
         stored: store::StoredTask,
     ) -> Result<DownloadActionResult> {
-        let resume = request.action == DownloadAction::Resume;
-        if !matches!(
-            stored.task.state,
-            TaskState::Paused
-                | TaskState::Interrupted
-                | TaskState::Failed
-                | TaskState::Cancelled
-                | TaskState::Missing
-        ) {
-            return Ok(skipped("当前任务状态不允许重新下载"));
-        }
-        if resume && !stored.task.can_resume {
-            return Ok(skipped("该下载不能安全续传，请重新下载"));
+        if let Some(result) = retry_rejection(request.action, &stored.task) {
+            return Ok(result);
         }
 
+        let resume = request.action == DownloadAction::Resume;
         let file =
             prepared.ok_or_else(|| AppError::new(ErrorCode::NotFound, "节目来源已不可用"))?;
         policy::target(&file.url, &self.origins)?;
@@ -280,7 +290,11 @@ impl Inner {
             reservation,
             control,
             checkpoint: record.checkpoint,
-            resume,
+            mode: if resume {
+                TransferMode::Resume
+            } else {
+                TransferMode::Full
+            },
         });
 
         Ok(DownloadActionResult::Applied {
@@ -298,11 +312,7 @@ impl Inner {
         if let Some(previous) = &stored.reservation
             && stored.task.has_partial
         {
-            directory
-                .recover_reservation(previous)
-                .map_err(storage)?
-                .cleanup()
-                .map_err(storage)?;
+            directory.cancel_recovered(previous).map_err(storage)?;
             self.records
                 .change_blocking(&stored.task.id, &stored.task.attempt_id, |record| {
                     record.reservation = None;
@@ -332,6 +342,29 @@ fn skipped(message: &str) -> DownloadActionResult {
     DownloadActionResult::Skipped {
         message: message.into(),
     }
+}
+
+fn retry_rejection(action: DownloadAction, task: &DownloadTask) -> Option<DownloadActionResult> {
+    if task.active() {
+        return Some(skipped("任务仍在处理中，请稍后重试"));
+    }
+
+    if !matches!(
+        task.state,
+        TaskState::Paused
+            | TaskState::Interrupted
+            | TaskState::Failed
+            | TaskState::Cancelled
+            | TaskState::Missing
+    ) {
+        return Some(skipped("当前任务状态不允许重新下载"));
+    }
+
+    if action == DownloadAction::Resume && !task.can_resume {
+        return Some(skipped("该下载不能安全续传，请重新下载"));
+    }
+
+    None
 }
 
 fn resume_reservation(

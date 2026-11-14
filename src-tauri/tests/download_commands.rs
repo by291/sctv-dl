@@ -32,14 +32,21 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
     let upstream = origin.clone();
     let refreshed = Arc::new(AtomicBool::new(false));
     let upstream_refreshed = refreshed.clone();
+    let unavailable = Arc::new(AtomicBool::new(false));
+    let upstream_unavailable = unavailable.clone();
     let server = tokio::spawn(async move {
         axum::serve(
             listener,
             Router::new().fallback(move |request: Request<Body>| {
                 let origin = upstream.clone();
                 let refreshed = upstream_refreshed.load(Ordering::SeqCst);
+                let unavailable = upstream_unavailable.load(Ordering::SeqCst);
 
                 async move {
+                    if unavailable {
+                        return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+                    }
+
                     if request.uri().path().ends_with(".mp4") {
                         return Response::builder()
                             .header("Content-Type", "video/mp4")
@@ -210,6 +217,23 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
     .unwrap();
     assert_eq!(stale["kind"], "skipped");
     assert_eq!(manager.list().len(), 1);
+
+    unavailable.store(true, Ordering::SeqCst);
+    let ineligible = invoke(
+        &main,
+        "act_on_download",
+        json!({
+            "request": {
+                "taskId": tasks[0]["id"],
+                "attemptId": tasks[0]["attemptId"],
+                "action": "restart",
+            }
+        }),
+        local,
+    )
+    .unwrap();
+    assert_eq!(ineligible["kind"], "skipped");
+    unavailable.store(false, Ordering::SeqCst);
 
     let deleted = invoke(
         &main,

@@ -14,6 +14,7 @@ pub mod resume;
 pub mod store;
 mod worker;
 
+pub(crate) use actions::RetryTarget;
 pub use file_actions::PendingLocalPlayback;
 pub use filename::download_filename;
 pub use manager::{DownloadConfig, DownloadManager};

@@ -347,6 +347,10 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
                     Err(std::io::Error::other("interrupted")),
                 ])))
                 .unwrap(),
+            "/7.mp4" => Response::builder()
+                .header("Content-Type", "video/mp4")
+                .body(Body::empty())
+                .unwrap(),
             _ => Response::builder()
                 .header("Content-Type", "video/mp4")
                 .body(Body::from_stream(futures_util::stream::iter([Ok::<
@@ -367,14 +371,14 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
     .unwrap();
     manager
         .start(
-            (3..7)
+            (3..8)
                 .map(|id| prepared(&server.origin, &id.to_string()))
                 .collect(),
             root.path(),
         )
         .await
         .unwrap();
-    terminal(&manager, 4).await;
+    terminal(&manager, 5).await;
 
     let tasks = manager.list();
 
@@ -383,7 +387,7 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
             .iter()
             .filter(|task| task.state == TaskState::Failed)
             .count(),
-        3
+        4
     );
     let completed = tasks
         .iter()

@@ -93,7 +93,7 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         media::Quality,
     };
 
-    for published in [false, true] {
+    for (published, blocked_cleanup) in [(false, false), (true, false), (true, true)] {
         let root = tempfile::tempdir().unwrap();
         let target = root.path().join("files");
         std::fs::create_dir(&target).unwrap();
@@ -156,6 +156,11 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         if published {
             reservation.publish().unwrap();
         }
+        let journal = target.join(format!(".sctv-dl-{}.json", publication.id));
+        if blocked_cleanup {
+            std::fs::remove_file(&journal).unwrap();
+            std::fs::create_dir(&journal).unwrap();
+        }
         reservation.retain();
         drop(directory);
         drop(store);
@@ -173,11 +178,7 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
                 std::fs::read(target.join(task.filename)).unwrap(),
                 b"complete"
             );
-            assert!(
-                !target
-                    .join(format!(".sctv-dl-{}.json", publication.id))
-                    .exists()
-            );
+            assert_eq!(journal.exists(), blocked_cleanup);
         } else {
             assert_eq!(task.state, TaskState::Interrupted);
             assert_eq!(task.received_bytes, 8);
@@ -186,6 +187,154 @@ async fn publication_crashes_reconcile_without_redownload_or_clobber() {
         }
         manager.shutdown().await;
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn temporarily_unreadable_completed_file_can_be_opened_again() {
+    use std::{os::unix::fs::PermissionsExt, sync::Arc};
+
+    use sctv_dl_desktop_lib::{
+        downloads::{
+            ContentRef, DownloadAction, DownloadActionRequest, DownloadManager, DownloadTask,
+            TaskState,
+            file_identity::FileIdentity,
+            store::{DownloadDocument, DownloadStore, StoredTask},
+        },
+        history::HistoryMetadata,
+        lifecycle::ExitController,
+        media::Quality,
+    };
+
+    let root = tempfile::tempdir().unwrap();
+    let filename = "clip.mp4";
+    let path = root.path().join(filename);
+    std::fs::write(&path, b"complete").unwrap();
+    let permissions = std::fs::metadata(&path).unwrap().permissions();
+    let identity = FileIdentity::read(&std::fs::File::open(&path).unwrap()).unwrap();
+    let content = ContentRef {
+        programme_id: "1".into(),
+        date_id: "2".into(),
+        content_id: "3".into(),
+    };
+    let task = DownloadTask {
+        id: uuid::Uuid::new_v4().to_string(),
+        attempt_id: uuid::Uuid::new_v4().to_string(),
+        metadata: HistoryMetadata {
+            content: content.clone(),
+            programme_name: "News".into(),
+            broadcast_date: "2026-10-17".into(),
+            title: "Clip".into(),
+            cover: None,
+        },
+        content,
+        filename: filename.into(),
+        quality: Quality::Standard,
+        state: TaskState::Completed,
+        received_bytes: 8,
+        total_bytes: Some(8),
+        error: None,
+        revision: 1,
+        created_at: "2026-10-17T00:00:00.000Z".into(),
+        can_resume: false,
+        file_available: true,
+        has_partial: false,
+    };
+    let index = root.path().join("downloads-v1.json");
+    let store = DownloadStore::open(index.clone()).unwrap();
+    store
+        .save(&DownloadDocument {
+            version: 1,
+            revision: 1,
+            tasks: vec![StoredTask {
+                task: task.clone(),
+                directory: root.path().canonicalize().unwrap(),
+                reservation: None,
+                completed_identity: Some(identity),
+            }],
+        })
+        .unwrap();
+    drop(store);
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let manager = DownloadManager::open(Default::default(), index)
+        .await
+        .unwrap();
+    let lifecycle = ExitController::default();
+    let request = DownloadActionRequest {
+        task_id: task.id,
+        attempt_id: task.attempt_id,
+        action: DownloadAction::OpenFile,
+    };
+    let unavailable = manager
+        .act_on_file(
+            request.clone(),
+            None,
+            Arc::new(lifecycle.enter().await.unwrap()),
+            |_, _| panic!("the OS opener should not be called for an unreadable file"),
+        )
+        .await;
+    std::fs::set_permissions(&path, permissions).unwrap();
+    let retried = manager
+        .act_on_file(
+            request,
+            None,
+            Arc::new(lifecycle.enter().await.unwrap()),
+            |path, _| {
+                assert_eq!(std::fs::read(path).unwrap(), b"complete");
+                Ok(())
+            },
+        )
+        .await;
+
+    assert!(unavailable.is_err());
+    assert_eq!(manager.list()[0].state, TaskState::Completed);
+    assert!(retried.is_ok());
+    manager.shutdown().await;
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_partial_removal_keeps_the_recovery_journal() {
+    use std::process::Command;
+
+    let root = tempfile::tempdir().unwrap();
+    let directory = DownloadDirectory::open(root.path()).unwrap();
+    let (writer, mut reservation) = directory.reserve("clip.mp4").unwrap();
+    drop(writer);
+    let record = reservation
+        .upgrade("task".into(), "attempt".into())
+        .unwrap();
+    let journal = root.path().join(format!(".sctv-dl-{}.json", record.id));
+
+    let partial = root.path().join(format!(".sctv-dl-{}.part", record.id));
+    assert!(
+        Command::new("/usr/bin/chflags")
+            .arg("uchg")
+            .arg(&partial)
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    let result = reservation.cleanup();
+    assert!(
+        Command::new("/usr/bin/chflags")
+            .arg("nouchg")
+            .arg(&partial)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(result.is_err());
+    assert!(journal.is_file());
+    directory
+        .recover_reservation(&record)
+        .unwrap()
+        .cleanup()
+        .unwrap();
+    assert!(!partial.exists());
+    assert!(!journal.exists());
 }
 
 #[test]
@@ -257,7 +406,7 @@ fn cleanup_retains_both_replaced_partial_and_unreadable_journal_causes() {
     assert_eq!(journal_error.kind(), std::io::ErrorKind::PermissionDenied);
     let diagnostic = cleanup.unwrap_err().to_string();
     assert!(
-        diagnostic.contains("已被替换"),
+        diagnostic.contains("identity changed"),
         "missing partial-file identity cause: {diagnostic}"
     );
     assert!(

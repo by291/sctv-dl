@@ -132,6 +132,42 @@ async fn deleting_the_owned_file_stops_local_playback_and_retains_a_missing_reco
 }
 
 #[tokio::test]
+async fn reports_index_failure_after_deletion_and_reconciles_the_missing_file_on_restart() {
+    use sctv_dl_desktop_lib::error::ErrorCode;
+
+    let (root, manager, task, gate) = completed().await;
+    let index = root.path().join("downloads-v1.json");
+    let retained_index = root.path().join("retained-index.json");
+    std::fs::rename(&index, &retained_index).unwrap();
+    std::fs::create_dir(&index).unwrap();
+
+    let delete = manager
+        .act_on_file(
+            request(&task, DownloadAction::DeleteFile),
+            None,
+            Arc::new(gate.enter().await.unwrap()),
+            |_, _| panic!("deletion does not call an external opener"),
+        )
+        .await;
+
+    assert_eq!(delete.unwrap_err().code, ErrorCode::Storage);
+    assert!(!root.path().join("files").join(&task.filename).exists());
+
+    manager.shutdown().await;
+    drop(manager);
+    std::fs::remove_dir(&index).unwrap();
+    std::fs::rename(retained_index, &index).unwrap();
+    let recovered = DownloadManager::open(Default::default(), index)
+        .await
+        .unwrap();
+    let missing = recovered.task(&task.id).unwrap();
+
+    assert_eq!(missing.state, TaskState::Missing);
+    assert!(!missing.file_available);
+    recovered.shutdown().await;
+}
+
+#[tokio::test]
 async fn validates_external_paths_and_preserves_replacement_files() {
     let (root, manager, task, gate) = completed().await;
     let expected = root

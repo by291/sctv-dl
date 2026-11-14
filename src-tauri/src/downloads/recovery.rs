@@ -1,4 +1,10 @@
-use super::{TaskState, errors::storage, journal, manager::Inner};
+use super::{
+    TaskState,
+    errors::storage,
+    file_identity::{FileAccess, is_missing_or_replaced},
+    journal,
+    manager::Inner,
+};
 use crate::error::{AppError, ErrorCode, Result};
 
 pub(super) fn recover(owner: &Inner) {
@@ -33,7 +39,8 @@ pub(super) fn recover(owner: &Inner) {
                         directory.complete_recovered(&publication).map_err(storage)
                     })
                 {
-                    owner.records.report_failure(&id, &attempt, error);
+                    // The final file and its index entry are already committed.
+                    error.reported("clean up recovered publication");
                 }
             }
             Err(error) => owner.records.report_failure(&id, &attempt, error),
@@ -47,9 +54,16 @@ fn recover_record(owner: &Inner, record: &mut super::store::StoredTask) -> Resul
             .completed_identity
             .as_ref()
             .ok_or_else(|| AppError::new(ErrorCode::Storage, "下载文件身份缺失"))?;
-        identity
-            .open_verified(&record.directory.join(&record.task.filename), false)
-            .map_err(storage)?;
+        let path = record.directory.join(&record.task.filename);
+        if let Err(error) = identity.open_verified(&path, FileAccess::ReadOnly) {
+            if is_missing_or_replaced(&error) {
+                return Err(storage(error));
+            }
+
+            // Temporary I/O errors cannot establish that the completed file is gone.
+            storage(error).reported("verify completed download");
+            return Ok(());
+        }
 
         record.task.state = TaskState::Completed;
         record.task.file_available = true;
@@ -66,10 +80,10 @@ fn recover_record(owner: &Inner, record: &mut super::store::StoredTask) -> Resul
     let directory = owner.directory(&record.directory)?;
     if let Some(reservation) = &record.reservation {
         if reservation.phase != journal::PublicationPhase::Writing
-            && let Ok(file) = reservation
-                .checkpoint
-                .file_identity
-                .open_verified(&record.directory.join(&reservation.filename), false)
+            && let Ok(file) = reservation.checkpoint.file_identity.open_verified(
+                &record.directory.join(&reservation.filename),
+                FileAccess::ReadOnly,
+            )
             && file.metadata().map_err(storage)?.len() == reservation.checkpoint.committed_bytes
         {
             record.task.filename = reservation.filename.clone();

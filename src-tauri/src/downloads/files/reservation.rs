@@ -4,12 +4,12 @@ use same_file::Handle;
 use tempfile::TempPath;
 
 use super::super::{
-    file_identity::FileIdentity,
+    file_identity::{FileIdentity, is_replaced},
     journal::{PublicationPhase, ReservationRecord, ResumeCheckpoint},
 };
 use super::{
     DownloadDirectory, MAX_RECORD_BYTES,
-    artifacts::{combine, invalid, remove_identified_file, verify_identity},
+    artifacts::{combine, invalid, remove_identified_file, remove_verified_file, verify_identity},
 };
 
 pub struct Reservation {
@@ -25,14 +25,17 @@ pub struct Reservation {
 }
 
 impl Reservation {
+    /// Returns the currently reserved final filename.
     pub fn filename(&self) -> &str {
         &self.filename
     }
 
+    /// Clones the owned handle for a writer that must close before publication.
     pub(crate) fn writer(&self) -> io::Result<File> {
         self.identity.as_file().try_clone()
     }
 
+    /// Replaces the provisional marker with the journal of a durable task attempt.
     pub fn upgrade(
         &mut self,
         task_id: String,
@@ -85,6 +88,7 @@ impl Reservation {
         Ok(record)
     }
 
+    /// Synchronizes written data before advancing the journal's committed offset.
     pub fn checkpoint(
         &mut self,
         bytes: u64,
@@ -93,30 +97,32 @@ impl Reservation {
     ) -> io::Result<ReservationRecord> {
         verify_identity(&self.temporary, &self.identity)?;
         if self.identity.as_file().metadata()?.len() < bytes {
-            return Err(invalid("下载文件短于待保存的进度"));
+            return Err(invalid("Download is shorter than the proposed checkpoint"));
         }
 
         self.identity.as_file().sync_all()?;
         let mut record = self
             .durable
             .clone()
-            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+            .ok_or_else(|| invalid("Download has no durable recovery journal"))?;
         record.checkpoint.committed_bytes = bytes;
         record.checkpoint.total_bytes = total;
         record.checkpoint.etag = etag;
         self.save_record(record)
     }
 
+    /// Assigns the retained partial to a new attempt while retaining its byte checkpoint.
     pub fn new_attempt(&mut self, attempt_id: String) -> io::Result<ReservationRecord> {
         let mut record = self
             .durable
             .clone()
-            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+            .ok_or_else(|| invalid("Download has no durable recovery journal"))?;
         record.checkpoint.attempt_id = attempt_id;
         record.phase = PublicationPhase::Writing;
         self.save_record(record)
     }
 
+    /// Records the final name before the move so recovery can identify a published file.
     pub fn publication_intent(&mut self) -> io::Result<ReservationRecord> {
         let mut names = self.directory.reserved.lock().unwrap();
         names.remove(&self.filename.to_lowercase());
@@ -127,7 +133,7 @@ impl Reservation {
         let mut record = self
             .durable
             .clone()
-            .ok_or_else(|| invalid("下载没有持久化恢复记录"))?;
+            .ok_or_else(|| invalid("Download has no durable recovery journal"))?;
         record.filename = self.filename.clone();
         record.phase = PublicationPhase::Publishing;
         self.save_record(record)
@@ -147,6 +153,7 @@ impl Reservation {
         self.retained = true;
     }
 
+    /// Cleans up temporary artifacts after the caller has committed the completed task.
     pub fn complete(self) -> io::Result<()> {
         self.cleanup()
     }
@@ -193,24 +200,31 @@ impl Reservation {
     fn remove_artifacts(&self) -> io::Result<()> {
         let temporary = remove_identified_file(&self.temporary, &self.identity);
 
-        // Remove our journal even when a replacement is preserved, so recovery cannot delete it.
+        // Keep durable ownership evidence when the owned partial could not be removed.
+        // A known replacement is preserved and must never be treated as a crash leftover.
+        if self.durable.is_some() && temporary.as_ref().is_err_and(|error| !is_replaced(error)) {
+            return temporary;
+        }
+
         let journal = self.remove_owned_journal();
 
         combine(temporary, journal)
     }
 
     fn remove_owned_journal(&self) -> io::Result<()> {
-        match std::fs::symlink_metadata(&self.journal) {
-            Ok(metadata)
-                if metadata.is_file()
-                    && metadata.len() <= MAX_RECORD_BYTES
-                    && std::fs::read(&self.journal)? == self.record_bytes =>
+        match remove_verified_file(&self.journal, |candidate| {
+            let metadata = std::fs::symlink_metadata(candidate)?;
+            if !metadata.is_file()
+                || metadata.len() > MAX_RECORD_BYTES
+                || std::fs::read(candidate)? != self.record_bytes
             {
-                std::fs::remove_file(&self.journal)
+                return Err(invalid("Download journal identity changed"));
             }
-            Ok(_) => Err(invalid("下载记录已被替换，请检查下载目录")),
+
+            Ok(())
+        }) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(error),
+            result => result,
         }
     }
 

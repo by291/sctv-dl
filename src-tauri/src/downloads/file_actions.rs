@@ -1,6 +1,12 @@
 use std::{fs::File, path::Path, sync::Arc};
 
-use super::{errors::storage, manager::Inner, *};
+use super::{
+    errors::storage,
+    file_identity::{FileAccess, is_missing_or_replaced},
+    files::remove_verified_file,
+    manager::Inner,
+    *,
+};
 use crate::{
     error::{AppError, ErrorCode, Result},
     lifecycle::OperationGuard,
@@ -14,6 +20,7 @@ pub struct PendingLocalPlayback {
 }
 
 impl PendingLocalPlayback {
+    /// Transfers session ownership to the caller, which now owns closing it.
     pub fn deliver(mut self) -> PlaybackSession {
         self.session.take().unwrap()
     }
@@ -28,6 +35,7 @@ impl Drop for PendingLocalPlayback {
 }
 
 impl DownloadManager {
+    /// Opens a verified local file and returns a session that must be delivered or dropped.
     pub async fn open_local_playback(
         &self,
         task_id: String,
@@ -73,6 +81,7 @@ impl DownloadManager {
                 });
             }
 
+            // Revoke playback and await open readers before deleting their underlying file.
             if request.action == DownloadAction::DeleteFile
                 && let Some(playback) = playback
             {
@@ -88,14 +97,13 @@ impl DownloadManager {
 
                 match request.action {
                     DownloadAction::DeleteFile => {
-                        // The directory lock is retained while identity is rechecked and removed.
-                        stored
-                            .completed_identity
-                            .as_ref()
-                            .unwrap()
-                            .open_verified(&path, false)
-                            .map_err(storage)?;
-                        std::fs::remove_file(&path).map_err(storage)?;
+                        let identity = stored.completed_identity.as_ref().unwrap();
+                        remove_verified_file(&path, |candidate| {
+                            identity
+                                .open_verified(candidate, FileAccess::ReadOnly)
+                                .map(drop)
+                        })
+                        .map_err(storage)?;
 
                         let task = owner.records.change_blocking(
                             &request.task_id,
@@ -150,15 +158,20 @@ impl Inner {
             ));
         }
 
-        let _directory = self.directory(&stored.directory)?;
         let file = stored
             .completed_identity
             .as_ref()
             .ok_or_else(|| AppError::new(ErrorCode::Storage, "下载文件身份缺失"))?
-            .open_verified(&stored.directory.join(&stored.task.filename), false);
+            .open_verified(
+                &stored.directory.join(&stored.task.filename),
+                FileAccess::ReadOnly,
+            );
         match file {
-            Ok(file) => Ok((stored, file)),
-            Err(error) => {
+            Ok(file) => {
+                let _directory = self.directory(&stored.directory)?;
+                Ok((stored, file))
+            }
+            Err(error) if is_missing_or_replaced(&error) => {
                 let error = storage(error);
                 self.records.change_blocking(
                     &stored.task.id,
@@ -171,6 +184,7 @@ impl Inner {
                 )?;
                 Err(error)
             }
+            Err(error) => Err(storage(error)),
         }
     }
 }

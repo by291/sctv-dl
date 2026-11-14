@@ -11,6 +11,8 @@ use crate::{
     storage::{read_json, write_json_atomic},
 };
 
+const MAX_INDEX_BYTES: u64 = 32 * 1024 * 1024;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StoredTask {
@@ -34,6 +36,7 @@ pub struct DownloadStore {
 }
 
 impl DownloadStore {
+    /// Locks the task index against concurrent writers in another process.
     pub fn open(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(storage)?;
@@ -56,8 +59,9 @@ impl DownloadStore {
         Ok(Self { path, _lock: lock })
     }
 
+    /// Loads and validates the existing task index without altering it.
     pub fn load(path: &Path) -> Result<DownloadDocument> {
-        let document = read_json::<DownloadDocument>(path, 32 * 1024 * 1024)
+        let document = read_json::<DownloadDocument>(path, MAX_INDEX_BYTES)
             .map_err(storage)?
             .unwrap_or(DownloadDocument {
                 version: 1,
@@ -104,11 +108,12 @@ impl DownloadStore {
         Ok(document)
     }
 
+    /// Persists a new task index using atomic replacement.
     pub fn save(&self, document: &DownloadDocument) -> Result<()> {
         let bytes = serde_json::to_vec(document).map_err(|error| {
             AppError::with_source(ErrorCode::Storage, "下载记录无法编码", error)
         })?;
-        if bytes.len() > 32 * 1024 * 1024 {
+        if bytes.len() as u64 > MAX_INDEX_BYTES {
             return Err(AppError::new(
                 ErrorCode::Storage,
                 "下载记录已达到存储容量，请移除不需要的已完成记录",

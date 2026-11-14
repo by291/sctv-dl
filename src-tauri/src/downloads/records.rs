@@ -428,6 +428,8 @@ impl TaskRecords {
                 .checkpoint_failed
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
+
+        // Once replaced, the index owns the new state even if directory sync fails.
         if let Err(error) = &persisted
             && !store::replacement_committed(error)
         {

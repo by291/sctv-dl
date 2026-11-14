@@ -10,10 +10,13 @@ use super::{
     errors::{network, storage, with_secondary},
     files::Reservation,
     journal::{ReservationRecord, ResumeCheckpoint},
-    manager::{Inner, Job},
+    manager::{Inner, Job, TransferMode},
     resume::{ResumeDecision, decide, strong_etag},
 };
 use crate::error::{AppError, ErrorCode, Result};
+
+const PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(100);
+const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(1);
 
 struct Progress {
     bytes: u64,
@@ -22,11 +25,18 @@ struct Progress {
 }
 
 /// Carries task/attempt identity and cancellation together through every worker phase.
+#[derive(Clone)]
 struct Attempt {
     owner: Arc<Inner>,
     id: String,
     attempt: String,
     control: Arc<super::manager::Control>,
+}
+
+struct TransferSource {
+    url: String,
+    checkpoint: ResumeCheckpoint,
+    mode: TransferMode,
 }
 
 /// The writer is closed before its reservation can move into publication or cleanup.
@@ -68,7 +78,7 @@ pub(super) async fn run(owner: Arc<Inner>, job: Job) {
         reservation,
         control,
         checkpoint,
-        resume,
+        mode,
     } = job;
     let attempt = Attempt {
         owner,
@@ -76,7 +86,13 @@ pub(super) async fn run(owner: Arc<Inner>, job: Job) {
         attempt,
         control,
     };
-    if let Err(error) = run_attempt(&attempt, url, reservation, checkpoint, resume).await {
+    let source = TransferSource {
+        url,
+        checkpoint,
+        mode,
+    };
+
+    if let Err(error) = run_attempt(&attempt, reservation, &source).await {
         attempt
             .owner
             .records
@@ -86,21 +102,21 @@ pub(super) async fn run(owner: Arc<Inner>, job: Job) {
 
 async fn run_attempt(
     attempt: &Attempt,
-    url: String,
     reservation: Reservation,
-    checkpoint: ResumeCheckpoint,
-    resume: bool,
+    source: &TransferSource,
 ) -> Result<()> {
     let transfer_slot = tokio::select! {
         biased;
         _ = attempt.control.cancel.cancelled() => None,
         result = attempt.owner.slots.clone().acquire_owned() => result.ok(),
     };
+
+    // A stopped queued attempt still owns a reservation that must be settled or removed.
     let mut writer = TransferWriter::acquire(reservation).await?;
     let mut progress = Progress {
-        bytes: checkpoint.committed_bytes,
-        total: checkpoint.total_bytes,
-        etag: checkpoint.etag.clone(),
+        bytes: source.checkpoint.committed_bytes,
+        total: source.checkpoint.total_bytes,
+        etag: source.checkpoint.etag.clone(),
     };
 
     let transfer_result = if transfer_slot.is_none() {
@@ -114,22 +130,19 @@ async fn run_attempt(
             })
             .await
         {
-            Ok(_) => {
-                transfer(
-                    attempt,
-                    &url,
-                    &checkpoint,
-                    resume,
-                    &mut writer,
-                    &mut progress,
-                )
-                .await
-            }
+            Ok(_) => transfer(attempt, source, &mut writer, &mut progress).await,
             Err(error) => Err(error),
         }
     };
 
     let (mut reservation, settled) = writer.settle().await;
+    let transfer_result = transfer_result.and_then(|()| {
+        if progress.bytes == 0 {
+            return Err(AppError::new(ErrorCode::Upstream, "视频数据为空，请重试"));
+        }
+
+        Ok(())
+    });
 
     let intent = attempt
         .control
@@ -145,15 +158,7 @@ async fn run_attempt(
         );
     }
 
-    let checkpoint_result = settle_checkpoint(
-        &attempt.owner,
-        &attempt.id,
-        &attempt.attempt,
-        &mut reservation,
-        &progress,
-        settled,
-    )
-    .await;
+    let checkpoint_result = settle_checkpoint(attempt, &mut reservation, &progress, settled).await;
     if let Err(error) = checkpoint_result {
         if let Some(reservation) = reservation {
             reservation.retain();
@@ -236,90 +241,89 @@ async fn retain_outcome(attempt: &Attempt, transfer: Result<()>) -> Result<()> {
     Ok(())
 }
 
-async fn publish(attempt: &Attempt, mut owned: Reservation) -> Result<()> {
-    let attempt = Attempt {
-        owner: attempt.owner.clone(),
-        id: attempt.id.clone(),
-        attempt: attempt.attempt.clone(),
-        control: attempt.control.clone(),
-    };
-    tokio::task::spawn_blocking(move || {
-        let result = (|| -> Result<()> {
-            let record = owned.publication_intent().map_err(storage)?;
-            let checkpoint = record.checkpoint.clone();
-            attempt
-                .owner
-                .records
-                .try_change_blocking(&attempt.id, &attempt.attempt, |stored| {
-                    if attempt.control.cancel.is_cancelled() {
-                        return Err(cancelled());
-                    }
-                    stored.task.state = TaskState::Finalizing;
-                    stored.task.filename = record.filename.clone();
-                    stored.reservation = Some(record.clone());
-                    Ok(())
-                })?;
-
-            owned.publish().map_err(storage)?;
-            attempt
-                .owner
-                .records
-                .change_blocking(&attempt.id, &attempt.attempt, |stored| {
-                    stored.task.state = TaskState::Completed;
-                    stored.task.file_available = true;
-                    stored.task.has_partial = false;
-                    stored.task.can_resume = false;
-                    stored.task.error = None;
-                    stored.completed_identity = Some(checkpoint.file_identity.clone());
-                })?;
-            Ok(())
-        })();
-
-        match result {
-            Ok(()) => owned.complete().map_err(storage),
-            Err(error) if error.code == ErrorCode::Cancelled => {
-                if *attempt.control.intent.lock().unwrap() == StopIntent::Cancel {
-                    owned.cleanup().map_err(storage)?;
-                    attempt.owner.records.change_blocking(
-                        &attempt.id,
-                        &attempt.attempt,
-                        |record| {
-                            record.task.state = TaskState::Cancelled;
-                            record.task.has_partial = false;
-                            record.task.can_resume = false;
-                            record.reservation = None;
-                        },
-                    )?;
-                } else {
-                    owned.retain();
-                    attempt.owner.records.change_blocking(
-                        &attempt.id,
-                        &attempt.attempt,
-                        |record| record.task.state = TaskState::Paused,
-                    )?;
+async fn publish(attempt: &Attempt, mut reservation: Reservation) -> Result<()> {
+    let attempt = attempt.clone();
+    tokio::task::spawn_blocking(
+        move || match commit_publication(&attempt, &mut reservation) {
+            Ok(()) => {
+                if let Err(error) = reservation.complete() {
+                    // A committed file remains usable while its journal awaits cleanup on startup.
+                    storage(error).reported("clean up completed download");
                 }
+
                 Ok(())
             }
+            Err(error) if error.code == ErrorCode::Cancelled => {
+                settle_stopped_publication(&attempt, reservation)
+            }
             Err(error) => {
-                owned.retain();
+                reservation.retain();
                 Err(error)
             }
-        }
-    })
+        },
+    )
     .await
     .map_err(|error| AppError::with_source(ErrorCode::Storage, "下载发布异常终止", error))?
 }
 
+fn commit_publication(attempt: &Attempt, reservation: &mut Reservation) -> Result<()> {
+    // Record the destination before publishing so a crash can reconcile the independent rename.
+    let record = reservation.publication_intent().map_err(storage)?;
+    let identity = record.checkpoint.file_identity.clone();
+    let records = &attempt.owner.records;
+    records.try_change_blocking(&attempt.id, &attempt.attempt, |stored| {
+        if attempt.control.cancel.is_cancelled() {
+            return Err(cancelled());
+        }
+
+        stored.task.state = TaskState::Finalizing;
+        stored.task.filename.clone_from(&record.filename);
+        stored.reservation = Some(record);
+        Ok(())
+    })?;
+
+    // Keep the journal reachable until the moved file is owned by the committed task.
+    reservation.publish().map_err(storage)?;
+    records.change_blocking(&attempt.id, &attempt.attempt, |stored| {
+        stored.task.state = TaskState::Completed;
+        stored.task.file_available = true;
+        stored.task.has_partial = false;
+        stored.task.can_resume = false;
+        stored.task.error = None;
+        stored.completed_identity = Some(identity);
+    })?;
+
+    Ok(())
+}
+
+fn settle_stopped_publication(attempt: &Attempt, reservation: Reservation) -> Result<()> {
+    let intent = *attempt.control.intent.lock().unwrap();
+    let records = &attempt.owner.records;
+    if intent == StopIntent::Cancel {
+        reservation.cleanup().map_err(storage)?;
+        records.change_blocking(&attempt.id, &attempt.attempt, |record| {
+            record.task.state = TaskState::Cancelled;
+            record.task.has_partial = false;
+            record.task.can_resume = false;
+            record.reservation = None;
+        })?;
+    } else {
+        reservation.retain();
+        records.change_blocking(&attempt.id, &attempt.attempt, |record| {
+            record.task.state = TaskState::Paused;
+        })?;
+    }
+
+    Ok(())
+}
+
 async fn transfer(
     attempt: &Attempt,
-    url: &str,
-    checkpoint: &ResumeCheckpoint,
-    resume: bool,
+    source: &TransferSource,
     writer: &mut TransferWriter,
     progress: &mut Progress,
 ) -> Result<()> {
-    let Some(response) = negotiate(attempt, url, checkpoint, resume, writer, progress).await?
-    else {
+    let Some(response) = negotiate(attempt, source, writer, progress).await? else {
         return Ok(());
     };
 
@@ -342,22 +346,23 @@ async fn transfer(
 
 async fn negotiate(
     attempt: &Attempt,
-    url: &str,
-    checkpoint: &ResumeCheckpoint,
-    resume: bool,
+    source: &TransferSource,
     writer: &TransferWriter,
     progress: &mut Progress,
 ) -> Result<Option<reqwest::Response>> {
     let mut request = attempt
         .owner
         .client
-        .get(url)
+        .get(source.url.as_str())
         .header("Referer", "https://scgc.video.play/")
         .header("Accept-Encoding", "identity");
-    if resume {
+    if source.mode == TransferMode::Resume {
         request = request
-            .header("Range", format!("bytes={}-", checkpoint.committed_bytes))
-            .header("If-Range", checkpoint.etag.as_deref().unwrap_or(""));
+            .header(
+                "Range",
+                format!("bytes={}-", source.checkpoint.committed_bytes),
+            )
+            .header("If-Range", source.checkpoint.etag.as_deref().unwrap_or(""));
     }
 
     let response = tokio::select! {
@@ -372,9 +377,9 @@ async fn negotiate(
         }
     };
 
-    if resume {
+    if source.mode == TransferMode::Resume {
         match decide(
-            checkpoint,
+            &source.checkpoint,
             response.status(),
             response.headers(),
             writer.file.metadata().await.map_err(storage)?.len(),
@@ -444,7 +449,7 @@ async fn receive_body(
         writer.file.write_all(&chunk).await.map_err(storage)?;
         progress.bytes += chunk.len() as u64;
 
-        let publish = emitted.elapsed() >= Duration::from_millis(100);
+        let publish = emitted.elapsed() >= PROGRESS_EVENT_INTERVAL;
         attempt.owner.records.progress(
             &attempt.id,
             &attempt.attempt,
@@ -456,17 +461,10 @@ async fn receive_body(
             emitted = Instant::now();
         }
 
-        if checkpointed.elapsed() >= Duration::from_secs(1) {
+        if checkpointed.elapsed() >= CHECKPOINT_INTERVAL {
             writer.file.flush().await.map_err(storage)?;
             writer.file.sync_all().await.map_err(storage)?;
-            save_checkpoint(
-                &attempt.owner,
-                &attempt.id,
-                &attempt.attempt,
-                &mut writer.reservation,
-                progress,
-            )
-            .await?;
+            save_checkpoint(attempt, &mut writer.reservation, progress).await?;
             checkpointed = Instant::now();
         }
     }
@@ -481,21 +479,17 @@ async fn receive_body(
 }
 
 async fn settle_checkpoint(
-    owner: &Arc<Inner>,
-    id: &str,
-    attempt: &str,
+    attempt: &Attempt,
     reservation: &mut Option<Reservation>,
     progress: &Progress,
     settled: Result<()>,
 ) -> Result<()> {
     settled?;
-    save_checkpoint(owner, id, attempt, reservation, progress).await
+    save_checkpoint(attempt, reservation, progress).await
 }
 
 async fn save_checkpoint(
-    owner: &Arc<Inner>,
-    id: &str,
-    attempt: &str,
+    attempt: &Attempt,
     reservation: &mut Option<Reservation>,
     progress: &Progress,
 ) -> Result<()> {
@@ -517,9 +511,10 @@ async fn save_checkpoint(
     *reservation = Some(owned);
     let record: ReservationRecord = result?;
 
-    owner
+    attempt
+        .owner
         .records
-        .change(id.into(), attempt.into(), move |stored| {
+        .change(attempt.id.clone(), attempt.attempt.clone(), move |stored| {
             stored.task.received_bytes = record.checkpoint.committed_bytes;
             stored.task.total_bytes = record.checkpoint.total_bytes;
             stored.task.can_resume = record.checkpoint.resumable();
@@ -697,6 +692,12 @@ mod tests {
             file.flush().unwrap();
             drop(file);
             let manager = super::super::DownloadManager::new(Default::default()).unwrap();
+            let attempt = Attempt {
+                owner: manager.inner.clone(),
+                id: "task".into(),
+                attempt: "attempt".into(),
+                control: super::super::manager::Control::new(false),
+            };
             let mut reservation = Some(reservation);
 
             let settled = if failure == "flush" {
@@ -707,9 +708,7 @@ mod tests {
 
             assert!(
                 settle_checkpoint(
-                    &manager.inner,
-                    "task",
-                    "attempt",
+                    &attempt,
                     &mut reservation,
                     &Progress {
                         bytes: 17,

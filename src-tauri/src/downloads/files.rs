@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 pub use super::filename::download_filename;
 use super::filename::{MAX_STEM_UNITS, portable_stem};
+pub(super) use artifacts::remove_verified_file;
 use artifacts::{AcquiredFile, combine, initialize, initialize_owned, invalid};
 use recovery::RecoveryRecord;
 pub use reservation::Reservation;
@@ -32,6 +33,7 @@ pub struct DownloadDirectory {
 }
 
 impl DownloadDirectory {
+    /// Locks the download directory and reconciles recognized leftovers before use.
     /// Holds the directory's OS lock for its lifetime and recovers only recognized artifact pairs.
     pub fn open(root: &Path) -> io::Result<Arc<Self>> {
         Self::open_with(root, initialize)
@@ -43,7 +45,7 @@ impl DownloadDirectory {
     ) -> io::Result<Arc<Self>> {
         let root = root.canonicalize()?;
         if !root.is_dir() {
-            return Err(invalid("下载位置不是文件夹"));
+            return Err(invalid("Download location is not a directory"));
         }
 
         let lock_path = root.join(".sctv-dl.lock");
@@ -56,7 +58,7 @@ impl DownloadDirectory {
             Ok(file) => initialize_owned(file, &lock_path, LOCK_MAGIC, initialize)?,
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 if !std::fs::symlink_metadata(&lock_path)?.is_file() {
-                    return Err(invalid("下载目录的应用锁无效"));
+                    return Err(invalid("Invalid download directory lock marker"));
                 }
                 Handle::from_file(OpenOptions::new().read(true).write(true).open(&lock_path)?)?
             }
@@ -67,13 +69,13 @@ impl DownloadDirectory {
         let mut magic = Vec::new();
         lock.as_file_mut().take(128).read_to_end(&mut magic)?;
         if magic != LOCK_MAGIC {
-            return Err(invalid("下载目录的应用锁无效"));
+            return Err(invalid("Invalid download directory lock marker"));
         }
 
         lock.as_file().try_lock().map_err(|_| {
             io::Error::new(
                 io::ErrorKind::WouldBlock,
-                "此下载目录正由另一个桌面实例使用",
+                "Download directory is locked by another desktop instance",
             )
         })?;
 
@@ -87,6 +89,7 @@ impl DownloadDirectory {
         Ok(directory)
     }
 
+    /// Returns the canonical root used by the directory lock and reservations.
     pub fn path(&self) -> &Path {
         &self.root
     }
@@ -112,7 +115,7 @@ impl DownloadDirectory {
                 return Ok(name);
             }
         }
-        Err(invalid("下载目录内的同名文件过多"))
+        Err(invalid("Too many files with the same download name"))
     }
 
     /// Acquires temporary artifacts and a case-insensitive final name without replacing any file.
@@ -133,12 +136,16 @@ impl DownloadDirectory {
             .encode_utf16()
             .count();
         if root_units + TEMPORARY_PATH_UNITS > MAX_PATH_UNITS {
-            return Err(invalid("下载目录路径过长，请选择较短的路径"));
+            return Err(invalid(
+                "Download directory path exceeds the portable limit",
+            ));
         }
 
         let room = MAX_PATH_UNITS.saturating_sub(root_units + FINAL_NAME_OVERHEAD_UNITS);
         if room < 16 {
-            return Err(invalid("下载目录路径过长，请选择较短的路径"));
+            return Err(invalid(
+                "Download directory path exceeds the portable limit",
+            ));
         }
 
         let base = portable_stem(

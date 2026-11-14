@@ -28,6 +28,7 @@ use crate::{
 };
 
 pub(super) const TRANSFER_CONCURRENCY: usize = 2;
+const MAX_QUEUE_CAPACITY: usize = 100;
 
 pub struct DownloadConfig {
     pub upstream_origins: Vec<String>,
@@ -42,7 +43,7 @@ impl Default for DownloadConfig {
             upstream_origins: policy::default_origins(),
             header_timeout: Duration::from_secs(20),
             idle_timeout: Duration::from_secs(30),
-            queue_capacity: 100,
+            queue_capacity: MAX_QUEUE_CAPACITY,
         }
     }
 }
@@ -99,7 +100,13 @@ pub(super) struct Job {
     pub reservation: Reservation,
     pub control: Arc<Control>,
     pub checkpoint: journal::ResumeCheckpoint,
-    pub resume: bool,
+    pub mode: TransferMode,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum TransferMode {
+    Full,
+    Resume,
 }
 
 pub struct DownloadManager {
@@ -108,6 +115,7 @@ pub struct DownloadManager {
 }
 
 impl DownloadManager {
+    /// Resolves programme sources while the owner is accepting work.
     pub async fn prepare(
         &self,
         service: &crate::programmes::ProgrammeService,
@@ -156,6 +164,7 @@ impl DownloadManager {
         }
     }
 
+    /// Creates an owner that reports the saved index failure to callers.
     pub fn unavailable(config: DownloadConfig, error: AppError) -> Result<Self> {
         Self::build(
             config,
@@ -172,7 +181,7 @@ impl DownloadManager {
         store: Result<Option<DownloadStore>>,
         document: DownloadDocument,
     ) -> Result<Self> {
-        if config.queue_capacity == 0 || config.queue_capacity > 100 {
+        if config.queue_capacity == 0 || config.queue_capacity > MAX_QUEUE_CAPACITY {
             return Err(AppError::new(ErrorCode::InvalidInput, "下载队列容量无效"));
         }
 
@@ -191,8 +200,7 @@ impl DownloadManager {
                 )
             })?;
 
-        let (send, mut receive) =
-            mpsc::channel::<Job>(config.queue_capacity + TRANSFER_CONCURRENCY);
+        let (send, receive) = mpsc::channel::<Job>(config.queue_capacity + TRANSFER_CONCURRENCY);
         let inner = Arc::new(Inner {
             records: Arc::new(TaskRecords::new(store, document)),
             admission: Arc::default(),
@@ -206,45 +214,7 @@ impl DownloadManager {
             client,
         });
 
-        let owner = inner.clone();
-        let dispatcher = tokio::spawn(async move {
-            loop {
-                let job = tokio::select! {
-                    biased;
-                    _ = owner.stop.cancelled() => {
-                        receive.close();
-                        receive.recv().await
-                    }
-                    job = receive.recv() => job,
-                };
-                let Some(job) = job else {
-                    break;
-                };
-
-                let task_owner = owner.clone();
-                let id = job.id.clone();
-                let attempt = job.attempt.clone();
-                let control = job.control.clone();
-                owner.tracker.spawn(async move {
-                    if std::panic::AssertUnwindSafe(worker::run(task_owner.clone(), job))
-                        .catch_unwind()
-                        .await
-                        .is_err()
-                        && let Err(error) = task_owner
-                            .records
-                            .change(id.clone(), attempt.clone(), |record| {
-                                record.task.state = TaskState::Failed;
-                                record.task.error = Some("下载任务异常终止，请检查临时文件".into());
-                            })
-                            .await
-                    {
-                        task_owner.records.report_failure(&id, &attempt, error);
-                    }
-
-                    control.settled.send_replace(true);
-                });
-            }
-        });
+        let dispatcher = tokio::spawn(dispatch_jobs(inner.clone(), receive));
 
         Ok(Self {
             inner,
@@ -252,6 +222,7 @@ impl DownloadManager {
         })
     }
 
+    /// Starts a batch for an embedding caller without an application lifecycle guard.
     pub async fn start(
         &self,
         files: Vec<PreparedDownload>,
@@ -298,18 +269,22 @@ impl DownloadManager {
         .map_err(|error| AppError::with_source(ErrorCode::Storage, "下载准备异常终止", error))?
     }
 
+    /// Returns current download tasks for the legacy IPC adapter.
     pub fn list(&self) -> Vec<DownloadTask> {
         self.inner.records.list()
     }
 
+    /// Returns tasks with their source epoch and snapshot revision.
     pub fn snapshot(&self) -> Result<DownloadSnapshot> {
         self.inner.records.snapshot()
     }
 
+    /// Reports whether any queued or running work can delay exit.
     pub fn has_active(&self) -> bool {
         !self.inner.records.active_controls().is_empty()
     }
 
+    /// Signals an active task to cancel without waiting for writer settlement.
     pub fn cancel(&self, id: &str) {
         if let Some((stored, control)) = self.inner.records.find(id, None)
             && stored.task.active()
@@ -318,6 +293,7 @@ impl DownloadManager {
         }
     }
 
+    /// Registers a listener for task updates from the legacy adapter.
     pub fn subscribe(
         &self,
         listener: impl Fn(DownloadTask) -> bool + Send + Sync + 'static,
@@ -325,10 +301,12 @@ impl DownloadManager {
         self.inner.records.subscribe(listener)
     }
 
+    /// Removes a legacy task listener.
     pub fn unsubscribe(&self, id: &str) {
         self.inner.records.unsubscribe(id);
     }
 
+    /// Registers a listener for revisioned task updates and removals.
     pub fn subscribe_events(
         &self,
         listener: impl Fn(DownloadEvent) -> bool + Send + Sync + 'static,
@@ -336,6 +314,7 @@ impl DownloadManager {
         self.inner.records.subscribe_events(listener)
     }
 
+    /// Removes a revisioned event listener.
     pub fn unsubscribe_events(&self, id: &str) {
         self.inner.records.unsubscribe_events(id);
     }
@@ -370,6 +349,7 @@ impl DownloadManager {
         Ok(())
     }
 
+    /// Allows an exit attempt that was declined to accept work again.
     pub fn reopen_admission(&self) {
         if !self.inner.stop.is_cancelled() {
             self.inner.records.set_accepting(true);
@@ -515,10 +495,54 @@ impl Inner {
             reservation,
             control,
             checkpoint: record.checkpoint,
-            resume: false,
+            mode: TransferMode::Full,
         });
         Ok(id)
     }
+}
+
+async fn dispatch_jobs(owner: Arc<Inner>, mut receive: mpsc::Receiver<Job>) {
+    loop {
+        let job = tokio::select! {
+            biased;
+            _ = owner.stop.cancelled() => {
+                // Stop new jobs and drain accepted jobs so their reservations still settle.
+                receive.close();
+                receive.recv().await
+            }
+            job = receive.recv() => job,
+        };
+        let Some(job) = job else {
+            break;
+        };
+
+        owner.tracker.spawn(run_tracked_job(owner.clone(), job));
+    }
+}
+
+async fn run_tracked_job(owner: Arc<Inner>, job: Job) {
+    let task_id = job.id.clone();
+    let attempt_id = job.attempt.clone();
+    let control = job.control.clone();
+
+    let outcome = std::panic::AssertUnwindSafe(worker::run(owner.clone(), job))
+        .catch_unwind()
+        .await;
+    if outcome.is_err() {
+        let failed = owner
+            .records
+            .change(task_id.clone(), attempt_id.clone(), |record| {
+                record.task.state = TaskState::Failed;
+                record.task.error = Some("下载任务异常终止，请检查临时文件".into());
+            })
+            .await;
+        if let Err(error) = failed {
+            owner.records.report_failure(&task_id, &attempt_id, error);
+        }
+    }
+
+    // Waiters may proceed only after the writer and any panic-triggered settlement are done.
+    control.settled.send_replace(true);
 }
 
 fn closing() -> AppError {
