@@ -4,6 +4,7 @@ import SCTVCore
 
 public actor SQLiteFavouriteRepository: FavouriteRepository {
     private let database: DatabaseQueue
+
     private var confirmedIDs: Set<String> = []
     private var desiredIDs: Set<String> = []
     private var warning: String?
@@ -56,7 +57,12 @@ public actor SQLiteFavouriteRepository: FavouriteRepository {
 
     public func set(_ programmeID: String, isFavourite: Bool) throws {
         try loadIfNeeded()
-        if isFavourite { desiredIDs.insert(programmeID) } else { desiredIDs.remove(programmeID) }
+        if isFavourite {
+            desiredIDs.insert(programmeID)
+        } else {
+            desiredIDs.remove(programmeID)
+        }
+
         publishState()
 
         do {
@@ -72,7 +78,8 @@ public actor SQLiteFavouriteRepository: FavouriteRepository {
                         arguments: [programmeID])
                 }
             }
-            // Only this command was committed. Other desired edits may still be awaiting retry.
+
+            // Other desired edits may still be awaiting retry after this commit.
             if isFavourite {
                 confirmedIDs.insert(programmeID)
             } else {
@@ -119,6 +126,7 @@ public actor SQLiteFavouriteRepository: FavouriteRepository {
     }
 
     private func removeObserver(_ observerID: UUID) { observers.removeValue(forKey: observerID) }
+
     private func removeStateObserver(_ observerID: UUID) {
         stateObservers.removeValue(forKey: observerID)
     }

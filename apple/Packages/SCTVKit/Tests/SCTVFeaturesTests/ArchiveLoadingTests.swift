@@ -7,6 +7,7 @@ import Testing
 private actor ArchiveLoadingRepository: ProgrammeRepository {
     private var observers: [ProgrammeQuery: AsyncStream<ProgrammeUpdate>.Continuation] = [:]
     private var observationCounts: [ProgrammeQuery: Int] = [:]
+    private var refreshCounts: [ProgrammeQuery: Int] = [:]
     private var failedQuery: ProgrammeQuery?
 
     func observe(_ query: ProgrammeQuery) async -> AsyncStream<ProgrammeUpdate> {
@@ -20,7 +21,10 @@ private actor ArchiveLoadingRepository: ProgrammeRepository {
 
     func isObserving(_ query: ProgrammeQuery) -> Bool { observers[query] != nil }
     func failRefresh(_ query: ProgrammeQuery) { failedQuery = query }
+    func allowRefresh() { failedQuery = nil }
+    func refreshCount(_ query: ProgrammeQuery) -> Int { refreshCounts[query, default: 0] }
     func refresh(_ query: ProgrammeQuery) async throws {
+        refreshCounts[query, default: 0] += 1
         if failedQuery == query { throw CocoaError(.fileReadUnknown) }
     }
     func accept(_ query: ProgrammeQuery, revision: UUID) async throws {}
@@ -40,11 +44,35 @@ private actor ArchiveLoadingRepository: ProgrammeRepository {
 }
 
 @MainActor struct ArchiveLoadingTests {
+    @Test func refreshingAfterContentFailureRetriesTheSelectedDate() async throws {
+        let repository = ArchiveLoadingRepository()
+        let model = ArchiveModel(
+            programme: Programme(id: "1", name: "News", cover: nil), repository: repository)
+        let dates = ProgrammeQuery.dates(programmeID: "1")
+        let contents = ProgrammeQuery.contents(programmeID: "1", dateID: "20")
+        let broadcast = BroadcastDate(id: "20", date: "2026-10-22")
+        await repository.failRefresh(contents)
+        await model.load()
+        await repository.publish(dates, items: .dates([broadcast]))
+        for _ in 0..<100 where model.warning == nil {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        try #require(model.warning != nil)
+
+        await repository.allowRefresh()
+        await model.refresh()
+
+        #expect(await repository.refreshCount(contents) == 2)
+        #expect(model.selectedDateID == broadcast.id)
+        #expect(model.warning == nil)
+        model.stop()
+    }
+
     @Test func leavingArchiveReleasesItsPageModel() async throws {
         let repository = ArchiveLoadingRepository()
         var model: ArchiveModel? = ArchiveModel(
             programme: Programme(id: "1", name: "News", cover: nil), repository: repository)
-        weak var released = model
+        weak let released = model
         await model?.load()
         model?.stop()
         model = nil

@@ -49,7 +49,7 @@ private struct BatchSelectionBar<Bar: View>: ViewModifier {
                         }
                         .padding(.bottom, bottomSafeArea)
                         .background { Rectangle().fill(.regularMaterial) }
-                        // Anchor the entire footer while native tab visibility changes the safe area.
+                        // Anchor the footer while native tab visibility changes the safe area.
                         .offset(y: (1 - progress) * SelectionTabBarVisibility.travelDistance)
                         .opacity(progress)
                         .ignoresSafeArea(.container, edges: .bottom)

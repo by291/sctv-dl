@@ -11,7 +11,6 @@ public final class ArchiveModel {
     public private(set) var selection: Set<String> = []
     public private(set) var pendingDates: ProgrammeSnapshot?
     public private(set) var pendingContents: ProgrammeSnapshot?
-    public private(set) var warning: String?
     public private(set) var isLoading = true
     public var scrollAnchor: String?
     public var ascending = true {
@@ -28,8 +27,13 @@ public final class ArchiveModel {
     private var contentGroups = ContentGroups()
 
     private let repository: any ProgrammeRepository
+    private var datesWarning: String?
+    private var contentsWarning: String?
+    private var acceptanceWarning: String?
     private var datesRequestOwner = UUID()
     private var contentsRequestOwner = UUID()
+    private var datesRefreshToken = UUID()
+    private var contentsRefreshToken = UUID()
     private var restoredDateID: String?
     private var datesObservation: Task<Void, Never>?
     private var contentsObservation: Task<Void, Never>?
@@ -58,6 +62,8 @@ public final class ArchiveModel {
 
     public var hasPendingUpdate: Bool { pendingDates != nil || pendingContents != nil }
 
+    public var warning: String? { acceptanceWarning ?? contentsWarning ?? datesWarning }
+
     private var contentQuery: ProgrammeQuery? {
         selectedDateID.map { .contents(programmeID: programme.id, dateID: $0) }
     }
@@ -80,9 +86,7 @@ public final class ArchiveModel {
                 else { break }
 
                 pendingDates = update.pending
-                if case .refreshFailed(let message) = update.warning {
-                    warning = message
-                }
+                datesWarning = update.warning?.message
 
                 guard case .dates(let values) = update.accepted?.items else { continue }
 
@@ -106,22 +110,40 @@ public final class ArchiveModel {
             }
         }
 
-        await refresh()
+        await refreshDates()
     }
 
+    /// Retries a failed content request or refreshes the date list.
     public func refresh() async {
         guard isRunning else { return }
 
+        let generation = contentsGeneration
+        let retryQuery = contentsWarning == nil ? nil : contentQuery
+        acceptanceWarning = nil
+        if let retryQuery {
+            // Keep the existing observation and rendered rows while retrying their request.
+            let owner = contentsRequestOwner
+            await refreshContents(retryQuery, owner: owner, generation: generation)
+        } else {
+            await refreshDates()
+        }
+    }
+
+    private func refreshDates() async {
+        let refreshToken = UUID()
+        datesRefreshToken = refreshToken
         let activeLifecycle = lifecycleToken
         let owner = datesRequestOwner
         let query = ProgrammeQuery.dates(programmeID: programme.id)
 
         do {
             try await repository.refresh(query, owner: owner)
-            if lifecycleToken == activeLifecycle { warning = nil }
+            if lifecycleToken == activeLifecycle, datesRefreshToken == refreshToken {
+                datesWarning = nil
+            }
         } catch {
-            if lifecycleToken == activeLifecycle {
-                warning = error.localizedDescription
+            if lifecycleToken == activeLifecycle, datesRefreshToken == refreshToken {
+                datesWarning = error.localizedDescription
                 // Once dates exist, selectDate owns loading even while it is
                 // releasing the previous date and selectedDateID is temporarily nil.
                 if dates.isEmpty { isLoading = false }
@@ -140,10 +162,11 @@ public final class ArchiveModel {
         let requestGeneration = UUID()
         contentsGeneration = requestGeneration
         isLoading = true
-        warning = nil
+        acceptanceWarning = nil
 
         await clearDate()
         guard contentsGeneration == requestGeneration else { return }
+
         selectedDateID = id
         await observeContents(id)
     }
@@ -166,29 +189,37 @@ public final class ArchiveModel {
                 if case .contents(let values) = update.accepted?.items {
                     contents = values
                     rebuildContentGroups()
+                    // Refresh completion can precede delivery of the accepted snapshot.
                     isLoading = false
-                    warning = nil
                 }
 
                 pendingContents = update.pending
-                if case .refreshFailed(let message) = update.warning {
-                    warning = message
-                }
+                contentsWarning = update.warning?.message
             }
         }
 
+        await refreshContents(query, owner: owner, generation: requestGeneration)
+    }
+
+    private func refreshContents(_ query: ProgrammeQuery, owner: UUID, generation: UUID) async {
+        let refreshToken = UUID()
+        contentsRefreshToken = refreshToken
+
         do {
             try await repository.refresh(query, owner: owner)
+            if contentsGeneration == generation, contentsRefreshToken == refreshToken {
+                contentsWarning = nil
+            }
         } catch {
-            if contentsGeneration == requestGeneration {
-                warning = error.localizedDescription
+            if contentsGeneration == generation, contentsRefreshToken == refreshToken {
+                contentsWarning = error.localizedDescription
                 isLoading = false
             }
         }
 
-        if contentsGeneration != requestGeneration { await repository.cancel(query, owner: owner) }
-        // Only an accepted snapshot can establish an empty result. Refresh completion
-        // can precede delivery to the observation task.
+        if contentsGeneration != generation {
+            await repository.cancel(query, owner: owner)
+        }
     }
 
     public func setSelection(_ ids: Set<String>) {
@@ -212,31 +243,28 @@ public final class ArchiveModel {
         let requestGeneration = contentsGeneration
         let datesUpdate = pendingDates
         let contentsUpdate = pendingContents
+
+        acceptanceWarning = nil
         do {
             if let datesUpdate {
-                try await repository.accept(datesUpdate.query, revision: datesUpdate.revision)
-                guard contentsGeneration == requestGeneration, isRunning else { return }
-                if let query = contentQuery {
-                    let owner = contentsRequestOwner
-                    do {
-                        try await repository.refresh(query, owner: owner)
-                    } catch {
-                        if contentsGeneration != requestGeneration {
-                            await repository.cancel(query, owner: owner)
-                        }
-                        throw error
-                    }
-                    if contentsGeneration != requestGeneration {
-                        await repository.cancel(query, owner: owner)
-                    }
-                }
-                // A refreshed content revision requires its own explicit acceptance.
+                try await acceptDates(datesUpdate, preserving: requestGeneration)
             } else if let contentsUpdate {
                 try await repository.accept(contentsUpdate.query, revision: contentsUpdate.revision)
             }
         } catch {
-            if contentsGeneration == requestGeneration { warning = error.localizedDescription }
+            if contentsGeneration == requestGeneration {
+                acceptanceWarning = error.localizedDescription
+            }
         }
+    }
+
+    private func acceptDates(_ update: ProgrammeSnapshot, preserving generation: UUID) async throws
+    {
+        try await repository.accept(update.query, revision: update.revision)
+        guard contentsGeneration == generation, isRunning, let query = contentQuery else { return }
+
+        // Refresh against the accepted date list. Any new content still needs explicit acceptance.
+        await refreshContents(query, owner: contentsRequestOwner, generation: generation)
     }
 
     public func stop() {
@@ -278,6 +306,7 @@ public final class ArchiveModel {
         contents = []
         contentGroups = ContentGroups()
         pendingContents = nil
+        contentsWarning = nil
 
         await selectionChange?.value
         if let previousContentsQuery {
@@ -324,6 +353,14 @@ public final class ArchiveModel {
                 await repository.cancel(query, owner: contentsRequestOwner)
                 await repository.setSelectionActive(false, for: query, owner: contentsRequestOwner)
             }
+        }
+    }
+}
+
+extension ProgrammeWarning {
+    fileprivate var message: String {
+        switch self {
+        case .refreshFailed(let message): message
         }
     }
 }

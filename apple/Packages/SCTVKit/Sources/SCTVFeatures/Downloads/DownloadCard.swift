@@ -179,7 +179,11 @@ struct DownloadCard<Actions: View>: View {
         case .cancelled: Text("已取消").font(.caption)
         case .interrupted(let reason), .transferFailed(let reason, _),
             .publicationFailed(let reason, _):
-            Text(reason).font(.caption).foregroundStyle(secondaryText)
+            // Older database rows already store display text; only recognized codes are mapped.
+            let message =
+                DownloadIssueCode(rawValue: reason).map(DownloadIssueMessage.text)
+                ?? reason
+            Text(message).font(.caption).foregroundStyle(secondaryText)
         case .missingFile: Text("文件已移动或删除").font(.caption).foregroundStyle(secondaryText)
         }
     }

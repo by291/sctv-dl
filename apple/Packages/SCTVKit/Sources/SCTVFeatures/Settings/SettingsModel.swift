@@ -11,15 +11,21 @@ public final class SettingsModel {
     private let repository: any PreferenceRepository
     private var latestEditRevision: UInt64 = 0
     private var pendingEdit: (value: Preferences, token: UUID)?
+    private var isStartingObservation = false
     private var observation: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
     public init(repository: any PreferenceRepository) { self.repository = repository }
 
+    /// Starts one settings observation shared by every workspace scene.
     public func load() async {
-        guard observation == nil else { return }
+        guard observation == nil, !isStartingObservation else { return }
 
+        // Another scene can call load while registration is suspended on the repository.
+        isStartingObservation = true
+        defer { isStartingObservation = false }
         let source = await repository.updates()
+
         observation = Task { [weak self] in
             for await snapshot in source {
                 guard !Task.isCancelled, let self else { break }

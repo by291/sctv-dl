@@ -8,6 +8,7 @@ import SwiftUI
 struct ApplicationSettingsView: View {
     let dependencies: AppDependencies
     @State private var warning: String?
+
     var body: some View {
         SettingsView(
             model: dependencies.settings, clearCache: dependencies.cache.clearProgrammeCache,
@@ -26,6 +27,7 @@ struct ApplicationSettingsView: View {
             Text(warning ?? "")
         }
     }
+
     private var colorScheme: ColorScheme? {
         switch dependencies.settings.value.appearance {
         case .system: nil
@@ -42,28 +44,20 @@ struct ApplicationSettingsView: View {
     }
     private var chooseDirectory: (() -> Void)? {
         #if os(macOS)
-            return {
-                let panel = NSOpenPanel()
-                panel.canChooseFiles = false
-                panel.canChooseDirectories = true
-                panel.allowsMultipleSelection = false
-                panel.prompt = "选择下载目录"
-                Task {
-                    guard await panel.begin() == .OK, let directory = panel.url else { return }
-                    do { try await dependencies.downloads.chooseDirectory(directory) } catch {
-                        warning = error.localizedDescription
-                    }
-                }
-            }
+            return presentDirectoryPicker
         #else
             return nil
         #endif
     }
+
     private var resetDirectory: (() -> Void)? {
         #if os(macOS)
             guard case .external = dependencies.downloads.destination else { return nil }
+
             return {
-                do { try dependencies.downloads.useManagedDirectory() } catch {
+                do {
+                    try dependencies.downloads.useManagedDirectory()
+                } catch {
                     warning = error.localizedDescription
                 }
             }
@@ -71,4 +65,24 @@ struct ApplicationSettingsView: View {
             return nil
         #endif
     }
+
+    #if os(macOS)
+        private func presentDirectoryPicker() {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.prompt = "选择下载目录"
+
+            Task {
+                guard await panel.begin() == .OK, let directory = panel.url else { return }
+
+                do {
+                    try await dependencies.downloads.chooseDirectory(directory)
+                } catch {
+                    warning = error.localizedDescription
+                }
+            }
+        }
+    #endif
 }

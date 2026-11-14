@@ -158,7 +158,7 @@ struct ExplorationCard: View {
             ZStack {
                 PresentationStyle.surface(scheme)
                 PresentationStyle.accent(scheme).opacity(scheme == .dark ? 0.12 : 0.07)
-                // Reuse the cached cover for ambient color without an extra image-analysis pipeline.
+                // Reuse the cached cover for ambient color without a second analysis pipeline.
                 Artwork(url: programme.cover)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .scaleEffect(1.5)

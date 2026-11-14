@@ -43,78 +43,13 @@ public struct ArchiveView: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     archiveHeader
                     ArchiveDateSelection(model: model)
-                    if let warning = model.warning {
-                        InlineNotice(text: warning)
-                        Button("重试") { Task { await model.refresh() } }
-                    }
-                    if model.hasPendingUpdate && !selecting {
-                        Button("发现新内容，点此查看", systemImage: "arrow.clockwise") {
-                            Task { await model.acceptUpdate() }
-                        }.buttonStyle(.bordered)
-                    }
-                    if model.isLoading && model.contents.isEmpty {
-                        ProgressView("载入节目").frame(maxWidth: .infinity).padding(24)
-                    }
+                    archiveNotices
                     if wide {
-                        HStack(alignment: .top, spacing: 28) {
-                            if !model.fullEpisodes.isEmpty {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
-                                    LazyVGrid(
-                                        columns: MediaCardLayout.columns(
-                                            model.clips.isEmpty ? 2 : 1), spacing: 16
-                                    ) {
-                                        ForEach(model.fullEpisodes) { content in
-                                            contentCard(content, featured: true).id(content.id)
-                                        }
-                                    }.scrollTargetLayout()
-                                }.frame(maxWidth: .infinity, alignment: .topLeading)
-                            }
-                            if !model.clips.isEmpty {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    clipsHeading
-                                    LazyVGrid(
-                                        columns: MediaCardLayout.columns(
-                                            model.fullEpisodes.isEmpty ? 2 : 1), spacing: 12
-                                    ) {
-                                        ForEach(model.clips) { content in
-                                            contentCard(content, featured: false).id(content.id)
-                                        }
-                                    }.scrollTargetLayout()
-                                }.frame(maxWidth: .infinity, alignment: .topLeading)
-                            }
-                        }
+                        wideArchiveSections
                     } else {
-                        // Keep rows in one lazy stack so the scroll view can track
-                        // their geometry without nested section-sized layouts.
-                        if !model.fullEpisodes.isEmpty {
-                            Section {
-                                ForEach(model.fullEpisodes) { content in
-                                    contentCard(content, featured: true).id(content.id)
-                                }
-                            } header: {
-                                SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
-                                    .padding(.top, 12)
-                            }
-                        }
-                        if !model.clips.isEmpty {
-                            Section {
-                                ForEach(model.clips) { content in
-                                    contentCard(content, featured: false).id(content.id)
-                                }
-                            } header: {
-                                clipsHeading
-                                    .padding(.top, 12)
-                            }
-                        }
+                        compactArchiveSections
                     }
-                    if !model.isLoading && model.contents.isEmpty && model.warning == nil {
-                        ContentUnavailableView(
-                            "暂无节目", systemImage: "play.rectangle",
-                            description: Text("选择其他播出日期，或稍后刷新。")
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
+                    archiveEmptyState
                 }
                 .scrollTargetLayout(isEnabled: !wide)
                 .padding(20)
@@ -165,6 +100,87 @@ public struct ArchiveView: View {
         }
         .task { await model.load() }
         .onDisappear { model.stop() }
+    }
+
+    @ViewBuilder private var archiveNotices: some View {
+        if let warning = model.warning {
+            InlineNotice(text: warning)
+            Button("重试") { Task { await model.refresh() } }
+        }
+        if model.hasPendingUpdate && !selecting {
+            Button("发现新内容，点此查看", systemImage: "arrow.clockwise") {
+                Task { await model.acceptUpdate() }
+            }.buttonStyle(.bordered)
+        }
+        if model.isLoading && model.contents.isEmpty {
+            ProgressView("载入节目").frame(maxWidth: .infinity).padding(24)
+        }
+    }
+
+    @ViewBuilder private var archiveEmptyState: some View {
+        if !model.isLoading && model.contents.isEmpty && model.warning == nil {
+            ContentUnavailableView(
+                "暂无节目", systemImage: "play.rectangle",
+                description: Text("选择其他播出日期，或稍后刷新。")
+            )
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var wideArchiveSections: some View {
+        HStack(alignment: .top, spacing: 28) {
+            if !model.fullEpisodes.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
+                    LazyVGrid(
+                        columns: MediaCardLayout.columns(
+                            model.clips.isEmpty ? 2 : 1), spacing: 16
+                    ) {
+                        ForEach(model.fullEpisodes) { content in
+                            contentCard(content, featured: true).id(content.id)
+                        }
+                    }.scrollTargetLayout()
+                }.frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            if !model.clips.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    clipsHeading
+                    LazyVGrid(
+                        columns: MediaCardLayout.columns(
+                            model.fullEpisodes.isEmpty ? 2 : 1), spacing: 12
+                    ) {
+                        ForEach(model.clips) { content in
+                            contentCard(content, featured: false).id(content.id)
+                        }
+                    }.scrollTargetLayout()
+                }.frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+
+    @ViewBuilder private var compactArchiveSections: some View {
+        // Keep rows in one lazy stack so the scroll view can track
+        // their geometry without nested section-sized layouts.
+        if !model.fullEpisodes.isEmpty {
+            Section {
+                ForEach(model.fullEpisodes) { content in
+                    contentCard(content, featured: true).id(content.id)
+                }
+            } header: {
+                SectionHeading(title: "完整节目", subtitle: "一整期，慢慢看")
+                    .padding(.top, 12)
+            }
+        }
+        if !model.clips.isEmpty {
+            Section {
+                ForEach(model.clips) { content in
+                    contentCard(content, featured: false).id(content.id)
+                }
+            } header: {
+                clipsHeading
+                    .padding(.top, 12)
+            }
+        }
     }
 
     private var selectionBar: some View {
@@ -251,24 +267,27 @@ public struct ArchiveView: View {
 
     private func contentCard(_ content: ProgrammeContent, featured: Bool) -> some View {
         let vertical = featured || typeSize.isAccessibilitySize
+        let isSelected = model.selection.contains(content.id)
+        let horizontalLayout = HStackLayout(
+            alignment: .center, spacing: PresentationStyle.mediaCardSpacing)
+        let layout =
+            vertical
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(horizontalLayout)
+        let selectionSymbol = isSelected ? "checkmark.circle.fill" : "circle"
+        let badgeSymbol = selecting ? selectionSymbol : "play.fill"
+        let verticalTitleInset: CGFloat = featured ? 16 : 18
+        let verticalTitleTop: CGFloat = featured ? 8 : 18
+        let compactFooterInset = featured ? 14 : PresentationStyle.mediaCardInset
+
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 activate(content)
             } label: {
-                let layout =
-                    vertical
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-                    : AnyLayout(
-                        HStackLayout(
-                            alignment: .center, spacing: PresentationStyle.mediaCardSpacing))
                 layout {
                     Artwork(url: content.cover ?? model.programme.cover)
                         .overlay(alignment: .bottomTrailing) {
-                            MediaCoverBadge(
-                                symbol: selecting
-                                    ? (model.selection.contains(content.id)
-                                        ? "checkmark.circle.fill" : "circle") : "play.fill",
-                                large: featured)
+                            MediaCoverBadge(symbol: badgeSymbol, large: featured)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: vertical ? 18 : 12))
                         .frame(width: vertical ? nil : 136)
@@ -280,8 +299,8 @@ public struct ArchiveView: View {
                             reservesSpace: !featured
                         )
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, vertical ? (featured ? 16 : 18) : 0)
-                        .padding(.top, vertical ? (featured ? 8 : 18) : 0)
+                        .padding(.horizontal, vertical ? verticalTitleInset : 0)
+                        .padding(.top, vertical ? verticalTitleTop : 0)
                         .padding(.bottom, vertical && !featured ? 18 : 0)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -291,6 +310,8 @@ public struct ArchiveView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(content.title)
+            .accessibilityAddTraits(selecting && isSelected ? .isSelected : [])
+            .accessibilityHint(selecting ? "切换此节目的选择状态" : "播放此节目")
             .accessibilityIdentifier("archive-play-\(content.id)")
             HStack(spacing: 12) {
                 Text(content.publishedAt ?? model.broadcast?.date ?? "")
@@ -323,14 +344,11 @@ public struct ArchiveView: View {
             .padding(.horizontal, featured ? 16 : PresentationStyle.mediaCardInset)
             .padding(.top, typeSize.isAccessibilitySize ? 0 : 12)
             // Shared episode/clip insets contain the menu's full 44-point hit area.
-            .padding(
-                .bottom,
-                typeSize.isAccessibilitySize
-                    ? 6 : (featured ? 14 : PresentationStyle.mediaCardInset))
+            .padding(.bottom, typeSize.isAccessibilitySize ? 6 : compactFooterInset)
         }
         .editorialCard()
         .overlay {
-            if model.selection.contains(content.id) {
+            if isSelected {
                 RoundedRectangle(cornerRadius: 22)
                     .strokeBorder(PresentationStyle.accent(scheme), lineWidth: 2)
                     .allowsHitTesting(false)

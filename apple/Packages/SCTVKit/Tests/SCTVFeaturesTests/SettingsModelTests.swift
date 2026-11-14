@@ -5,6 +5,20 @@ import Testing
 @testable import SCTVFeatures
 
 @MainActor struct SettingsModelTests {
+    @Test func overlappingLoadsUseOnePreferenceSubscription() async {
+        let repository = RecoveringPreferenceRepository()
+        let model = SettingsModel(repository: repository)
+        await repository.blockNextSubscription()
+
+        let first = Task { await model.load() }
+        await repository.waitUntilSubscriptionBlocked()
+        await model.load()
+        await repository.resumeBlockedSubscription()
+        await first.value
+
+        #expect(await repository.subscriptionCount == 1)
+    }
+
     @Test func editAfterFailedLoadPersistsWhenRetryRecoversStoredRevision() async throws {
         let repository = RecoveringPreferenceRepository()
         let model = SettingsModel(repository: repository)
@@ -54,8 +68,22 @@ private actor RecoveringPreferenceRepository: PreferenceRepository {
     private var shouldBlockSave = false
     private var blockedSave: CheckedContinuation<Void, Never>?
     private var saveWaiter: CheckedContinuation<Void, Never>?
+    private var shouldBlockSubscription = false
+    private var blockedSubscription: CheckedContinuation<Void, Never>?
+    private var subscriptionWaiter: CheckedContinuation<Void, Never>?
+    private(set) var subscriptionCount = 0
 
-    func updates() -> AsyncStream<PreferenceSnapshot> {
+    func updates() async -> AsyncStream<PreferenceSnapshot> {
+        subscriptionCount += 1
+        if shouldBlockSubscription {
+            shouldBlockSubscription = false
+            await withCheckedContinuation { continuation in
+                blockedSubscription = continuation
+                subscriptionWaiter?.resume()
+                subscriptionWaiter = nil
+            }
+        }
+
         let id = UUID()
         return AsyncStream { continuation in
             observers[id] = continuation
@@ -91,6 +119,18 @@ private actor RecoveringPreferenceRepository: PreferenceRepository {
 
     func flush() throws {
         guard available else { throw PreferenceFixtureError.unavailable }
+    }
+
+    func blockNextSubscription() { shouldBlockSubscription = true }
+
+    func waitUntilSubscriptionBlocked() async {
+        if blockedSubscription != nil { return }
+        await withCheckedContinuation { subscriptionWaiter = $0 }
+    }
+
+    func resumeBlockedSubscription() {
+        blockedSubscription?.resume()
+        blockedSubscription = nil
     }
     func recover() { available = true }
     func blockNextSave() { shouldBlockSave = true }

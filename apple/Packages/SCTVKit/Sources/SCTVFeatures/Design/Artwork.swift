@@ -38,7 +38,8 @@ public struct Artwork: View {
                         }
                     }
                     .pipeline(ArtworkCache.pipeline)
-                    // Nuke's request comparison omits thumbnail options; reload only across buckets.
+                    // Nuke omits thumbnail options when comparing requests.
+                    // A bucket change must reload the image at the new resolution.
                     .id(request?.thumbnail)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                 }

@@ -44,8 +44,10 @@ public final class DownloadsModel {
     private var commandWarning: String?
 
     private let service: any DownloadService
+    private var isStartingObservation = false
     private var observation: Task<Void, Never>?
     private var acceptedRevision: UInt64 = 0
+    private var recoveryToken = UUID()
 
     public var visibleTasks: [DownloadTask] { tasks.filter { filter.includes($0.state) } }
 
@@ -58,15 +60,18 @@ public final class DownloadsModel {
 
     public init(service: any DownloadService) { self.service = service }
 
+    /// Subscribes once before attempting to recover durable download tasks.
     public func load() async {
-        guard observation == nil else { return }
+        guard observation == nil, !isStartingObservation else { return }
 
+        isStartingObservation = true
+        defer { isStartingObservation = false }
         let source = await service.updates()
+
         observation = Task { [weak self] in
             for await snapshot in source {
-                guard !Task.isCancelled, let self, snapshot.revision >= acceptedRevision else {
-                    continue
-                }
+                guard !Task.isCancelled, let self else { break }
+                guard snapshot.revision >= acceptedRevision else { continue }
 
                 acceptedRevision = snapshot.revision
                 tasks = snapshot.tasks
@@ -78,13 +83,19 @@ public final class DownloadsModel {
     }
 
     public func reconcile() async {
+        let request = UUID()
+        recoveryToken = request
         recoveryState = .loading
 
         do {
             try await service.reconcile()
+            guard recoveryToken == request else { return }
+
             commandWarning = nil
             recoveryState = .ready
         } catch {
+            guard recoveryToken == request else { return }
+
             recoveryState = .failed("下载状态尚未恢复：\(error.localizedDescription)")
         }
     }

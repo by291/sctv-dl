@@ -61,33 +61,9 @@ public struct DownloadsView: View {
                 width: geometry.size.width, typeSize: typeSize)
             Group {
                 if columns == 1 {
-                    List(selection: selectionBinding) {
-                        listHeader
-                        ForEach(model.canPerformCommands ? model.visibleTasks : []) { task in
-                            taskRow(task, progress: selectionProgress).tag(task.id)
-                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                                .contextMenu { if !selecting { actions(task) } }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    compactTaskList(progress: selectionProgress)
                 } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 20) {
-                            listHeader
-                            LazyVGrid(
-                                columns: MediaCardLayout.columns(columns),
-                                spacing: MediaCardLayout.spacing
-                            ) {
-                                ForEach(model.canPerformCommands ? model.visibleTasks : []) {
-                                    task in
-                                    taskRow(task, progress: selectionProgress, cardSelection: true)
-                                        .id(task.id)
-                                        .contextMenu { if !selecting { actions(task) } }
-                                }
-                            }.scrollTargetLayout()
-                        }.padding(20)
-                    }
+                    taskGrid(columns: columns, progress: selectionProgress)
                 }
             }
             .frame(maxWidth: 1160)
@@ -103,9 +79,6 @@ public struct DownloadsView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar(.visible, for: .navigationBar)
         #endif
-        .onChange(of: selecting) { _, value in
-            if !value { model.setSelection([]) }
-        }
         .onChange(of: model.visibleTasks.isEmpty) { _, empty in
             if empty { setSelecting(false) }
         }
@@ -137,8 +110,7 @@ public struct DownloadsView: View {
             Button(
                 pending.commands.first?.action == .deleteFile ? "删除文件" : "移除记录", role: .destructive
             ) {
-                confirming = nil
-                Task { await model.perform(pending.commands) }
+                confirm(pending)
             }
             .accessibilityIdentifier("download-confirm-action")
         } message: { pending in
@@ -147,6 +119,42 @@ public struct DownloadsView: View {
                     ? "下载记录会保留，之后可以重新下载。" : "已下载的文件会保留。")
         }
         .task { await model.load() }
+    }
+
+    private var displayableTasks: [DownloadTask] {
+        model.canPerformCommands ? model.visibleTasks : []
+    }
+
+    private func compactTaskList(progress: CGFloat) -> some View {
+        List(selection: selectionBinding) {
+            listHeader
+            ForEach(displayableTasks) { task in
+                taskRow(task, progress: progress).tag(task.id)
+                    .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    .contextMenu { if !selecting { actions(task) } }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+    }
+
+    private func taskGrid(columns: Int, progress: CGFloat) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                listHeader
+                LazyVGrid(
+                    columns: MediaCardLayout.columns(columns),
+                    spacing: MediaCardLayout.spacing
+                ) {
+                    ForEach(displayableTasks) {
+                        task in
+                        taskRow(task, progress: progress, cardSelection: true)
+                            .id(task.id)
+                            .contextMenu { if !selecting { actions(task) } }
+                    }
+                }.scrollTargetLayout()
+            }.padding(20)
+        }
     }
 
     @ViewBuilder private var listHeader: some View {
@@ -229,18 +237,29 @@ public struct DownloadsView: View {
     private var confirmationActions: some View {
         Button("确认", role: .destructive) {
             guard let pending = confirming else { return }
-            confirming = nil
-            // Keep the original attempt guards while the confirmation is presented.
-            Task { await model.perform(pending.commands) }
+            confirm(pending)
         }
         .accessibilityIdentifier("download-confirm-action")
     }
 
+    private func confirm(_ pending: Confirmation) {
+        confirming = nil
+
+        // Execute the commands captured before presentation so retries cannot change the target.
+        Task { await model.perform(pending.commands) }
+    }
+
     private func setSelecting(_ value: Bool) {
-        if !value { departingActions = availableBatchActions }
+        if !value {
+            // Retain the button labels through the exit animation while clearing actual selection.
+            departingActions = availableBatchActions
+        }
+
         withAnimation(reduceMotion ? nil : .smooth(duration: 0.3)) {
             selecting = value
         }
+
+        if !value { model.setSelection([]) }
     }
 
     // A nil binding keeps ordinary row/menu taps out of native selection mode.
@@ -296,9 +315,9 @@ public struct DownloadsView: View {
     }
 
     private func selectionBar(progress: CGFloat) -> some View {
-        // Retain outgoing labels only through the exit animation. Native menus can otherwise
-        // expose the invisible buttons to accessibility after selection has ended.
-        let actions = selecting ? availableBatchActions : (progress > 0 ? departingActions : [])
+        let animatedActions = progress > 0 ? departingActions : []
+        let actions = selecting ? availableBatchActions : animatedActions
+
         return BatchActionBar {
             if actions.isEmpty {
                 HStack(spacing: 12) {
@@ -317,13 +336,7 @@ public struct DownloadsView: View {
                     selectAllButton
                     ForEach(actions) { item in
                         Button(role: item.destructive ? .destructive : nil) {
-                            let commands = model.commands(for: item.action)
-                            if item.destructive {
-                                confirming = Confirmation(
-                                    source: .batch(item.id), commands: commands)
-                            } else {
-                                Task { await model.perform(commands) }
-                            }
+                            requestCommand(item, source: .batch(item.id))
                         } label: {
                             Text(item.title).frame(maxWidth: .infinity, minHeight: 32)
                         }
@@ -375,10 +388,11 @@ public struct DownloadsView: View {
             EmptyView()
         } else {
             HStack {
-                commandButton("暂停", .pause, ids: [task.id])
-                commandButton("继续", .resume, ids: [task.id])
-                commandButton("重试", .retry, ids: [task.id])
-                commandButton("重试保存", .retryPublication, ids: [task.id])
+                commandButton(BatchAction(title: "暂停", action: .pause), taskID: task.id)
+                commandButton(BatchAction(title: "继续", action: .resume), taskID: task.id)
+                commandButton(BatchAction(title: "重试", action: .retry), taskID: task.id)
+                commandButton(
+                    BatchAction(title: "重试保存", action: .retryPublication), taskID: task.id)
             }.buttonStyle(.bordered).buttonBorderShape(.capsule)
         }
     }
@@ -395,34 +409,45 @@ public struct DownloadsView: View {
                 Button("在访达中显示", systemImage: "folder") { reveal(task) }
             #endif
         }
-        commandButton("取消下载", .cancel, ids: [task.id], systemImage: "xmark.circle")
-        commandButton("删除文件", .deleteFile, ids: [task.id], destructive: true, systemImage: "trash")
         commandButton(
-            "移除记录", .removeRecord, ids: [task.id], destructive: true,
-            systemImage: "text.badge.minus")
+            BatchAction(title: "取消下载", action: .cancel), taskID: task.id, symbol: "xmark.circle")
+        commandButton(
+            BatchAction(title: "删除文件", action: .deleteFile, destructive: true),
+            taskID: task.id, symbol: "trash")
+        commandButton(
+            BatchAction(title: "移除记录", action: .removeRecord, destructive: true),
+            taskID: task.id, symbol: "text.badge.minus")
     }
 
     @ViewBuilder private func commandButton(
-        _ title: String, _ action: DownloadAction, ids: Set<UUID>? = nil, destructive: Bool = false,
-        systemImage: String? = nil
+        _ action: BatchAction, taskID: UUID, symbol: String? = nil
     ) -> some View {
-        let commands = model.commands(for: action, ids: ids)
-        if !commands.isEmpty {
-            Button(role: destructive ? .destructive : nil) {
-                if destructive {
-                    guard let id = ids?.first else { return }
-                    confirming = Confirmation(source: .task(id), commands: commands)
-                } else {
-                    Task { await model.perform(commands) }
-                }
+        if !model.commands(for: action.action, ids: [taskID]).isEmpty {
+            Button(role: action.destructive ? .destructive : nil) {
+                requestCommand(action, source: .task(taskID))
             } label: {
-                if let systemImage {
-                    Label(title, systemImage: systemImage)
+                if let symbol {
+                    Label(action.title, systemImage: symbol)
                 } else {
-                    Text(title)
+                    Text(action.title)
                 }
             }
         }
     }
 
+    private func requestCommand(_ action: BatchAction, source: ConfirmationSource) {
+        let ids: Set<UUID>? =
+            switch source {
+            case .task(let taskID): [taskID]
+            case .batch: nil
+            }
+        let commands = model.commands(for: action.action, ids: ids)
+        guard !commands.isEmpty else { return }
+
+        if action.destructive {
+            confirming = Confirmation(source: source, commands: commands)
+        } else {
+            Task { await model.perform(commands) }
+        }
+    }
 }

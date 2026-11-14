@@ -16,7 +16,7 @@
         }
 
         static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
-            controller.restore()
+            controller.stopObserving()
         }
 
         final class Controller: UIViewController {
@@ -47,8 +47,7 @@
 
             override func viewWillDisappear(_ animated: Bool) {
                 super.viewWillDisappear(animated)
-                visible = false
-                restore()
+                stopObserving()
             }
 
             func update(hidden: Bool, animated: Bool) {
@@ -64,7 +63,7 @@
                 // their bindings. Leave the representable update before invoking UIKit.
                 pendingUpdate = Task { @MainActor [weak self] in
                     guard !Task.isCancelled, let self else { return }
-                    pendingUpdate = nil
+                    defer { pendingUpdate = nil }
                     guard visible else { return }
                     apply()
                 }
@@ -75,19 +74,27 @@
                     let bottomSafeArea, bottomSafeArea.wrappedValue != inset
                 {
                     // Report the window inset, excluding the tab bar's changing safe area.
-                    Task { @MainActor in bottomSafeArea.wrappedValue = inset }
+                    bottomSafeArea.wrappedValue = inset
                 }
-                guard let tabs = tabBarController else { return }
+
+                // Publishing the inset can synchronously trigger a representable update.
+                guard visible, !Task.isCancelled, let tabs = tabBarController else { return }
+
                 // Top tabs do not compete with bottom actions.
                 guard tabs.traitCollection.horizontalSizeClass != .regular else {
-                    restore()
+                    restoreTabBar()
                     return
+                }
+
+                if let controlledTabs, controlledTabs !== tabs {
+                    restoreTabBar()
                 }
                 if controlledTabs == nil {
                     guard hidden else { return }
                     controlledTabs = tabs
                     originalHidden = tabs.isTabBarHidden
                 }
+
                 let target = hidden || originalHidden
                 // Layout callbacks must not restart an in-flight system transition.
                 guard requestedHidden != target else { return }
@@ -95,15 +102,19 @@
                 tabs.setTabBarHidden(target, animated: animated)
             }
 
-            func restore() {
+            func stopObserving() {
+                visible = false
                 pendingUpdate?.cancel()
                 pendingUpdate = nil
 
-                if let controlledTabs {
-                    controlledTabs.setTabBarHidden(originalHidden, animated: false)
-                }
+                restoreTabBar()
+            }
+
+            private func restoreTabBar() {
+                let tabs = controlledTabs
                 controlledTabs = nil
                 requestedHidden = nil
+                tabs?.setTabBarHidden(originalHidden, animated: false)
             }
         }
     }
@@ -112,10 +123,12 @@
     struct BatchSelectionTransition<Content: View>: View, Animatable {
         nonisolated var progress: CGFloat
         @ViewBuilder var content: (CGFloat) -> Content
+
         nonisolated var animatableData: CGFloat {
             get { progress }
             set { progress = newValue }
         }
+
         var body: some View {
             content(progress).transaction { $0.animation = nil }
         }

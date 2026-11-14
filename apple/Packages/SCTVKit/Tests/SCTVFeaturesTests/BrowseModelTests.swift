@@ -4,6 +4,52 @@ import Testing
 
 @testable import SCTVFeatures
 
+private actor CatalogueRefreshGate: ProgrammeRepository {
+    private var pending: [CheckedContinuation<Void, Never>] = []
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func refresh(_ query: ProgrammeQuery) async throws {
+        await withCheckedContinuation { continuation in
+            pending.append(continuation)
+            waiter?.resume()
+            waiter = nil
+        }
+    }
+
+    func waitForRequests(_ count: Int) async {
+        while pending.count < count {
+            await withCheckedContinuation { waiter = $0 }
+        }
+    }
+
+    func finishOldest() { pending.removeFirst().resume() }
+
+    func observe(_ query: ProgrammeQuery) -> AsyncStream<ProgrammeUpdate> {
+        AsyncStream { $0.finish() }
+    }
+
+    func accept(_ query: ProgrammeQuery, revision: UUID) throws {}
+
+    func cancel(_ query: ProgrammeQuery) {}
+}
+
+@MainActor @Test func supersededCatalogueRefreshLeavesTheCurrentRequestLoading() async {
+    let repository = CatalogueRefreshGate()
+    let model = CatalogueModel(repository: repository, favourites: FavouriteFixture())
+    let older = Task { await model.refresh() }
+    await repository.waitForRequests(1)
+    let newer = Task { await model.refresh() }
+    await repository.waitForRequests(2)
+
+    await repository.finishOldest()
+    await older.value
+
+    #expect(model.isLoading)
+    await repository.finishOldest()
+    await newer.value
+    #expect(!model.isLoading)
+}
+
 actor BrowseFixture: ProgrammeRepository {
     var queries: [ProgrammeQuery] = []
     let programme = Programme(id: "1", name: "四川新闻", cover: nil)
@@ -42,7 +88,7 @@ struct BrowseModelTests {
     @Test func removedRestoredDateSelectsNewestOnce() async throws {
         let repository = BrowseFixture()
         let model = ArchiveModel(
-            programme: await repository.programme, repository: repository, restoredDateID: "removed"
+            programme: repository.programme, repository: repository, restoredDateID: "removed"
         )
         await model.load()
         let expectedRefresh = ProgrammeQuery.contents(programmeID: "1", dateID: "20")

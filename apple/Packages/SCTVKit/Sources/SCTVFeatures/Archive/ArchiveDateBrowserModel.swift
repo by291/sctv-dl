@@ -15,16 +15,22 @@ final class ArchiveDateBrowserModel {
     var searching: Bool {
         !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
     var monthIndex: Int { months.firstIndex { $0.id == monthID } ?? 0 }
+
     var monthTitle: String { months.first { $0.id == monthID }?.title ?? "全部日期" }
+
     var hasPreviousMonth: Bool { monthIndex + 1 < months.count }
+
     var hasNextMonth: Bool { monthIndex > 0 }
 
     init(dates: [BroadcastDate], selectedID: String?) {
+        // Cache grouped dates and search keys outside render and search updates.
         months = ArchiveDateGroup.group(dates, query: "")
         searchKeys = Dictionary(
             dates.map { ($0.id, $0.date.replacingOccurrences(of: "-", with: "")) },
             uniquingKeysWith: { first, _ in first })
+
         monthID =
             months.first { $0.dates.contains { $0.id == selectedID } }?.id
             ?? months.first?.id ?? ""
@@ -50,8 +56,7 @@ final class ArchiveDateBrowserModel {
             visibleMonths = months.filter { $0.id == monthID }
             return
         }
-        // Group and normalize once per presentation, rather than sorting thousands
-        // of dates on every body evaluation or search-field focus change.
+
         visibleMonths = months.compactMap { month in
             let dates = month.dates.filter { searchKeys[$0.id]?.contains(query) == true }
             return dates.isEmpty
