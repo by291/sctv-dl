@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Captures immutable progress only; durable submissions are owned by the repository, never the player. */
+private const val PROGRESS_SAVE_INTERVAL_MS = 5_000L
+
+/** Captures player progress for the repository’s independently owned write queue. */
 internal class PlaybackHistoryRecorder(
     private val history: HistoryRepository,
     private val target: ViewingTarget,
@@ -23,14 +25,16 @@ internal class PlaybackHistoryRecorder(
     private val now: () -> Long = System::currentTimeMillis
 ) {
     private var session: HistorySession? = null
-    private var last: PlaybackState? = null
+    private var lastObservedSample: PlaybackState? = null
+    private var latestSettledSample: PlaybackState? = null
     private var lastSaveAt: Long? = null
-    private var acquiring = false
-    private var seekPending = false
+    private var isAcquiringSession = false
+    private var isSeekPending = false
     private var invalidatedPosition: Long? = null
     private val mutableError = MutableStateFlow<String?>(null)
     val error = mutableError.asStateFlow()
 
+    /** Acquire a history session and return its saved resume position. */
     suspend fun initialize(): Long {
         try {
             session = history.begin(target)
@@ -40,26 +44,34 @@ internal class PlaybackHistoryRecorder(
         } catch (_: Exception) {
             mutableError.value = "无法读取观看记录，点击重试保存"
         }
+
         return resumePositionMs(session?.previous)
     }
 
     fun onProgress(state: PlaybackState) {
-        val previous = last
-        last = state
-        if (!state.ready && !state.ended) return
-        if (invalidatedPosition == state.positionMs && !state.playing) return
+        val previous = lastObservedSample
+        lastObservedSample = state
+        if (!state.ready && !state.ended) {
+            return
+        }
+        if (invalidatedPosition == state.positionMs && !state.playing) {
+            return
+        }
+        latestSettledSample = state
 
-        val paused = previous?.playWhenReady == true && !state.playWhenReady
-        val advanced = previous?.positionMs != state.positionMs
-        if (seekPending || paused || (state.ended && previous?.ended != true) ||
-            (advanced && (lastSaveAt == null || now() - requireNotNull(lastSaveAt) >= 5000))
-        ) {
+        val didPause = previous?.playWhenReady == true && !state.playWhenReady
+        val didEnd = state.ended && previous?.ended != true
+        val didMove = previous?.positionMs != state.positionMs
+        val savedAt = lastSaveAt
+        val shouldSaveProgress = didMove && (savedAt == null || now() - savedAt >= PROGRESS_SAVE_INTERVAL_MS)
+
+        if (isSeekPending || didPause || didEnd || shouldSaveProgress) {
             flush(state)
         }
     }
 
     fun onSeekCompleted(state: PlaybackState) {
-        seekPending = true
+        isSeekPending = true
         flush(state)
     }
 
@@ -72,36 +84,38 @@ internal class PlaybackHistoryRecorder(
     }
 
     fun flush(state: PlaybackState) {
-        if (!state.ready && !state.ended) return
-        last = state
-        val active = session
-        if (active == null) {
-            // An invalidated snapshot cannot recreate a deleted row. Only a later viewing event may begin again.
-            if (invalidatedPosition == state.positionMs || acquiring) return
-            acquiring = true
-            scope.launch {
-                try {
-                    initialize()
-                    if (session != null) flush(state)
-                } finally {
-                    acquiring = false
-                }
-            }
+        if (!state.ready && !state.ended) {
             return
         }
-        seekPending = false
+        lastObservedSample = state
+        latestSettledSample = state
+
+        val writeSession = session
+        if (writeSession == null) {
+            acquireForProgress(state.positionMs)
+            return
+        }
+
+        isSeekPending = false
         val entry = ViewingEntry(
-            target,
-            state.positionMs,
-            state.durationMs,
-            Instant.ofEpochMilli(now()),
-            isViewingCompleted(state.positionMs, state.durationMs, state.ended)
+            target = target,
+            positionMs = state.positionMs,
+            durationMs = state.durationMs,
+            viewedAt = Instant.ofEpochMilli(now()),
+            completed = isViewingCompleted(state.positionMs, state.durationMs, state.ended)
         )
         lastSaveAt = now()
-        val write = history.submit(active, entry)
+
+        val write = history.submit(writeSession, entry)
         scope.launch {
             try {
-                when (write.await()) {
+                val result = write.await()
+
+                // A retry can replace this session while its earlier write is still queued.
+                if (session !== writeSession) {
+                    return@launch
+                }
+                when (result) {
                     HistoryWriteResult.Saved -> mutableError.value = null
                     HistoryWriteResult.Invalidated -> {
                         session = null
@@ -111,7 +125,29 @@ internal class PlaybackHistoryRecorder(
             } catch (failure: CancellationException) {
                 throw failure
             } catch (_: Exception) {
-                mutableError.value = "观看进度未保存，点击重试"
+                if (session === writeSession) {
+                    mutableError.value = "观看进度未保存，点击重试"
+                }
+            }
+        }
+    }
+
+    private fun acquireForProgress(positionMs: Long) {
+        // A snapshot invalidated by deletion cannot recreate the row at the same position.
+        if (invalidatedPosition == positionMs || isAcquiringSession) {
+            return
+        }
+        isAcquiringSession = true
+
+        scope.launch {
+            try {
+                initialize()
+                // A seek or pause can settle while begin() waits on the durable write queue.
+                if (session != null) {
+                    latestSettledSample?.let(::flush)
+                }
+            } finally {
+                isAcquiringSession = false
             }
         }
     }

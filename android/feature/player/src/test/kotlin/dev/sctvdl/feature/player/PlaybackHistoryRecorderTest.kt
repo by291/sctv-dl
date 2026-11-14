@@ -1,9 +1,14 @@
 package dev.sctvdl.feature.player
 
+import dev.sctvdl.domain.history.ViewingEntry
 import dev.sctvdl.domain.history.ViewingTarget
+import dev.sctvdl.domain.repository.HistoryRepository
+import dev.sctvdl.domain.repository.HistorySession
+import dev.sctvdl.domain.repository.HistoryWriteResult
 import dev.sctvdl.domain.testing.FakeHistory
 import dev.sctvdl.player.model.PlaybackState
 import java.time.LocalDate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -67,5 +72,53 @@ class PlaybackHistoryRecorderTest {
         recorder.retry(state.copy(positionMs = 14_000))
         runCurrent()
         assertEquals(14_000, repo.entries.value.single().positionMs)
+    }
+
+    @Test
+    fun sessionAcquisitionSavesTheLatestSettledPosition() = runTest {
+        val history = FakeHistory()
+        val allowAcquisition = CompletableDeferred<Unit>()
+        val repository = object : HistoryRepository by history {
+            override suspend fun begin(target: ViewingTarget): HistorySession {
+                allowAcquisition.await()
+                return history.begin(target)
+            }
+        }
+        val recorder = PlaybackHistoryRecorder(repository, target, backgroundScope)
+        val firstSample = PlaybackState(ready = true, positionMs = 1_000)
+
+        recorder.onProgress(firstSample)
+        runCurrent()
+        recorder.onSeekCompleted(firstSample.copy(positionMs = 13_000))
+        recorder.onProgress(firstSample.copy(ready = false, positionMs = 0))
+        allowAcquisition.complete(Unit)
+        runCurrent()
+
+        assertEquals(13_000L, history.entries.value.single().positionMs)
+    }
+
+    @Test
+    fun invalidationFromAnOlderWriteDoesNotReplaceTheCurrentSession() = runTest {
+        val history = FakeHistory()
+        val delayedWrite = CompletableDeferred<HistoryWriteResult>()
+        var shouldDelayWrite = true
+        val repository = object : HistoryRepository by history {
+            override fun submit(session: HistorySession, entry: ViewingEntry) =
+                if (shouldDelayWrite) delayedWrite else history.submit(session, entry)
+        }
+        val recorder = PlaybackHistoryRecorder(repository, target, backgroundScope)
+        val sample = PlaybackState(ready = true, positionMs = 1_000)
+        recorder.initialize()
+
+        recorder.flush(sample)
+        shouldDelayWrite = false
+        recorder.retry(sample.copy(positionMs = 2_000))
+        runCurrent()
+        delayedWrite.complete(HistoryWriteResult.Invalidated)
+        runCurrent()
+        recorder.close(sample.copy(positionMs = 1_000))
+        runCurrent()
+
+        assertEquals(1_000L, history.entries.value.single().positionMs)
     }
 }
