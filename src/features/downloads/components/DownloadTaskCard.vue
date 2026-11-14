@@ -15,7 +15,10 @@ import {
 } from '@lucide/vue'
 
 import CoverImage from '@/shared/components/CoverImage.vue'
-import { availableDownloadActions } from '@/features/downloads/model/download-actions'
+import {
+  availableDownloadActions,
+  isActiveDownload,
+} from '@/features/downloads/model/download-actions'
 import {
   downloadActionLabel,
   downloadActionConfirmation,
@@ -92,16 +95,17 @@ const progress = computed(() =>
     ? 100
     : Math.min(99, Math.floor((props.task.receivedBytes / (props.task.totalBytes || 1)) * 100)),
 )
-const status = computed(() =>
-  props.task.state === 'completed'
-    ? 'success'
-    : props.task.state === 'failed'
-      ? 'error'
-      : 'default',
-)
-const activeState = computed(() =>
-  ['queued', 'running', 'pausing', 'finalizing'].includes(props.task.state),
-)
+const status = computed(() => {
+  switch (props.task.state) {
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'error'
+    default:
+      return 'default'
+  }
+})
+const activeState = computed(() => isActiveDownload(props.task))
 
 function bytes(value: number): string {
   if (value < 1024) {
@@ -126,7 +130,11 @@ function requestAction(action: DownloadActionRequest['action']): void {
 
   const description = downloadActionConfirmation(action, { kind: 'single', task: props.task })
   if (description) {
-    pending.value = { action, attemptId: props.task.attemptId, description }
+    pending.value = {
+      action,
+      attemptId: props.task.attemptId,
+      description,
+    }
   } else {
     emit('action', action)
   }

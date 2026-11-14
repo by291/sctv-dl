@@ -5,10 +5,15 @@ import { usePersistentState } from '@/shared/composables/usePersistentState'
 
 import type { SettingsPort } from '@/shared/platform/ports'
 
+// Expose validated browser settings and own the persistence subscription scope.
 export function createWebSettings(): { port: SettingsPort; dispose: () => void } {
   const scope = effectScope(true)
   const state = scope.run(() =>
-    usePersistentState('sctv-dl:settings', settingsSchema.parse({}), settingsSchema),
+    usePersistentState({
+      key: 'sctv-dl:settings',
+      defaults: settingsSchema.parse({}),
+      schema: settingsSchema,
+    }),
   )!
   const port: SettingsPort = {
     async load() {

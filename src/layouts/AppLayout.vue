@@ -42,10 +42,30 @@ const windowsFrameless =
   platform.kind === 'tauri' && /Windows|Win32|Win64/i.test(navigator.userAgent) && !!windowControls
 
 const links = [
-  { to: '/', label: '节目库', icon: Library },
-  { to: '/history', label: '观看历史', icon: History },
-  ...(downloads.kind === 'native' ? [{ to: '/downloads', label: '下载任务', icon: Download }] : []),
-  { to: '/settings', label: '设置', icon: Settings2 },
+  {
+    to: '/',
+    label: '节目库',
+    icon: Library,
+  },
+  {
+    to: '/history',
+    label: '观看历史',
+    icon: History,
+  },
+  ...(downloads.kind === 'native'
+    ? [
+        {
+          to: '/downloads',
+          label: '下载任务',
+          icon: Download,
+        },
+      ]
+    : []),
+  {
+    to: '/settings',
+    label: '设置',
+    icon: Settings2,
+  },
 ]
 const downloadNavigationLabel = computed(() =>
   tasks.activeCount ? `下载任务，${tasks.activeCount} 个进行中` : '下载任务',
@@ -94,8 +114,13 @@ onBeforeUnmount(() => {
           <span class="brand-icon">
             <Tv :size="22" />
           </span>
-          <!-- prettier-ignore -->
-          <span>sctv<span class="brand-dash">-dl</span><small class="brand-description">电视节目下载</small></span>
+          <span>
+            <span class="brand-title">
+              <span>sctv</span>
+              <span class="brand-dash">-dl</span>
+            </span>
+            <small class="brand-description">电视节目下载</small>
+          </span>
         </RouterLink>
         <nav
           class="primary-nav"
@@ -200,6 +225,10 @@ onBeforeUnmount(() => {
   font-weight: 800;
   letter-spacing: -0.7px;
   color: var(--rail-text);
+}
+.brand-title {
+  display: flex;
+  align-items: baseline;
 }
 .brand-dash {
   color: var(--hero-link);

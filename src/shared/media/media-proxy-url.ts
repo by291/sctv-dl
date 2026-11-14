@@ -1,3 +1,4 @@
+// Build a media proxy URL with optional attachment metadata.
 export function proxyMediaUrl(url: string, filename?: string): string {
   const params = new URLSearchParams({ url })
 

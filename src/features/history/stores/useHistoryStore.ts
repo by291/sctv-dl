@@ -7,6 +7,7 @@ import type { HistoryEntry, HistorySnapshot } from '@shared/contracts/history'
 import type { ContentRef } from '@shared/contracts/programmes'
 import type { HistoryPort } from '@/shared/platform/ports'
 
+// Expose current history and coordinate observation and active player captures.
 export const useHistoryStore = defineStore('history', () => {
   const entries = ref<HistoryEntry[]>([])
   const loading = ref(false)
@@ -30,6 +31,7 @@ export const useHistoryStore = defineStore('history', () => {
     warning.value = snapshot.warning
   }
 
+  // Invalidate the current history observer and release its subscription.
   function detach(): void {
     connectionVersion += 1
     unsubscribe?.()
@@ -38,6 +40,7 @@ export const useHistoryStore = defineStore('history', () => {
     loading.value = false
   }
 
+  // Connect a history port and subscribe before reading its initial snapshot.
   async function attach(next: HistoryPort): Promise<void> {
     if (port === next) {
       return
@@ -84,6 +87,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // Reload history and restore observation after a subscription failure.
   async function reload(): Promise<void> {
     const current = port
     if (!current) {
@@ -134,6 +138,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // Register an active player capture until its preview is disposed.
   function registerCapture(capture: () => Promise<void>): () => void {
     captures.add(capture)
 
@@ -142,6 +147,7 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  // Save settled progress from active players before application exit.
   async function captureActive(): Promise<void> {
     await Promise.all([...captures].map((capture) => capture()))
   }

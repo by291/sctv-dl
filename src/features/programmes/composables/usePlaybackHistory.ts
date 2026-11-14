@@ -11,6 +11,9 @@ import type {
   PlaybackSnapshot,
 } from '@/features/programmes/model/playback-state'
 
+const PROGRESS_WRITE_INTERVAL_MS = 5_000
+
+// Track settled playback samples and persist them under one history session.
 export function usePlaybackHistory(
   port: HistoryPort,
   metadata: HistoryMetadata,
@@ -33,7 +36,11 @@ export function usePlaybackHistory(
       if (disposed) {
         await port.end(session.id)
 
-        return { positionMs: 0, speed: 1, playing: false }
+        return {
+          positionMs: 0,
+          speed: 1,
+          playing: false,
+        }
       }
 
       sessionId = session.id
@@ -47,7 +54,11 @@ export function usePlaybackHistory(
     } catch (cause) {
       warning.value = errorMessage(cause)
 
-      return { positionMs: 0, speed: 1, playing: false }
+      return {
+        positionMs: 0,
+        speed: 1,
+        playing: false,
+      }
     }
   }
 
@@ -86,9 +97,15 @@ export function usePlaybackHistory(
     lastProgressWrite = Date.now()
     lastProgressPosition = positionMs
 
-    return enqueue({ positionMs, durationMs, ended, sequence: ++sequence })
+    return enqueue({
+      positionMs,
+      durationMs,
+      ended,
+      sequence: ++sequence,
+    })
   }
 
+  // Record settled playback changes using the appropriate write cadence.
   function update(value: PlaybackSnapshot, reason: PlaybackSampleReason) {
     if (
       disposed ||
@@ -100,17 +117,19 @@ export function usePlaybackHistory(
     }
 
     latest = value
+
     if (reason === 'seek' || reason === 'pause' || reason === 'ended') {
       void save()
     } else if (
       reason === 'progress' &&
       value.positionMs > lastProgressPosition &&
-      Date.now() - lastProgressWrite >= 5000
+      Date.now() - lastProgressWrite >= PROGRESS_WRITE_INTERVAL_MS
     ) {
       void save()
     }
   }
 
+  // Save the latest settled progress before the current player is released.
   async function captureAndSave() {
     if (disposed) {
       return
@@ -125,6 +144,7 @@ export function usePlaybackHistory(
     await save()
   }
 
+  // Retry the original failed sample or save the current one.
   async function retry() {
     if (disposed) {
       return
@@ -151,6 +171,7 @@ export function usePlaybackHistory(
     }
   }
 
+  // Drain queued progress and release the history session.
   function dispose() {
     if (disposal) {
       return disposal
@@ -174,5 +195,13 @@ export function usePlaybackHistory(
     return disposal
   }
 
-  return { ready, warning, update, captureAndSave, retry, dispose, settled: () => queue }
+  return {
+    ready,
+    warning,
+    update,
+    captureAndSave,
+    retry,
+    dispose,
+    settled: () => queue,
+  }
 }

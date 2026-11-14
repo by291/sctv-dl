@@ -36,6 +36,7 @@ export function pageScrollTarget(): HTMLElement | Window {
   return document.getElementById('workspace-scroll') ?? window
 }
 
+// Capture the current offset, clamping transient WebKit edge bounce.
 export function pageScrollPosition(
   target: HTMLElement | Window = pageScrollTarget(),
 ): ScrollPosition {
@@ -45,6 +46,7 @@ export function pageScrollPosition(
     : { left: Math.max(0, target.scrollX), top: Math.max(0, target.scrollY) }
 }
 
+// Measure the current scroll bounds of the workspace or window.
 export function pageScrollMaximum(target: HTMLElement | Window = pageScrollTarget()): number {
   return Math.max(
     0,
@@ -54,6 +56,7 @@ export function pageScrollMaximum(target: HTMLElement | Window = pageScrollTarge
   )
 }
 
+// Restore a position on the supplied workspace or window.
 export function scrollPageTo(
   position: ScrollToOptions,
   target: HTMLElement | Window = pageScrollTarget(),

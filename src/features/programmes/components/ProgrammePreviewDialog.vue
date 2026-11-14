@@ -37,7 +37,7 @@ const {
   receiveSnapshot,
   mediaError,
   mediaReady,
-  loadPreview,
+  retryPreview,
   retryHistory,
   updateVisible,
   clearPreview,
@@ -102,7 +102,7 @@ const {
       v-if="failed"
       secondary
       class="preview-retry"
-      @click="loadPreview(true)"
+      @click="retryPreview"
     >
       重试
     </NButton>

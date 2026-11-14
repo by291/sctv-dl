@@ -6,6 +6,7 @@ import { navigationTab } from '@/shared/navigation/navigation-tab'
 
 import type { MaybeRefOrGetter } from 'vue'
 
+// Coordinate cover transitions with route ownership and browser history.
 export function useProgrammeCoverNavigation(programmeId: MaybeRefOrGetter<string>) {
   const router = useRouter()
   const selected = ref(false)
@@ -75,7 +76,9 @@ export function useProgrammeCoverNavigation(programmeId: MaybeRefOrGetter<string
 
         return updated && !disposed && toValue(programmeId) === id
       })
-        .catch(() => {})
+        .catch(() => {
+          // The router owns navigation errors; finally releases its temporary guards.
+        })
         .finally(() => {
           continueNavigation(false)
           stopWatching()
@@ -147,7 +150,9 @@ export function useProgrammeCoverNavigation(programmeId: MaybeRefOrGetter<string
 
       return updated
     })
-      .catch(() => {})
+      .catch(() => {
+        // The router owns navigation errors; finally clears the selected cover.
+      })
       .finally(() => {
         stopWatching()
         selected.value = false

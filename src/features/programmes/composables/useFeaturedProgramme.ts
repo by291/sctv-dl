@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { Programme } from '@/features/programmes/model/programme'
 
+// Keep the current spotlight selection stable until it must change.
 export function useFeaturedProgramme(
   programmes: Ref<Programme[]>,
   random: () => number = Math.random,

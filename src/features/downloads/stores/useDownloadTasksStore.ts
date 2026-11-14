@@ -33,6 +33,7 @@ export interface DownloadTarget {
   attemptId: string
 }
 
+// Observe native downloads and apply actions to current task attempts.
 export const useDownloadTasksStore = defineStore('downloadTasks', () => {
   const taskState = ref(createDownloadTaskState())
   const failures = ref<FileFailure[]>([])
@@ -48,6 +49,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
   let dispose: (() => void) | undefined
   let connectionVersion = 0
 
+  // Invalidate the current observer and release its subscription.
   function detach(): void {
     connectionVersion += 1
     dispose?.()
@@ -56,6 +58,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     loading.value = false
   }
 
+  // Subscribe to native task events before loading the initial snapshot.
   async function attach(next: NativeDownloadPort): Promise<void> {
     detach()
     port = next
@@ -75,6 +78,8 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
 
         const previousEpoch = taskState.value.epoch
         applyDownloadEvent(taskState.value, event)
+
+        // The first event from a replacement process cannot restore its other tasks.
         if (previousEpoch !== null && taskState.value.epoch !== previousEpoch) {
           void next
             .snapshot()
@@ -90,6 +95,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
             })
         }
       })
+
       if (currentConnectionVersion !== connectionVersion) {
         unsubscribe()
 
@@ -97,7 +103,9 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
       }
 
       dispose = unsubscribe
+
       const snapshot = await next.snapshot()
+
       if (currentConnectionVersion === connectionVersion) {
         applyDownloadSnapshot(taskState.value, snapshot)
       }
@@ -114,6 +122,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     }
   }
 
+  // Merge newly queued tasks and report preparation failures.
   function recordStart(result: DownloadStartResult): void {
     if (result.kind !== 'native') {
       return
@@ -131,6 +140,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     }
   }
 
+  // Start transfers through the native port and integrate the result.
   async function start(
     request: DownloadRequest,
     source: NativeDownloadPort | undefined = port,
@@ -145,39 +155,57 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     return result
   }
 
+  // Apply confirmed actions to current attempts and report partial outcomes.
   async function runBatch(
     action: DownloadActionRequest['action'],
     targets: DownloadTarget[],
   ): Promise<BatchResult> {
-    const result: BatchResult = { applied: 0, skipped: 0, failures: [] }
+    const result: BatchResult = {
+      applied: 0,
+      skipped: 0,
+      failures: [],
+    }
     const source = port
     const currentConnectionVersion = connectionVersion
     const captured = targets.map((target) => ({ ...target }))
 
     for (const target of captured) {
       const task = tasks.value.find((value) => value.id === target.taskId)
-      if (
-        !source ||
-        connectionVersion !== currentConnectionVersion ||
-        !task ||
-        task.attemptId !== target.attemptId ||
-        !availableDownloadActions(task).includes(action) ||
-        pendingActions.value.includes(task.id)
-      ) {
+
+      // Tasks can change attempts or become ineligible after the batch was confirmed.
+      const canApplyAction =
+        source &&
+        connectionVersion === currentConnectionVersion &&
+        task &&
+        task.attemptId === target.attemptId &&
+        availableDownloadActions(task).includes(action) &&
+        !pendingActions.value.includes(task.id)
+
+      if (!canApplyAction) {
         result.skipped += 1
         continue
       }
 
       pendingActions.value.push(task.id)
+
       try {
         const response = await source.act({ ...target, action })
+
         if (response.kind === 'skipped') {
           result.skipped += 1
-        } else {
-          result.applied += 1
-          if (currentConnectionVersion === connectionVersion) {
-            applyDownloadCommandResult(taskState.value, task.id, action, response)
-          }
+          continue
+        }
+
+        result.applied += 1
+
+        // The command result belongs to the connection that dispatched the action.
+        if (currentConnectionVersion === connectionVersion) {
+          applyDownloadCommandResult({
+            state: taskState.value,
+            taskId: task.id,
+            action,
+            result: response,
+          })
         }
       } catch (cause) {
         result.failures.push({ taskId: target.taskId, message: errorMessage(cause) })
@@ -194,6 +222,7 @@ export const useDownloadTasksStore = defineStore('downloadTasks', () => {
     return result
   }
 
+  // Apply an action to the current attempt of one task.
   async function act(id: string, action: DownloadActionRequest['action']): Promise<BatchResult> {
     const task = tasks.value.find((value) => value.id === id)
 

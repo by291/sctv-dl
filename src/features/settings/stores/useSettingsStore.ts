@@ -6,6 +6,7 @@ import { settingsSchema } from '@/features/settings/model/settings-schema'
 import type { Settings } from '@/features/settings/model/settings-schema'
 import type { SettingsPort } from '@/shared/platform/ports'
 
+// Coordinate local edits, incoming settings snapshots, and serialized saves.
 export const useSettingsStore = defineStore('settings', () => {
   const value = ref(settingsSchema.parse({}))
   const persisted = ref(true)
@@ -81,9 +82,11 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  // Connect persisted settings while preserving newer local edits.
   async function hydrate(next: SettingsPort): Promise<void> {
     unsubscribe?.()
     unsubscribe = undefined
+
     connectionVersion += 1
     const version = connectionVersion
     const initialSnapshotRevision = snapshotRevision
@@ -111,6 +114,7 @@ export const useSettingsStore = defineStore('settings', () => {
       }
 
       unsubscribe = dispose
+
       const loaded = await next.load()
 
       if (version !== connectionVersion) {
@@ -136,6 +140,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  // Drain settings saves, including edits queued during an in-flight save.
   async function flush(): Promise<void> {
     // Edits made during a save append work, so await the queue until its tail stops changing.
     let saving: Promise<void>
@@ -159,6 +164,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const theme = preference('theme')
   const favourites = preference('favourites')
 
+  // Toggle the programme in the saved favourites list.
   function toggleFavourite(id: string): void {
     favourites.value = favourites.value.includes(id)
       ? favourites.value.filter((value) => value !== id)

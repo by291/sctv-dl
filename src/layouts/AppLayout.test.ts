@@ -177,7 +177,7 @@ it('keeps connection announcements available across navigation and recovery', as
   expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')
 
   programmeApi.programmes.mockRejectedValueOnce(new Error('The programme service is unavailable.'))
-  await catalogue.load(true)
+  await catalogue.load({ shouldRefresh: true })
   await router.push('/settings')
   await flushPromises()
 
@@ -188,7 +188,7 @@ it('keeps connection announcements available across navigation and recovery', as
     'The programme service is unavailable.',
   )
 
-  await catalogue.load(true)
+  await catalogue.load({ shouldRefresh: true })
   await flushPromises()
 
   expect(wrapper.get('[role="status"]').text()).toBe('已连接节目服务')

@@ -4,6 +4,7 @@ const active = ref(false)
 
 export const viewTransitionActive = readonly(active)
 
+// Check browser support, motion preference, and transition ownership.
 export function canStartViewTransition(): boolean {
   return (
     !active.value &&
@@ -12,6 +13,7 @@ export function canStartViewTransition(): boolean {
   )
 }
 
+// Run one navigation update and release transition state when it settles.
 export async function runViewTransition(update: () => Promise<boolean | void>): Promise<void> {
   active.value = true
   await nextTick()
@@ -34,6 +36,7 @@ export async function runViewTransition(update: () => Promise<boolean | void>): 
     } catch (error) {
       active.value = false
 
+      // Once the callback has started, running it again could navigate twice.
       if (updateStarted) {
         throw error
       }

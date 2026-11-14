@@ -4,6 +4,7 @@ export interface PersistenceOwner {
   isPersisted(): Promise<boolean>
 }
 
+// Drain all persistence owners until their write revisions stabilize.
 export async function flushPersistence(owners: PersistenceOwner[]): Promise<boolean> {
   try {
     for (;;) {

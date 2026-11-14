@@ -58,14 +58,14 @@ const filtered = computed(() => {
       item.name.toLowerCase().includes(search) && (tab.value === 'all' || favourites.has(item.id)),
   )
 
-  return items.sort((a, b) => {
+  return items.sort((left, right) => {
     const priority =
       tab.value === 'all'
-        ? Number(favouritePriority.has(b.id)) - Number(favouritePriority.has(a.id))
+        ? Number(favouritePriority.has(right.id)) - Number(favouritePriority.has(left.id))
         : 0
 
     // Stable sorting preserves the service order within each group in default mode.
-    return priority || (sort.value === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : 0)
+    return priority || (sort.value === 'name' ? left.name.localeCompare(right.name, 'zh-CN') : 0)
   })
 })
 const emptyState = computed(() => {
@@ -89,7 +89,7 @@ onBeforeRouteLeave(() => {
 
 onActivated(async () => {
   if (store.fetchedAt && !store.refreshing) {
-    void store.load(true)
+    void store.load({ shouldRefresh: true })
   }
 
   await nextTick()
@@ -108,7 +108,7 @@ onActivated(async () => {
         :loading="store.refreshing"
         quaternary
         :theme-overrides="refreshButtonTheme"
-        @click="store.load(true)"
+        @click="store.load({ shouldRefresh: true })"
       >
         <template #icon><RefreshCw :size="16" /></template>
         刷新节目
@@ -122,7 +122,7 @@ onActivated(async () => {
       :refresh-error="store.refreshError"
       :cache-warning="store.cacheWarning"
       @accept="store.acceptUpdate"
-      @retry="store.load(true)"
+      @retry="store.load({ shouldRefresh: true })"
     />
 
     <div
@@ -201,7 +201,7 @@ onActivated(async () => {
     <StatePanel
       v-else-if="store.error"
       :error="store.error"
-      @retry="store.load(true)"
+      @retry="store.load({ shouldRefresh: true })"
     />
 
     <StatePanel

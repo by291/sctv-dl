@@ -32,8 +32,16 @@ const contentSortLabel = computed(() => (sortOrder.value === 'asc' ? '时间升�
 const rows = computed(() => programmeContentRows(props.contents, props.fullIds, sortOrder.value))
 const groups = computed(() =>
   [
-    { id: 'full', label: '整期节目', rows: rows.value.filter((row) => row.fullEpisode) },
-    { id: 'clips', label: '节目片段', rows: rows.value.filter((row) => !row.fullEpisode) },
+    {
+      id: 'full',
+      label: '整期节目',
+      rows: rows.value.filter((row) => row.fullEpisode),
+    },
+    {
+      id: 'clips',
+      label: '节目片段',
+      rows: rows.value.filter((row) => !row.fullEpisode),
+    },
   ].filter((group) => group.rows.length),
 )
 

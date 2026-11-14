@@ -33,7 +33,7 @@ describe('programme archive requests', () => {
         ]),
     }
     const scope = effectScope()
-    const archive = scope.run(() => useProgrammeArchive(ref('1'), client))!
+    const archive = scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))!
     await nextTick()
     await nextTick()
     archive.selectedDate.value = '2026-10-05'
@@ -62,7 +62,7 @@ describe('programme archive requests', () => {
     }
     const programmeId = ref('1')
     const scope = effectScope()
-    const archive = scope.run(() => useProgrammeArchive(programmeId, client))!
+    const archive = scope.run(() => useProgrammeArchive({ programmeId, client }))!
     programmeId.value = '2'
     await nextTick()
     await nextTick()
@@ -80,7 +80,7 @@ describe('programme archive requests', () => {
       contents: vi.fn(),
     }
     const scope = effectScope()
-    const archive = scope.run(() => useProgrammeArchive(ref('1'), client))!
+    const archive = scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))!
     await nextTick()
     expect(archive.loadingDates.value).toBe(false)
     expect(archive.selectedDate.value).toBeNull()
@@ -100,7 +100,7 @@ describe('programme archive requests', () => {
       }),
     }
     const scope = effectScope()
-    scope.run(() => useProgrammeArchive(ref('1'), client))
+    scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))
     scope.stop()
     expect(signal?.aborted).toBe(true)
   })
@@ -134,7 +134,7 @@ it('holds content changes during batch selection and preserves rows on refresh f
   const held = ref(true)
   const scope = effectScope()
   const archive = scope.run(() =>
-    useProgrammeArchive(ref('1'), client, undefined, { interactionHold: held }),
+    useProgrammeArchive({ programmeId: ref('1'), client, interactionHold: held }),
   )!
   await settleArchive()
   await archive.loadContents()
@@ -164,7 +164,7 @@ it('clears old content and resolves a changed date ID when date updates are acce
       .mockImplementationOnce(() => new Promise(() => {})),
   }
   const scope = effectScope()
-  const archive = scope.run(() => useProgrammeArchive(ref('1'), client))!
+  const archive = scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))!
   await settleArchive()
   await archive.loadDates()
   expect(archive.contents.value).toEqual([episode])
@@ -200,7 +200,9 @@ it('restores an older date before issuing any content request and falls back aft
   }
   const scope = effectScope()
   const archive = scope.run(() =>
-    useProgrammeArchive(ref('1'), client, undefined, {
+    useProgrammeArchive({
+      programmeId: ref('1'),
+      client,
       restoration: { ready: () => pending, saved },
     }),
   )!
@@ -227,7 +229,7 @@ it('applies an empty date update without keeping the previous content list', asy
     contents: vi.fn().mockResolvedValue([episode]),
   }
   const scope = effectScope()
-  const archive = scope.run(() => useProgrammeArchive(ref('1'), client))!
+  const archive = scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))!
   await settleArchive()
   await archive.loadDates()
   await archive.acceptUpdate()
@@ -258,7 +260,7 @@ it('rejects the first A request after A to B to A navigation', async () => {
       .mockResolvedValueOnce([{ ...episode, title: 'Fresh A' }]),
   }
   const scope = effectScope()
-  const archive = scope.run(() => useProgrammeArchive(ref('1'), client))!
+  const archive = scope.run(() => useProgrammeArchive({ programmeId: ref('1'), client }))!
   await settleArchive()
   archive.selectedDate.value = '2026-10-05'
   await settleArchive()

@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core'
 
+// Register the native exit handler that reports whether persistence completed.
 export async function prepareNativeExit(prepare: () => Promise<boolean>): Promise<() => void> {
   let active = true
   const onEvent = new Channel<string>()

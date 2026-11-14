@@ -4,6 +4,8 @@ import { contentRefSchema, urlSchema } from './programmes.ts'
 
 import type { ContentRef } from './programmes.ts'
 
+export const MAX_HISTORY_ENTRIES = 500
+
 const milliseconds = z.number().int().nonnegative()
 
 export const historyMetadataSchema = z.object({
@@ -29,7 +31,7 @@ export const historyEntrySchema = historyMetadataSchema.extend({
 })
 
 export const historySnapshotSchema = z.object({
-  entries: z.array(historyEntrySchema).max(500),
+  entries: z.array(historyEntrySchema).max(MAX_HISTORY_ENTRIES),
   revision: z.number().int().nonnegative(),
   persisted: z.boolean(),
   warning: z.string().nullable(),

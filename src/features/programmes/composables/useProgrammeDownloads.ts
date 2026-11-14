@@ -7,17 +7,24 @@ import type { ProgrammeContent } from '@/features/programmes/model/programme'
 import type { Quality } from '@/shared/media/video-quality'
 import type { DownloadStartResult } from '@shared/contracts/downloads'
 
+// Track download preparation and delegate to the active platform port.
 export function useProgrammeDownloads() {
   const downloads = usePlatform().downloads
   const tasks = downloads.kind === 'native' ? useDownloadTasksStore() : undefined
   const preparingIds = ref<string[]>([])
 
-  async function prepareDownloads(
-    items: ProgrammeContent[],
-    dateId: string,
-    quality: Quality,
-    programmeId: string,
-  ): Promise<DownloadStartResult | null> {
+  // Keep one preparation in flight and route it to the active download port.
+  async function prepareDownloads({
+    items,
+    dateId,
+    quality,
+    programmeId,
+  }: {
+    items: ProgrammeContent[]
+    dateId: string
+    quality: Quality
+    programmeId: string
+  }): Promise<DownloadStartResult | null> {
     if (!items.length || !dateId || preparingIds.value.length) {
       return null
     }

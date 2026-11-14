@@ -64,6 +64,7 @@ function createPlayerOptions(container: HTMLDivElement, options: PlayerOptions):
   }
 }
 
+// Coordinate Artplayer events, source changes, and player ownership.
 export function createProgrammePlayerController(options: PlayerOptions, events: PlayerEvents) {
   let player: Artplayer | undefined
 
@@ -371,5 +372,10 @@ export function createProgrammePlayerController(options: PlayerOptions, events: 
     }
   }
 
-  return { mount, pause, capture, dispose }
+  return {
+    mount,
+    pause,
+    capture,
+    dispose,
+  }
 }

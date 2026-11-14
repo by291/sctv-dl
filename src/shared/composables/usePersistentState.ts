@@ -3,12 +3,18 @@ import { ref } from 'vue'
 
 import type { z } from 'zod'
 
-export function usePersistentState<T>(
-  key: string,
-  defaults: T,
-  schema: z.ZodType<T>,
-  options: { syncTabs?: boolean } = {},
-) {
+// Load validated settings and expose whether browser persistence is available.
+export function usePersistentState<T>({
+  key,
+  defaults,
+  schema,
+  shouldSyncTabs = true,
+}: {
+  key: string
+  defaults: T
+  schema: z.ZodType<T>
+  shouldSyncTabs?: boolean
+}) {
   const persisted = ref(true)
   let storage: Storage | undefined
 
@@ -20,7 +26,7 @@ export function usePersistentState<T>(
 
   const value = useStorage<T>(key, () => structuredClone(defaults), storage, {
     writeDefaults: false,
-    listenToStorageChanges: options.syncTabs ?? true,
+    listenToStorageChanges: shouldSyncTabs,
     onError: () => {
       persisted.value = false
     },
@@ -34,7 +40,7 @@ export function usePersistentState<T>(
           return structuredClone(defaults)
         }
       },
-      write: (data) => JSON.stringify(data),
+      write: (value) => JSON.stringify(value),
     },
   })
 

@@ -20,25 +20,31 @@ function validatedId(value: string): string {
   return result.data
 }
 
+// Read validated catalogue, broadcast, and content records over cancellable IPC.
 export function createTauriProgrammeApi(): ProgrammeApi {
   return {
     programmes: (signal) =>
-      invokeAbortable('list_programmes', {}, z.array(programmeSchema), signal),
-    async dates(programmeId, signal) {
-      return invokeAbortable(
-        'list_programme_dates',
-        { programmeId: validatedId(programmeId) },
-        z.array(programmeDateSchema),
+      invokeAbortable({
+        command: 'list_programmes',
+        parameters: {},
+        schema: z.array(programmeSchema),
         signal,
-      )
+      }),
+    async dates(programmeId, signal) {
+      return invokeAbortable({
+        command: 'list_programme_dates',
+        parameters: { programmeId: validatedId(programmeId) },
+        schema: z.array(programmeDateSchema),
+        signal,
+      })
     },
     async contents(programmeId, dateId, signal) {
-      return invokeAbortable(
-        'list_programme_contents',
-        { programmeId: validatedId(programmeId), dateId: validatedId(dateId) },
-        z.array(programmeContentSchema),
+      return invokeAbortable({
+        command: 'list_programme_contents',
+        parameters: { programmeId: validatedId(programmeId), dateId: validatedId(dateId) },
+        schema: z.array(programmeContentSchema),
         signal,
-      )
+      })
     },
   }
 }

@@ -10,6 +10,7 @@ import { createTauriWindowControls } from '@/platform/window-controls.tauri'
 
 import type { AppPlatform } from '@/shared/platform/ports'
 
+// Compose native adapters and own their application lifetime.
 export function createTauriPlatform(): AppPlatform {
   const playback = createTauriPlayback()
   const history = createTauriHistory()

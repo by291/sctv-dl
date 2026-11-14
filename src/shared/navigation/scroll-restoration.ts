@@ -17,6 +17,7 @@ export interface ScrollRestoration {
 
 export const scrollRestorationKey: InjectionKey<ScrollRestoration> = Symbol('scroll-restoration')
 
+// Coordinate pending workspace offsets with entry ownership and user input.
 export function createScrollRestoration(): ScrollRestoration {
   const positions = new Map<string, ScrollPosition>()
   let cancelActive = () => {}
@@ -87,7 +88,11 @@ export function createScrollRestoration(): ScrollRestoration {
 
   return {
     scrollOnEnter(key, position, mode = 'navigation') {
-      pending = { key, position, mode }
+      pending = {
+        key,
+        position,
+        mode,
+      }
       applyPending()
     },
     pageEntered(key, retainedPosition) {

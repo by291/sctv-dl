@@ -60,11 +60,12 @@ void startWithRecovery(root, async () => {
 
     await settings.hydrate(platform.settings)
     await history.attach(platform.history)
+
     const app = createApp(App)
-      .provide(platformKey, platform)
-      .provide(scrollRestorationKey, scrollRestoration)
-      .use(pinia)
-      .use(router)
+    app.provide(platformKey, platform)
+    app.provide(scrollRestorationKey, scrollRestoration)
+    app.use(pinia)
+    app.use(router)
 
     app.onUnmount(() => {
       void disposeApplication().catch((cause) => {

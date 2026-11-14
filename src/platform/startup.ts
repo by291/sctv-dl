@@ -1,3 +1,4 @@
+// Start the application and provide a retry surface when initialization fails.
 export async function startWithRecovery(
   root: HTMLElement,
   start: () => Promise<void>,

@@ -100,7 +100,9 @@ async function changeFilter(value: Filter): Promise<void> {
   filter.value = value
   selection.value = []
   batchFeedback.value = null
+
   await nextTick()
+
   scrollPageTo({ top: offsets.get(value) ?? 0 })
 }
 
@@ -126,7 +128,11 @@ function batch(action: DownloadActionRequest['action']): void {
 
   const description = downloadActionConfirmation(action, { kind: 'batch', count: targets.length })
   if (description) {
-    confirmation.value = { action, targets, description }
+    confirmation.value = {
+      action,
+      targets,
+      description,
+    }
   } else {
     void runBatchAction(action, targets)
   }

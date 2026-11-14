@@ -5,11 +5,17 @@ import {
   historyMetadataSchema,
   historySampleSchema,
   isHistoryCompleted,
+  MAX_HISTORY_ENTRIES,
 } from '@shared/contracts/history'
 
 import type { HistoryEntry, HistoryMetadata, HistorySnapshot } from '@shared/contracts/history'
 import type { ApplicationDatabase } from '@/shared/storage/application-database.web'
 import type { HistoryPort } from '@/shared/platform/ports'
+
+const MAX_HISTORY_METADATA_BYTES = 16_384
+
+const historyEntriesSchema = z.array(historyEntrySchema).max(MAX_HISTORY_ENTRIES)
+const historyRevisionSchema = z.number().int().nonnegative()
 
 const sessionSchema = z.object({
   id: z.string(),
@@ -23,11 +29,16 @@ interface State {
   revision: number
 }
 
+// Persist playback history with transaction-scoped session ownership.
 export function createWebHistory(database: ApplicationDatabase): {
   port: HistoryPort
   dispose(): void
 } {
-  let state: State = { entries: [], sessions: [], revision: 0 }
+  let state: State = {
+    entries: [],
+    sessions: [],
+    revision: 0,
+  }
   let warning: string | null = null
   let disposed = false
   let writeRevision = 0
@@ -58,10 +69,16 @@ export function createWebHistory(database: ApplicationDatabase): {
 
   // Check session ownership in the write transaction, so another tab's clear
   // cannot race a read followed by an independent write and resurrect progress.
-  async function transact<T>(mutate: boolean, action: (draft: State) => T): Promise<T> {
+  async function transact<T>({
+    shouldWrite,
+    action,
+  }: {
+    shouldWrite: boolean
+    action: (draft: State) => T
+  }): Promise<T> {
     const connection = await database.open()
     const recovering = pendingMutations.length > 0
-    const writes = mutate || recovering
+    const writes = shouldWrite || recovering
 
     return new Promise<T>((resolve, reject) => {
       const transaction = connection.transaction(
@@ -71,6 +88,7 @@ export function createWebHistory(database: ApplicationDatabase): {
       const entries = transaction.objectStore('history').getAll()
       const sessions = transaction.objectStore('historySessions').getAll()
       const revision = transaction.objectStore('meta').get('historyRevision')
+
       let result: T
       let next: State
       let cause: unknown
@@ -90,19 +108,15 @@ export function createWebHistory(database: ApplicationDatabase): {
 
       revision.onsuccess = () => {
         try {
+          const storedEntries = historyEntriesSchema.parse(entries.result)
+          storedEntries.sort((left, right) => right.viewedAt.localeCompare(left.viewedAt))
+
           next = {
-            entries: z
-              .array(historyEntrySchema)
-              .max(500)
-              .parse(entries.result)
-              .sort((left, right) => right.viewedAt.localeCompare(left.viewedAt)),
+            entries: storedEntries,
             sessions: z.array(sessionSchema).parse(sessions.result),
-            revision: z
-              .number()
-              .int()
-              .nonnegative()
-              .parse(revision.result ?? 0),
+            revision: historyRevisionSchema.parse(revision.result ?? 0),
           }
+
           // Replay operations against fresh durable ownership, never copy the
           // fallback snapshot over other tabs' commits. Removed/replaced tokens
           // make their pending progress harmless no-ops.
@@ -111,11 +125,14 @@ export function createWebHistory(database: ApplicationDatabase): {
           }
 
           next.revision = Math.max(next.revision, state.revision)
+
           // Fresh ownership remains authoritative even if quota prevents this
           // transaction from committing. Keep replayed local progress only for
           // still-current tokens, and preserve the observable revision floor.
           state = structuredClone(next)
+
           result = action(next)
+
           if (!writes) {
             return
           }
@@ -141,8 +158,11 @@ export function createWebHistory(database: ApplicationDatabase): {
     })
   }
 
-  function enqueue<T>(mutate: boolean, action: (draft: State) => T): Promise<T> {
-    if (mutate) {
+  function enqueue<T>(
+    { shouldWrite }: { shouldWrite: boolean },
+    action: (draft: State) => T,
+  ): Promise<T> {
+    if (shouldWrite) {
       writeRevision += 1
     }
 
@@ -154,22 +174,26 @@ export function createWebHistory(database: ApplicationDatabase): {
       let result: T
       const recovering = warning !== null
       try {
-        result = await transact(mutate, action)
+        result = await transact({ shouldWrite, action })
       } catch {
         warning = '观看历史无法保存到本地，当前记录仅在本次会话中保留'
         result = action(state)
-        if (mutate) {
+
+        // Reads can observe fallback state but only writes need replay on recovery.
+        if (shouldWrite) {
           pendingMutations.push(action)
         }
       }
 
       notify()
-      if ((mutate || recovering) && warning === null) {
+      if ((shouldWrite || recovering) && warning === null) {
         channel?.postMessage(null)
       }
 
       return result
     })
+
+    // Let the next operation proceed even if this caller receives a rejection.
     queue = pending.catch(() => {})
 
     return pending
@@ -177,20 +201,20 @@ export function createWebHistory(database: ApplicationDatabase): {
 
   const port: HistoryPort = {
     async list() {
-      await enqueue(false, () => {})
+      await enqueue({ shouldWrite: false }, () => {})
 
       return snapshot()
     },
     begin(input) {
       const metadata: HistoryMetadata = historyMetadataSchema.parse(input)
-      if (new TextEncoder().encode(JSON.stringify(metadata)).length > 16384) {
+      if (new TextEncoder().encode(JSON.stringify(metadata)).length > MAX_HISTORY_METADATA_BYTES) {
         return Promise.reject(new Error('History metadata too large'))
       }
 
       const id = crypto.randomUUID()
       let expected: { revision: number; sessionId: string | undefined } | undefined
 
-      return enqueue(true, (draft) => {
+      return enqueue({ shouldWrite: true }, (draft) => {
         const key = historyKey(metadata.content)
         const entry = draft.entries.find((value) => historyKey(value.content) === key) ?? null
         const existing = draft.sessions.find((value) => historyKey(value.metadata.content) === key)
@@ -204,7 +228,11 @@ export function createWebHistory(database: ApplicationDatabase): {
         draft.sessions = draft.sessions.filter(
           (value) => historyKey(value.metadata.content) !== key,
         )
-        draft.sessions.push({ id, metadata, sequence: 0 })
+        draft.sessions.push({
+          id,
+          metadata,
+          sequence: 0,
+        })
         // Session ownership changes must remain observable after end removes the
         // token, otherwise a delayed fallback begin could install an older owner.
         draft.revision += 1
@@ -214,7 +242,7 @@ export function createWebHistory(database: ApplicationDatabase): {
     },
     async record(id, input) {
       const sample = historySampleSchema.parse(input)
-      const accepted = await enqueue(true, (draft) => {
+      const accepted = await enqueue({ shouldWrite: true }, (draft) => {
         const session = draft.sessions.find((value) => value.id === id)
         if (!session || sample.sequence <= session.sequence) {
           return false
@@ -235,7 +263,7 @@ export function createWebHistory(database: ApplicationDatabase): {
           viewedAt,
           completed: isHistoryCompleted(sample),
         })
-        draft.entries = draft.entries.slice(0, 500)
+        draft.entries = draft.entries.slice(0, MAX_HISTORY_ENTRIES)
         draft.revision += 1
 
         return true
@@ -244,12 +272,12 @@ export function createWebHistory(database: ApplicationDatabase): {
       return { accepted, persisted: warning === null }
     },
     end(id) {
-      return enqueue(true, (draft) => {
+      return enqueue({ shouldWrite: true }, (draft) => {
         draft.sessions = draft.sessions.filter((value) => value.id !== id)
       })
     },
     remove(content) {
-      return enqueue(true, (draft) => {
+      return enqueue({ shouldWrite: true }, (draft) => {
         const key = historyKey(content)
         draft.entries = draft.entries.filter((entry) => historyKey(entry.content) !== key)
         draft.sessions = draft.sessions.filter(
@@ -259,7 +287,7 @@ export function createWebHistory(database: ApplicationDatabase): {
       })
     },
     clear() {
-      return enqueue(true, (draft) => {
+      return enqueue({ shouldWrite: true }, (draft) => {
         draft.entries = []
         draft.sessions = []
         draft.revision += 1
@@ -280,7 +308,7 @@ export function createWebHistory(database: ApplicationDatabase): {
     },
     async flush() {
       if (warning !== null) {
-        await enqueue(false, () => {})
+        await enqueue({ shouldWrite: false }, () => {})
       }
 
       let pending: Promise<unknown>
@@ -297,7 +325,9 @@ export function createWebHistory(database: ApplicationDatabase): {
   }
 
   function refresh(): void {
-    void port.list().catch(() => {})
+    void port.list().catch(() => {
+      // A background refresh can race disposal; the next read opens a fresh transaction.
+    })
   }
 
   function visibility(): void {

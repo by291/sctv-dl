@@ -39,6 +39,7 @@ interface PreviewOwner {
   playbackIntentVersion: number
 }
 
+// Own the preview session, player restoration, and history capture lifecycle.
 export function useProgrammePreview(
   content: Ref<ProgrammeContent | null>,
   options: PreviewOptions,
@@ -52,7 +53,11 @@ export function useProgrammePreview(
   const failed = ref('')
   const qualityNotice = ref('')
   const hidden = ref(document.hidden)
-  const restore = shallowRef<PlaybackRestore>({ positionMs: 0, speed: 1, playing: false })
+  const restore = shallowRef<PlaybackRestore>({
+    positionMs: 0,
+    speed: 1,
+    playing: false,
+  })
   const gate = new LatestRequest()
   const owner = shallowRef<PreviewOwner | null>(null)
 
@@ -75,6 +80,7 @@ export function useProgrammePreview(
     }
   }
 
+  // Keep the latest usable playback sample for retry and history.
   function receiveSnapshot(value: PlaybackSnapshot, reason: PlaybackSampleReason) {
     const current = owner.value
     if (!current || failed.value || !value.initialized) {
@@ -116,7 +122,7 @@ export function useProgrammePreview(
     releaseSession()
   }
 
-  async function loadPreview(retry = false) {
+  async function loadPreview({ shouldRetry = false } = {}) {
     const current = owner.value
     if (!current || !content.value) {
       return
@@ -125,11 +131,12 @@ export function useProgrammePreview(
     // Cancellation stops cooperative adapters; the request identity also rejects late completions.
     const request = gate.begin()
     const playbackIntentVersion = current.playbackIntentVersion
-    const retryState = retry ? current.lastSnapshot : null
+    const retryState = shouldRetry ? current.lastSnapshot : null
     releaseSession()
     failed.value = ''
     loading.value = true
     qualityNotice.value = ''
+
     try {
       if (!current.reference) {
         throw new Error('节目内容已不可用，请刷新后重试')
@@ -137,7 +144,11 @@ export function useProgrammePreview(
 
       const initial = current.history
         ? await current.history.ready
-        : { positionMs: 0, speed: 1, playing: false }
+        : {
+            positionMs: 0,
+            speed: 1,
+            playing: false,
+          }
       if (!request.isCurrent()) {
         return
       }
@@ -148,6 +159,7 @@ export function useProgrammePreview(
             { ...current.reference, quality: retryState?.quality ?? current.quality },
             request.signal,
           )
+      // An obsolete open can still have created a session that needs releasing.
       if (!request.isCurrent()) {
         await platform.playback.close(opened.id)
 
@@ -163,6 +175,7 @@ export function useProgrammePreview(
           !document.hidden &&
           !!content.value,
       }
+
       const requestedQuality = retryState?.quality ?? current.quality
       if (opened.selectedQuality !== requestedQuality) {
         qualityNotice.value = `所选画质暂不可用，已使用${opened.selectedQuality === 'smooth' ? '流畅' : '标准'}画质。`
@@ -184,14 +197,12 @@ export function useProgrammePreview(
     gate.cancel()
     disposeOwner()
     const pinned = options.input
+    const reference = pinned?.metadata.content ?? options.reference
+
     displayedContent.value = { ...(pinned?.content ?? value) }
     const current: PreviewOwner = {
       localTaskId: pinned?.kind === 'download' ? pinned.taskId : null,
-      reference: pinned
-        ? { ...pinned.metadata.content }
-        : options.reference
-          ? { ...options.reference }
-          : null,
+      reference: reference ? { ...reference } : null,
       quality: options.quality,
       history: null,
       unregisterCapture: null,
@@ -199,6 +210,7 @@ export function useProgrammePreview(
       playbackIntentVersion: 0,
     }
     owner.value = current
+
     if (pinned) {
       current.history = usePlaybackHistory(
         platform.history,
@@ -219,6 +231,7 @@ export function useProgrammePreview(
     return platform.downloads.openPlayback(taskId, signal)
   }
 
+  // Preserve usable playback state when the current source fails.
   function mediaError() {
     const current = owner.value
     if (current) {
@@ -248,20 +261,29 @@ export function useProgrammePreview(
     videoPlayer.value?.pause()
   }
 
+  // Retry persistence for the current preview history session.
   function retryHistory() {
     return owner.value?.history?.retry()
   }
 
+  // Reopen sources using the last playable position and valid playback intent.
+  function retryPreview() {
+    return loadPreview({ shouldRetry: true })
+  }
+
+  // Clear the error once the current player reports readiness.
   function mediaReady() {
     failed.value = ''
   }
 
+  // Dismiss the preview while leaving session release to the modal lifecycle.
   function updateVisible(show: boolean) {
     if (!show) {
       content.value = null
     }
   }
 
+  // Release the departing preview after its modal leave transition.
   function clearPreview() {
     // Leave callbacks from an older modal cannot release a newly opened preview.
     if (!content.value) {
@@ -324,7 +346,7 @@ export function useProgrammePreview(
     receiveSnapshot,
     mediaError,
     mediaReady,
-    loadPreview,
+    retryPreview,
     retryHistory,
     updateVisible,
     clearPreview,

@@ -346,7 +346,7 @@ it('pins history metadata when a preview opens and retains it while archive stat
   }
   expect(dialog.props('input')).toEqual(expected)
   programmeApi.programmes.mockResolvedValue([{ id: '1', name: 'Renamed programme', cover: null }])
-  await useProgrammeCatalogueStore().load(true)
+  await useProgrammeCatalogueStore().load({ shouldRefresh: true })
   useProgrammeCatalogueStore().acceptUpdate()
   wrapper.findComponent(ProgrammeDatePicker).vm.$emit('update:modelValue', '2026-10-05')
   await flushPromises()

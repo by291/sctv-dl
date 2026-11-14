@@ -12,6 +12,7 @@ import type { ProgrammeApi } from '@/shared/platform/ports'
 
 export type { ProgrammeApi } from '@/shared/platform/ports'
 
+// Read validated programme, broadcast, and content records from the client API.
 export function createProgrammeApi(
   base = '/client-api/v1',
   fetcher: typeof fetch = fetch,

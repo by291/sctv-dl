@@ -86,7 +86,7 @@ it('rejects promptly on abort and cancels the same native request even if it lat
   await Promise.resolve()
 })
 
-it.each(['success', 'error'])('removes abort listeners after terminal %s', async (outcome) => {
+it.each(['success', 'error'])('does not cancel a request after terminal %s', async (outcome) => {
   const commands: string[] = []
   mockIPC((command) => {
     commands.push(command)
@@ -97,7 +97,6 @@ it.each(['success', 'error'])('removes abort listeners after terminal %s', async
     return []
   })
   const controller = new AbortController()
-  const remove = vi.spyOn(controller.signal, 'removeEventListener')
   const request = createTauriProgrammeApi().programmes(controller.signal)
   if (outcome === 'success') {
     await expect(request).resolves.toEqual([])
@@ -105,7 +104,6 @@ it.each(['success', 'error'])('removes abort listeners after terminal %s', async
     await expect(request).rejects.toThrow('Service failed')
   }
 
-  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
   controller.abort()
   expect(commands).toEqual(['list_programmes'])
 })
@@ -160,7 +158,9 @@ it('keeps the newest archive when native replies arrive after a programme switch
   })
   const scope = effectScope()
   const programmeId = ref('1')
-  const archive = scope.run(() => useProgrammeArchive(programmeId, createTauriProgrammeApi()))!
+  const archive = scope.run(() =>
+    useProgrammeArchive({ programmeId, client: createTauriProgrammeApi() }),
+  )!
   try {
     programmeId.value = '2'
     await nextTick()

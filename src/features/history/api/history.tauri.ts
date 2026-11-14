@@ -11,6 +11,7 @@ import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { HistoryPort } from '@/shared/platform/ports'
 
+// Expose native history, serialize writes, and track persistence failures.
 export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<void> } {
   let disposed = false
   let writeRevision = 0
@@ -27,9 +28,14 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
       throw new Error('History disposed')
     }
 
-    return invokeValidated(command, args, schema, {
-      failure: '无法访问观看历史，请重试',
-      invalid: '观看历史数据格式异常，请检查客户端版本',
+    return invokeValidated({
+      command,
+      parameters: args,
+      schema,
+      messages: {
+        failure: '无法访问观看历史，请重试',
+        invalid: '观看历史数据格式异常，请检查客户端版本',
+      },
     })
   }
 
@@ -51,6 +57,8 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
         throw cause
       }
     })
+
+    // Keep processing later writes while the caller receives this operation's failure.
     queue = pending.catch(() => {})
 
     return pending

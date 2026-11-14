@@ -19,7 +19,11 @@ const props = withDefaults(
     restore?: PlaybackRestore
     active?: boolean
   }>(),
-  { variants: () => [], active: true, restore: undefined },
+  {
+    variants: () => [],
+    active: true,
+    restore: undefined,
+  },
 )
 const emit = defineEmits<{
   error: []

@@ -31,12 +31,18 @@ async function request<T>(
   args: Record<string, unknown>,
   schema: z.ZodType<T>,
 ): Promise<T> {
-  return invokeValidated(command, args, schema, {
-    failure: '无法调用桌面下载服务，请重试',
-    invalid: '桌面下载服务数据格式异常，请检查客户端版本',
+  return invokeValidated({
+    command,
+    parameters: args,
+    schema,
+    messages: {
+      failure: '无法调用桌面下载服务，请重试',
+      invalid: '桌面下载服务数据格式异常，请检查客户端版本',
+    },
   })
 }
 
+// Expose native download commands and guarded event subscriptions.
 export function createTauriDownloads(): NativeDownloadPort {
   return {
     kind: 'native',
@@ -48,17 +54,18 @@ export function createTauriDownloads(): NativeDownloadPort {
         downloadActionResultSchema,
       ),
     openPlayback: (taskId, signal) =>
-      invokeAbortable(
-        'open_local_playback',
-        { taskId: z.string().min(1).parse(taskId) },
-        playbackSessionSchema,
+      invokeAbortable({
+        command: 'open_local_playback',
+        parameters: { taskId: z.string().min(1).parse(taskId) },
+        schema: playbackSessionSchema,
         signal,
-        (raw) => {
+        onLate: (raw) => {
           if (raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string') {
+            // A discarded reply can still own a native session until teardown.
             void invoke('close_playback', { sessionId: raw.id }).catch(() => {})
           }
         },
-      ),
+      }),
     async subscribeEvents(listener) {
       let active = true
       const onEvent = new Channel<unknown>()
@@ -83,6 +90,7 @@ export function createTauriDownloads(): NativeDownloadPort {
         }
 
         active = false
+        // Stop delivery locally even if native teardown already made the command unavailable.
         void invoke('unsubscribe_download_events', { subscriptionId }).catch(() => {})
       }
     },

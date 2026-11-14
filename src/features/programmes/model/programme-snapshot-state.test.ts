@@ -38,8 +38,11 @@ describe('accepted programme snapshots', () => {
   })
   it('does not apply an update while a preview or selection holds it', () => {
     const state = { accepted: snapshot, pending: { ...snapshot, revision: '2', items: [] } }
-    expect(acceptProgrammeUpdate(state, true)).toEqual(state)
-    expect(acceptProgrammeUpdate(state, false)).toEqual({ accepted: state.pending, pending: null })
+    expect(acceptProgrammeUpdate(state, { isInteractionHeld: true })).toEqual(state)
+    expect(acceptProgrammeUpdate(state, { isInteractionHeld: false })).toEqual({
+      accepted: state.pending,
+      pending: null,
+    })
   })
 })
 

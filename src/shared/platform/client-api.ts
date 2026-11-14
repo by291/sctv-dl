@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { applicationErrorSchema } from '@shared/contracts/errors'
 
+// Create a request function that validates responses from the normalized API.
 export function createClientApi(base = '/client-api/v1', fetcher: typeof fetch = fetch) {
   return async function request<T>(
     path: string,

@@ -15,6 +15,7 @@ export interface DownloadTaskState {
   removedTaskIds: Set<string>
 }
 
+// Create an empty task state with revision and removal guards.
 export function createDownloadTaskState(): DownloadTaskState {
   return {
     tasks: [],
@@ -26,6 +27,7 @@ export function createDownloadTaskState(): DownloadTaskState {
   }
 }
 
+// Reset revision guards before a replacement observer reads a snapshot.
 export function resetDownloadObservation(state: DownloadTaskState): void {
   state.epoch = null
   state.snapshotRevision = -1
@@ -74,6 +76,7 @@ function useEpoch(state: DownloadTaskState, next: string): boolean {
   return true
 }
 
+// Merge a complete snapshot without replacing newer observed task state.
 export function applyDownloadSnapshot(state: DownloadTaskState, snapshot: DownloadSnapshot): void {
   // A snapshot started before a process replacement cannot switch us back.
   if (state.epoch !== null && state.epoch !== snapshot.epoch) {
@@ -99,6 +102,7 @@ export function applyDownloadSnapshot(state: DownloadTaskState, snapshot: Downlo
   state.snapshotRevision = snapshot.revision
 }
 
+// Apply a revisioned event to the current native process state.
 export function applyDownloadEvent(state: DownloadTaskState, event: DownloadEvent): void {
   if (!useEpoch(state, event.epoch) || event.revision <= state.snapshotRevision) {
     return
@@ -124,12 +128,18 @@ function removeTask(state: DownloadTaskState, taskId: string): void {
   state.tasks = state.tasks.filter((task) => task.id !== taskId)
 }
 
-export function applyDownloadCommandResult(
-  state: DownloadTaskState,
-  taskId: string,
-  action: DownloadActionRequest['action'],
-  result: DownloadActionResult,
-): void {
+// Merge an applied command response while respecting task removal guards.
+export function applyDownloadCommandResult({
+  state,
+  taskId,
+  action,
+  result,
+}: {
+  state: DownloadTaskState
+  taskId: string
+  action: DownloadActionRequest['action']
+  result: DownloadActionResult
+}): void {
   if (result.kind !== 'applied') {
     return
   }

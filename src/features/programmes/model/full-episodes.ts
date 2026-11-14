@@ -1,3 +1,4 @@
+// Identify a full broadcast by programme and date rather than row position.
 export function isFullEpisode(
   title: string,
   programmeName: string,

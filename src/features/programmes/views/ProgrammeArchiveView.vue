@@ -50,6 +50,7 @@ const interactionHold = computed(
 const {
   dates,
   selectedDate,
+  selectedDateId,
   contents,
   loadingDates,
   loadingContents,
@@ -66,7 +67,10 @@ const {
   selectionNotice,
   datesLoaded,
   contentsLoaded,
-} = useProgrammeArchive(programmeId, platform.programmes, platform.programmeCache, {
+} = useProgrammeArchive({
+  programmeId,
+  client: platform.programmes,
+  cache: platform.programmeCache,
   interactionHold,
   restoration: { ready: () => browse.ready, saved: browse.saved },
 })
@@ -78,9 +82,6 @@ const { selected, allSelected, fullIds, selectAll, selectFullEpisodes } = useCon
 
 const { preparingIds, prepareDownloads } = useProgrammeDownloads()
 
-const selectedDateId = computed(
-  () => dates.value.find((date) => date.date === selectedDate.value)?.id || '',
-)
 const { contentSortOrder, preserveScrollAfter } = useArchiveBrowseRestoration({
   programmeId,
   browse,
@@ -94,6 +95,11 @@ const previewReference = computed(() => previewInput.value?.metadata.content ?? 
 const selectedContents = computed(() =>
   contents.value.filter((item) => selected.value.includes(item.id)),
 )
+const hasAvailableDates = computed(
+  () => !loadingDates.value && !dateError.value && dates.value.length > 0,
+)
+const hasContentResult = computed(() => !loadingContents.value && !contentError.value)
+const hasAvailableContents = computed(() => hasContentResult.value && contents.value.length > 0)
 const dateSummary = computed(() => {
   if (loadingDates.value) {
     return '播出日期加载中'
@@ -124,7 +130,11 @@ function openPreview(content: ProgrammeContent) {
     kind: 'online',
     content: pinned,
     metadata: {
-      content: { programmeId: props.id, dateId: selectedDateId.value, contentId: content.id },
+      content: {
+        programmeId: props.id,
+        dateId: selectedDateId.value,
+        contentId: content.id,
+      },
       programmeName: programmeName.value,
       broadcastDate: selectedDate.value,
       title: content.title,
@@ -135,8 +145,18 @@ function openPreview(content: ProgrammeContent) {
 }
 
 async function downloadContents(items: ProgrammeContent[], quality: Quality) {
+  const dateId = selectedDateId.value
+  if (!dateId) {
+    return
+  }
+
   try {
-    const result = await prepareDownloads(items, selectedDateId.value, quality, props.id)
+    const result = await prepareDownloads({
+      items,
+      dateId,
+      quality,
+      programmeId: props.id,
+    })
 
     if (!result || result.kind === 'cancelled') {
       return
@@ -284,20 +304,20 @@ onMounted(() => {
         />
       </section>
 
-      <template v-if="!loadingDates && !dateError && dates.length">
+      <template v-if="hasAvailableDates">
         <div class="content-toolbar">
           <div class="content-count">
             <h2 class="content-date">{{ selectedDate }}</h2>
             <span class="content-kind">节目内容</span>
             <span
-              v-if="!loadingContents && !contentError"
+              v-if="hasContentResult"
               class="content-total"
             >
               {{ contents.length }} 条
             </span>
           </div>
           <div
-            v-if="!loadingContents && !contentError && contents.length"
+            v-if="hasAvailableContents"
             class="content-actions"
           >
             <div class="selection-toolbar">

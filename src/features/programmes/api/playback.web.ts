@@ -5,6 +5,7 @@ import { proxyMediaUrl } from '@/shared/media/media-proxy-url'
 
 import type { PlaybackPort } from '@/shared/platform/ports'
 
+// Prepare browser playback with validated media proxy URLs.
 export function createWebPlayback(base?: string, fetcher?: typeof fetch): PlaybackPort {
   const request = createClientApi(base, fetcher)
 

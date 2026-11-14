@@ -142,6 +142,7 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
 }
 @media (hover: hover) {
   .programme-cover:hover {
+    --cover-image-transform: scale(1.025);
     border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   }
   .programme-cover:hover .cover-open {
@@ -150,9 +151,6 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   }
   .cover-open:hover {
     background: var(--accent-fill);
-  }
-  .programme-cover:hover :deep(.cover-photo) {
-    transform: scale(1.025);
   }
   .programme-card:hover .programme-name {
     color: var(--accent);

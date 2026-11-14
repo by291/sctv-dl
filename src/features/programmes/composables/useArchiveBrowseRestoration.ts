@@ -21,15 +21,18 @@ import type { Ref } from 'vue'
 import type { useArchiveBrowseState } from '@/features/programmes/composables/useArchiveBrowseState'
 import type { ContentSortOrder } from '@/features/programmes/model/content-presentation'
 
+const SCROLL_SAVE_INTERVAL_MS = 1_000
+
 interface ArchiveBrowseRestorationOptions {
   programmeId: Readonly<Ref<string>>
   browse: ReturnType<typeof useArchiveBrowseState>
   datesLoaded: Readonly<Ref<boolean>>
   contentsLoaded: Readonly<Ref<boolean>>
-  selectedDateId: Readonly<Ref<string>>
+  selectedDateId: Readonly<Ref<string | null>>
   selectedDate: Readonly<Ref<string | null>>
 }
 
+// Restore archive sorting and scroll after the matching content renders.
 export function useArchiveBrowseRestoration({
   programmeId,
   browse,
@@ -55,7 +58,7 @@ export function useArchiveBrowseRestoration({
     }
 
     void browse.save({
-      dateId: selectedDateId.value || null,
+      dateId: selectedDateId.value,
       date: selectedDate.value,
       sort: contentSortOrder.value,
       // Date hydration finishes before content layout; keep the saved offset until restoration.
@@ -121,8 +124,15 @@ export function useArchiveBrowseRestoration({
   })
   watch([datesLoaded, contentsLoaded, selectedDate], restoreAfterContentRender, { flush: 'post' })
 
-  // Leading-only throttling has no trailing timer to outlive the route; scrollend captures the tail.
-  const saveScroll = useThrottleFn(saveBrowse, 1000, false, true)
+  // Leading-only throttling leaves no live timer at route departure. Scrollend saves the tail.
+  const shouldSaveTrailingScroll = false
+  const shouldSaveLeadingScroll = true
+  const saveScroll = useThrottleFn(
+    saveBrowse,
+    SCROLL_SAVE_INTERVAL_MS,
+    shouldSaveTrailingScroll,
+    shouldSaveLeadingScroll,
+  )
   useEventListener(document, 'visibilitychange', () => {
     if (document.hidden) {
       saveBrowse()

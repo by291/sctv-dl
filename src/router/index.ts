@@ -4,6 +4,7 @@ import { createScrollRestoration } from '@/shared/navigation/scroll-restoration'
 import { pageScrollPosition } from '@/shared/navigation/page-scroll'
 import type { ScrollPosition, ScrollRestoration } from '@/shared/navigation/scroll-restoration'
 
+// Create browser routes and coordinate workspace scroll with history entries.
 export function createAppRouter(
   kind: 'web' | 'tauri',
   restoration: ScrollRestoration = createScrollRestoration(),

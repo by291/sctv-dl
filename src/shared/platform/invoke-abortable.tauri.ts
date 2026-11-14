@@ -13,14 +13,20 @@ function nativeError(value: unknown): Error {
   return new Error('无法调用桌面服务，请重启应用后重试', { cause: value })
 }
 
-// onLate releases resources returned after cancellation or in an invalid response.
-export async function invokeAbortable<T>(
-  command: string,
-  args: Record<string, unknown>,
-  schema: z.ZodType<T>,
-  signal?: AbortSignal,
-  onLate?: (raw: unknown) => void,
-): Promise<T> {
+// Validate cancellable IPC and let the caller release resources from unusable replies.
+export async function invokeAbortable<T>({
+  command,
+  parameters,
+  schema,
+  signal,
+  onLate,
+}: {
+  command: string
+  parameters: Record<string, unknown>
+  schema: z.ZodType<T>
+  signal?: AbortSignal
+  onLate?: (raw: unknown) => void
+}): Promise<T> {
   signal?.throwIfAborted()
   const requestId = crypto.randomUUID()
 
@@ -38,11 +44,13 @@ export async function invokeAbortable<T>(
 
     const abort = () => {
       settle(() => reject(signal?.reason ?? new DOMException('请求已取消', 'AbortError')))
+
+      // Local cancellation is settled even if the native cancel command fails.
       void invoke('cancel_request', { requestId }).catch(() => {})
     }
 
     signal?.addEventListener('abort', abort, { once: true })
-    void invoke<unknown>(command, { ...args, requestId }).then(
+    void invoke<unknown>(command, { ...parameters, requestId }).then(
       (raw) => {
         if (finished) {
           onLate?.(raw)

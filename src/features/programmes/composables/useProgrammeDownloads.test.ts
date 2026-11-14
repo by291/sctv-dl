@@ -74,7 +74,12 @@ it('exposes native preparation failures before the task panel connects', async (
     }
   })
 
-  const result = await downloads.prepareDownloads([content], '2', 'smooth', '1')
+  const result = await downloads.prepareDownloads({
+    items: [content],
+    dateId: '2',
+    quality: 'smooth',
+    programmeId: '1',
+  })
 
   expect(result?.kind).toBe('native')
   expect(tasks.failures).toEqual([{ contentId: '3', message: 'Content unavailable' }])
@@ -99,9 +104,15 @@ it('blocks duplicate preparation until directory selection is cancelled, then al
     })
   const { downloads, tasks } = mountDownloads(start)
 
-  const first = downloads.prepareDownloads([content], '2', 'standard', '1')
+  const request = {
+    items: [content],
+    dateId: '2',
+    quality: 'standard' as const,
+    programmeId: '1',
+  }
+  const first = downloads.prepareDownloads(request)
   expect(downloads.preparingIds.value).toEqual(['3'])
-  expect(await downloads.prepareDownloads([content], '2', 'standard', '1')).toBeNull()
+  expect(await downloads.prepareDownloads(request)).toBeNull()
   expect(start).toHaveBeenCalledOnce()
 
   finish({ kind: 'cancelled' })
@@ -109,7 +120,7 @@ it('blocks duplicate preparation until directory selection is cancelled, then al
   expect(downloads.preparingIds.value).toEqual([])
   expect(tasks.failures).toEqual([])
 
-  expect(await downloads.prepareDownloads([content], '2', 'standard', '1')).toEqual({
+  expect(await downloads.prepareDownloads(request)).toEqual({
     kind: 'native',
     taskIds: ['job'],
     usedFallback: false,

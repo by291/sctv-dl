@@ -6,6 +6,7 @@ export interface ProgrammeSnapshotState<T extends ProgrammeSnapshot> {
   pending: T | null
 }
 
+// Accept a snapshot or hold a changed payload for explicit application.
 export function receiveProgrammeSnapshot<T extends ProgrammeSnapshot>(
   state: ProgrammeSnapshotState<T>,
   next: T,
@@ -26,9 +27,10 @@ export function receiveProgrammeSnapshot<T extends ProgrammeSnapshot>(
   return { accepted: state.accepted, pending: next }
 }
 
+// Apply the pending snapshot when the current interaction permits it.
 export function acceptProgrammeUpdate<T extends ProgrammeSnapshot>(
   state: ProgrammeSnapshotState<T>,
-  held: boolean,
+  { isInteractionHeld }: { isInteractionHeld: boolean },
 ): ProgrammeSnapshotState<T> {
-  return held || !state.pending ? state : { accepted: state.pending, pending: null }
+  return isInteractionHeld || !state.pending ? state : { accepted: state.pending, pending: null }
 }

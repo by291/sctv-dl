@@ -46,6 +46,7 @@ function publicationTime(value: string | null): PublicationTime | null {
   }
 }
 
+// Build and order archive rows while keeping full episodes first.
 export function programmeContentRows(
   contents: readonly ProgrammeContent[],
   fullIds: readonly string[],
@@ -68,8 +69,12 @@ export function programmeContentRows(
     }
 
     // Unknown times follow dated clips; ties retain the upstream order.
-    if (!left.publication || !right.publication) {
-      return left.publication ? -1 : right.publication ? 1 : 0
+    if (!left.publication) {
+      return right.publication ? 1 : 0
+    }
+
+    if (!right.publication) {
+      return -1
     }
 
     const difference = left.publication.timestamp - right.publication.timestamp

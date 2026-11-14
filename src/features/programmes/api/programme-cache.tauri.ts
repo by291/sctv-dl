@@ -12,6 +12,7 @@ import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { ProgrammeCachePort } from '@/shared/platform/ports'
 
+// Expose the native cache and notify owners when its epoch changes.
 export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose(): void } {
   let disposed = false
   const listeners = new Set<(epoch: string) => void>()
@@ -25,10 +26,25 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
       throw new Error('Programme cache disposed')
     }
 
-    return invokeValidated(command, args, schema, {
-      failure: '无法访问节目缓存，请重试',
-      invalid: '节目缓存数据格式异常，请检查客户端版本',
+    return invokeValidated({
+      command,
+      parameters: args,
+      schema,
+      messages: {
+        failure: '无法访问节目缓存，请重试',
+        invalid: '节目缓存数据格式异常，请检查客户端版本',
+      },
     })
+  }
+
+  function notifyCleared(epoch: string): void {
+    if (disposed) {
+      return
+    }
+
+    for (const listener of listeners) {
+      listener(epoch)
+    }
   }
 
   const port: ProgrammeCachePort = {
@@ -59,11 +75,7 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
           {},
           z.object({ epoch: z.string().min(1) }),
         )
-        if (!disposed) {
-          for (const listener of listeners) {
-            listener(result.epoch)
-          }
-        }
+        notifyCleared(result.epoch)
 
         return result
       } catch (error) {
@@ -71,11 +83,7 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
         // back so mounted owners still invalidate work from the old generation.
         try {
           const current = await port.read({ kind: 'catalogue' })
-          if (!disposed) {
-            for (const listener of listeners) {
-              listener(current.epoch)
-            }
-          }
+          notifyCleared(current.epoch)
         } catch {
           /* Preserve the actionable clear error if storage is unavailable. */
         }

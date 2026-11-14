@@ -13,6 +13,7 @@ interface DownloadDirectoryWorkflow {
   chooseDirectory(): Promise<void>
 }
 
+// Manage the native download directory and reconcile the picker result.
 export function useDownloadDirectory(
   downloads: AppPlatform['downloads'],
 ): DownloadDirectoryWorkflow {
@@ -49,6 +50,7 @@ export function useDownloadDirectory(
     }
   }
 
+  // Open the picker and reconcile the resulting saved directory.
   async function chooseDirectory(): Promise<void> {
     if (!nativeDownloads || busy.value) {
       return
@@ -86,5 +88,11 @@ export function useDownloadDirectory(
     disposed = true
   })
 
-  return { directory, error, busy, canChooseDirectory: !!nativeDownloads, chooseDirectory }
+  return {
+    directory,
+    error,
+    busy,
+    canChooseDirectory: !!nativeDownloads,
+    chooseDirectory,
+  }
 }

@@ -26,7 +26,12 @@ it('keeps command removals fenced against later snapshots, events and command re
   const task = createDownloadTaskFixture()
   applyDownloadSnapshot(state, { epoch: 'one', revision: 2, tasks: [task] })
 
-  applyDownloadCommandResult(state, task.id, 'remove', { kind: 'applied', task: null })
+  applyDownloadCommandResult({
+    state,
+    taskId: task.id,
+    action: 'remove',
+    result: { kind: 'applied', task: null },
+  })
   applyDownloadSnapshot(state, { epoch: 'one', revision: 3, tasks: [task] })
   applyDownloadEvent(state, {
     kind: 'upsert',
@@ -34,9 +39,14 @@ it('keeps command removals fenced against later snapshots, events and command re
     revision: 4,
     task: { ...task, revision: 4 },
   })
-  applyDownloadCommandResult(state, task.id, 'pause', {
-    kind: 'applied',
-    task: { ...task, revision: 5, state: 'paused' },
+  applyDownloadCommandResult({
+    state,
+    taskId: task.id,
+    action: 'pause',
+    result: {
+      kind: 'applied',
+      task: { ...task, revision: 5, state: 'paused' },
+    },
   })
 
   expect(state.tasks).toEqual([])
@@ -62,9 +72,14 @@ it('keeps a newer attempt when an earlier command response arrives late', () => 
   const replacement = { ...task, attemptId: 'replacement', revision: 5 }
   applyDownloadSnapshot(state, { epoch: 'one', revision: 5, tasks: [replacement] })
 
-  applyDownloadCommandResult(state, task.id, 'pause', {
-    kind: 'applied',
-    task: { ...task, revision: 4, state: 'paused' },
+  applyDownloadCommandResult({
+    state,
+    taskId: task.id,
+    action: 'pause',
+    result: {
+      kind: 'applied',
+      task: { ...task, revision: 4, state: 'paused' },
+    },
   })
 
   expect(state.tasks).toEqual([replacement])

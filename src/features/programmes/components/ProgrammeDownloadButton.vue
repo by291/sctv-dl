@@ -54,7 +54,11 @@ const buttonTheme = computed(() => ({
   border: '1px solid var(--line)',
 }))
 
-const dropdownTheme = { fontSizeMedium: '14px', optionHeightMedium: '40px', padding: '4px 0' }
+const dropdownTheme = {
+  fontSizeMedium: '14px',
+  optionHeightMedium: '40px',
+  padding: '4px 0',
+}
 
 function downloadMenuProps() {
   return { role: 'menu', 'aria-label': '下载画质' }

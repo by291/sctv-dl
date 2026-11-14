@@ -6,6 +6,7 @@ import { errorMessage } from '@/shared/utils/errors'
 
 import type { BrowserDownloadPort } from '@/shared/platform/ports'
 
+// Prepare downloads through the client API and hand off validated attachments.
 export function createWebDownloads(base?: string, fetcher?: typeof fetch): BrowserDownloadPort {
   const request = createClientApi(base, fetcher)
 

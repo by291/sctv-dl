@@ -9,16 +9,21 @@ import type { ArchiveBrowseState } from '@shared/contracts/programme-cache'
 import type { ProgrammeDate } from '@/features/programmes/model/programme'
 
 interface ArchiveOptions {
+  programmeId: Ref<string>
+  client?: ProgrammeApi
+  cache?: ProgrammeCachePort
   interactionHold?: Readonly<Ref<boolean>>
   restoration?: { ready(): Promise<void>; saved: Readonly<Ref<ArchiveBrowseState | null>> }
 }
 
-export function useProgrammeArchive(
-  programmeId: Ref<string>,
-  client: ProgrammeApi = usePlatform().programmes,
-  cache?: ProgrammeCachePort,
-  options: ArchiveOptions = {},
-) {
+// Coordinate date selection, content requests, and pending archive updates.
+export function useProgrammeArchive({
+  programmeId,
+  client = usePlatform().programmes,
+  cache,
+  interactionHold,
+  restoration,
+}: ArchiveOptions) {
   const dateSnapshots = useProgrammeSnapshot('dates', cache)
   const contentSnapshots = useProgrammeSnapshot('contents', cache)
   const dates = ref<ProgrammeDate[]>([])
@@ -40,26 +45,29 @@ export function useProgrammeArchive(
     }
 
     const version = ++generation
-    if (!restored && options.restoration) {
+    if (!restored && restoration) {
       restoringDate.value = true
-      await options.restoration.ready()
+      await restoration.ready()
       if (disposed || version !== generation) {
         return
       }
     }
 
-    const saved = !restored ? options.restoration?.saved.value : null
+    const saved = !restored ? restoration?.saved.value : null
     const wanted =
       selectedDate.value ?? (saved?.programmeId === programmeId.value ? saved.date : null)
     const selected = snapshot.items.find((date) => date.date === wanted)
+
     selectionNotice.value = wanted && !selected ? '原播出日期已不可用，已切换到最近日期。' : ''
     restored = true
     restoringDate.value = false
+
     // Updating dates also invalidates content when the same date now has a different ID.
     dates.value = snapshot.items
     selectedDate.value = selected?.date ?? snapshot.items[0]?.date ?? null
   }
 
+  // Refresh broadcast dates for the current programme.
   function loadDates() {
     const id = programmeId.value
 
@@ -68,6 +76,7 @@ export function useProgrammeArchive(
     )
   }
 
+  // Refresh clips for the currently selected broadcast ID.
   function loadContents() {
     const dateId = selectedDateId.value
     const id = programmeId.value
@@ -77,13 +86,19 @@ export function useProgrammeArchive(
       return Promise.resolve()
     }
 
-    return contentSnapshots.load({ kind: 'contents', programmeId: id, dateId }, (signal) =>
-      client.contents(id, dateId, signal),
+    return contentSnapshots.load(
+      {
+        kind: 'contents',
+        programmeId: id,
+        dateId,
+      },
+      (signal) => client.contents(id, dateId, signal),
     )
   }
 
+  // Apply pending dates before content so the selection can invalidate stale clips.
   async function acceptUpdate() {
-    if (options.interactionHold?.value) {
+    if (interactionHold?.value) {
       return
     }
 

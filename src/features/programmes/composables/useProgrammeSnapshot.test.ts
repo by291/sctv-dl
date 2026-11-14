@@ -82,9 +82,9 @@ describe('programme snapshot refresh ownership', () => {
     await loading
     expect(owner.accepted.value?.items).toEqual(snapshot.items)
     expect(owner.pendingUpdate.value).toBe(true)
-    owner.acceptUpdate(true)
+    owner.acceptUpdate({ isInteractionHeld: true })
     expect(owner.accepted.value?.items).toEqual(snapshot.items)
-    owner.acceptUpdate(false)
+    owner.acceptUpdate()
     expect(owner.accepted.value?.items).toEqual(fresh)
   })
   it('keeps valid empty cache visible after a network failure', async () => {

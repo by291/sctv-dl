@@ -1,5 +1,6 @@
 import { proxyMediaUrl } from '@/shared/media/media-proxy-url'
 
+// Verify the attachment response before handing the download to the browser.
 export async function handOffDownload(
   file: { url: string; filename: string },
   fetcher: typeof fetch = fetch,

@@ -4,6 +4,7 @@ import type { HistoryEntry } from '@shared/contracts/history'
 import type { ProgrammeContent } from '@shared/contracts/programmes'
 import type { PreviewInput } from '@/features/programmes/model/playback-state'
 
+// Open a preview from saved history identifiers and display metadata.
 export function useHistoryPreview() {
   const content = ref<ProgrammeContent | null>(null)
   const input = shallowRef<PreviewInput | null>(null)
@@ -36,5 +37,9 @@ export function useHistoryPreview() {
     content.value = null
   })
 
-  return { content, input, open }
+  return {
+    content,
+    input,
+    open,
+  }
 }

@@ -188,8 +188,8 @@ const { coverStyle, openProgramme } = useProgrammeCoverNavigation(() => props.pr
   .feature-link:hover svg {
     transform: translateX(3px);
   }
-  .featured-visual:hover :deep(.cover-photo) {
-    transform: scale(1.02);
+  .featured-visual:hover {
+    --cover-image-transform: scale(1.02);
   }
 }
 @container workspace (width < 860px) {

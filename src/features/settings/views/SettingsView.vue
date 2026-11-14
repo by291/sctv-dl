@@ -258,7 +258,7 @@ onMounted(() => {
           <NButton
             secondary
             :loading="programmes.refreshing"
-            @click="programmes.load(true)"
+            @click="programmes.load({ shouldRefresh: true })"
           >
             <template #icon><RefreshCw :size="16" /></template>
             检查连接

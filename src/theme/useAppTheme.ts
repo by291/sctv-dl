@@ -3,6 +3,7 @@ import { computed, watchEffect } from 'vue'
 
 import { useSettingsStore } from '@/features/settings/stores/useSettingsStore'
 
+// Resolve the saved theme against system appearance and update browser chrome.
 export function useAppTheme() {
   const settings = useSettingsStore()
   const preference = computed<'light' | 'dark' | 'auto'>({

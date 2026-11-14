@@ -7,6 +7,7 @@ export const MAX_CACHE_BYTES = 20 * 1024 * 1024
 
 export const MAX_BROWSE_STATES = 100
 
+// Compare normalized programme fields and order for update detection.
 export function sameProgrammePayload(left: unknown, right: unknown): boolean {
   const a = programmeCachePayloadSchema.safeParse(left)
   const b = programmeCachePayloadSchema.safeParse(right)
@@ -16,6 +17,7 @@ export function sameProgrammePayload(left: unknown, right: unknown): boolean {
   return a.success && b.success && JSON.stringify(a.data) === JSON.stringify(b.data)
 }
 
+// Measure the serialized snapshot size in UTF-8 bytes.
 export function snapshotBytes(snapshot: ProgrammeSnapshot): number {
   return new TextEncoder().encode(JSON.stringify(snapshot)).byteLength
 }

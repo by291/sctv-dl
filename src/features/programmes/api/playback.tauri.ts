@@ -5,6 +5,7 @@ import { invokeAbortable } from '@/shared/platform/invoke-abortable.tauri'
 
 import type { PlaybackPort } from '@/shared/platform/ports'
 
+// Own native playback requests and release the sessions they create.
 export function createTauriPlayback(): PlaybackPort & { dispose(): Promise<void> } {
   const sessions = new Set<string>()
   const pending = new Set<AbortController>()
@@ -17,6 +18,7 @@ export function createTauriPlayback(): PlaybackPort & { dispose(): Promise<void>
 
   function closeLate(raw: unknown) {
     if (raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string') {
+      // Invalid or cancelled replies can still hold a native session until backend teardown.
       void close(raw.id).catch(() => {})
     }
   }
@@ -33,14 +35,15 @@ export function createTauriPlayback(): PlaybackPort & { dispose(): Promise<void>
       const abort = () => controller.abort(signal?.reason)
       signal?.addEventListener('abort', abort, { once: true })
       pending.add(controller)
+
       try {
-        const session = await invokeAbortable(
-          'open_playback',
-          { request },
-          playbackSessionSchema,
-          controller.signal,
-          closeLate,
-        )
+        const session = await invokeAbortable({
+          command: 'open_playback',
+          parameters: { request },
+          schema: playbackSessionSchema,
+          signal: controller.signal,
+          onLate: closeLate,
+        })
         if (disposed || controller.signal.aborted) {
           await close(session.id)
           throw new DOMException('请求已取消', 'AbortError')

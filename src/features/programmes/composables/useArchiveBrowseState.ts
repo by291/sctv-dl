@@ -7,6 +7,7 @@ import type { ProgrammeCachePort } from '@/shared/platform/ports'
 
 type BrowsePosition = Pick<ArchiveBrowseState, 'dateId' | 'date' | 'sort' | 'scrollY'>
 
+// Load and save browse state against the programme cache epoch.
 export function useArchiveBrowseState(programmeId: Ref<string>, cache: ProgrammeCachePort) {
   const saved = shallowRef<ArchiveBrowseState | null>(null)
   const warning = ref('')
@@ -75,7 +76,11 @@ export function useArchiveBrowseState(programmeId: Ref<string>, cache: Programme
     // Start the write before the caller tears down the route. Clear still fences its epoch.
     try {
       const result = await cache.writeBrowseState(
-        { ...value, programmeId: programmeId.value, visitedAt: new Date().toISOString() },
+        {
+          ...value,
+          programmeId: programmeId.value,
+          visitedAt: new Date().toISOString(),
+        },
         epoch,
       )
       if (!disposed && version === generation && result.accepted) {

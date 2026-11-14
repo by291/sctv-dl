@@ -5,6 +5,7 @@ import { usePlatform } from '@/shared/platform/usePlatform'
 import { useProgrammeSnapshot } from '@/features/programmes/composables/useProgrammeSnapshot'
 import { programmeServiceStatus } from '@/features/programmes/model/programme-service-status'
 
+// Expose the accepted catalogue and coordinate refreshes and pending updates.
 export const useProgrammeCatalogueStore = defineStore('programmes', () => {
   const platform = usePlatform()
   const snapshots = useProgrammeSnapshot('catalogue', platform.programmeCache)
@@ -22,14 +23,16 @@ export const useProgrammeCatalogueStore = defineStore('programmes', () => {
     }),
   )
 
-  async function load(force = false) {
-    if (!force && (snapshots.accepted.value || snapshots.refreshing.value)) {
+  // Reuse the current catalogue unless an explicit refresh is requested.
+  async function load({ shouldRefresh = false } = {}) {
+    if (!shouldRefresh && (snapshots.accepted.value || snapshots.refreshing.value)) {
       return
     }
 
     await snapshots.load({ kind: 'catalogue' }, (signal) => platform.programmes.programmes(signal))
   }
 
+  // Apply the pending catalogue revision after the user accepts it.
   function acceptUpdate() {
     snapshots.acceptUpdate()
   }

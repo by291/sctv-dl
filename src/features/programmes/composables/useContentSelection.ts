@@ -6,6 +6,7 @@ import { hasPlayableVideo } from '@/features/programmes/model/video-capabilities
 import type { Ref } from 'vue'
 import type { ProgrammeContent } from '@/features/programmes/model/programme'
 
+// Track selected content IDs and reconcile them when archive rows change.
 export function useContentSelection(
   contents: Ref<ProgrammeContent[]>,
   programmeName: Ref<string>,

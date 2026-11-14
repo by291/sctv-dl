@@ -130,24 +130,27 @@ describe('browser programme cache', () => {
     ).toBeNull()
   })
   it('fences stale writes across connections and preserves unrelated stores', async () => {
-    const a = setup()
-    const b = setup()
-    const { epoch } = await a.cache.read({ kind: 'catalogue' })
-    await a.cache.writeBrowseState(browse(1), epoch)
-    const connection = await a.database.open()
+    const firstConnection = setup()
+    const secondConnection = setup()
+    const { epoch } = await firstConnection.cache.read({ kind: 'catalogue' })
+    await firstConnection.cache.writeBrowseState(browse(1), epoch)
+    const connection = await firstConnection.database.open()
     await new Promise<void>((resolve) => {
       const tx = connection.transaction('history', 'readwrite')
       tx.objectStore('history').put('preserve', 'history')
       tx.oncomplete = () => resolve()
     })
-    const cleared = await b.cache.clear()
+    const cleared = await secondConnection.cache.clear()
     expect(cleared.epoch).not.toBe(epoch)
-    expect((await a.cache.write({ kind: 'catalogue', items: [] }, epoch)).accepted).toBe(false)
-    expect((await a.cache.writeBrowseState(browse(2), epoch)).accepted).toBe(false)
-    expect((await a.cache.write({ kind: 'catalogue', items: [] }, cleared.epoch)).persisted).toBe(
-      true,
-    )
-    expect((await b.cache.readBrowseState('1')).value).toBeNull()
+    expect(
+      (await firstConnection.cache.write({ kind: 'catalogue', items: [] }, epoch)).accepted,
+    ).toBe(false)
+    expect((await firstConnection.cache.writeBrowseState(browse(2), epoch)).accepted).toBe(false)
+    expect(
+      (await firstConnection.cache.write({ kind: 'catalogue', items: [] }, cleared.epoch))
+        .persisted,
+    ).toBe(true)
+    expect((await secondConnection.cache.readBrowseState('1')).value).toBeNull()
     const request = connection.transaction('history').objectStore('history').get('history')
     expect(
       await new Promise((resolve) => {
@@ -170,11 +173,11 @@ describe('browser programme cache', () => {
 })
 
 it('keeps the committed epoch after cleanup failure and preserves concurrent writes in the new epoch', async () => {
-  const a = setup()
-  const b = setup()
-  const { epoch: old } = await a.cache.read({ kind: 'catalogue' })
-  await a.cache.write({ kind: 'catalogue', items: [] }, old)
-  const connection = await a.database.open()
+  const firstConnection = setup()
+  const secondConnection = setup()
+  const { epoch: old } = await firstConnection.cache.read({ kind: 'catalogue' })
+  await firstConnection.cache.write({ kind: 'catalogue', items: [] }, old)
+  const connection = await firstConnection.database.open()
   const transaction = connection.transaction.bind(connection)
   const fail = vi.spyOn(connection, 'transaction').mockImplementation((stores, mode, options) => {
     if (Array.isArray(stores)) {
@@ -183,21 +186,23 @@ it('keeps the committed epoch after cleanup failure and preserves concurrent wri
 
     return transaction(stores, mode, options)
   })
-  await expect(a.cache.clear()).rejects.toThrow('Cleanup denied')
+  await expect(firstConnection.cache.clear()).rejects.toThrow('Cleanup denied')
   fail.mockRestore()
-  const current = await b.cache.read({ kind: 'catalogue' })
+  const current = await secondConnection.cache.read({ kind: 'catalogue' })
   expect(current.epoch).not.toBe(old)
   expect(current.snapshot).toBeNull()
-  expect((await a.cache.write({ kind: 'catalogue', items: [] }, old)).accepted).toBe(false)
+  expect((await firstConnection.cache.write({ kind: 'catalogue', items: [] }, old)).accepted).toBe(
+    false,
+  )
   let newWrite: Promise<unknown> | undefined
-  const stop = await a.cache.subscribeCleared((epoch) => {
-    newWrite = b.cache.write({ kind: 'catalogue', items: [] }, epoch)
+  const stop = await firstConnection.cache.subscribeCleared((epoch) => {
+    newWrite = secondConnection.cache.write({ kind: 'catalogue', items: [] }, epoch)
   })
-  const cleared = await a.cache.clear()
+  const cleared = await firstConnection.cache.clear()
   await newWrite
   stop()
-  expect((await a.cache.read({ kind: 'catalogue' })).epoch).toBe(cleared.epoch)
-  expect((await a.cache.read({ kind: 'catalogue' })).snapshot?.items).toEqual([])
+  expect((await firstConnection.cache.read({ kind: 'catalogue' })).epoch).toBe(cleared.epoch)
+  expect((await firstConnection.cache.read({ kind: 'catalogue' })).snapshot?.items).toEqual([])
 })
 
 it('retains a memory-only snapshot after a quota failure and retries it without losing the epoch fence', async () => {

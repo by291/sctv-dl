@@ -9,15 +9,21 @@ interface InvocationMessages {
   invalid: string
 }
 
-export async function invokeValidated<T>(
-  command: string,
-  args: Record<string, unknown>,
-  schema: z.ZodType<T>,
-  messages: InvocationMessages,
-): Promise<T> {
+// Call a native command, validate its reply, and preserve diagnostic causes.
+export async function invokeValidated<T>({
+  command,
+  parameters,
+  schema,
+  messages,
+}: {
+  command: string
+  parameters: Record<string, unknown>
+  schema: z.ZodType<T>
+  messages: InvocationMessages
+}): Promise<T> {
   let raw: unknown
   try {
-    raw = await invoke(command, args)
+    raw = await invoke(command, parameters)
   } catch (cause) {
     const error = applicationErrorSchema.safeParse(cause)
     throw new Error(error.success ? error.data.message : messages.failure, { cause })

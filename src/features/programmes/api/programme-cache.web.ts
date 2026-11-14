@@ -24,24 +24,36 @@ const snapshotRowSchema = z.object({
   accessed: z.number().finite(),
 })
 const browseRowSchema = z.object({ epoch: z.string(), value: archiveBrowseStateSchema })
+const storageWarning = '节目缓存无法保存到本地，当前数据仅在本次会话中保留'
+const oversizedWarning = '节目数据超过缓存容量，本次结果未保存'
+
 type SnapshotRow = z.infer<typeof snapshotRowSchema>
 type BrowseRow = z.infer<typeof browseRowSchema>
+
 interface CacheState {
   epoch: string
   snapshots: Map<string, SnapshotRow>
   browse: Map<string, BrowseRow>
 }
-const storageWarning = '节目缓存无法保存到本地，当前数据仅在本次会话中保留'
-const oversizedWarning = '节目数据超过缓存容量，本次结果未保存'
 
-function decodeCacheState(
-  storedEpoch: unknown,
-  snapshots: unknown[],
-  browse: unknown[],
-  initialEpoch: string,
-): CacheState {
+function decodeCacheState({
+  storedEpoch,
+  snapshots,
+  browse,
+  initialEpoch,
+}: {
+  storedEpoch: unknown
+  snapshots: unknown[]
+  browse: unknown[]
+  initialEpoch: string
+}): CacheState {
   const epoch = typeof storedEpoch === 'string' && storedEpoch ? storedEpoch : initialEpoch
-  const draft: CacheState = { epoch, snapshots: new Map(), browse: new Map() }
+  const draft: CacheState = {
+    epoch,
+    snapshots: new Map(),
+    browse: new Map(),
+  }
+
   for (const raw of snapshots) {
     const row = snapshotRowSchema.safeParse(raw)
     if (row.success && row.data.epoch === epoch) {
@@ -91,11 +103,16 @@ function writeCacheState(transaction: IDBTransaction, draft: CacheState): void {
   transaction.objectStore('meta').put(draft.epoch, 'cacheEpoch')
 }
 
+// Persist programme snapshots and browse state with cross-tab epoch guards.
 export function createWebProgrammeCache(database: ApplicationDatabase): {
   port: ProgrammeCachePort
   dispose(): void
 } {
-  let state: CacheState = { epoch: crypto.randomUUID(), snapshots: new Map(), browse: new Map() }
+  let state: CacheState = {
+    epoch: crypto.randomUUID(),
+    snapshots: new Map(),
+    browse: new Map(),
+  }
   let fallback: CacheState | null = null
   let epochLoaded = false
   let disposed = false
@@ -122,7 +139,9 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
   }
 
   function trim(draft: CacheState): void {
-    const entries = [...draft.snapshots.entries()].sort((a, b) => a[1].accessed - b[1].accessed)
+    const entries = [...draft.snapshots.entries()].sort(
+      ([, left], [, right]) => left.accessed - right.accessed,
+    )
     let bytes = entries.reduce((total, [, row]) => total + snapshotBytes(row.snapshot), 0)
     while (draft.snapshots.size > MAX_CACHE_SNAPSHOTS || bytes > MAX_CACHE_BYTES) {
       const row = entries.shift()
@@ -134,8 +153,8 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
       bytes -= snapshotBytes(row[1].snapshot)
     }
 
-    const browse = [...draft.browse.entries()].sort((a, b) =>
-      b[1].value.visitedAt.localeCompare(a[1].value.visitedAt),
+    const browse = [...draft.browse.entries()].sort(([, left], [, right]) =>
+      right.value.visitedAt.localeCompare(left.value.visitedAt),
     )
     for (const [key] of browse.slice(MAX_BROWSE_STATES)) {
       draft.browse.delete(key)
@@ -153,9 +172,11 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
       const snapshots = tx.objectStore('programmeCache').getAll()
       const browse = tx.objectStore('browseState').getAll()
       const epoch = tx.objectStore('meta').get('cacheEpoch')
+
       let result: T
       let draft: CacheState
       let cause: unknown
+
       tx.onabort = () => reject(cause ?? tx.error ?? new Error('Cache transaction aborted'))
       tx.onerror = () => {
         /* Abort reports the rolled-back operation. */
@@ -175,7 +196,12 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
 
       epoch.onsuccess = () => {
         try {
-          draft = decodeCacheState(epoch.result, snapshots.result, browse.result, state.epoch)
+          draft = decodeCacheState({
+            storedEpoch: epoch.result,
+            snapshots: snapshots.result,
+            browse: browse.result,
+            initialEpoch: state.epoch,
+          })
 
           // Retry memory-only writes after quota/permission failures, but only
           // within their captured epoch. A durable clear discards every fallback.
@@ -187,6 +213,7 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
 
           // Preserve the committed state if a quota error aborts the mutation.
           state = structuredClone(draft)
+
           result = action(draft)
           trim(draft)
           writeCacheState(tx, draft)
@@ -206,6 +233,8 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
 
       return action()
     })
+
+    // Expose the failure to this caller without blocking later transactions.
     queue = result.catch(() => {})
 
     return result
@@ -215,14 +244,22 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
     action: (draft: CacheState) => T,
   ): Promise<{ result: T; persisted: boolean; warning: string | null }> {
     try {
-      return { result: await transact(action), persisted: true, warning: null }
+      return {
+        result: await transact(action),
+        persisted: true,
+        warning: null,
+      }
     } catch {
       const result = action(state)
       trim(state)
       fallback = structuredClone(state)
       epochLoaded = true
 
-      return { result, persisted: false, warning: storageWarning }
+      return {
+        result,
+        persisted: false,
+        warning: storageWarning,
+      }
     }
   }
 
@@ -252,7 +289,11 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
         const { result, ...status } = await perform((draft) => {
           const previous = draft.snapshots.get(name)?.snapshot ?? null
           if (draft.epoch !== expectedEpoch) {
-            return { epoch: draft.epoch, snapshot: previous, accepted: false }
+            return {
+              epoch: draft.epoch,
+              snapshot: previous,
+              accepted: false,
+            }
           }
 
           const snapshot: ProgrammeSnapshot = {
@@ -266,10 +307,18 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
           }
           oversized = snapshotBytes(snapshot) > MAX_CACHE_BYTES
           if (!oversized) {
-            draft.snapshots.set(name, { epoch: draft.epoch, snapshot, accessed: access() })
+            draft.snapshots.set(name, {
+              epoch: draft.epoch,
+              snapshot,
+              accessed: access(),
+            })
           }
 
-          return { epoch: draft.epoch, snapshot, accepted: true }
+          return {
+            epoch: draft.epoch,
+            snapshot,
+            accepted: true,
+          }
         })
 
         return {
@@ -312,19 +361,27 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
       return enqueue(async () => {
         const connection = await database.open()
         const epoch = crypto.randomUUID()
+
         // Commit the fence before cleanup. A later cleanup failure must not make
         // pre-clear responses eligible to write again.
         await new Promise<void>((resolve, reject) => {
           const tx = connection.transaction('meta', 'readwrite')
           tx.objectStore('meta').put(epoch, 'cacheEpoch')
           tx.oncomplete = () => resolve()
+
           tx.onabort = () => reject(tx.error ?? new Error('无法清除节目缓存，请重试'))
         })
-        state = { epoch, snapshots: new Map(), browse: new Map() }
+
+        state = {
+          epoch,
+          snapshots: new Map(),
+          browse: new Map(),
+        }
         fallback = null
         epochLoaded = true
         notify(epoch)
         channel?.postMessage(epoch)
+
         // transact loads only the current durable generation, preserving writes
         // that another tab committed after the clear fence.
         await transact(() => {})
@@ -351,7 +408,9 @@ export function createWebProgrammeCache(database: ApplicationDatabase): {
         // Broadcast delivery may be reordered; the database owns the latest fence.
         void enqueue(async () => {
           await transact(() => {})
-        }).catch(() => {})
+        }).catch(() => {
+          // Broadcasts are reminders. The next cache operation reads the durable epoch again.
+        })
       }
     }
   }

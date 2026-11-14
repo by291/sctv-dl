@@ -55,6 +55,7 @@ watch(
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform: var(--cover-image-transform, none);
   transition: transform 400ms var(--motion-ease);
 }
 .cover-fallback {

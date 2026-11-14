@@ -1,5 +1,6 @@
 import type { DownloadTask, DownloadActionRequest } from '@shared/contracts/downloads'
 
+// List actions applicable to the current download attempt and file state.
 export function availableDownloadActions(task: DownloadTask): DownloadActionRequest['action'][] {
   switch (task.state) {
     case 'queued':
@@ -25,6 +26,7 @@ export function availableDownloadActions(task: DownloadTask): DownloadActionRequ
   }
 }
 
+// Identify tasks that still contribute to the active transfer count.
 export function isActiveDownload(task: DownloadTask): boolean {
   return ['queued', 'running', 'pausing', 'finalizing'].includes(task.state)
 }

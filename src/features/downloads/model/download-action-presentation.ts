@@ -54,6 +54,7 @@ export const batchDownloadActions: DownloadAction[] = [
   'deleteFile',
 ]
 
+// Return the localized label for a single or batch download action.
 export function downloadActionLabel(
   action: DownloadAction,
   scope: 'single' | 'batch' = 'single',
@@ -65,6 +66,7 @@ export function downloadActionLabel(
     : actionPresentation.label
 }
 
+// Describe destructive effects that need confirmation before dispatch.
 export function downloadActionConfirmation(
   action: DownloadAction,
   context: { kind: 'single'; task: DownloadTask } | { kind: 'batch'; count: number },

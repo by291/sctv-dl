@@ -8,6 +8,7 @@ import { createApplicationDatabase } from '@/shared/storage/application-database
 
 import type { AppPlatform } from '@/shared/platform/ports'
 
+// Compose browser adapters and own their shared resource cleanup.
 export function createWebPlatform(): AppPlatform {
   const base = import.meta.env.VITE_CLIENT_API_BASE || '/client-api/v1'
   const settings = createWebSettings()

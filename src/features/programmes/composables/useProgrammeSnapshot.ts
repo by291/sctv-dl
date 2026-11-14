@@ -14,6 +14,7 @@ import type { ProgrammeCachePort } from '@/shared/platform/ports'
 
 type Snapshot<K> = Extract<ProgrammeSnapshot, { kind: K }>
 
+// Coordinate live programme requests, cached results, and invalidation.
 export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
   kind: K,
   cache?: ProgrammeCachePort,
@@ -40,6 +41,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
     return value.kind === kind
   }
 
+  // Cancel pending work and discard presentation from the previous key.
   function reset() {
     gate.cancel()
     activeKey = ''
@@ -76,6 +78,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
       }
     })
 
+  // Show cached data when available and reconcile it with the current live request.
   async function load(
     key: Extract<ProgrammeCacheKey, { kind: K }>,
     fetcher: (signal: AbortSignal) => Promise<Snapshot<K>['items']>,
@@ -93,6 +96,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
     const request = gate.begin()
     refreshing.value = true
     failure.value = ''
+
     // Observe invalidation before any cache or live work can cross a clear boundary.
     if (subscription) {
       await subscription
@@ -115,6 +119,8 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
 
               cacheWarning.value = result.warning ?? ''
               const snapshot = result.snapshot
+
+              // Cache can fill an empty view only until this request receives live data.
               if (
                 !networkReceived &&
                 snapshot &&
@@ -141,6 +147,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
 
     async function receiveLiveSnapshot(): Promise<Snapshot<K> | null> {
       const items = await fetcher(request.signal)
+
       if (!request.isCurrent()) {
         return null
       }
@@ -153,6 +160,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
         revision: crypto.randomUUID(),
         fetchedAt: new Date().toISOString(),
       })
+
       if (!matches(snapshot)) {
         return null
       }
@@ -196,6 +204,7 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
     }
 
     const cacheRead = readCachedSnapshot()
+
     try {
       const snapshot = await receiveLiveSnapshot()
       if (!request.isCurrent() || !snapshot) {
@@ -216,9 +225,10 @@ export function useProgrammeSnapshot<K extends ProgrammeCacheKey['kind']>(
     }
   }
 
-  function acceptUpdate(held = false) {
+  // Show the pending snapshot once interactions using the previous revision have ended.
+  function acceptUpdate({ isInteractionHeld = false } = {}) {
     const previous = state.value
-    state.value = acceptProgrammeUpdate(previous, held)
+    state.value = acceptProgrammeUpdate(previous, { isInteractionHeld })
     if (state.value !== previous) {
       cached.value = false
     }

@@ -3,6 +3,7 @@ export interface ApplicationDatabase {
   dispose(): void
 }
 
+// Share an IndexedDB connection across adapters and close it on disposal.
 export function createApplicationDatabase(): ApplicationDatabase {
   let connection: IDBDatabase | undefined
   let opening: Promise<IDBDatabase> | undefined

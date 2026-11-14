@@ -5,6 +5,7 @@ import type { AppPlatform } from '@/shared/platform/ports'
 
 export const platformKey: InjectionKey<AppPlatform> = Symbol('application-platform')
 
+// Read the application's injected platform ports.
 export function usePlatform(): AppPlatform {
   const platform = inject(platformKey)
   if (!platform) {
