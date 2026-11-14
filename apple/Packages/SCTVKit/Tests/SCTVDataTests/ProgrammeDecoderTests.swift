@@ -39,6 +39,13 @@ struct ProgrammeDecoderTests {
         #expect(try ProgrammeDecoder.decodeDates(body).map(\.id) == ["2", "3"])
     }
 
+    @Test func broadcastDatesRejectInvalidCalendarDays() {
+        let body = Data(#"{"rs":200,"data":[{"id":1,"date":"2026-02-30"}]}"#.utf8)
+        #expect(throws: ProgrammeDecodingError.invalidDate) {
+            try ProgrammeDecoder.decodeDates(body)
+        }
+    }
+
     @Test func fractionalEnvelopeStatusDoesNotMasqueradeAsSuccess() {
         let body = Data(#"{"rs":200.5,"data":[]}"#.utf8)
         #expect(throws: ProgrammeDecodingError.self) { try ProgrammeDecoder.decodeContents(body) }

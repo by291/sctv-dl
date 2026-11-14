@@ -11,19 +11,23 @@ public enum ProgrammeDecodingError: Error, Equatable, Sendable {
     case invalidDate
 }
 
+/// Validates upstream programme payloads before they enter the cache.
 public enum ProgrammeDecoder {
+    private static let successStatus = 200
     private static let maxSafeInteger = 9_007_199_254_740_991
     private static let javascriptWhitespace = CharacterSet(
         charactersIn:
             " \t\n\r\u{000B}\u{000C}\u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}"
     )
 
+    /// Decodes the catalogue record page.
     public static func decodeCatalogue(_ data: Data) throws -> [Programme] {
         guard let object = try envelope(data) as? [String: Any],
             let rows = object["records"] as? [[String: Any]]
         else {
             throw ProgrammeDecodingError.invalidRecord
         }
+
         return try rows.map { row in
             Programme(
                 id: try id(row["id"]),
@@ -33,24 +37,31 @@ public enum ProgrammeDecoder {
         }
     }
 
+    /// Decodes unique broadcast dates in descending calendar order.
     public static func decodeDates(_ data: Data) throws -> [BroadcastDate] {
         guard let rows = try envelope(data) as? [[String: Any]] else {
             throw ProgrammeDecodingError.invalidRecord
         }
+
         var byDate: [String: BroadcastDate] = [:]
         for row in rows {
             guard let date = row["date"] as? String, validDate(date) else {
                 throw ProgrammeDecodingError.invalidDate
             }
+
+            // The last record for a day supplies the ID used to load that day's contents.
             byDate[date] = BroadcastDate(id: try id(row["id"]), date: date)
         }
+
         return byDate.values.sorted { $0.date > $1.date }
     }
 
+    /// Decodes the clips and source variants for a broadcast date.
     public static func decodeContents(_ data: Data) throws -> [ProgrammeContent] {
         guard let rows = try envelope(data) as? [[String: Any]] else {
             throw ProgrammeDecodingError.invalidRecord
         }
+
         return try rows.map { row in
             ProgrammeContent(
                 id: try id(row["id"]),
@@ -63,35 +74,49 @@ public enum ProgrammeDecoder {
         }
     }
 
+    /// Checks the ASCII decimal form permitted in upstream path components.
     public static func validID(_ value: String) -> Bool {
-        !value.isEmpty && value.utf8.allSatisfy { (48...57).contains($0) }
+        !value.isEmpty
+            && value.utf8.allSatisfy { (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0) }
     }
 
     private static func envelope(_ data: Data) throws -> Any {
         let raw: Any
-        do { raw = try JSONSerialization.jsonObject(with: data) } catch {
+        do {
+            raw = try JSONSerialization.jsonObject(with: data)
+        } catch {
             throw ProgrammeDecodingError.invalidJSON
         }
+
         guard let envelope = raw as? [String: Any], let status = envelope["rs"] as? NSNumber,
-            CFGetTypeID(status) != CFBooleanGetTypeID(), envelope.keys.contains("data")
-        else { throw ProgrammeDecodingError.invalidEnvelope }
-        guard status.doubleValue == 200 else {
-            throw ProgrammeDecodingError.businessError(envelope["error"] as? String ?? "节目服务暂时不可用")
+            CFGetTypeID(status) != CFBooleanGetTypeID(), let payload = envelope["data"]
+        else {
+            throw ProgrammeDecodingError.invalidEnvelope
         }
-        return envelope["data"]!
+        guard status.doubleValue == Double(successStatus) else {
+            let diagnostic =
+                envelope["error"] as? String ?? "Programme service rejected the request"
+            throw ProgrammeDecodingError.businessError(diagnostic)
+        }
+
+        return payload
     }
 
     private static func id(_ raw: Any?) throws -> String {
         if let value = raw as? String, validID(value) { return value }
-        if let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
-            let value = number.doubleValue
-            if value.isFinite, value >= 0, value <= Double(maxSafeInteger),
-                value.rounded(.towardZero) == value
-            {
-                return String(number.int64Value)
-            }
+        guard let number = raw as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            throw ProgrammeDecodingError.invalidID
         }
-        throw ProgrammeDecodingError.invalidID
+
+        // A number already rounded by the upstream JSON producer cannot be recovered as an ID.
+        let value = number.doubleValue
+        guard value.isFinite, value >= 0, value <= Double(maxSafeInteger),
+            value.rounded(.towardZero) == value
+        else {
+            throw ProgrammeDecodingError.invalidID
+        }
+
+        return String(number.int64Value)
     }
 
     private static func validDate(_ value: String) -> Bool {
@@ -101,14 +126,9 @@ public enum ProgrammeDecoder {
         let parts = value.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return false }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        guard
-            let date = calendar.date(
-                from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
-        else { return false }
-        let components = calendar.dateComponents([.year, .month, .day], from: date)
-        return components.year == parts[0] && components.month == parts[1]
-            && components.day == parts[2]
+        calendar.timeZone = .gmt
+        let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        return components.isValidDate(in: calendar)
     }
 
     private static func url(_ raw: Any?, base: String) -> URL? {

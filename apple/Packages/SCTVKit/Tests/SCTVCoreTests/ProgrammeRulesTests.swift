@@ -33,4 +33,14 @@ struct ProgrammeRulesTests {
             ProgrammeRules.publicationTime(" 2026-10-09 18:40:05 ")
                 == ProgrammeRules.publicationTime("2026-10-09 18:40:05"))
     }
+
+    @Test(arguments: ["2026-02-30 10:00:00", "2026-01-01T24:00:00Z"])
+    func rejectsNonexistentCalendarTimes(_ publication: String) {
+        #expect(ProgrammeRules.publicationTime(publication) == nil)
+    }
+
+    @Test func treatsMinutePrecisionAsZeroSecondsInShanghai() {
+        let expected = ISO8601DateFormatter().date(from: "2026-10-09T10:40:00Z")
+        #expect(ProgrammeRules.publicationTime("2026-10-09 18:40") == expected)
+    }
 }

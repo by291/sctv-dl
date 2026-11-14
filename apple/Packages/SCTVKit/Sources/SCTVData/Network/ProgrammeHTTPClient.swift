@@ -9,6 +9,7 @@ public enum ProgrammeHTTPError: Error, Equatable, Sendable {
     case deadline
 }
 
+// URLSession can call this delegate concurrently. It retains no mutable state.
 private final class RejectRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     func urlSession(
         _ session: URLSession,
@@ -75,6 +76,7 @@ public struct ProgrammeHTTPClient: ProgrammeAPI {
             try await session.bytes(for: request, delegate: redirectDelegate)
         }
         defer { bytes.task.cancel() }
+
         guard let http = response as? HTTPURLResponse else {
             throw ProgrammeHTTPError.forbiddenEndpoint
         }
@@ -82,6 +84,7 @@ public struct ProgrammeHTTPClient: ProgrammeAPI {
         guard (200...299).contains(http.statusCode) else {
             throw ProgrammeHTTPError.httpStatus(http.statusCode)
         }
+
         return try await withTaskCancellationHandler {
             try await withDeadline(after: bodyDeadline) {
                 try await BoundedHTTPBody.read(bytes)

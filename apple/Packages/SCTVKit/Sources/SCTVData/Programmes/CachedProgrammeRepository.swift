@@ -65,47 +65,54 @@ public actor CachedProgrammeRepository: ProgrammeRepository {
         loadIfNeeded(query)
         var entry = entries[query, default: Entry()]
         if let owner { entry.interestedOwners.insert(owner) }
+
         entry.generation &+= 1
         let generation = entry.generation
         entry.request?.cancel()
         let request = Task { [api] in try await Self.fetch(query, from: api) }
+
         entry.request = request
         entry.warning = nil
         entries[query] = entry
-        publish(query)
+        notifyObservers(for: query)
 
         do {
             let items = try await request.value
+            // Cancellation is advisory; a replaced request can still return normally.
             guard entries[query]?.generation == generation else { return }
+
             entry = entries[query, default: Entry()]
-            let revision = UUID()
             let snapshot = ProgrammeSnapshot(
-                query: query, items: items, revision: revision, fetchedAt: Date())
-            if let accepted = entry.accepted {
-                if SnapshotComparison.hasMeaningfulChange(accepted.items, items) {
-                    entry.pending = snapshot
-                } else {
-                    entry.pending = nil
-                }
-            } else {
-                // A successful empty result is accepted data, distinct from never fetched.
-                try persist(snapshot)
-                entry.accepted = snapshot
-                entry.pending = nil
-            }
+                query: query, items: items, revision: UUID(), fetchedAt: Date())
+            try applyFetchedSnapshot(snapshot, to: &entry)
+
             entry.request = nil
             entry.warning = nil
             entries[query] = entry
-            publish(query)
+            notifyObservers(for: query)
         } catch {
             guard entries[query]?.generation == generation else { return }
+
             entry = entries[query, default: Entry()]
             entry.request = nil
             entry.warning = .refreshFailed(String(describing: error))
             entries[query] = entry
-            publish(query)
+            notifyObservers(for: query)
             throw error
         }
+    }
+
+    private func applyFetchedSnapshot(_ snapshot: ProgrammeSnapshot, to entry: inout Entry) throws {
+        if let accepted = entry.accepted {
+            let hasChanges = SnapshotComparison.hasMeaningfulChange(accepted.items, snapshot.items)
+            entry.pending = hasChanges ? snapshot : nil
+            return
+        }
+
+        // A successful empty result is accepted data, distinct from never fetched.
+        try persist(snapshot)
+        entry.accepted = snapshot
+        entry.pending = nil
     }
 
     public func accept(_ query: ProgrammeQuery, revision: UUID) throws {
@@ -131,12 +138,14 @@ public actor CachedProgrammeRepository: ProgrammeRepository {
         {
             throw AcceptanceError.datesPending
         }
+
         try persist(pending)
+
         var entry = entries[query, default: Entry()]
         entry.accepted = pending
         entry.pending = nil
         entries[query] = entry
-        publish(query)
+        notifyObservers(for: query)
     }
 
     public func cancel(_ query: ProgrammeQuery) {
@@ -223,8 +232,12 @@ public actor CachedProgrammeRepository: ProgrammeRepository {
         let payload = try JSONEncoder().encode(snapshot)
         try database.write { db in
             try db.execute(
-                sql:
-                    "INSERT INTO programme_snapshots (resource_key, payload, revision, fetched_at) VALUES (?, ?, ?, ?) ON CONFLICT(resource_key) DO UPDATE SET payload=excluded.payload, revision=excluded.revision, fetched_at=excluded.fetched_at",
+                sql: """
+                    INSERT INTO programme_snapshots (resource_key, payload, revision, fetched_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(resource_key) DO UPDATE SET payload = excluded.payload,
+                        revision = excluded.revision, fetched_at = excluded.fetched_at
+                    """,
                 arguments: [
                     key, payload, snapshot.revision.uuidString,
                     snapshot.fetchedAt.timeIntervalSince1970,
@@ -237,13 +250,14 @@ public actor CachedProgrammeRepository: ProgrammeRepository {
         try JSONEncoder().encode(query).base64EncodedString()
     }
 
-    private func publish(_ query: ProgrammeQuery) {
+    private func notifyObservers(for query: ProgrammeQuery) {
         guard let entry = entries[query] else { return }
         for continuation in entry.observers.values { continuation.yield(entry.update) }
     }
 
     private func removeObserver(_ observerID: UUID, for query: ProgrammeQuery) {
         entries[query]?.observers.removeValue(forKey: observerID)
+
         if entries[query]?.observers.isEmpty == true,
             entries[query]?.interestedOwners.isEmpty == true
         {
