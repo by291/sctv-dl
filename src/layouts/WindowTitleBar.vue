@@ -8,13 +8,16 @@ const props = defineProps<{ controls: WindowControlsPort }>()
 const maximized = ref(false)
 
 let stopResize: (() => void) | undefined
-let active = true
+let isMounted = false
+let readRevision = 0
 
 async function syncMaximized(): Promise<void> {
+  const revision = ++readRevision
   try {
-    const value = await props.controls.isMaximized()
-    if (active) {
-      maximized.value = value
+    const isMaximized = await props.controls.isMaximized()
+    // Resize and button queries can complete out of order.
+    if (isMounted && revision === readRevision) {
+      maximized.value = isMaximized
     }
   } catch (cause) {
     // Window chrome has no in-app error surface; the native controls remain usable.
@@ -32,39 +35,53 @@ function minimize(): void {
   run(props.controls.minimize())
 }
 
+async function toggleAndReadMaximized(): Promise<void> {
+  await props.controls.toggleMaximize()
+  if (isMounted) {
+    await syncMaximized()
+  }
+}
+
 function toggleMaximize(): void {
-  run(
-    props.controls.toggleMaximize().then(async () => {
-      const value = await props.controls.isMaximized()
-      if (active) {
-        maximized.value = value
-      }
-    }),
-  )
+  run(toggleAndReadMaximized())
 }
 
 function close(): void {
   run(props.controls.close())
 }
 
-onMounted(() => {
-  void syncMaximized()
-  void props.controls
-    .onResized(() => void syncMaximized())
-    .then((unlisten) => {
-      if (active) {
-        stopResize = unlisten
-      } else {
-        unlisten()
+async function observeMaximized(): Promise<void> {
+  try {
+    const unlisten = await props.controls.onResized(() => {
+      if (isMounted) {
+        void syncMaximized()
       }
     })
-    .catch((cause) => {
-      console.error('Failed to observe window size', cause)
-    })
+    // Registration can finish after component teardown.
+    if (!isMounted) {
+      unlisten()
+
+      return
+    }
+
+    stopResize = unlisten
+  } catch (cause) {
+    console.error('Failed to observe window size', cause)
+  }
+
+  // Subscribe before taking the initial snapshot so no resize falls between them.
+  if (isMounted) {
+    await syncMaximized()
+  }
+}
+
+onMounted(() => {
+  isMounted = true
+  void observeMaximized()
 })
 
 onBeforeUnmount(() => {
-  active = false
+  isMounted = false
   stopResize?.()
 })
 </script>
