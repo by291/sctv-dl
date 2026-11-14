@@ -126,7 +126,6 @@ void main() {
       expect(repository.calls, ['1', '2', '3']);
       expect(result.succeeded, ['1', '3']);
       expect(result.failures.keys, ['2']);
-      expect(result.failures['2'], contains('offline'));
       expect(result.skipped, ['4', '5']);
     },
   );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../design/download_issue_label.dart';
+import '../../domain/downloads/download_issue.dart';
 import '../../domain/downloads/download_task.dart';
 import 'download_management.dart';
 import 'downloads_controller.dart';
@@ -43,7 +45,9 @@ class DownloadsActions {
       ),
       _ => ('', '', ''),
     };
-    if (title.isEmpty) return true;
+    if (title.isEmpty) {
+      return true;
+    }
 
     return await showDialog<bool>(
           context: context,
@@ -74,7 +78,9 @@ class DownloadsActions {
       selected,
       (targets) => _confirmBatch(action, targets),
     );
-    if (result == null || !isMounted() || !context.mounted) return;
+    if (result == null || !isMounted() || !context.mounted) {
+      return;
+    }
 
     final details = [
       '${action.label}：已处理 ${result.succeeded.length} 项',
@@ -90,10 +96,11 @@ class DownloadsActions {
   Future<void> perform(String id, Future<void> Function() action) async {
     try {
       await controller.perform(id, action);
-    } catch (error) {
+    } catch (error, stack) {
+      final message = reportDownloadError(error, stack);
       if (isMounted() && context.mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.toString())));
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     }
   }
@@ -107,10 +114,12 @@ class DownloadsActions {
     if (current == null ||
         current.state != DownloadState.completed ||
         current.fileLocation == null) {
-      throw StateError('文件已不可用，请重新下载');
+      throw DownloadIssue(DownloadIssueCode.fileUnavailable);
     }
 
-    if (isMounted()) onPlayLocal(current);
+    if (isMounted()) {
+      onPlayLocal(current);
+    }
   }
 
   Future<void> _delete(DownloadTask task) async {
@@ -132,7 +141,9 @@ class DownloadsActions {
       ),
     );
 
-    if (confirmed == true) await controller.repository.deleteFile(task.id);
+    if (confirmed == true) {
+      await controller.repository.deleteFile(task.id);
+    }
   }
 
   Future<void> fileAction(String action, DownloadTask task) async {

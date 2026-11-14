@@ -63,9 +63,13 @@ class NativeDownloadFiles implements DownloadFileGateway {
         'location': reference.value,
       });
 
-      final bytes = result?['bytes'];
+      if (result == null || result['exists'] is! bool) {
+        throw const FormatException('Invalid MediaStore stat reply');
+      }
+
+      final bytes = result['bytes'];
       return FileDetails(
-        exists: result?['exists'] == true,
+        exists: result['exists'] == true,
         bytes: bytes is int && bytes >= 0 ? bytes : null,
       );
     }
@@ -100,7 +104,9 @@ class NativeDownloadFiles implements DownloadFileGateway {
       return location.value;
     }
 
-    if (!await file.exists()) throw StateError('Downloaded file is missing');
+    if (!await file.exists()) {
+      throw StateError('Downloaded file is missing');
+    }
 
     // Native recovery distinguishes our pending rows from visible publications.
     // Keep the source until the repository durably commits the returned URI.
@@ -125,7 +131,9 @@ class NativeDownloadFiles implements DownloadFileGateway {
     );
 
     final file = await _privateFile(location);
-    if (await file.exists()) await file.delete();
+    if (await file.exists()) {
+      await file.delete();
+    }
     // Native cancellation owns the plugin's opaque partial/resume artifacts.
   }
 
@@ -134,7 +142,9 @@ class NativeDownloadFiles implements DownloadFileGateway {
     final reference = DownloadFileLocation.parse(location);
     if (reference is PrivateFileLocation) {
       final file = await _privateFile(reference);
-      if (await file.exists()) await file.delete();
+      if (await file.exists()) {
+        await file.delete();
+      }
     } else {
       // The plugin's DocumentFile deletion rejects MediaStore Downloads URIs.
       // The host instead invokes ContentResolver.delete for the owned URI.

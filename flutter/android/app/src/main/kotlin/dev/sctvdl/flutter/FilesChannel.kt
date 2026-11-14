@@ -2,17 +2,20 @@ package dev.sctvdl.flutter
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.concurrent.Executors
 
-/** Owns file-channel work; publication and resolver I/O never run on the UI thread. */
-internal class FilesChannel(private val activity: Activity, messenger: BinaryMessenger) : AutoCloseable {
+/** Owns file-channel work; publication and resolver I/O stay off the UI thread. */
+internal class FilesChannel(
+    private val activity: Activity,
+    messenger: BinaryMessenger,
+) : AutoCloseable {
     private val executor = Executors.newSingleThreadExecutor()
     private val resolver = activity.contentResolver
     private val channel = MethodChannel(messenger, "dev.sctvdl.flutter/files")
@@ -21,51 +24,65 @@ internal class FilesChannel(private val activity: Activity, messenger: BinaryMes
         channel.setMethodCallHandler(::handle)
     }
 
-    private fun handle(call: MethodCall, result: MethodChannel.Result) {
-        if (call.method == "consumeNotificationIntent") {
-            val cleaned = consumeDownloadNotificationIntent(activity.intent, call.argument<String>("taskId"))
-            if (cleaned != null) activity.intent = cleaned
-            result.success(cleaned != null)
-            return
-        }
-        if (call.method == "publishRecoverable") {
-            publish(call, result)
-            return
-        }
-
-        val location = call.argument<String>("location")
-        if (location == null || !location.startsWith("content://")) {
-            result.error("invalid_location", "Expected an owned content URI", null)
-            return
-        }
-        val uri = Uri.parse(location)
+    private fun handle(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         when (call.method) {
-            "stat" ->
-                executor.execute {
-                    val state = stat(uri)
-                    activity.runOnUiThread { result.success(state) }
+            "consumeNotificationIntent" -> {
+                val taskId = call.argument<String>("taskId")
+                val cleaned = consumeDownloadNotificationIntent(activity.intent, taskId)
+                if (cleaned != null) {
+                    activity.intent = cleaned
                 }
-            "delete" -> execute("delete_failed", result) { resolver.delete(uri, null, null) > 0 }
-            "share" -> share(uri, call.argument<String>("filename"), result)
+                result.success(cleaned != null)
+            }
+            "publishRecoverable" -> publish(call, result)
+            "stat", "delete", "share" -> handlePublishedFile(call, result)
             else -> result.notImplemented()
         }
     }
 
-    private fun publish(call: MethodCall, result: MethodChannel.Result) {
+    private fun handlePublishedFile(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val location = call.argument<String>("location")
+        val uri = location?.let(Uri::parse)
+        if (uri?.scheme != ContentResolver.SCHEME_CONTENT || uri.authority.isNullOrEmpty()) {
+            result.error("invalid_location", "Expected an owned content URI", null)
+            return
+        }
+
+        when (call.method) {
+            "stat" -> execute("stat_failed", result) { inspectPublishedFile(resolver, uri) }
+            "delete" -> execute("delete_failed", result) { resolver.delete(uri, null, null) > 0 }
+            "share" -> share(uri, call.argument<String>("filename"), result)
+        }
+    }
+
+    private fun publish(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         val source = call.argument<String>("sourcePath")
         val filename = call.argument<String>("filename")
         if (source == null || filename == null) {
             result.error("invalid_publication", "Source and planned filename are required", null)
             return
         }
+
         execute("publication_failed", result) {
-            MediaStorePublisher(resolver, activity.packageName, activity.filesDir)
-                .publish(File(source), filename)
-                .toString()
+            val publisher = MediaStorePublisher(resolver, activity.packageName, activity.filesDir)
+            publisher.publish(File(source), filename).toString()
         }
     }
 
-    private fun execute(code: String, result: MethodChannel.Result, action: () -> Any) {
+    private fun execute(
+        code: String,
+        result: MethodChannel.Result,
+        action: () -> Any,
+    ) {
         executor.execute {
             try {
                 val value = action()
@@ -76,7 +93,11 @@ internal class FilesChannel(private val activity: Activity, messenger: BinaryMes
         }
     }
 
-    private fun share(uri: Uri, filename: String?, result: MethodChannel.Result) {
+    private fun share(
+        uri: Uri,
+        filename: String?,
+        result: MethodChannel.Result,
+    ) {
         try {
             val intent =
                 Intent(Intent.ACTION_SEND).apply {
@@ -86,6 +107,7 @@ internal class FilesChannel(private val activity: Activity, messenger: BinaryMes
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     clipData = ClipData.newUri(resolver, "video", uri)
                 }
+
             activity.startActivity(Intent.createChooser(intent, "分享视频"))
             result.success(true)
         } catch (error: Exception) {
@@ -93,26 +115,13 @@ internal class FilesChannel(private val activity: Activity, messenger: BinaryMes
         }
     }
 
-    private fun stat(uri: Uri): Map<String, Any> = try {
-        resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-            var size = descriptor.statSize
-            if (size < 0) {
-                resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst() && !cursor.isNull(0)) size = cursor.getLong(0)
-                }
-            }
-            buildMap {
-                put("exists", true)
-                if (size >= 0) put("bytes", size)
-            }
-        } ?: mapOf("exists" to false)
-    } catch (_: Exception) {
-        mapOf("exists" to false)
-    }
-
+    /** Stops intake while allowing already accepted file operations to finish. */
     override fun close() {
-        channel.setMethodCallHandler(null)
-        // Finish accepted publication work; shutdown does not cancel queued I/O.
-        executor.shutdown()
+        try {
+            channel.setMethodCallHandler(null)
+        } finally {
+            // Cancelling accepted publication work can leave a half-written pending row.
+            executor.shutdown()
+        }
     }
 }

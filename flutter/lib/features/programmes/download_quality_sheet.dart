@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../design/download_issue_label.dart';
 import '../../design/primary_page_scaffold.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
@@ -13,7 +14,9 @@ Future<DownloadBatchResult?> showDownloadQualitySheet(
   required bool wifiOnly,
   String wifiPolicyLabel = '仅使用 Wi-Fi',
 }) async {
-  if (selections.isEmpty) return null;
+  if (selections.isEmpty) {
+    return null;
+  }
 
   final options = <VideoQuality>{
     for (final selection in selections)
@@ -65,17 +68,28 @@ Future<DownloadBatchResult?> showDownloadQualitySheet(
     },
   );
   // Dismissing the chooser never creates a durable task or starts preflight.
-  if (quality == null) return null;
+  if (quality == null) {
+    return null;
+  }
 
   return downloads.start(selections, quality, wifiOnly: wifiOnly);
 }
 
 String downloadResultLabel(DownloadBatchResult result) {
   final parts = <String>['已加入 ${result.taskIds.length} 项'];
-  if (result.duplicates > 0) parts.add('${result.duplicates} 项已在下载');
-  if (result.fallbacks > 0) parts.add('${result.fallbacks} 项使用可用清晰度');
+  if (result.duplicates > 0) {
+    parts.add('${result.duplicates} 项已在下载');
+  }
+  if (result.fallbacks > 0) {
+    parts.add('${result.fallbacks} 项使用可用清晰度');
+  }
   if (result.failures.isNotEmpty) {
-    parts.add('${result.failures.length} 项失败：${result.failures.first.message}');
+    final first = result.failures.first;
+    final message = downloadIssueLabel(
+      first.issueCode,
+      fallback: first.message,
+    );
+    parts.add('${result.failures.length} 项失败：$message');
   }
 
   return parts.join('，');

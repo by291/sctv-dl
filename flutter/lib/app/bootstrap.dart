@@ -17,6 +17,7 @@ import '../data/programmes/dio_programme_client.dart';
 import '../data/settings/drift_user_repository.dart';
 import '../data/settings/installation_identity.dart';
 import '../domain/programmes/programme.dart';
+import '../domain/programmes/programme_repository.dart';
 import '../platform/downloads/background_transfer_gateway.dart';
 import '../platform/files/native_download_files.dart';
 import '../platform/images/strict_cover_client.dart';
@@ -25,6 +26,7 @@ import '../platform/storage/runtime_backup_policy.dart';
 import 'resource_cleanup.dart';
 import 'services.dart';
 
+/// Opens local storage and transfers resource ownership to the application.
 Future<AppServices> bootstrapServices() async {
   final package = await PackageInfo.fromPlatform();
   final support = await getApplicationSupportDirectory();
@@ -73,28 +75,8 @@ Future<AppServices> bootstrapServices() async {
       store: SqliteDownloadTaskStore(runtimeDatabase),
       transfers: transferGateway,
       files: NativeDownloadFiles(),
-      revalidate: (old) async {
-        final dates = await programmes.refreshDates(old.programme.id);
-        final broadcast = dates.items
-            .where((date) => date.id == old.broadcast.id)
-            .firstOrNull;
-        if (broadcast == null) throw StateError('原播出日期已不可用');
-
-        final contents = await programmes.refreshContents(
-          old.programme.id,
-          broadcast.id,
-        );
-        final content = contents.items
-            .where((item) => item.id == old.content.id)
-            .firstOrNull;
-        if (content == null) throw StateError('原节目内容已不可用');
-
-        return ProgrammeSelection(
-          programme: old.programme,
-          broadcast: broadcast,
-          content: content,
-        );
-      },
+      revalidate: (selection) =>
+          _refreshDownloadSelection(programmes, selection),
     );
     ownedDownloads = downloads;
 
@@ -150,6 +132,34 @@ Future<AppServices> bootstrapServices() async {
 
     Error.throwWithStackTrace(error, stack);
   }
+}
+
+Future<ProgrammeSelection> _refreshDownloadSelection(
+  ProgrammeRepository programmes,
+  ProgrammeSelection previous,
+) async {
+  final programme = previous.programme;
+  final dates = await programmes.refreshDates(programme.id);
+  final broadcast = dates.items
+      .where((date) => date.id == previous.broadcast.id)
+      .firstOrNull;
+  if (broadcast == null) {
+    throw StateError('The original broadcast date is no longer available');
+  }
+
+  final contents = await programmes.refreshContents(programme.id, broadcast.id);
+  final content = contents.items
+      .where((item) => item.id == previous.content.id)
+      .firstOrNull;
+  if (content == null) {
+    throw StateError('The original programme content is no longer available');
+  }
+
+  return ProgrammeSelection(
+    programme: programme,
+    broadcast: broadcast,
+    content: content,
+  );
 }
 
 Future<MetadataDeviceProfile> _androidProfile() async {

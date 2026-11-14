@@ -51,26 +51,29 @@ void main() {
     expect(request.baseDirectory, native.BaseDirectory.applicationDocuments);
     expect(request.directory, 'Downloads');
   });
-  test('configuration failure can retry concurrently without losing the native callback owner', () async {
-    final engine = FailOnceDownloader();
-    final gateway = BackgroundTransferGateway(downloader: engine);
-    final events = <Object>[];
-    final listener = gateway.events.listen(events.add);
-    await expectLater(gateway.initialize(), throwsStateError);
-    await Future.wait([gateway.initialize(), gateway.initialize()]);
-    final nativeTask = gateway.buildNativeTask(
-      task('https://fscgc.scgchc.com/video.mp4'),
-    );
-    engine.statusCallback!(
-      native.TaskStatusUpdate(nativeTask, native.TaskStatus.enqueued),
-    );
-    expect(events, hasLength(1));
-    expect(engine.configureCalls, 2);
-    expect(engine.resumeCalls, 1);
-    await listener.cancel();
-    await gateway.dispose();
-    expect(engine.statusCallback, isNull);
-  });
+  test(
+    'concurrent retry after configuration failure retains callback ownership',
+    () async {
+      final engine = FailOnceDownloader();
+      final gateway = BackgroundTransferGateway(downloader: engine);
+      final events = <Object>[];
+      final listener = gateway.events.listen(events.add);
+      await expectLater(gateway.initialize(), throwsStateError);
+      await Future.wait([gateway.initialize(), gateway.initialize()]);
+      final nativeTask = gateway.buildNativeTask(
+        task('https://fscgc.scgchc.com/video.mp4'),
+      );
+      engine.statusCallback!(
+        native.TaskStatusUpdate(nativeTask, native.TaskStatus.enqueued),
+      );
+      expect(events, hasLength(1));
+      expect(engine.configureCalls, 2);
+      expect(engine.resumeCalls, 1);
+      await listener.cancel();
+      await gateway.dispose();
+      expect(engine.statusCallback, isNull);
+    },
+  );
   test(
     'initial transfers reject arbitrary hosts before reaching the plugin',
     () {
@@ -81,24 +84,70 @@ void main() {
       );
     },
   );
-  test('cancellation during preflight rejects a late successful probe without native enqueue', () async {
-    final probe = DelayedProbe();
-    final gateway = BackgroundTransferGateway(mediaProbe: probe);
-    final pending = gateway.enqueue(task('https://fscgc.scgchc.com/video.mp4'));
-    final rejected = expectLater(pending, throwsA(isA<RequestCancelled>()));
-    await probe.entered.future;
-    expect(await gateway.cancel('attempt'), isTrue);
-    probe.release.complete();
-    await rejected;
-    expect(probe.scope!.isCancelled, isTrue);
-    await gateway.dispose();
-  });
+  test(
+    'all disposal callers wait for outstanding observers to close',
+    () async {
+      final gateway = BackgroundTransferGateway();
+      final observation = gateway.events.listen((_) {});
+      observation.pause();
+      addTearDown(observation.cancel);
+
+      final first = gateway.dispose();
+      final second = gateway.dispose();
+      var isFirstDone = false;
+      var isSecondDone = false;
+      unawaited(first.then((_) => isFirstDone = true));
+      unawaited(second.then((_) => isSecondDone = true));
+      await Future<void>.delayed(Duration.zero);
+
+      final completedWhilePaused = [isFirstDone, isSecondDone];
+      observation.resume();
+      await Future.wait([first, second]);
+
+      expect(completedWhilePaused, [false, false]);
+    },
+  );
+
+  test(
+    'notification observers close even if the media probe fails to close',
+    () async {
+      final failure = StateError('Media probe could not close');
+      final probe = DelayedProbe()..disposalFailure = failure;
+      final gateway = BackgroundTransferGateway(mediaProbe: probe);
+      final eventsClosed = gateway.events.drain<void>();
+      final notificationsClosed = gateway.notificationTaps.drain<void>();
+
+      await expectLater(gateway.dispose(), throwsA(same(failure)));
+
+      await Future.wait([eventsClosed, notificationsClosed])
+          .timeout(const Duration(seconds: 2));
+    },
+  );
+
+  test(
+    'cancelled preflight ignores a late success without native enqueue',
+    () async {
+      final probe = DelayedProbe();
+      final gateway = BackgroundTransferGateway(mediaProbe: probe);
+      final pending = gateway.enqueue(
+        task('https://fscgc.scgchc.com/video.mp4'),
+      );
+      final rejected = expectLater(pending, throwsA(isA<RequestCancelled>()));
+      await probe.entered.future;
+      expect(await gateway.cancel('attempt'), isTrue);
+      probe.release.complete();
+      await rejected;
+      expect(probe.scope!.isCancelled, isTrue);
+      await gateway.dispose();
+    },
+  );
 }
 
 class DelayedProbe implements DownloadMediaProbe {
   final entered = Completer<void>();
   final release = Completer<void>();
   RequestScope? scope;
+  Object? disposalFailure;
   @override
   Future<void> validate(String url, {required RequestScope scope}) async {
     this.scope = scope;
@@ -107,7 +156,11 @@ class DelayedProbe implements DownloadMediaProbe {
   }
 
   @override
-  void dispose() {}
+  void dispose() {
+    if (disposalFailure case final failure?) {
+      throw failure;
+    }
+  }
 }
 
 class FailOnceDownloader implements native.FileDownloader {

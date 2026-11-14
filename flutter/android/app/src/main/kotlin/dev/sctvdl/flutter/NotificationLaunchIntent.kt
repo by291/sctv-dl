@@ -5,13 +5,20 @@ import com.bbflight.background_downloader.NotificationReceiver
 import org.json.JSONObject
 
 /** An acknowledgement for an older tap cannot consume a newer launch intent. */
-internal fun consumeDownloadNotificationIntent(current: Intent, taskId: String?): Intent? {
-    if (taskId == null || current.action != NotificationReceiver.actionTap) return null
-    val receivedId =
-        runCatching {
-            JSONObject(current.getStringExtra(NotificationReceiver.keyTask) ?: "").optString("taskId")
-        }.getOrNull()
-    if (receivedId != taskId) return null
+internal fun consumeDownloadNotificationIntent(
+    current: Intent,
+    taskId: String?,
+): Intent? {
+    if (taskId == null || current.action != NotificationReceiver.actionTap) {
+        return null
+    }
+
+    val taskPayload = current.getStringExtra(NotificationReceiver.keyTask) ?: return null
+    val receivedId = runCatching { JSONObject(taskPayload).optString("taskId") }.getOrNull()
+    if (receivedId != taskId) {
+        return null
+    }
+
     return Intent(current).apply {
         action = Intent.ACTION_MAIN
         listOf(
@@ -21,7 +28,7 @@ internal fun consumeDownloadNotificationIntent(current: Intent, taskId: String?)
             NotificationReceiver.keyGroupNotificationName,
             NotificationReceiver.keyNotificationConfig,
             NotificationReceiver.keyNotificationType,
-            NotificationReceiver.keyNotificationId
+            NotificationReceiver.keyNotificationId,
         ).forEach(::removeExtra)
     }
 }

@@ -1,3 +1,4 @@
+import '../../design/download_issue_label.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
 
@@ -90,8 +91,8 @@ Future<DownloadActionResult> runDownloadBatch(
 
       await action.execute(repository, target.id);
       result.succeeded.add(target.id);
-    } catch (error) {
-      result.failures[target.id] = error.toString();
+    } catch (error, stack) {
+      result.failures[target.id] = reportDownloadError(error, stack);
     }
   }
 

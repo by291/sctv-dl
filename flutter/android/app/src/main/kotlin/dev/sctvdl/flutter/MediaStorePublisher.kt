@@ -3,102 +3,79 @@ package dev.sctvdl.flutter
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
+import android.database.Cursor
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
 
-/** Publishes one attempt's unique filename. Private bytes survive every failure. */
+private const val MAX_FILENAME_BYTES = 255
+
+/** Publishes one attempt's unique filename and keeps its private source available for recovery. */
 internal class MediaStorePublisher(
     private val resolver: ContentResolver,
     private val ownerPackage: String,
-    private val privateRoot: File
+    private val privateRoot: File,
 ) {
     private val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    private val destination = Environment.DIRECTORY_DOWNLOADS + "/sctv-dl/"
 
     // API 29 needs this URI form; it remains supported on newer providers. A
     // normal query can omit pending rows even when this package created them.
     @Suppress("DEPRECATION")
     private val recoverableCollection = MediaStore.setIncludePending(collection)
-    private val destination = Environment.DIRECTORY_DOWNLOADS + "/sctv-dl/"
 
-    fun publish(source: File, filename: String): Uri {
-        require(
-            filename.isNotBlank() && filename != "." && filename != ".." &&
-                !filename.contains('/') && !filename.contains('\\') && !filename.contains('\u0000') &&
-                filename.toByteArray(Charsets.UTF_8).size <= 255
-        ) { "Invalid planned filename" }
-        val canonical = source.canonicalFile
-        require(canonical.path.startsWith(privateRoot.canonicalPath + File.separator) && canonical.isFile) {
-            "Publication requires an app-owned staging file"
-        }
+    private data class OwnedRow(
+        val uri: Uri,
+        val isPending: Boolean,
+    )
+
+    private data class PublishedMetadata(
+        val isPending: Boolean,
+        val packageName: String?,
+        val filename: String?,
+        val relativePath: String?,
+    )
+
+    /** Recovers an interrupted publication or returns the verified public URI. */
+    fun publish(
+        source: File,
+        filename: String,
+    ): Uri {
+        val canonical = validateSource(source, filename)
         val length = canonical.length()
-        val existing = findOwned(filename)
-        for (row in existing.filter { it.pending }) {
-            check(resolver.delete(row.uri, null, null) > 0) { "Unable to remove interrupted publication" }
-        }
-        existing.firstOrNull { !it.pending }?.let { row ->
-            check(actualLength(row.uri) == length) { "A visible file already owns the planned filename" }
-            return row.uri
-        }
-        val values =
-            ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, destination)
-                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
+        val rows = findOwned(filename)
+
+        // Full-length pending rows can still represent an interrupted copy.
+        for (row in rows.filter { it.isPending }) {
+            check(resolver.delete(row.uri, null, null) > 0) {
+                "Unable to remove interrupted publication"
             }
-        val created =
-            checkNotNull(resolver.insert(collection, values)) {
-                "Unable to reserve Downloads publication"
+        }
+
+        val visible = rows.firstOrNull { !it.isPending }
+        if (visible != null) {
+            // Dart may retry after publication but before the URI was saved.
+            check(actualLength(visible.uri) == length) {
+                "A visible file already owns the planned filename"
             }
+            return visible.uri
+        }
+
+        val created = reservePending(filename)
         try {
-            canonical.inputStream().use { input ->
-                val stream =
-                    checkNotNull(resolver.openOutputStream(created, "w")) {
-                        "Unable to open reserved publication"
-                    }
-                stream.use { output ->
-                    input.copyTo(output)
-                    output.flush()
-                }
-            }
+            copyBytes(canonical, created)
             check(actualLength(created) == length) { "Publication size verification failed" }
-            val visible = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-            check(resolver.update(created, visible, null, null) == 1) { "Unable to make publication visible" }
-            val projection =
-                arrayOf(
-                    MediaStore.MediaColumns.IS_PENDING,
-                    MediaStore.MediaColumns.OWNER_PACKAGE_NAME,
-                    MediaStore.MediaColumns.DISPLAY_NAME,
-                    MediaStore.MediaColumns.RELATIVE_PATH
-                )
-            val metadata =
-                resolver.query(created, projection, null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        listOf(
-                            cursor.getInt(0).toString(),
-                            cursor.getString(1),
-                            cursor.getString(2),
-                            cursor.getString(3)
-                        )
-                    } else {
-                        null
-                    }
-                }
-            check(
-                metadata != null && metadata[0] == "0" && metadata[1] == ownerPackage && metadata[2] == filename &&
-                    metadata[3] == destination &&
-                    actualLength(created) == length
-            ) {
-                "Published destination could not be verified: $metadata"
-            }
+
+            makeVisible(created)
+            verifyPublication(created, filename, length)
             return created
         } catch (error: Exception) {
-            // Only this call's newly inserted row is removed. Existing visible
-            // files and the private source are never deleted on copy failure.
+            // Existing visible files and the private source survive this rollback.
             try {
-                check(resolver.delete(created, null, null) > 0) { "Unable to clean failed publication" }
+                check(resolver.delete(created, null, null) > 0) {
+                    "Unable to clean failed publication"
+                }
             } catch (cleanup: Exception) {
                 error.addSuppressed(cleanup)
             }
@@ -106,32 +83,157 @@ internal class MediaStorePublisher(
         }
     }
 
-    private data class Row(val uri: Uri, val pending: Boolean)
+    private fun validateSource(
+        source: File,
+        filename: String,
+    ): File {
+        val isSimpleName = filename.isNotBlank() && filename != "." && filename != ".."
+        val hasInvalidCharacters =
+            filename.contains('/') || filename.contains('\\') || filename.contains('\u0000')
+        val fitsFilenameBudget = filename.toByteArray(Charsets.UTF_8).size <= MAX_FILENAME_BYTES
+        require(isSimpleName && !hasInvalidCharacters && fitsFilenameBudget) {
+            "Invalid planned filename"
+        }
 
-    private fun findOwned(filename: String): List<Row> {
-        val rows = mutableListOf<Row>()
+        val canonical = source.canonicalFile
+        val isPrivate = canonical.path.startsWith(privateRoot.canonicalPath + File.separator)
+        require(isPrivate && canonical.isFile) { "Publication requires an app-owned staging file" }
+
+        return canonical
+    }
+
+    private fun findOwned(filename: String): List<OwnedRow> {
+        val rows = mutableListOf<OwnedRow>()
         val projection =
             arrayOf(
                 MediaStore.MediaColumns._ID,
                 MediaStore.MediaColumns.IS_PENDING,
-                MediaStore.MediaColumns.OWNER_PACKAGE_NAME
+                MediaStore.MediaColumns.OWNER_PACKAGE_NAME,
             )
-        resolver
-            .query(
+        val selection =
+            "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND " +
+                "${MediaStore.MediaColumns.RELATIVE_PATH} = ?"
+        val matches =
+            resolver.query(
                 recoverableCollection,
                 projection,
-                "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+                selection,
                 arrayOf(filename, destination),
-                null
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    // Provider-visible files from another app are not ours to repair.
-                    if (cursor.getString(2) != ownerPackage) continue
-                    rows += Row(ContentUris.withAppendedId(collection, cursor.getLong(0)), cursor.getInt(1) != 0)
+                null,
+            )
+
+        checkNotNull(matches) { "Unable to query existing publications" }.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+            val pendingColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.IS_PENDING)
+            val ownerColumn =
+                cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.OWNER_PACKAGE_NAME)
+            while (cursor.moveToNext()) {
+                // Provider-visible files from another app are not ours to repair.
+                if (cursor.getString(ownerColumn) != ownerPackage) {
+                    continue
                 }
+
+                val uri = ContentUris.withAppendedId(collection, cursor.getLong(idColumn))
+                rows += OwnedRow(uri = uri, isPending = cursor.getInt(pendingColumn) != 0)
             }
+        }
+
         return rows
     }
 
-    private fun actualLength(uri: Uri): Long = resolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+    private fun reservePending(filename: String): Uri {
+        val values =
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, destination)
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+
+        return checkNotNull(resolver.insert(collection, values)) {
+            "Unable to reserve Downloads publication"
+        }
+    }
+
+    private fun copyBytes(
+        source: File,
+        uri: Uri,
+    ) {
+        source.inputStream().use { input ->
+            val stream =
+                checkNotNull(resolver.openOutputStream(uri, "w")) {
+                    "Unable to open reserved publication"
+                }
+            stream.use { output ->
+                input.copyTo(output)
+                output.flush()
+            }
+        }
+    }
+
+    private fun actualLength(uri: Uri): Long {
+        val descriptor =
+            checkNotNull(resolver.openFileDescriptor(uri, "r")) {
+                "Unable to open publication for verification"
+            }
+        return descriptor.use { it.statSize }
+    }
+
+    private fun makeVisible(uri: Uri) {
+        val values =
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+        check(resolver.update(uri, values, null, null) == 1) {
+            "Unable to make publication visible"
+        }
+    }
+
+    private fun verifyPublication(
+        uri: Uri,
+        filename: String,
+        length: Long,
+    ) {
+        // MediaStore can rename the file when it becomes visible. Dart may drop the
+        // recovery source after saving the URI, so verify the committed location first.
+        val projection =
+            arrayOf(
+                MediaStore.MediaColumns.IS_PENDING,
+                MediaStore.MediaColumns.OWNER_PACKAGE_NAME,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.RELATIVE_PATH,
+            )
+        val metadata =
+            resolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    readMetadata(cursor)
+                } else {
+                    null
+                }
+            }
+
+        val expected =
+            PublishedMetadata(
+                isPending = false,
+                packageName = ownerPackage,
+                filename = filename,
+                relativePath = destination,
+            )
+        check(metadata == expected && actualLength(uri) == length) {
+            "Published destination could not be verified: $metadata"
+        }
+    }
+
+    private fun readMetadata(cursor: Cursor): PublishedMetadata {
+        val pendingColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.IS_PENDING)
+        val ownerColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.OWNER_PACKAGE_NAME)
+        val filenameColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+        val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+        return PublishedMetadata(
+            isPending = cursor.getInt(pendingColumn) != 0,
+            packageName = cursor.getString(ownerColumn),
+            filename = cursor.getString(filenameColumn),
+            relativePath = cursor.getString(pathColumn),
+        )
+    }
 }

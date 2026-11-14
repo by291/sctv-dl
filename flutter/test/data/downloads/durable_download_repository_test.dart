@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/data/database/record_database.dart';
 import 'package:sctv_dl_mobile/data/downloads/durable_download_repository.dart';
 import 'package:sctv_dl_mobile/data/downloads/sqlite_download_task_store.dart';
+import 'package:sctv_dl_mobile/domain/downloads/download_issue.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/downloads/file_gateway.dart';
@@ -115,7 +116,7 @@ void main() {
     },
   );
 
-  test('native terminal events received before storage recovery survive a stale snapshot', () async {
+  test('early terminal events survive a stale native snapshot', () async {
     final task = await start();
     await repository.dispose();
     repository = DurableDownloadRepository(
@@ -262,6 +263,70 @@ void main() {
   );
 
   test(
+    'disposal drains publication after transfer observation fails to cancel',
+    () async {
+      await repository.dispose();
+      final failure = StateError('Transfer observation could not cancel');
+      transfers.eventsOverride = Stream.multi((observer) {
+        final subscription = transfers.controller.stream.listen(
+          observer.addSync,
+        );
+        observer.onCancel = () async {
+          await subscription.cancel();
+          throw failure;
+        };
+      }, isBroadcast: true);
+      final downloads = DurableDownloadRepository(
+        store: store,
+        transfers: transfers,
+        files: files,
+      );
+      final result = await downloads.start(
+        [selection],
+        VideoQuality.standard,
+        wifiOnly: true,
+      );
+      final task = (await downloads.loadTasks()).single;
+      expect(result.taskIds, [task.id]);
+      final changesClosed = downloads.watchTasks().drain<void>();
+      final entered = Completer<void>();
+      final gate = Completer<void>();
+      files.publicationEntered = entered;
+      files.publicationGate = gate;
+      transfers.emit(
+        TransferSnapshot(
+          attemptId: task.attemptId,
+          state: DownloadState.finalizing,
+          fileLocation: 'support:downloads/${task.filename}',
+        ),
+      );
+      await entered.future;
+
+      var isDisposalDone = false;
+      final disposal = downloads.dispose();
+      final reported = expectLater(disposal, throwsA(same(failure)));
+      unawaited(
+        disposal.then<void>(
+          (_) {
+            isDisposalDone = true;
+          },
+          onError: (Object _) {
+            isDisposalDone = true;
+          },
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final finishedBeforePublication = isDisposalDone;
+      gate.complete();
+      await reported;
+
+      expect(finishedBeforePublication, isFalse);
+      expect((await store.load()).single.state, DownloadState.completed);
+      await changesClosed.timeout(const Duration(seconds: 2));
+    },
+  );
+
+  test(
     'reserves before enqueue and rejects concurrent duplicate actual quality',
     () async {
       transfers.onEnqueue = (task) async {
@@ -292,6 +357,36 @@ void main() {
     expect(result.fallbacks, 1);
     expect(result.failures.single.contentId, '4');
   });
+
+  test(
+    'duplicate selections do not consume the batch transfer limit',
+    () async {
+      final selections = [
+        selection,
+        selection,
+        for (var i = 4; i <= 103; i++)
+          ProgrammeSelection(
+            programme: selection.programme,
+            broadcast: selection.broadcast,
+            content: ProgrammeContent(
+              id: '$i',
+              title: 'Clip $i',
+              video: 'https://fscgc.scgchc.com/video/$i.mp4',
+            ),
+          ),
+      ];
+
+      final result = await repository.start(
+        selections,
+        VideoQuality.standard,
+        wifiOnly: true,
+      );
+
+      expect(result.duplicates, 1);
+      expect(result.taskIds, hasLength(100));
+      expect(result.failures.single.contentId, '103');
+    },
+  );
 
   test(
     'a media preparation failure leaves other batch members accepted',
@@ -447,6 +542,7 @@ void main() {
       expect(current.state, DownloadState.finalizing);
       expect(current.privateLocation, isNotNull);
       expect(current.error, contains('disk full'));
+      expect(current.issueCode, DownloadIssueCode.publicationFailed);
       files.publicationFailure = null;
       await repository.publish(task.id);
       current = (await repository.loadTasks()).single;
@@ -582,6 +678,23 @@ void main() {
         (await repository.loadTasks()).single.state,
         DownloadState.missing,
       );
+    },
+  );
+
+  test(
+    'a failed file probe leaves the published location and state intact',
+    () async {
+      final task = await start();
+      await event(task, DownloadState.finalizing);
+      final published = (await store.load()).single;
+      final failure = StateError('MediaStore temporarily unavailable');
+      files.onInspect = (_) async => throw failure;
+
+      await expectLater(repository.reconcile(), throwsA(same(failure)));
+
+      final current = (await store.load()).single;
+      expect(current.state, DownloadState.completed);
+      expect(current.fileLocation, published.fileLocation);
     },
   );
 
@@ -987,10 +1100,11 @@ class FakeTransfers implements TransferGateway {
   int eventStreamAccesses = 0;
   Completer<void>? initializationEntered;
   Completer<void>? initializationGate;
+  Stream<TransferSnapshot>? eventsOverride;
   @override
   Stream<TransferSnapshot> get events {
     eventStreamAccesses++;
-    return controller.stream;
+    return eventsOverride ?? controller.stream;
   }
 
   @override

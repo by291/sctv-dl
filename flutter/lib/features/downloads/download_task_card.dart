@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../design/cover_image.dart';
+import '../../design/download_issue_label.dart';
 import '../../domain/downloads/download_task.dart';
 
 class DownloadTaskCard extends StatelessWidget {
@@ -48,11 +49,15 @@ class DownloadTaskCard extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
 
-    final status = task.state == DownloadState.finalizing && task.error != null
+    final diagnostic = task.error;
+    final issue = diagnostic == null && task.issueCode == null
+        ? null
+        : downloadIssueLabel(task.issueCode, fallback: diagnostic ?? '');
+    final status = task.state == DownloadState.finalizing && issue != null
         ? '文件保存失败'
         : _status(task.state);
     final statusColour =
-        (task.error != null && task.state != DownloadState.missing) ||
+        (issue != null && task.state != DownloadState.missing) ||
             task.state == DownloadState.failed
         ? theme.colorScheme.error
         : task.state == DownloadState.completed ||
@@ -107,11 +112,10 @@ class DownloadTaskCard extends StatelessWidget {
                   ],
                 ),
               ],
-              if (task.error != null &&
-                  task.state != DownloadState.missing) ...[
+              if (issue != null && task.state != DownloadState.missing) ...[
                 const SizedBox(height: 8),
                 Text(
-                  task.error!,
+                  issue,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.error,
                   ),

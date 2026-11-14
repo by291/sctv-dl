@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:uuid/uuid.dart';
 
+import '../../domain/downloads/download_issue.dart';
 import '../../domain/downloads/download_repository.dart';
 import '../../domain/downloads/download_task.dart';
 import '../../domain/downloads/file_gateway.dart';
 import '../../domain/downloads/transfer_gateway.dart';
 import '../../domain/programmes/programme.dart';
 import '../../domain/programmes/programme_policy.dart';
+
+typedef _ObservedAttempt = ({String id, int revision, int eventVersion});
 
 /// Native operations stay outside the serialized transition lane so cancellation
 /// can overtake a slow enqueue. This repository has one app-lifetime owner.
@@ -86,7 +89,9 @@ class DurableDownloadRepository implements DownloadRepository {
   Future<void> _ensureReady() {
     _checkOpen();
     final existing = _ready;
-    if (existing != null) return existing;
+    if (existing != null) {
+      return existing;
+    }
 
     final attempt = _initialize();
     _ready = attempt;
@@ -98,7 +103,9 @@ class DurableDownloadRepository implements DownloadRepository {
       attempt.then<void>(
         (_) {},
         onError: (Object error, StackTrace stack) {
-          if (identical(_ready, attempt)) _ready = null;
+          if (identical(_ready, attempt)) {
+            _ready = null;
+          }
           _streamError(error, stack);
         },
       ),
@@ -115,7 +122,9 @@ class DurableDownloadRepository implements DownloadRepository {
   }
 
   void _checkOpen() {
-    if (_disposed) throw StateError('Download repository is disposed');
+    if (_disposed) {
+      throw StateError('Download repository is disposed');
+    }
   }
 
   DownloadTask _task(String id) =>
@@ -123,14 +132,47 @@ class DurableDownloadRepository implements DownloadRepository {
 
   Future<void> _save(DownloadTask task) async {
     await _store.save(task);
-
-    _tasks[task.id] = task;
-    _revision++;
-    if (!_disposed) _changes.add(_snapshot());
+    _recordSavedTask(task);
   }
 
+  void _recordSavedTask(DownloadTask task) {
+    _tasks[task.id] = task;
+    _revision++;
+    if (!_disposed) {
+      _changes.add(_snapshot());
+    }
+  }
+
+  Future<bool> _reserve(DownloadTask task) async {
+    // Native callbacks can arrive during enqueue and need a durable attempt ID.
+    if (_store case AtomicDownloadTaskStore store) {
+      if (!await store.reserve(task)) {
+        return false;
+      }
+      _recordSavedTask(task);
+    } else {
+      await _save(task);
+    }
+
+    return true;
+  }
+
+  bool _hasActiveDownload(
+    ContentRef content,
+    VideoQuality quality, {
+    String? excludingId,
+  }) => _tasks.values.any(
+    (task) =>
+        task.id != excludingId &&
+        task.isActive &&
+        task.selection.ref == content &&
+        task.quality == quality,
+  );
+
   void _requireUnclaimed(String id) {
-    if (_claims.containsKey(id)) throw StateError('此任务正在处理文件，请稍后重试');
+    if (_claims.containsKey(id)) {
+      throw DownloadIssue(DownloadIssueCode.fileBusy);
+    }
   }
 
   Future<T> _track<T>(Future<T> Function() action) {
@@ -162,7 +204,9 @@ class DurableDownloadRepository implements DownloadRepository {
       final task = transition?.call(current) ?? current;
       // Intent transitions share claim acquisition's lane turn, so a callback
       // cannot revise an active task between its capture and cancellation.
-      if (transition != null) await _save(task);
+      if (transition != null) {
+        await _save(task);
+      }
 
       final effect = _TaskEffect(task);
       _claims[id] = effect;
@@ -204,7 +248,9 @@ class DurableDownloadRepository implements DownloadRepository {
     Future<void> Function(_TaskEffect) action,
   ) {
     final existing = _claims[id];
-    if (existing != null) return existing.completion.future;
+    if (existing != null) {
+      return existing.completion.future;
+    }
 
     final effect = _TaskEffect(_task(id));
     _claims[id] = effect;
@@ -225,12 +271,25 @@ class DurableDownloadRepository implements DownloadRepository {
         if (!identical(_claims[expected.id], effect) ||
             current?.attemptId != expected.attemptId ||
             current?.revision != expected.revision) {
-          throw StateError('任务状态已改变');
+          throw DownloadIssue(DownloadIssueCode.taskChanged);
         }
 
         await _save(next);
         effect.task = next;
       });
+
+  Future<void> _recordEffectIssue(_TaskEffect effect, DownloadIssue issue) {
+    final task = effect.task;
+
+    return _commitEffect(
+      effect,
+      task.copyWith(
+        error: issue.message,
+        issueCode: issue.code,
+        revision: task.revision + 1,
+      ),
+    );
+  }
 
   @override
   Future<List<DownloadTask>> loadTasks() async {
@@ -254,7 +313,9 @@ class DurableDownloadRepository implements DownloadRepository {
 
     // Loading cannot lose an event because the listener is already attached.
     loadTasks().then((tasks) {
-      if (observedRevision < _revision) controller.add(tasks);
+      if (observedRevision < _revision) {
+        controller.add(tasks);
+      }
     }, onError: controller.addError);
     controller.onCancel = subscription.cancel;
   });
@@ -268,103 +329,45 @@ class DurableDownloadRepository implements DownloadRepository {
     _checkOpen();
     await _ensureReady();
 
+    final unique = <String, ProgrammeSelection>{};
+    for (final selection in selections) {
+      unique.putIfAbsent(selection.ref.key, () => selection);
+    }
+
+    final attempts = await Future.wait(
+      unique.values
+          .take(downloadBatchLimit)
+          .map(
+            (selection) =>
+                _startSelection(selection, quality, wifiOnly: wifiOnly),
+          ),
+    );
+
     final accepted = <String>[];
     final failures = <DownloadFailure>[];
-    var duplicates = 0;
+    var duplicates = selections.length - unique.length;
     var fallbacks = 0;
-    final seen = <String>{};
-    var distinct = 0;
-
-    await Future.wait(
-      selections.map((selection) async {
-        if (!seen.add(selection.ref.key)) {
-          duplicates++;
-          return;
+    for (final (task, failure) in attempts) {
+      if (failure != null) {
+        failures.add(failure);
+      } else if (task == null) {
+        duplicates++;
+      } else {
+        accepted.add(task.id);
+        if (task.quality != quality) {
+          fallbacks++;
         }
-        if (++distinct > 100) {
-          failures.add(
-            DownloadFailure(
-              contentId: selection.content.id,
-              message: '每批最多下载 100 项',
-            ),
-          );
-          return;
-        }
-
-        try {
-          final source = resolveVideo(selection.content, quality);
-          if (source == null || !isAllowedMediaUrl(source.url)) {
-            throw StateError('没有可下载的视频');
-          }
-
-          final task = await _serial(() async {
-            _checkOpen();
-            if (_tasks.values.any(
-              (task) =>
-                  task.isActive &&
-                  task.selection.ref == selection.ref &&
-                  task.quality == source.quality,
-            )) {
-              return null;
-            }
-
-            final attempt = _createId();
-            final task = DownloadTask(
-              id: _createId(),
-              attemptId: attempt,
-              selection: selection,
-              requestedQuality: quality,
-              quality: source.quality,
-              url: source.url,
-              filename: downloadFilename(
-                selection,
-                source.quality,
-                suffix: attempt,
-              ),
-              wifiOnly: wifiOnly,
-              state: DownloadState.preparing,
-              createdAt: _now(),
-            );
-
-            // Persist the native correlation identity before enqueue can run.
-            if (_store case AtomicDownloadTaskStore store) {
-              if (!await store.reserve(task)) return null;
-
-              _tasks[task.id] = task;
-              _revision++;
-              _changes.add(_snapshot());
-            } else {
-              await _save(task);
-            }
-
-            return task;
-          });
-          if (task == null) {
-            duplicates++;
-            return;
-          }
-
-          if (await _enqueue(task)) {
-            accepted.add(task.id);
-            if (source.quality != quality) fallbacks++;
-          } else {
-            failures.add(
-              DownloadFailure(
-                contentId: selection.content.id,
-                message: _tasks[task.id]?.error ?? '下载未能加入队列',
-              ),
-            );
-          }
-        } catch (error) {
-          failures.add(
-            DownloadFailure(
-              contentId: selection.content.id,
-              message: error.toString(),
-            ),
-          );
-        }
-      }),
-    );
+      }
+    }
+    for (final selection in unique.values.skip(downloadBatchLimit)) {
+      failures.add(
+        DownloadFailure(
+          contentId: selection.content.id,
+          message: DownloadIssueCode.batchLimit.diagnostic,
+          issueCode: DownloadIssueCode.batchLimit,
+        ),
+      );
+    }
 
     return DownloadBatchResult(
       taskIds: List.unmodifiable(accepted),
@@ -373,6 +376,75 @@ class DurableDownloadRepository implements DownloadRepository {
       failures: List.unmodifiable(failures),
     );
   });
+
+  Future<(DownloadTask?, DownloadFailure?)> _startSelection(
+    ProgrammeSelection selection,
+    VideoQuality quality, {
+    required bool wifiOnly,
+  }) async {
+    try {
+      final source = resolveVideo(selection.content, quality);
+      if (source == null || !isAllowedMediaUrl(source.url)) {
+        throw DownloadIssue(DownloadIssueCode.noSource);
+      }
+
+      final task = await _serial(() async {
+        _checkOpen();
+        if (_hasActiveDownload(selection.ref, source.quality)) {
+          return null;
+        }
+
+        final attempt = _createId();
+        final task = DownloadTask(
+          id: _createId(),
+          attemptId: attempt,
+          selection: selection,
+          requestedQuality: quality,
+          quality: source.quality,
+          url: source.url,
+          filename: downloadFilename(
+            selection,
+            source.quality,
+            suffix: attempt,
+          ),
+          wifiOnly: wifiOnly,
+          state: DownloadState.preparing,
+          createdAt: _now(),
+        );
+
+        return await _reserve(task) ? task : null;
+      });
+      if (task == null) {
+        return (null, null);
+      }
+
+      if (await _enqueue(task)) {
+        return (task, null);
+      }
+
+      final rejected = _tasks[task.id];
+      return (
+        null,
+        DownloadFailure(
+          contentId: selection.content.id,
+          message:
+              rejected?.error ?? DownloadIssueCode.enqueueFailed.diagnostic,
+          issueCode: rejected?.issueCode ?? DownloadIssueCode.enqueueFailed,
+        ),
+      );
+    } catch (error) {
+      return (
+        null,
+        DownloadFailure(
+          contentId: selection.content.id,
+          message: error.toString(),
+          issueCode: error is DownloadIssue
+              ? error.code
+              : DownloadIssueCode.downloadFailed,
+        ),
+      );
+    }
+  }
 
   Future<bool> _enqueue(DownloadTask task) => _track(() async {
     var enqueued = false;
@@ -403,23 +475,29 @@ class DurableDownloadRepository implements DownloadRepository {
           current.state == DownloadState.cancelled) {
         return true;
       }
-      if (current.state != DownloadState.preparing) return false;
+      if (current.state != DownloadState.preparing) {
+        return false;
+      }
 
       if (recovered != null) {
         await _apply(recovered);
         return false;
       }
 
+      final state = switch ((enqueued, failure)) {
+        (true, _) => DownloadState.queued,
+        (false, TransferEnqueueException()) => DownloadState.interrupted,
+        _ => DownloadState.failed,
+      };
+      final issue = enqueued
+          ? null
+          : DownloadIssue(DownloadIssueCode.enqueueFailed, cause: failure);
+
       await _save(
         current.copyWith(
-          state: enqueued
-              ? DownloadState.queued
-              : failure is TransferEnqueueException
-              ? DownloadState.interrupted
-              : DownloadState.failed,
-          error: enqueued
-              ? null
-              : '加入下载队列失败${failure == null ? '' : ': $failure'}',
+          state: state,
+          error: issue?.message,
+          issueCode: issue?.code,
           revision: current.revision + 1,
         ),
       );
@@ -438,7 +516,9 @@ class DurableDownloadRepository implements DownloadRepository {
   });
 
   void _received(TransferSnapshot event) {
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
 
     _eventVersions.update(
       event.attemptId,
@@ -460,20 +540,28 @@ class DurableDownloadRepository implements DownloadRepository {
   }
 
   void _streamError(Object error, [StackTrace? stack]) {
-    if (!_disposed) _changes.addError(error, stack);
+    if (!_disposed) {
+      _changes.addError(error, stack);
+    }
   }
 
   Future<void> _apply(TransferSnapshot event) async {
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
 
     final matches = _tasks.values.where(
       (task) => task.attemptId == event.attemptId,
     );
-    if (matches.isEmpty) return;
+    if (matches.isEmpty) {
+      return;
+    }
 
     final task = matches.first;
     // Attempt fencing and terminal guards protect separate callback races.
-    if (task.transferFinished) return;
+    if (task.transferFinished) {
+      return;
+    }
 
     final state = event.state == DownloadState.completed
         ? DownloadState.finalizing
@@ -486,6 +574,7 @@ class DurableDownloadRepository implements DownloadRepository {
       totalBytes: event.totalBytes,
       canResume: event.canResume,
       error: event.error,
+      issueCode: event.issueCode,
       revision: task.revision + 1,
     );
 
@@ -495,7 +584,8 @@ class DurableDownloadRepository implements DownloadRepository {
         await _save(
           next.copyWith(
             state: DownloadState.interrupted,
-            error: '下载完成，但无法确认文件位置',
+            error: DownloadIssueCode.missingPublication.diagnostic,
+            issueCode: DownloadIssueCode.missingPublication,
           ),
         );
         return;
@@ -519,13 +609,13 @@ class DurableDownloadRepository implements DownloadRepository {
   });
 
   Future<void> _reconcile({bool waitForFiles = true}) async {
-    final captured = await _serial(
+    final captured = await _serial<Map<String, _ObservedAttempt>>(
       () async => {
         for (final task in _tasks.values)
           task.id: (
-            task.attemptId,
-            task.revision,
-            _eventVersions[task.attemptId] ?? 0,
+            id: task.attemptId,
+            revision: task.revision,
+            eventVersion: _eventVersions[task.attemptId] ?? 0,
           ),
       },
     );
@@ -534,12 +624,15 @@ class DurableDownloadRepository implements DownloadRepository {
 
     final fileEffects = <Future<void>>[];
     await _serial(() async {
-      if (_disposed) return;
+      if (_disposed) {
+        return;
+      }
 
       for (final entry in captured.entries) {
         final current = _tasks[entry.key];
-        final (attempt, revision, eventVersion) = entry.value;
-        if (current == null) continue;
+        if (current == null) {
+          continue;
+        }
 
         final pending = _claims[current.id];
         if (pending != null) {
@@ -547,9 +640,12 @@ class DurableDownloadRepository implements DownloadRepository {
           continue;
         }
 
-        if (current.attemptId != attempt ||
-            current.revision != revision ||
-            (_eventVersions[attempt] ?? 0) != eventVersion) {
+        // The query ran outside the lane. Attempts can be replaced, durable
+        // state can advance, and a callback can arrive before its commit.
+        final observed = entry.value;
+        if (current.attemptId != observed.id ||
+            current.revision != observed.revision ||
+            (_eventVersions[observed.id] ?? 0) != observed.eventVersion) {
           continue;
         }
 
@@ -558,19 +654,7 @@ class DurableDownloadRepository implements DownloadRepository {
         } else if (current.state == DownloadState.finalizing) {
           fileEffects.add(_schedulePublication(current.id));
         } else if (!current.transferFinished) {
-          final snapshot = native[attempt];
-          if (snapshot == null) {
-            await _save(
-              current.copyWith(
-                state: DownloadState.interrupted,
-                canResume: false,
-                error: '无法确认原生下载任务，请重试',
-                revision: revision + 1,
-              ),
-            );
-          } else {
-            await _apply(snapshot);
-          }
+          await _reconcileTransfer(current, native[observed.id]);
         }
       }
     });
@@ -578,25 +662,40 @@ class DurableDownloadRepository implements DownloadRepository {
     // Bootstrap must expose the durable snapshot even while a native picker,
     // inspection or publication is stalled. Explicit validation joins existing
     // ownership too, so it cannot report stale availability during file changes.
-    if (waitForFiles) await Future.wait(fileEffects);
+    if (waitForFiles) {
+      await Future.wait(fileEffects);
+    }
+  }
+
+  Future<void> _reconcileTransfer(
+    DownloadTask current,
+    TransferSnapshot? snapshot,
+  ) async {
+    if (snapshot != null) {
+      await _apply(snapshot);
+      return;
+    }
+
+    await _save(
+      current.copyWith(
+        state: DownloadState.interrupted,
+        canResume: false,
+        error: DownloadIssueCode.missingTransfer.diagnostic,
+        issueCode: DownloadIssueCode.missingTransfer,
+        revision: current.revision + 1,
+      ),
+    );
   }
 
   Future<void> _inspectCompleted(_TaskEffect effect) async {
     final task = effect.task;
     final location = task.fileLocation;
     if (location == null || !(await _files.inspect(location)).exists) {
-      await _commitEffect(
-        effect,
-        task.copyWith(
-          state: DownloadState.missing,
-          error: '文件已被移除',
-          canResume: false,
-          revision: task.revision + 1,
-        ),
-      );
-    } else {
-      await _cleanupCompleted(effect);
+      await _markFileMissing(effect);
+      return;
     }
+
+    await _cleanupCompleted(effect);
   }
 
   @override
@@ -606,13 +705,15 @@ class DurableDownloadRepository implements DownloadRepository {
     final task = await _serial(() async {
       final task = _task(id);
       if (task.state != DownloadState.running || !task.canResume) {
-        throw StateError('此任务暂不支持暂停');
+        throw DownloadIssue(DownloadIssueCode.cannotPause);
       }
 
       return task;
     });
 
-    if (!await _transfers.pause(task.attemptId)) throw StateError('原生任务未能暂停');
+    if (!await _transfers.pause(task.attemptId)) {
+      throw DownloadIssue(DownloadIssueCode.pauseFailed);
+    }
     // Only the native paused event confirms that the request succeeded.
   });
 
@@ -623,7 +724,7 @@ class DurableDownloadRepository implements DownloadRepository {
     final task = await _serial(() async {
       final task = _task(id);
       if (task.state != DownloadState.paused || !task.canResume) {
-        throw StateError('此任务无法续传，请重新下载');
+        throw DownloadIssue(DownloadIssueCode.cannotResume);
       }
 
       return task;
@@ -638,14 +739,15 @@ class DurableDownloadRepository implements DownloadRepository {
             current.copyWith(
               state: DownloadState.interrupted,
               canResume: false,
-              error: '续传数据不可用，请重新下载',
+              error: DownloadIssueCode.missingResumeData.diagnostic,
+              issueCode: DownloadIssueCode.missingResumeData,
               revision: current.revision + 1,
             ),
           );
         }
       });
 
-      throw StateError('续传数据不可用，请重新下载');
+      throw DownloadIssue(DownloadIssueCode.missingResumeData);
     }
   });
 
@@ -657,7 +759,7 @@ class DurableDownloadRepository implements DownloadRepository {
       id,
       (task) {
         if (!task.isActive || task.state == DownloadState.finalizing) {
-          throw StateError('此任务已结束传输');
+          throw DownloadIssue(DownloadIssueCode.transferFinished);
         }
       },
       (effect) async {
@@ -666,20 +768,17 @@ class DurableDownloadRepository implements DownloadRepository {
         // retry from racing the partial-file cleanup owned by this attempt.
         try {
           if (!await _transfers.cancel(original.attemptId)) {
-            throw StateError('原生下载取消失败');
+            throw DownloadIssue(DownloadIssueCode.cancelFailed);
           }
 
           await _files.cleanPartial(original);
         } catch (error) {
-          final current = effect.task;
-          await _commitEffect(
-            effect,
-            current.copyWith(
-              error: '取消后的清理失败: $error',
-              revision: current.revision + 1,
-            ),
+          final issue = DownloadIssue(
+            DownloadIssueCode.cancelCleanupFailed,
+            cause: error,
           );
-          rethrow;
+          await _recordEffectIssue(effect, issue);
+          throw issue;
         }
       },
       transition: (task) => task.copyWith(
@@ -695,102 +794,16 @@ class DurableDownloadRepository implements DownloadRepository {
   Future<void> retry(String id) => _track(() async {
     await _ensureReady();
 
-    final task = await _withTaskEffect(
-      id,
-      (task) {
-        if (task.isActive || task.state == DownloadState.completed) {
-          throw StateError('此任务无需重新下载');
-        }
-      },
-      (effect) async {
-        final original = effect.task;
-        final selection =
-            await _revalidate?.call(original.selection) ?? original.selection;
-        final source = resolveVideo(
-          selection.content,
-          original.requestedQuality,
-        );
-        if (source == null || !isAllowedMediaUrl(source.url)) {
-          throw StateError('视频源已不可用');
-        }
-
-        // Keep the old durable identity until cleanup succeeds. If cleanup fails,
-        // it must still identify the native job and partial artifacts to clean.
-        try {
-          if (!await _transfers.cancel(original.attemptId)) {
-            throw StateError('无法清理旧下载任务');
-          }
-
-          await _files.cleanPartial(original);
-        } catch (error) {
-          await _serial(() async {
-            final current = _tasks[id];
-            if (current?.attemptId == original.attemptId) {
-              await _save(
-                current!.copyWith(
-                  error: '重试前清理失败: $error',
-                  revision: current.revision + 1,
-                ),
-              );
-            }
-          });
-          rethrow;
-        }
-
-        return _serial(() async {
-          final current = _task(id);
-          if (current.attemptId != original.attemptId ||
-              current.revision != original.revision ||
-              current.isActive) {
-            throw StateError('任务状态已改变');
-          }
-          if (_tasks.values.any(
-            (task) =>
-                task.id != id &&
-                task.isActive &&
-                task.selection.ref == selection.ref &&
-                task.quality == source.quality,
-          )) {
-            throw StateError('此视频已有下载任务');
-          }
-
-          final attempt = _createId();
-          final next = current.copyWith(
-            attemptId: attempt,
-            selection: selection,
-            state: DownloadState.preparing,
-            quality: source.quality,
-            url: source.url,
-            filename: downloadFilename(
-              selection,
-              source.quality,
-              suffix: attempt,
-            ),
-            receivedBytes: 0,
-            totalBytes: null,
-            fileLocation: null,
-            privateLocation: null,
-            error: null,
-            canResume: false,
-            revision: current.revision + 1,
-          );
-
-          if (_store case AtomicDownloadTaskStore store) {
-            if (!await store.reserve(next)) throw StateError('此视频已有下载任务');
-            _tasks[next.id] = next;
-            _revision++;
-            if (!_disposed) _changes.add(_snapshot());
-          } else {
-            await _save(next);
-          }
-
-          return next;
-        });
-      },
-    );
+    final task = await _withTaskEffect(id, (task) {
+      if (task.isActive || task.state == DownloadState.completed) {
+        throw DownloadIssue(DownloadIssueCode.cannotRetry);
+      }
+    }, _prepareRetry);
 
     try {
-      if (!await _enqueue(task)) throw StateError('重新下载未能加入队列');
+      if (!await _enqueue(task)) {
+        throw DownloadIssue(DownloadIssueCode.enqueueFailed);
+      }
     } catch (error) {
       await _serial(() async {
         final current = _task(id);
@@ -800,6 +813,7 @@ class DurableDownloadRepository implements DownloadRepository {
             current.copyWith(
               state: DownloadState.failed,
               error: error.toString(),
+              issueCode: error is DownloadIssue ? error.code : null,
               revision: current.revision + 1,
             ),
           );
@@ -808,6 +822,78 @@ class DurableDownloadRepository implements DownloadRepository {
       rethrow;
     }
   });
+
+  Future<DownloadTask> _prepareRetry(_TaskEffect effect) async {
+    final original = effect.task;
+    final ProgrammeSelection selection;
+    try {
+      selection =
+          await _revalidate?.call(original.selection) ?? original.selection;
+    } catch (error) {
+      throw DownloadIssue(DownloadIssueCode.sourceUnavailable, cause: error);
+    }
+
+    final source = resolveVideo(selection.content, original.requestedQuality);
+    if (source == null || !isAllowedMediaUrl(source.url)) {
+      throw DownloadIssue(DownloadIssueCode.sourceUnavailable);
+    }
+
+    // Keep the old durable identity until cleanup succeeds. If cleanup fails,
+    // it must still identify the native job and partial artifacts to clean.
+    try {
+      if (!await _transfers.cancel(original.attemptId)) {
+        throw StateError('The native attempt could not be cancelled');
+      }
+
+      await _files.cleanPartial(original);
+    } catch (error) {
+      final issue = DownloadIssue(
+        DownloadIssueCode.retryCleanupFailed,
+        cause: error,
+      );
+      await _recordEffectIssue(effect, issue);
+      throw issue;
+    }
+
+    return _serial(() async {
+      final current = _task(original.id);
+      if (current.attemptId != original.attemptId ||
+          current.revision != original.revision ||
+          current.isActive) {
+        throw DownloadIssue(DownloadIssueCode.taskChanged);
+      }
+      if (_hasActiveDownload(
+        selection.ref,
+        source.quality,
+        excludingId: current.id,
+      )) {
+        throw DownloadIssue(DownloadIssueCode.duplicate);
+      }
+
+      final attempt = _createId();
+      final next = current.copyWith(
+        attemptId: attempt,
+        selection: selection,
+        state: DownloadState.preparing,
+        quality: source.quality,
+        url: source.url,
+        filename: downloadFilename(selection, source.quality, suffix: attempt),
+        receivedBytes: 0,
+        totalBytes: null,
+        fileLocation: null,
+        privateLocation: null,
+        error: null,
+        canResume: false,
+        revision: current.revision + 1,
+      );
+
+      if (!await _reserve(next)) {
+        throw DownloadIssue(DownloadIssueCode.duplicate);
+      }
+
+      return next;
+    });
+  }
 
   @override
   Future<void> publish(String id) async {
@@ -823,7 +909,7 @@ class DurableDownloadRepository implements DownloadRepository {
   Future<void> _publication(String id, {bool throwOnFailure = true}) =>
       _withTaskEffect(id, (task) {
         if (task.state != DownloadState.finalizing) {
-          throw StateError('此任务没有等待发布的文件');
+          throw DownloadIssue(DownloadIssueCode.cannotPublish);
         }
       }, (effect) => _publishEffect(effect, throwOnFailure: throwOnFailure));
 
@@ -834,14 +920,16 @@ class DurableDownloadRepository implements DownloadRepository {
     final task = effect.task;
     try {
       final staging = task.privateLocation;
-      if (staging == null) throw StateError('没有可发布的私有文件');
+      if (staging == null) {
+        throw StateError('No private file is available for publication');
+      }
 
       final published = await _files.publish(task, staging);
       DownloadFileLocation.parse(published);
 
       final details = await _files.inspect(published);
       if (!details.exists || details.bytes == null) {
-        throw StateError('无法验证发布后的文件');
+        throw StateError('Could not verify the published file');
       }
 
       // Keep the private recovery source until the published URI is durable.
@@ -858,16 +946,15 @@ class DurableDownloadRepository implements DownloadRepository {
         ),
       );
     } catch (error) {
-      await _commitEffect(
-        effect,
-        task.copyWith(
-          state: DownloadState.finalizing,
-          error: '文件发布失败，可重试发布: $error',
-          revision: task.revision + 1,
-        ),
+      final issue = DownloadIssue(
+        DownloadIssueCode.publicationFailed,
+        cause: error,
       );
+      await _recordEffectIssue(effect, issue);
 
-      if (throwOnFailure) rethrow;
+      if (throwOnFailure) {
+        throw issue;
+      }
       return;
     }
 
@@ -877,11 +964,15 @@ class DurableDownloadRepository implements DownloadRepository {
   Future<void> _cleanupCompleted(_TaskEffect effect) async {
     final task = effect.task;
     final private = task.privateLocation;
-    if (private == null) return;
+    if (private == null) {
+      return;
+    }
 
     try {
       // iOS publishes in place: clearing the pointer must not delete the video.
-      if (private != task.fileLocation) await _files.delete(private);
+      if (private != task.fileLocation) {
+        await _files.delete(private);
+      }
 
       await _commitEffect(
         effect,
@@ -893,12 +984,9 @@ class DurableDownloadRepository implements DownloadRepository {
       );
     } catch (error) {
       // Public playback remains valid; retain the recovery pointer for cleanup.
-      await _commitEffect(
+      await _recordEffectIssue(
         effect,
-        task.copyWith(
-          error: '视频已发布，但私有副本清理失败: $error',
-          revision: task.revision + 1,
-        ),
+        DownloadIssue(DownloadIssueCode.privateCleanupFailed, cause: error),
       );
     }
   }
@@ -910,7 +998,9 @@ class DurableDownloadRepository implements DownloadRepository {
       _checkOpen();
       _requireUnclaimed(id);
       final task = _task(id);
-      if (task.isActive) throw StateError('请先完成或取消任务');
+      if (task.isActive) {
+        throw DownloadIssue(DownloadIssueCode.taskActive);
+      }
 
       await _store.remove(id);
 
@@ -922,23 +1012,32 @@ class DurableDownloadRepository implements DownloadRepository {
 
   void _requireCompleted(DownloadTask task) {
     if (task.state != DownloadState.completed || task.fileLocation == null) {
-      throw StateError('下载文件不可用');
+      throw DownloadIssue(DownloadIssueCode.fileUnavailable);
     }
   }
 
   Future<void> _requireAvailable(_TaskEffect effect) async {
-    final task = effect.task;
-    if (!(await _files.inspect(task.fileLocation!)).exists) {
-      await _commitEffect(
-        effect,
-        task.copyWith(
-          state: DownloadState.missing,
-          error: '文件已被移除',
-          revision: task.revision + 1,
-        ),
-      );
-      throw StateError('文件已被移除，请重新下载');
+    final details = await _files.inspect(effect.task.fileLocation!);
+    if (!details.exists) {
+      await _markFileMissing(effect);
+      throw DownloadIssue(DownloadIssueCode.fileMissing);
     }
+  }
+
+  Future<void> _markFileMissing(_TaskEffect effect) {
+    final task = effect.task;
+    const issue = DownloadIssueCode.fileMissing;
+
+    return _commitEffect(
+      effect,
+      task.copyWith(
+        state: DownloadState.missing,
+        error: issue.diagnostic,
+        issueCode: issue,
+        canResume: false,
+        revision: task.revision + 1,
+      ),
+    );
   }
 
   Future<T> _fileAction<T>(
@@ -970,16 +1069,18 @@ class DurableDownloadRepository implements DownloadRepository {
           task.copyWith(
             state: DownloadState.missing,
             fileLocation: null,
-            error: '文件已删除',
+            error: DownloadIssueCode.fileDeleted.diagnostic,
+            issueCode: DownloadIssueCode.fileDeleted,
             revision: task.revision + 1,
           ),
         );
       } catch (error) {
-        await _commitEffect(
-          effect,
-          task.copyWith(error: '删除失败: $error', revision: task.revision + 1),
+        final issue = DownloadIssue(
+          DownloadIssueCode.deleteFailed,
+          cause: error,
         );
-        rethrow;
+        await _recordEffectIssue(effect, issue);
+        throw issue;
       }
     });
   }
@@ -996,7 +1097,9 @@ class DurableDownloadRepository implements DownloadRepository {
 
   @override
   Future<bool> exportFile(String id) {
-    if (!_files.supportsExport) throw UnsupportedError('此平台不支持导出');
+    if (!_files.supportsExport) {
+      throw UnsupportedError(DownloadIssueCode.exportUnsupported.diagnostic);
+    }
 
     return _fileAction(
       id,
@@ -1005,11 +1108,19 @@ class DurableDownloadRepository implements DownloadRepository {
   }
 
   @override
-  Future<void> dispose() => _disposal ??= _dispose();
+  Future<void> dispose() {
+    _disposed = true;
+
+    return _disposal ??= Future<void>.microtask(_dispose);
+  }
 
   Future<void> _dispose() async {
-    _disposed = true;
-    await _subscription.cancel();
+    (Object, StackTrace)? cancellationFailure;
+    try {
+      await _subscription.cancel();
+    } catch (error, stack) {
+      cancellationFailure = (error, stack);
+    }
 
     try {
       await _ready;
@@ -1027,7 +1138,11 @@ class DurableDownloadRepository implements DownloadRepository {
 
     await _lane;
     await _changes.close();
-    // Composition owns the shared native gateway and database lifetimes.
+
+    // The application can close shared owners after the repository drains.
+    if (cancellationFailure case (final error, final stack)) {
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 }
 

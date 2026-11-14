@@ -72,16 +72,28 @@ class FileDetails {
   final int? bytes;
 }
 
+/// Owns platform operations for private download artifacts and published files.
 abstract interface class DownloadFileGateway {
   bool get supportsExport;
 
+  /// Returns confirmed file details and throws when availability is unknown.
   Future<FileDetails> inspect(String location);
 
   /// Idempotently recover publication by the unique planned filename.
   Future<String> publish(DownloadTask task, String privateLocation);
+
+  /// Clears the partial file that belongs to the specified attempt.
   Future<void> cleanPartial(DownloadTask task);
+
+  /// Deletes the referenced file and verifies removal.
   Future<void> delete(String location);
+
+  /// Opens the file in an application capable of handling it.
   Future<void> open(String location);
+
+  /// Shares the file using its user-visible filename.
   Future<void> share(String location, String filename);
+
+  /// Exports a copy and returns false when the user dismisses the picker.
   Future<bool> export(String location, String filename);
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../design/adaptive_action_bar.dart';
+import '../../design/download_issue_label.dart';
 import '../../design/primary_page_scaffold.dart';
 import '../../design/state_panel.dart';
 import '../../domain/downloads/download_repository.dart';
@@ -261,11 +262,15 @@ class _DownloadsPageState extends State<DownloadsPage> {
     List<DownloadTask> visible, {
     double bottomInset = 0,
   }) {
-    if (snapshot.hasError) {
+    if (snapshot.error case final error?) {
       return _state(
         StatePanel(
           title: '无法读取下载记录',
-          message: '${snapshot.error}',
+          message: reportDownloadError(
+            error,
+            snapshot.stackTrace,
+            fallback: '请重试读取下载记录',
+          ),
           icon: Icons.cloud_off_outlined,
           onAction: _retryObservation,
         ),

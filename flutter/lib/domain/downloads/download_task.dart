@@ -1,4 +1,7 @@
 import '../programmes/programme.dart';
+import 'download_issue.dart';
+
+const downloadBatchLimit = 100;
 
 enum DownloadState {
   preparing,
@@ -32,6 +35,7 @@ class DownloadTask {
     this.fileLocation,
     this.privateLocation,
     this.error,
+    this.issueCode,
     this.canResume = false,
     this.revision = 0,
   });
@@ -61,7 +65,10 @@ class DownloadTask {
   /// succeeds. On iOS this may name the same file as [fileLocation].
   final String? privateLocation;
 
+  /// Technical diagnostic, or older display text read from an existing record.
   final String? error;
+
+  final DownloadIssueCode? issueCode;
   final bool canResume;
 
   /// Durable transition revision within this record, including attempt changes.
@@ -100,6 +107,7 @@ class DownloadTask {
     Object? fileLocation = _unchanged,
     Object? privateLocation = _unchanged,
     Object? error = _unchanged,
+    DownloadIssueCode? issueCode,
     bool? canResume,
     int? revision,
   }) => DownloadTask(
@@ -124,6 +132,8 @@ class DownloadTask {
         ? this.privateLocation
         : privateLocation as String?,
     error: identical(error, _unchanged) ? this.error : error as String?,
+    issueCode:
+        issueCode ?? (identical(error, _unchanged) ? this.issueCode : null),
     canResume: canResume ?? this.canResume,
     revision: revision ?? this.revision,
   );
@@ -132,10 +142,15 @@ class DownloadTask {
 const _unchanged = Object();
 
 class DownloadFailure {
-  const DownloadFailure({required this.contentId, required this.message});
+  const DownloadFailure({
+    required this.contentId,
+    required this.message,
+    this.issueCode,
+  });
 
   final String contentId;
   final String message;
+  final DownloadIssueCode? issueCode;
 }
 
 class DownloadBatchResult {

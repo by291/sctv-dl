@@ -16,51 +16,54 @@ void main() {
     await root.delete(recursive: true);
   });
 
-  test('publication uses owned pending-row recovery and retains private data until durable commit', () async {
-    const channel = MethodChannel('test/publish-files');
-    final source = File('${root.path}/downloads/attempt/video.mp4');
-    await source.parent.create(recursive: true);
-    await source.writeAsBytes([1, 2, 3, 4]);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          expect(call.method, 'publishRecoverable');
-          expect(call.arguments, {
-            'sourcePath': source.path,
-            'filename': 'video.mp4',
+  test(
+    'publication recovers owned pending rows and retains the private file',
+    () async {
+      const channel = MethodChannel('test/publish-files');
+      final source = File('${root.path}/downloads/attempt/video.mp4');
+      await source.parent.create(recursive: true);
+      await source.writeAsBytes([1, 2, 3, 4]);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'publishRecoverable');
+            expect(call.arguments, {
+              'sourcePath': source.path,
+              'filename': 'video.mp4',
+            });
+            return 'content://media/external/downloads/41';
           });
-          return 'content://media/external/downloads/41';
-        });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null),
-    );
-    final files = NativeDownloadFiles(
-      channel: channel,
-      isIOS: false,
-      supportDirectory: () async => root,
-    );
-    final task = DownloadTask(
-      id: 'record',
-      attemptId: 'attempt',
-      selection: const ProgrammeSelection(
-        programme: Programme(id: '1', name: 'Test'),
-        broadcast: BroadcastDate(id: '2', date: '2026-10-16'),
-        content: ProgrammeContent(id: '3', title: 'Test'),
-      ),
-      requestedQuality: VideoQuality.standard,
-      quality: VideoQuality.standard,
-      url: 'https://fscgc.scgchc.com/video.mp4',
-      filename: 'video.mp4',
-      wifiOnly: true,
-      state: DownloadState.finalizing,
-      createdAt: DateTime(2026),
-    );
-    expect(
-      await files.publish(task, 'support:downloads/attempt/video.mp4'),
-      'content://media/external/downloads/41',
-    );
-    expect(await source.readAsBytes(), [1, 2, 3, 4]);
-  });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final files = NativeDownloadFiles(
+        channel: channel,
+        isIOS: false,
+        supportDirectory: () async => root,
+      );
+      final task = DownloadTask(
+        id: 'record',
+        attemptId: 'attempt',
+        selection: const ProgrammeSelection(
+          programme: Programme(id: '1', name: 'Test'),
+          broadcast: BroadcastDate(id: '2', date: '2026-10-16'),
+          content: ProgrammeContent(id: '3', title: 'Test'),
+        ),
+        requestedQuality: VideoQuality.standard,
+        quality: VideoQuality.standard,
+        url: 'https://fscgc.scgchc.com/video.mp4',
+        filename: 'video.mp4',
+        wifiOnly: true,
+        state: DownloadState.finalizing,
+        createdAt: DateTime(2026),
+      );
+      expect(
+        await files.publish(task, 'support:downloads/attempt/video.mp4'),
+        'content://media/external/downloads/41',
+      );
+      expect(await source.readAsBytes(), [1, 2, 3, 4]);
+    },
+  );
   test(
     'resolves references against the current base and reads actual bytes',
     () async {
@@ -128,6 +131,23 @@ void main() {
       expect(
         (await files.inspect('content://media/external/downloads/41')).exists,
         isFalse,
+      );
+    },
+  );
+
+  test(
+    'an incomplete stat reply does not mark a MediaStore file missing',
+    () async {
+      const channel = MethodChannel('test/incomplete-stat');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (_) async => {});
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final files = NativeDownloadFiles(channel: channel);
+
+      await expectLater(
+        files.inspect('content://media/external/downloads/41'),
+        throwsFormatException,
       );
     },
   );

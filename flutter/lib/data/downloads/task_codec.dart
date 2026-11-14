@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../domain/downloads/download_issue.dart';
 import '../../domain/downloads/download_task.dart';
 import '../../domain/downloads/file_gateway.dart';
 import '../../domain/programmes/programme.dart';
@@ -38,6 +39,7 @@ Map<String, Object?> encodeDownloadTask(DownloadTask task) => {
   'fileLocation': task.fileLocation,
   'privateLocation': task.privateLocation,
   'error': task.error,
+  if (task.issueCode case final issue?) 'issueCode': issue.name,
   'canResume': task.canResume,
   'revision': task.revision,
 };
@@ -63,7 +65,9 @@ DownloadTask decodeDownloadTask(Map<String, Object?> json) {
   }
 
   for (final key in ['fileLocation', 'privateLocation']) {
-    if (json[key] != null) DownloadFileLocation.parse(json[key] as String);
+    if (json[key] != null) {
+      DownloadFileLocation.parse(json[key] as String);
+    }
   }
 
   return DownloadTask(
@@ -102,6 +106,9 @@ DownloadTask decodeDownloadTask(Map<String, Object?> json) {
     fileLocation: json['fileLocation'] as String?,
     privateLocation: json['privateLocation'] as String?,
     error: json['error'] as String?,
+    issueCode: DownloadIssueCode.values
+        .where((issue) => issue.name == json['issueCode'])
+        .firstOrNull,
     canResume: json['canResume'] as bool? ?? false,
     revision: _bytes(json['revision']),
   );

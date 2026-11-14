@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:background_downloader/background_downloader.dart' as native;
 import 'package:flutter/services.dart';
 
+import '../../domain/downloads/download_issue.dart';
 import '../../domain/downloads/download_task.dart';
 import '../../domain/downloads/file_gateway.dart';
 import '../../domain/downloads/media_probe.dart';
@@ -44,6 +45,7 @@ class BackgroundTransferGateway implements TransferGateway {
   final _nativeTasks = <String, native.DownloadTask>{};
 
   Future<void>? _initialization;
+  Future<void>? _disposal;
   bool _disposed = false;
 
   @override
@@ -96,7 +98,9 @@ class BackgroundTransferGateway implements TransferGateway {
     }
 
     final existing = _initialization;
-    if (existing != null) return existing;
+    if (existing != null) {
+      return existing;
+    }
 
     late final Future<void> attempt;
     attempt = _initialize().then<void>(
@@ -106,7 +110,9 @@ class BackgroundTransferGateway implements TransferGateway {
           _initialization = null;
           // A failed initialization owns these callbacks until rollback. Retry
           // installs one fresh owner before recovering background observations.
-          if (!_disposed) _downloader.unregisterCallbacks(group: group);
+          if (!_disposed) {
+            _downloader.unregisterCallbacks(group: group);
+          }
         }
         Error.throwWithStackTrace(error, stack);
       },
@@ -117,14 +123,18 @@ class BackgroundTransferGateway implements TransferGateway {
   }
 
   Future<void> _initialize() async {
-    if (_disposed) throw StateError('Transfer gateway is disposed');
+    if (_disposed) {
+      throw StateError('Transfer gateway is disposed');
+    }
 
     _downloader.registerCallbacks(
       group: group,
       taskStatusCallback: _status,
       taskProgressCallback: _progress,
       taskNotificationTapCallback: (task, _) {
-        if (_disposed) return;
+        if (_disposed) {
+          return;
+        }
 
         try {
           final metadata = jsonDecode(task.metaData);
@@ -230,7 +240,9 @@ class BackgroundTransferGateway implements TransferGateway {
   }
 
   void _emit(TransferSnapshot snapshot) {
-    if (_disposed) return;
+    if (_disposed) {
+      return;
+    }
 
     _latest[snapshot.attemptId] = snapshot;
     _events.add(snapshot);
@@ -276,6 +288,9 @@ class BackgroundTransferGateway implements TransferGateway {
                     update.responseStatusCode! >= 400
                 ? 'HTTP ${update.responseStatusCode}'
                 : null),
+        issueCode: state == DownloadState.failed
+            ? DownloadIssueCode.downloadFailed
+            : null,
         canResume: previous?.canResume ?? false,
       ),
     );
@@ -302,12 +317,15 @@ class BackgroundTransferGateway implements TransferGateway {
                     receivedBytes: latest.receivedBytes,
                     totalBytes: latest.totalBytes,
                     error: latest.error,
+                    issueCode: latest.issueCode,
                     canResume: canResume,
                   ),
                 );
               },
               onError: (Object error, StackTrace stack) {
-                if (!_disposed) _events.addError(error, stack);
+                if (!_disposed) {
+                  _events.addError(error, stack);
+                }
               },
             ),
       );
@@ -315,7 +333,9 @@ class BackgroundTransferGateway implements TransferGateway {
   }
 
   void _progress(native.TaskProgressUpdate update) {
-    if (update.task.group != group || _disposed || update.progress < 0) return;
+    if (update.task.group != group || _disposed || update.progress < 0) {
+      return;
+    }
 
     final previous = _latest[update.task.taskId];
     if (previous != null &&
@@ -396,8 +416,13 @@ class BackgroundTransferGateway implements TransferGateway {
             ? _location(task)
             : null,
         error: state == DownloadState.interrupted
-            ? '原生下载已不在调度队列中，请重试'
+            ? DownloadIssueCode.missingTransfer.diagnostic
             : record.exception?.description,
+        issueCode: switch (state) {
+          DownloadState.interrupted => DownloadIssueCode.missingTransfer,
+          DownloadState.failed => DownloadIssueCode.downloadFailed,
+          _ => null,
+        },
       );
     }
 
@@ -455,19 +480,27 @@ class BackgroundTransferGateway implements TransferGateway {
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-
+  Future<void> dispose() {
     _disposed = true;
-    for (final scope in _preparing.values) {
-      scope.cancel();
-    }
 
-    _mediaProbe.dispose();
-    if (_initialization != null) _downloader.unregisterCallbacks(group: group);
+    return _disposal ??= Future<void>.microtask(_dispose);
+  }
 
-    await _events.close();
-    await _notificationTaps.dispose();
+  Future<void> _dispose() async {
     // Queued transfers remain native-owned after the UI observer is disposed.
+    final preparations = _preparing.values.toList();
+    final releases = <void Function()>[
+      for (final scope in preparations) scope.cancel,
+      _mediaProbe.dispose,
+      if (_initialization != null)
+        () => _downloader.unregisterCallbacks(group: group),
+    ];
+
+    // A failed cleanup must not keep either stream open for its observers.
+    await Future.wait<void>([
+      for (final release in releases) Future<void>.sync(release),
+      _events.close(),
+      _notificationTaps.dispose(),
+    ]);
   }
 }

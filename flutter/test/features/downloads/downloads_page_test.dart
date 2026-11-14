@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
+import 'package:sctv_dl_mobile/domain/downloads/download_issue.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
@@ -488,6 +489,29 @@ void main() {
       expect(repository.published, '1');
       await tester.pumpWidget(const SizedBox());
       await repository.close();
+    },
+  );
+
+  testWidgets(
+    'download cards display localized issues without native diagnostics',
+    (tester) async {
+      final repository = PageRepository([
+        task(DownloadState.finalizing).copyWith(
+          error: 'Publication failed: resolver rejected the request',
+          issueCode: DownloadIssueCode.publicationFailed,
+        ),
+      ]);
+      addTearDown(repository.close);
+
+      await tester.pumpWidget(
+        host(
+          home: DownloadsPage(repository: repository, onPlayLocal: (_) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('文件发布失败，可重试发布'), findsOneWidget);
+      expect(find.textContaining('resolver rejected'), findsNothing);
     },
   );
   testWidgets(

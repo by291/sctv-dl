@@ -91,7 +91,9 @@ class DioMediaProbe implements DownloadMediaProbe {
 
   void _validateResponse(Response<ResponseBody> response) {
     final status = response.statusCode ?? 0;
-    if (status < 200 || status >= 300) throw StateError('媒体探测失败: HTTP $status');
+    if (status < 200 || status >= 300) {
+      throw StateError('Media probe failed with HTTP $status');
+    }
 
     final type = response.headers
         .value(Headers.contentTypeHeader)
@@ -103,7 +105,9 @@ class DioMediaProbe implements DownloadMediaProbe {
         type != 'video/mp4' &&
         type != 'application/octet-stream' &&
         type != 'binary/octet-stream') {
-      throw StateError('视频源返回了不支持的内容类型: $type');
+      throw StateError(
+        'Media source returned an unsupported content type: $type',
+      );
     }
   }
 

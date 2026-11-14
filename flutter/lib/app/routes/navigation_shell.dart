@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import '../../design/download_issue_label.dart';
 import '../../design/ios_primary_navigation.dart';
 import '../../design/primary_page_scaffold.dart';
 import '../../domain/downloads/download_task.dart';
@@ -55,10 +56,18 @@ class _NavigationShellState extends State<NavigationShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(
-        widget.services.downloads.reconcile().catchError((Object error) {
+        widget.services.downloads.reconcile().catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          final message = reportDownloadError(
+            error,
+            stack,
+            fallback: '下载状态更新失败，请重试',
+          );
           if (mounted) {
             ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('下载状态更新失败：$error')));
+                .showSnackBar(SnackBar(content: Text(message)));
           }
         }),
       );
