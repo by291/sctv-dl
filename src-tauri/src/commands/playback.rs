@@ -9,6 +9,7 @@ use crate::{
     state::{AppState, PlaybackState},
 };
 
+/// Resolves programme IDs into a cancellable online playback session.
 #[tauri::command]
 pub async fn open_playback(
     state: State<'_, AppState>,
@@ -17,24 +18,22 @@ pub async fn open_playback(
     request: PlaybackRequest,
     request_id: String,
 ) -> Result<PlaybackSession> {
-    state
-        .requests
-        .register(&request_id)?
-        .run(async {
-            let _operation = lifecycle.enter().await?;
-            let programmes = state.programmes.as_ref().map_err(Clone::clone)?;
+    let registered = state.requests.register(&request_id)?;
+    let operation = async {
+        let _admission = lifecycle.enter().await?;
+        let programmes = state.programmes.as_ref().map_err(Clone::clone)?;
+        let playback = playback.0.as_ref().map_err(Clone::clone)?;
 
-            playback
-                .0
-                .as_ref()
-                .map_err(Clone::clone)?
-                .open(programmes, request)
-                .await
-        })
+        playback.open(programmes, request).await
+    };
+
+    registered
+        .run(operation)
         .await
         .map_err(|error| error.reported("open playback"))
 }
 
+/// Revokes the session URL, allowing repeated or late closes.
 #[tauri::command]
 pub fn close_playback(playback: State<'_, PlaybackState>, session_id: String) {
     if let Ok(service) = &playback.0 {
@@ -42,6 +41,7 @@ pub fn close_playback(playback: State<'_, PlaybackState>, session_id: String) {
     }
 }
 
+/// Opens a task's verified download as a cancellable local playback session.
 #[tauri::command]
 pub async fn open_local_playback(
     state: State<'_, AppState>,
@@ -51,19 +51,20 @@ pub async fn open_local_playback(
     task_id: String,
     request_id: String,
 ) -> Result<PlaybackSession> {
-    state
-        .requests
-        .register(&request_id)?
-        .run(async {
-            let operation = Arc::new(lifecycle.enter().await?);
-            let playback = playback.0.as_ref().map_err(Clone::clone)?.clone();
+    let registered = state.requests.register(&request_id)?;
+    let operation = async {
+        let admission = Arc::new(lifecycle.enter().await?);
+        let playback = playback.0.as_ref().map_err(Clone::clone)?;
 
-            let pending = downloads
-                .open_local_playback(task_id, playback, operation)
-                .await?;
+        let pending = downloads
+            .open_local_playback(task_id, playback.clone(), admission)
+            .await?;
 
-            Ok(pending.deliver())
-        })
+        Ok(pending.deliver())
+    };
+
+    registered
+        .run(operation)
         .await
         .map_err(|error| error.reported("open local playback"))
 }

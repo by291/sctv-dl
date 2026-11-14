@@ -196,6 +196,7 @@ export function useProgrammePreview(
   function startPreview(value: ProgrammeContent) {
     gate.cancel()
     disposeOwner()
+
     const pinned = options.input
     const reference = pinned?.metadata.content ?? options.reference
 
@@ -243,7 +244,9 @@ export function useProgrammePreview(
       }
     }
 
-    failed.value = '这个视频暂时无法播放，请检查网络或换一个日期。'
+    failed.value = current?.localTaskId
+      ? '本地视频无法播放，请在下载任务中检查文件或重新下载。'
+      : '这个视频暂时无法播放，请检查网络或换一个日期。'
     videoPlayer.value?.pause()
   }
 

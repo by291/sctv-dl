@@ -10,8 +10,6 @@ import {
   fileFailureSchema,
 } from '@shared/contracts/downloads'
 
-import { playbackSessionSchema } from '@shared/contracts/media'
-import { invokeAbortable } from '@/shared/platform/invoke-abortable.tauri'
 import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { NativeDownloadPort } from '@/shared/platform/ports'
@@ -43,7 +41,9 @@ async function request<T>(
 }
 
 // Expose native download commands and guarded event subscriptions.
-export function createTauriDownloads(): NativeDownloadPort {
+export function createTauriDownloads(
+  openPlayback: NativeDownloadPort['openPlayback'],
+): NativeDownloadPort {
   return {
     kind: 'native',
     snapshot: () => request('get_download_snapshot', {}, downloadSnapshotSchema),
@@ -53,19 +53,7 @@ export function createTauriDownloads(): NativeDownloadPort {
         { request: downloadActionRequestSchema.parse(input) },
         downloadActionResultSchema,
       ),
-    openPlayback: (taskId, signal) =>
-      invokeAbortable({
-        command: 'open_local_playback',
-        parameters: { taskId: z.string().min(1).parse(taskId) },
-        schema: playbackSessionSchema,
-        signal,
-        onLate: (raw) => {
-          if (raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string') {
-            // A discarded reply can still own a native session until teardown.
-            void invoke('close_playback', { sessionId: raw.id }).catch(() => {})
-          }
-        },
-      }),
+    openPlayback,
     async subscribeEvents(listener) {
       let active = true
       const onEvent = new Channel<unknown>()

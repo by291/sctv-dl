@@ -2,6 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createDownloadTaskFixture } from '@/shared/platform/platform.test-support'
 import { createTauriDownloads } from '@/features/programmes/api/downloads.tauri'
+import { createTauriPlayback } from '@/features/programmes/api/playback.tauri'
 
 const bridge = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -41,7 +42,7 @@ it('validates native results and sends only domain references to start', async (
     failures: [],
     usedFallback: false,
   })
-  const downloads = createTauriDownloads()
+  const downloads = createTauriDownloads(createTauriPlayback().openLocal)
   expect(
     await downloads.start({
       programmeId: '1',
@@ -66,7 +67,8 @@ it('validates native results and sends only domain references to start', async (
 it('delivers validated channel updates and disposes its native subscription once', async () => {
   bridge.invoke.mockResolvedValueOnce('subscription')
   const values: unknown[] = []
-  const dispose = await createTauriDownloads().subscribeEvents((value) => values.push(value))
+  const downloads = createTauriDownloads(createTauriPlayback().openLocal)
+  const dispose = await downloads.subscribeEvents((value) => values.push(value))
   const event = { kind: 'upsert', epoch: 'process', revision: 2, task }
   bridge.channels[0]!.onmessage(event)
   bridge.channels[0]!.onmessage({ ...event, task: { ...task, state: 'invalid' } })
@@ -82,7 +84,8 @@ it('delivers validated channel updates and disposes its native subscription once
 })
 
 it('carries attempts and removal revisions and opens only a task-owned local file', async () => {
-  const downloads = createTauriDownloads()
+  const playback = createTauriPlayback()
+  const downloads = createTauriDownloads(playback.openLocal)
   bridge.invoke.mockResolvedValueOnce({ epoch: 'process', revision: 4, tasks: [task] })
   expect((await downloads.snapshot()).tasks).toEqual([task])
   bridge.invoke.mockResolvedValueOnce({ kind: 'applied', task: { ...task, state: 'paused' } })
@@ -108,4 +111,8 @@ it('carries attempts and removal revisions and opens only a task-owned local fil
     taskId: task.id,
     requestId: expect.any(String),
   })
+
+  await playback.dispose()
+
+  expect(bridge.invoke).toHaveBeenLastCalledWith('close_playback', { sessionId: 'local' })
 })

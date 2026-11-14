@@ -3,29 +3,32 @@ use std::sync::Arc;
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, Request, Response, StatusCode, request::Parts},
 };
 
 use super::{
     MediaSource,
     http::{Inner, Session, SessionSource},
+    local::LocalSource,
     stream,
 };
 use crate::error::{AppError, ErrorCode};
 
+/// Routes one authorized loopback request to its published playback source.
 pub(super) async fn handle(
     State(inner): State<Arc<Inner>>,
     Path((id, quality)): Path<(String, String)>,
     request: Request<Body>,
 ) -> Response<Body> {
-    let headers = request.headers();
+    let (request, _) = request.into_parts();
+    let headers = &request.headers;
     if !allows_request(headers, &inner) {
         return response(StatusCode::FORBIDDEN, HeaderMap::new(), Body::empty(), None);
     }
 
     let origin = headers.get("origin");
     let empty = |status| response(status, HeaderMap::new(), Body::empty(), origin);
-    if ![Method::GET, Method::HEAD, Method::OPTIONS].contains(request.method()) {
+    if ![Method::GET, Method::HEAD, Method::OPTIONS].contains(&request.method) {
         return empty(StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -34,7 +37,7 @@ pub(super) async fn handle(
         return empty(StatusCode::NOT_FOUND);
     };
 
-    if request.method() == Method::OPTIONS {
+    if request.method == Method::OPTIONS {
         return response(
             StatusCode::NO_CONTENT,
             preflight_headers(),
@@ -43,42 +46,34 @@ pub(super) async fn handle(
         );
     }
 
-    let source = match &session.source {
-        SessionSource::Upstream(sources) => match sources
-            .iter()
-            .find(|source| source.quality.as_str() == quality)
-        {
-            Some(source) => source,
-            None => return empty(StatusCode::NOT_FOUND),
-        },
+    let sources = match &session.source {
+        SessionSource::Upstream(sources) => sources,
         SessionSource::Local(source) => {
             if source.quality.as_str() != quality {
                 return empty(StatusCode::NOT_FOUND);
             }
 
-            // Serialize local producer registration with task-session removal so
-            // deletion can await every producer that was actually admitted.
-            let sessions = inner.sessions.lock().unwrap();
-            if !sessions.contains_key(&id) {
-                return empty(StatusCode::GONE);
-            }
-
-            let (status, headers, body) = super::local::response(
+            return serve_local(LocalRequest {
+                inner: &inner,
                 source,
-                request.method(),
-                headers,
-                session.cancellation.clone(),
-                &inner.producers,
-            );
-            return response(status, headers, body, origin);
+                session: &session,
+                id: &id,
+                request: &request,
+            });
         }
     };
+    let Some(source) = sources
+        .iter()
+        .find(|source| source.quality.as_str() == quality)
+    else {
+        return empty(StatusCode::NOT_FOUND);
+    };
 
-    let upstream = match request_upstream(&inner, &session, source, request.method(), headers).await
-    {
+    let upstream = match request_upstream(&inner, &session, source, &request).await {
         Ok(upstream) => upstream,
         Err(status) => return empty(status),
     };
+
     let status = upstream.status();
     if status.is_redirection() {
         return empty(StatusCode::BAD_GATEWAY);
@@ -91,12 +86,40 @@ pub(super) async fn handle(
         Ok(headers) => headers,
         Err(status) => return empty(status),
     };
-    if request.method() == Method::HEAD {
+    if request.method == Method::HEAD {
         return response(status, copied, Body::empty(), origin);
     }
 
     let body = stream::body(upstream, session.cancellation.clone(), &inner.producers);
     response(status, copied, body, origin)
+}
+
+struct LocalRequest<'a> {
+    inner: &'a Inner,
+    source: &'a LocalSource,
+    session: &'a Session,
+    id: &'a str,
+    request: &'a Parts,
+}
+
+fn serve_local(local: LocalRequest<'_>) -> Response<Body> {
+    let origin = local.request.headers.get("origin");
+
+    // Serialize local producer registration with session removal so deletion awaits every read.
+    let (status, headers, body) = {
+        let sessions = local.inner.sessions.lock().unwrap();
+        if !sessions.contains_key(local.id) {
+            return response(StatusCode::GONE, HeaderMap::new(), Body::empty(), origin);
+        }
+
+        local.source.response(
+            local.request,
+            local.session.cancellation.clone(),
+            &local.inner.producers,
+        )
+    };
+
+    response(status, headers, body, origin)
 }
 
 fn allows_request(headers: &HeaderMap, inner: &Inner) -> bool {
@@ -118,42 +141,47 @@ async fn request_upstream(
     inner: &Inner,
     session: &Session,
     source: &MediaSource,
-    method: &Method,
-    headers: &HeaderMap,
+    request: &Parts,
 ) -> std::result::Result<reqwest::Response, StatusCode> {
-    let mut upstream = inner
-        .client
-        .request(method.clone(), &source.url)
+    let mut upstream = inner.client.request(request.method.clone(), &source.url);
+    upstream = upstream
         .header("Referer", "https://scgc.video.play/")
         .header("Accept-Encoding", "identity");
     for name in ["range", "if-range"] {
-        if let Some(value) = headers.get(name) {
+        if let Some(value) = request.headers.get(name) {
             upstream = upstream.header(name, value);
         }
     }
 
-    tokio::select! {
+    // A revoked session takes precedence if its header request completes at the same time.
+    let pending = tokio::time::timeout(inner.config.header_timeout, upstream.send());
+    let result = tokio::select! {
         biased;
-        _ = session.cancellation.cancelled() => Err(StatusCode::GONE),
-        result = tokio::time::timeout(inner.config.header_timeout, upstream.send()) => match result {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(error)) => {
-                let (code, status) = if error.is_timeout() {
-                    (ErrorCode::Timeout, StatusCode::GATEWAY_TIMEOUT)
-                } else {
-                    (ErrorCode::Upstream, StatusCode::BAD_GATEWAY)
-                };
-                AppError::with_source(code, "视频服务请求失败", error.without_url())
-                    .reported("request media response headers");
-                Err(status)
-            },
-            Err(error) => {
-                AppError::with_source(ErrorCode::Timeout, "视频服务响应超时", error)
-                    .reported("request media response headers");
-                Err(StatusCode::GATEWAY_TIMEOUT)
-            },
+        _ = session.cancellation.cancelled() => return Err(StatusCode::GONE),
+        result = pending => result,
+    };
+
+    match result {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(error)) => Err(upstream_header_error(error)),
+        Err(error) => {
+            AppError::with_source(ErrorCode::Timeout, "视频服务响应超时", error)
+                .reported("request media response headers");
+            Err(StatusCode::GATEWAY_TIMEOUT)
         }
     }
+}
+
+fn upstream_header_error(error: reqwest::Error) -> StatusCode {
+    let (code, status) = if error.is_timeout() {
+        (ErrorCode::Timeout, StatusCode::GATEWAY_TIMEOUT)
+    } else {
+        (ErrorCode::Upstream, StatusCode::BAD_GATEWAY)
+    };
+
+    AppError::with_source(code, "视频服务请求失败", error.without_url())
+        .reported("request media response headers");
+    status
 }
 
 fn error_headers(upstream: &reqwest::Response) -> HeaderMap {
@@ -168,22 +196,21 @@ fn error_headers(upstream: &reqwest::Response) -> HeaderMap {
 }
 
 fn media_headers(upstream: &reqwest::Response) -> std::result::Result<HeaderMap, StatusCode> {
-    let content_type = upstream
-        .headers()
+    let upstream_headers = upstream.headers();
+    let raw_content_type = upstream_headers
         .get("content-type")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("")
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim();
-    let valid_type = content_type.eq_ignore_ascii_case("video/mp4")
+        .unwrap_or("");
+    let media_type = raw_content_type.split(';').next().unwrap_or("");
+    let content_type = media_type.trim();
+    let is_media_type = content_type.eq_ignore_ascii_case("video/mp4")
         || content_type.eq_ignore_ascii_case("application/octet-stream");
-    let encoded = upstream
-        .headers()
+    let is_encoded = upstream_headers
         .get("content-encoding")
         .is_some_and(|value| value != "identity");
-    if !valid_type || encoded {
+
+    // Forwarded byte offsets describe the identity representation.
+    if !is_media_type || is_encoded {
         return Err(StatusCode::BAD_GATEWAY);
     }
 
@@ -196,10 +223,11 @@ fn media_headers(upstream: &reqwest::Response) -> std::result::Result<HeaderMap,
         "etag",
         "last-modified",
     ] {
-        if let Some(value) = upstream.headers().get(name) {
+        if let Some(value) = upstream_headers.get(name) {
             headers.insert(name, value.clone());
         }
     }
+
     Ok(headers)
 }
 

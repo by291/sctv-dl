@@ -20,16 +20,21 @@ export function createTauriPlatform(): AppPlatform {
     kind: 'tauri',
     programmes: createTauriProgrammeApi(),
     playback,
-    downloads: createTauriDownloads(),
+    downloads: createTauriDownloads(playback.openLocal),
     settings: createTauriSettings(),
     history: history.port,
     programmeCache: programmeCache.port,
     windowControls: createTauriWindowControls(),
     prepareExit: prepareNativeExit,
     async dispose() {
-      await playback.dispose()
-      await history.dispose()
       programmeCache.dispose()
+      const results = await Promise.allSettled([playback.dispose(), history.dispose()])
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      )
+      if (errors.length > 0) {
+        throw new AggregateError(errors, 'Failed to release the desktop platform')
+      }
     },
   }
 }

@@ -441,6 +441,8 @@ it('opens a downloaded task locally and never substitutes an online source on fa
   openLocal.mockRejectedValueOnce(new Error('本地文件已丢失'))
   wrapper.findComponent(ProgrammeVideoPlayer).vm.$emit('error')
   await nextTick()
+
+  expect(document.body.textContent).toContain('请在下载任务中检查文件或重新下载')
   document.querySelector<HTMLButtonElement>('.preview-retry')!.click()
   await flushPromises()
   expect(document.body.textContent).toContain('本地文件已丢失')

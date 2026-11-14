@@ -11,6 +11,15 @@ const session = {
   sources: [{ quality: 'standard', url: 'http://127.0.0.1:3210/media/token/standard' }],
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((complete) => {
+    resolve = complete
+  })
+
+  return { promise, resolve }
+}
+
 it('closes sessions returned after cancellation and releases all owned work on disposal', async () => {
   let complete!: (value: unknown) => void
   const calls: { command: string; args: unknown }[] = []
@@ -62,4 +71,54 @@ it('releases an identifiable native session even when the returned payload is ma
   const playback = createTauriPlayback()
   await expect(playback.open(input)).rejects.toThrow('格式')
   expect(call).toHaveBeenCalledWith('close_playback', { sessionId: 'broken' })
+})
+
+it('retries a failed session close during disposal', async () => {
+  const close = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('bridge unavailable'))
+    .mockResolvedValue(null)
+  mockIPC((command) => (command === 'open_playback' ? session : close()))
+  const playback = createTauriPlayback()
+  await playback.open(input)
+
+  await expect(playback.close(session.id)).rejects.toThrow('bridge unavailable')
+  await playback.dispose()
+
+  expect(close).toHaveBeenCalledTimes(2)
+})
+
+it('shares disposal completion until late sessions have closed', async () => {
+  const open = deferred<unknown>()
+  const close = deferred<unknown>()
+  const startedClosing = deferred<void>()
+  mockIPC((command) => {
+    if (command === 'open_playback') {
+      return open.promise
+    }
+
+    if (command === 'close_playback') {
+      startedClosing.resolve()
+
+      return close.promise
+    }
+
+    return null
+  })
+  const playback = createTauriPlayback()
+  const pending = playback.open(input)
+  const first = playback.dispose()
+  const second = playback.dispose()
+  const completed = vi.fn()
+  void first.then(completed)
+  void second.then(completed)
+
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  open.resolve(session)
+  await startedClosing.promise
+  await Promise.resolve()
+
+  expect(completed).not.toHaveBeenCalled()
+  close.resolve(null)
+  await Promise.all([first, second])
 })

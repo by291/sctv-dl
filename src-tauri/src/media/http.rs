@@ -89,7 +89,7 @@ pub struct MediaServer {
 }
 
 impl MediaServer {
-    // Production callers use the default fixed CDN configuration; no command accepts this configuration.
+    /// Binds a private HTTP listener with the configured media policy.
     pub async fn bind(config: MediaConfig) -> Result<Self> {
         let origins = policy::parse_origins(&config.upstream_origins)?;
         let client = Client::builder()
@@ -138,6 +138,7 @@ impl MediaServer {
         })
     }
 
+    /// Publishes the available qualities for an online source under a new session ID.
     pub fn open(
         &self,
         sources: Vec<MediaSource>,
@@ -159,14 +160,7 @@ impl MediaServer {
         let id = Uuid::new_v4().to_string();
         let output = sources
             .iter()
-            .map(|source| PlaybackSource {
-                quality: source.quality,
-                url: format!(
-                    "http://{}/media/{id}/{}",
-                    self.inner.address,
-                    source.quality.as_str()
-                ),
-            })
+            .map(|source| self.playback_source(&id, source.quality))
             .collect();
 
         self.inner.sessions.lock().unwrap().insert(
@@ -184,6 +178,7 @@ impl MediaServer {
         })
     }
 
+    /// Publishes a session that retains the caller's verified file until readers finish.
     pub fn open_local(
         &self,
         task_id: String,
@@ -200,20 +195,7 @@ impl MediaServer {
         // used by the handler and close_task. No producer can escape a task close.
         {
             let mut sessions = self.inner.sessions.lock().unwrap();
-            let readers = {
-                let mut registry = self.inner.local_readers.lock().unwrap();
-                if let Some(readers) = registry.get(&task_id).and_then(Weak::upgrade) {
-                    readers
-                } else {
-                    let readers = Arc::new(LocalReaders {
-                        task_id: task_id.clone(),
-                        producers: TaskTracker::new(),
-                        registry: self.inner.local_readers.clone(),
-                    });
-                    registry.insert(task_id, Arc::downgrade(&readers));
-                    readers
-                }
-            };
+            let readers = self.local_reader_owner(task_id);
 
             sessions.insert(
                 id.clone(),
@@ -232,17 +214,35 @@ impl MediaServer {
         }
 
         Ok(PlaybackSession {
-            sources: vec![PlaybackSource {
-                quality,
-                url: format!(
-                    "http://{}/media/{id}/{}",
-                    self.inner.address,
-                    quality.as_str()
-                ),
-            }],
+            sources: vec![self.playback_source(&id, quality)],
             selected_quality: quality,
             id,
         })
+    }
+
+    fn playback_source(&self, id: &str, quality: Quality) -> PlaybackSource {
+        let address = self.inner.address;
+        let quality_path = quality.as_str();
+        PlaybackSource {
+            quality,
+            url: format!("http://{address}/media/{id}/{quality_path}"),
+        }
+    }
+
+    fn local_reader_owner(&self, task_id: String) -> Arc<LocalReaders> {
+        let mut registry = self.inner.local_readers.lock().unwrap();
+        if let Some(readers) = registry.get(&task_id).and_then(Weak::upgrade) {
+            return readers;
+        }
+
+        let readers = Arc::new(LocalReaders {
+            task_id: task_id.clone(),
+            producers: TaskTracker::new(),
+            registry: self.inner.local_readers.clone(),
+        });
+        registry.insert(task_id, Arc::downgrade(&readers));
+
+        readers
     }
 
     /// Revokes task URLs and returns completion owners, including readers from URLs
@@ -260,8 +260,11 @@ impl MediaServer {
         let ids: Vec<_> = sessions
             .iter()
             .filter_map(|(id, session)| {
-                matches!(&session.source, SessionSource::Local(source) if source.readers.task_id == task_id)
-                    .then_some(id.clone())
+                let SessionSource::Local(source) = &session.source else {
+                    return None;
+                };
+
+                (source.readers.task_id == task_id).then(|| id.clone())
             })
             .collect();
 
@@ -280,6 +283,7 @@ impl MediaServer {
             .collect()
     }
 
+    /// Revokes one URL and signals its readers without awaiting them.
     pub fn close(&self, id: &str) {
         let session = { self.inner.sessions.lock().unwrap().remove(id) };
         if let Some(session) = session {
@@ -462,17 +466,22 @@ mod tests {
         server.shutdown.cancel();
         server.task.take().unwrap().await.unwrap();
         let inner = server.inner.clone();
-        let shutdown = server.shutdown();
-        tokio::pin!(shutdown);
+        let playback = super::super::PlaybackService::own(server);
+        let mut shutdown = Box::pin(playback.shutdown());
         let shutdown_waited = futures_util::poll!(&mut shutdown).is_pending();
+        drop(shutdown);
+
+        let another_owner = playback.clone();
+        let mut shared_shutdown = Box::pin(another_owner.shutdown());
+        let shared_shutdown_waited = futures_util::poll!(&mut shared_shutdown).is_pending();
 
         // Always release the worker before asserting, including on the broken implementation.
         release.send(()).unwrap();
         if retry_waited {
             retried_completion.await;
         }
-        if shutdown_waited {
-            shutdown.await;
+        if shared_shutdown_waited {
+            shared_shutdown.await;
         }
         drop(response);
 
@@ -484,6 +493,10 @@ mod tests {
         assert!(
             shutdown_waited,
             "shutdown returned while its local read was blocked"
+        );
+        assert!(
+            shared_shutdown_waited,
+            "a later shutdown lost ownership after its first waiter was dropped"
         );
         assert!(
             file.upgrade().is_none(),

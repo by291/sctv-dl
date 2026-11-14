@@ -40,13 +40,14 @@ pub struct RequestGuard {
 }
 
 fn request_id(value: &str) -> Result<Uuid> {
-    Uuid::parse_str(value)
-        .ok()
+    let parsed = Uuid::parse_str(value).ok();
+    parsed
         .filter(|id| id.get_version_num() == 4 && id.get_variant() == uuid::Variant::RFC4122)
         .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "请求标识无效"))
 }
 
 impl RequestRegistry {
+    /// Registers a request and consumes any cancellation that arrived before it.
     pub fn register(self: &Arc<Self>, value: &str) -> Result<RequestGuard> {
         let id = request_id(value)?;
         let mut requests = self.requests.lock().unwrap();
@@ -57,11 +58,11 @@ impl RequestRegistry {
         }
 
         let cancellation = CancellationToken::new();
-        if let Some(index) = requests
+        let early_cancellation = requests
             .early
             .iter()
-            .position(|(request, _)| *request == id)
-        {
+            .position(|(request, _)| *request == id);
+        if let Some(index) = early_cancellation {
             requests.early.remove(index);
             cancellation.cancel();
         }
@@ -74,6 +75,7 @@ impl RequestRegistry {
         })
     }
 
+    /// Signals cancellation or remembers it until the request is registered.
     pub fn cancel(&self, value: &str) -> Result<()> {
         let id = request_id(value)?;
         let mut requests = self.requests.lock().unwrap();
@@ -81,20 +83,24 @@ impl RequestRegistry {
 
         if let Some(cancellation) = requests.active.get(&id) {
             cancellation.cancel();
-        } else {
-            // Native commands may arrive out of order; retain only bounded, expiring cancellations.
-            requests.early.retain(|(request, _)| *request != id);
-            requests.early.push_back((id, Instant::now()));
-            while requests.early.len() > MAX_EARLY_CANCELLATIONS {
-                requests.early.pop_front();
-            }
+            return Ok(());
         }
+
+        // Native commands may arrive out of order; retain only bounded, expiring cancellations.
+        requests.early.retain(|(request, _)| *request != id);
+        requests.early.push_back((id, Instant::now()));
+        while requests.early.len() > MAX_EARLY_CANCELLATIONS {
+            requests.early.pop_front();
+        }
+
         Ok(())
     }
 }
 
 impl RequestGuard {
+    /// Drops the pending operation if cancellation arrives and then releases its registration.
     pub async fn run<T>(self, operation: impl Future<Output = Result<T>>) -> Result<T> {
+        // A cancellation already in the registry must win before the first operation poll.
         tokio::select! {
             biased;
             _ = self.cancellation.cancelled() => Err(AppError::new(ErrorCode::Cancelled, "请求已取消")),
@@ -105,11 +111,7 @@ impl RequestGuard {
 
 impl Drop for RequestGuard {
     fn drop(&mut self) {
-        self.registry
-            .requests
-            .lock()
-            .unwrap()
-            .active
-            .remove(&self.id);
+        let mut requests = self.registry.requests.lock().unwrap();
+        requests.active.remove(&self.id);
     }
 }
