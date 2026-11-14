@@ -139,18 +139,34 @@ struct WorkspaceView: View {
                     }
                 }
             #else
+                // Keep scene storage and the tab binding on the same value type.
                 TabView(
                     selection: Binding(
-                        get: { WorkspaceSection(rawValue: selectedTabName) ?? .catalogue },
-                        set: selectSection)
+                        get: {
+                            (WorkspaceSection(rawValue: selectedTabName) ?? .catalogue).rawValue
+                        },
+                        set: { name in
+                            selectedTabName = name
+                            cancelPlaybackIfOriginChanged()
+                        }
+                    )
                 ) {
-                    Tab("栏目", systemImage: "square.grid.2x2", value: WorkspaceSection.catalogue) {
+                    Tab(
+                        "栏目", systemImage: "square.grid.2x2",
+                        value: WorkspaceSection.catalogue.rawValue
+                    ) {
                         catalogueNavigation
                     }
-                    Tab("资料库", systemImage: "books.vertical", value: WorkspaceSection.library) {
+                    Tab(
+                        "资料库", systemImage: "books.vertical",
+                        value: WorkspaceSection.library.rawValue
+                    ) {
                         libraryNavigation
                     }
-                    Tab("下载", systemImage: "arrow.down.circle", value: WorkspaceSection.downloads) {
+                    Tab(
+                        "下载", systemImage: "arrow.down.circle",
+                        value: WorkspaceSection.downloads.rawValue
+                    ) {
                         downloadsNavigation
                     }
                 }.tabViewStyle(.tabBarOnly)
@@ -205,11 +221,6 @@ struct WorkspaceView: View {
             }
             .sheet(item: $sharing.sharing) { FileShareView(file: $0) }
         #endif
-    }
-
-    private func selectSection(_ section: WorkspaceSection) {
-        selectedTabName = section.rawValue
-        cancelPlaybackIfOriginChanged()
     }
 
     private var activeOrigin: PlaybackOrigin {
