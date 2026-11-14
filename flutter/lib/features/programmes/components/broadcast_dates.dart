@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/programmes/programme.dart';
 
+const _recentDateCount = 7;
+const _weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
 class BroadcastDates extends StatefulWidget {
   const BroadcastDates({
     super.key,
@@ -37,11 +40,15 @@ class _BroadcastDatesState extends State<BroadcastDates> {
 
   void _revealSelection() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       final context = _selectedKey.currentContext;
       final target = context?.findRenderObject();
-      if (context == null || target == null) return;
+      if (context == null || target == null) {
+        return;
+      }
 
       // Reveal only the horizontal shortcut; keep the archive's vertical position.
       Scrollable.of(context, axis: Axis.horizontal).position.ensureVisible(
@@ -69,15 +76,14 @@ class _BroadcastDatesState extends State<BroadcastDates> {
   );
 
   Widget _content(BuildContext context) {
-    final colours = Theme.of(context).colorScheme;
     final typography = Theme.of(context).textTheme;
-
-    final sorted = [...widget.dates]..sort((a, b) => b.date.compareTo(a.date));
-    final recent = sorted.take(7).toList();
+    final sorted = [...widget.dates]
+      ..sort((first, second) => second.date.compareTo(first.date));
+    final recent = sorted.take(_recentDateCount).toList();
     final selected = widget.selected;
     if (selected != null && !recent.any((date) => date.id == selected.id)) {
       recent.add(selected);
-      recent.sort((a, b) => b.date.compareTo(a.date));
+      recent.sort((first, second) => second.date.compareTo(first.date));
     }
 
     return Column(
@@ -100,72 +106,63 @@ class _BroadcastDatesState extends State<BroadcastDates> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            children: [
-              for (final date in recent)
-                Padding(
-                  key: date.id == selected?.id
-                      ? _selectedKey
-                      : ValueKey(date.id),
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Semantics(
-                    label: '回看${date.date}',
-                    child: ChoiceChip(
-                      selected: date.id == selected?.id,
-                      showCheckmark: false,
-                      selectedColor: colours.primaryContainer,
-                      backgroundColor: colours.surfaceContainerLow,
-                      side: BorderSide(
-                        color: date.id == selected?.id
-                            ? Colors.transparent
-                            : colours.outlineVariant,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      labelPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      onSelected: (_) => widget.onSelected(date),
-                      label: ExcludeSemantics(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${DateTime.parse(date.date).month}月${DateTime.parse(date.date).day}日',
-                              style: typography.labelLarge?.copyWith(
-                                color: date.id == selected?.id
-                                    ? colours.onPrimaryContainer
-                                    : colours.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              const [
-                                '周一',
-                                '周二',
-                                '周三',
-                                '周四',
-                                '周五',
-                                '周六',
-                                '周日',
-                              ][DateTime.parse(date.date).weekday - 1],
-                              style: typography.labelSmall?.copyWith(
-                                color: date.id == selected?.id
-                                    ? colours.onPrimaryContainer
-                                    : colours.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+            children: [for (final date in recent) _dateChip(context, date)],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _dateChip(BuildContext context, BroadcastDate date) {
+    final theme = Theme.of(context);
+    final colours = theme.colorScheme;
+    final isSelected = date.id == widget.selected?.id;
+    final day = DateTime.parse(date.date);
+
+    return Padding(
+      key: isSelected ? _selectedKey : ValueKey(date.id),
+      padding: const EdgeInsets.only(right: 8),
+      child: Semantics(
+        label: '回看${date.date}',
+        child: ChoiceChip(
+          selected: isSelected,
+          showCheckmark: false,
+          selectedColor: colours.primaryContainer,
+          backgroundColor: colours.surfaceContainerLow,
+          side: BorderSide(
+            color: isSelected ? Colors.transparent : colours.outlineVariant,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          onSelected: (_) => widget.onSelected(date),
+          label: ExcludeSemantics(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${day.month}月${day.day}日',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: isSelected
+                        ? colours.onPrimaryContainer
+                        : colours.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _weekdayLabels[day.weekday - DateTime.monday],
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isSelected
+                        ? colours.onPrimaryContainer
+                        : colours.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1,11 +1,13 @@
 import 'programme.dart';
 
+/// Shares cancellation between a caller and the work it starts.
 class RequestScope {
   bool _cancelled = false;
   final List<void Function()> _listeners = [];
 
   bool get isCancelled => _cancelled;
 
+  /// Registers a cancellation callback and returns its detach function.
   void Function() onCancel(void Function() listener) {
     if (_cancelled) {
       listener();
@@ -16,8 +18,11 @@ class RequestScope {
     return () => _listeners.remove(listener);
   }
 
+  /// Cancels work attached to this scope.
   void cancel() {
-    if (_cancelled) return;
+    if (_cancelled) {
+      return;
+    }
 
     _cancelled = true;
     for (final listener in _listeners) {
@@ -26,8 +31,11 @@ class RequestScope {
     _listeners.clear();
   }
 
+  /// Rejects a result if the caller cancelled while awaiting it.
   void throwIfCancelled() {
-    if (_cancelled) throw const RequestCancelled();
+    if (_cancelled) {
+      throw const RequestCancelled();
+    }
   }
 }
 
