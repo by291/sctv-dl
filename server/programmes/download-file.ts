@@ -3,6 +3,7 @@ import { resolveVideo } from './video-variants.ts'
 import type { ProgrammeContent, Quality } from '../../shared/contracts/programmes.ts'
 import type { PreparedDownload } from '../../shared/contracts/downloads.ts'
 
+// Build a download descriptor using the selected variant and a portable filename.
 export function makeDownloadFile(
   content: ProgrammeContent,
   date: string,

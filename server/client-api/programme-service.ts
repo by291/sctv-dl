@@ -18,6 +18,7 @@ export interface ProgrammeService {
   downloads(request: DownloadRequest): Promise<PreparedDownloads>
 }
 
+// Prepare playable sources and downloadable files from upstream programme records.
 export function createProgrammeService(
   client: ProgrammeApi,
   signal: AbortSignal,
@@ -42,8 +43,10 @@ export function createProgrammeService(
       const content = contents.find((item) => item.id === request.contentId)
       const selected = content && resolveVideo(content, request.quality)
       const variants = content ? getVideoVariants(content) : []
-      // Resolve against original variants before URL normalization; duplicate URLs retain one quality.
+
+      // Match the original URL before normalization so duplicate sources keep one quality.
       const selectedVariant = variants.find((variant) => variant.url === selected?.url)
+
       if (!selectedVariant) {
         throw new ProgrammeUnavailableError('这条内容没有可播放的视频')
       }
@@ -53,12 +56,20 @@ export function createProgrammeService(
         url: validateMediaTarget(variant.url).href,
       }))
 
-      return { id: randomUUID(), selectedQuality: selectedVariant.quality, sources }
+      return {
+        id: randomUUID(),
+        selectedQuality: selectedVariant.quality,
+        sources,
+      }
     },
 
     async downloads(request: DownloadRequest): Promise<PreparedDownloads> {
       const { date, contents } = await loadBroadcast(request)
-      const result: PreparedDownloads = { files: [], failures: [], usedFallback: false }
+      const result: PreparedDownloads = {
+        files: [],
+        failures: [],
+        usedFallback: false,
+      }
 
       // One unavailable file must not discard other files prepared successfully in this batch.
       for (const contentId of request.contentIds) {

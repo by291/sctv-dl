@@ -75,7 +75,8 @@ describe('production HTTP app', () => {
       'fetch',
       vi.fn().mockImplementation((url, options) => {
         const isContents = String(url).includes('/contents/')
-        ;(isContents ? secondStarted : firstStarted)()
+        const markRequestStarted = isContents ? secondStarted : firstStarted
+        markRequestStarted()
 
         return new Promise<Response>((resolve, reject) => {
           const timer = setTimeout(
@@ -151,11 +152,11 @@ describe('production HTTP app', () => {
       'fetch',
       vi.fn().mockImplementation(async (url, options) => {
         identities.push(options.headers.deviceId)
-        const data = String(url).includes('/contents/')
+        const records = String(url).includes('/contents/')
           ? [{ id: '3', title: 'News', video: '/news.mp4' }]
           : [{ id: '2', date: '2026-10-16' }]
 
-        return new Response(JSON.stringify({ rs: 200, data }))
+        return new Response(JSON.stringify({ rs: 200, data: records }))
       }),
     )
     const response = await httpFetch(`${origin}/client-api/v1/downloads/prepare`, {

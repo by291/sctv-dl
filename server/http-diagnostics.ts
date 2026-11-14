@@ -1,3 +1,4 @@
+// Record the server-side cause using the request pathname.
 export function reportHttpFailure(
   method: string | undefined,
   pathname: string,

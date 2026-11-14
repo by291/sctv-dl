@@ -52,20 +52,23 @@ describe('normalized client API', () => {
         },
       ],
     ],
-  ])('dispatches %s with intact string IDs', async (path, upstreamUrl, data, expected) => {
-    vi.stubGlobal('fetch', async (url: string) => {
-      if (url !== upstreamUrl) {
-        throw new Error('Unexpected upstream route')
-      }
+  ])(
+    'dispatches %s with intact string IDs',
+    async (path, upstreamUrl, upstreamPayload, expected) => {
+      vi.stubGlobal('fetch', async (url: string) => {
+        if (url !== upstreamUrl) {
+          throw new Error('Unexpected upstream route')
+        }
 
-      return Response.json({ rs: 200, data })
-    })
+        return Response.json({ rs: 200, data: upstreamPayload })
+      })
 
-    const response = await httpFetch(`${origin}${path}`)
+      const response = await httpFetch(`${origin}${path}`)
 
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ data: expected })
-  })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ data: expected })
+    },
+  )
 
   it('prepares playback with a validated source and actual fallback quality', async () => {
     vi.stubGlobal('fetch', async (url: string | URL | Request) =>

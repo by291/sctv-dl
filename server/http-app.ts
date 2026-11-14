@@ -7,6 +7,7 @@ import { clientApiMiddleware } from './client-api/client-api-middleware.ts'
 
 import type { RequestListener } from 'node:http'
 
+// Compose the HTTP API, media proxy, health check, and built frontend.
 export function createHttpApp(assetsDirectory: string): RequestListener {
   if (!statSync(join(assetsDirectory, 'index.html'), { throwIfNoEntry: false })?.isFile()) {
     throw new Error('Frontend build is missing. Run "pnpm build" before "pnpm start".')

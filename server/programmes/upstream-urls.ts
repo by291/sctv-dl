@@ -12,6 +12,8 @@ function resolveUrl(value: unknown, base: string): string | null {
   }
 }
 
+// Resolve upstream video paths against the media origin.
 export const mediaUrl = (value: unknown) => resolveUrl(value, 'https://fscgc.scgchc.com/')
 
+// Resolve upstream image paths against the cover origin.
 export const imageUrl = (value: unknown) => resolveUrl(value, 'https://kscgc.sctv.com/')

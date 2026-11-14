@@ -14,6 +14,8 @@ import type {
   ProgrammeDate,
 } from '../../shared/contracts/programmes.ts'
 
+const PROGRAMME_HEADER_TIMEOUT_MS = 20_000
+
 export class UpstreamError extends Error {}
 
 export class UpstreamTimeoutError extends UpstreamError {}
@@ -54,6 +56,7 @@ export interface ProgrammeApi {
   contents(programmeId: string, dateId: string, signal?: AbortSignal): Promise<ProgrammeContent[]>
 }
 
+// Read and normalize upstream programme data with per-request deadlines.
 export function createProgrammeApi(
   base = '/api',
   fetcher: typeof fetch = fetch,
@@ -70,10 +73,11 @@ export function createProgrammeApi(
     const headerDeadline = setTimeout(() => {
       headersTimedOut = true
       controller.abort()
-    }, 20_000)
+    }, PROGRAMME_HEADER_TIMEOUT_MS)
 
     try {
       let response: Response
+
       try {
         response = await fetcher(`${base.replace(/\/$/, '')}${path}`, {
           signal: controller.signal,
@@ -97,6 +101,7 @@ export function createProgrammeApi(
       }
 
       let raw: unknown
+
       try {
         raw = await response.json()
       } catch (cause) {
@@ -104,6 +109,7 @@ export function createProgrammeApi(
       }
 
       const envelope = parseResponse(envelopeSchema, raw)
+
       if (envelope.rs !== 200) {
         throw new UpstreamError(envelope.error)
       }
@@ -118,9 +124,10 @@ export function createProgrammeApi(
   return {
     async programmes(signal?: AbortSignal): Promise<Programme[]> {
       const schema = z.object({ records: z.array(programmeSchema) })
-      const data = parseResponse(schema, await request('/app/v1/programs?page=0&size=100', signal))
+      const payload = await request('/app/v1/programs?page=0&size=100', signal)
+      const catalogue = parseResponse(schema, payload)
 
-      return data.records
+      return catalogue.records
     },
 
     async dates(programmeId: string, signal?: AbortSignal): Promise<ProgrammeDate[]> {
@@ -129,10 +136,13 @@ export function createProgrammeApi(
         await request(`/app/v1/programs/${pathId(programmeId)}/dates/list`, signal),
       )
 
-      // Deduplicate broadcast dates, retaining the last upstream record for each date.
-      return [...new Map(rows.map((row) => [row.date, row])).values()].sort((a, b) =>
-        b.date.localeCompare(a.date),
-      )
+      // The archive selects by calendar date, so preserve the last upstream ID for each date.
+      const rowsByDate = new Map<string, ProgrammeDate>()
+      for (const row of rows) {
+        rowsByDate.set(row.date, row)
+      }
+
+      return [...rowsByDate.values()].sort((left, right) => right.date.localeCompare(left.date))
     },
 
     async contents(

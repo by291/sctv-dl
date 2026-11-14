@@ -28,12 +28,17 @@ function executeRoute(
   }
 }
 
-function reply(
-  request: IncomingMessage,
-  response: ServerResponse,
-  status: number,
-  value: unknown,
-): void {
+function reply({
+  request,
+  response,
+  status,
+  value,
+}: {
+  request: IncomingMessage
+  response: ServerResponse
+  status: number
+  value: unknown
+}): void {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -41,16 +46,23 @@ function reply(
   response.end(request.method === 'HEAD' ? undefined : JSON.stringify(value))
 }
 
+// Own validation, cancellation, and responses for normalized client requests.
 export function clientApiMiddleware(
   request: IncomingMessage,
   response: ServerResponse,
   next: () => void,
 ): void {
   let pathname: string
+
   try {
     pathname = new URL(request.url || '/', 'http://localhost').pathname
   } catch {
-    reply(request, response, 400, { error: { code: 'invalid-input', message: '请求地址无效' } })
+    reply({
+      request,
+      response,
+      status: 400,
+      value: { error: { code: 'invalid-input', message: '请求地址无效' } },
+    })
 
     return
   }
@@ -69,11 +81,17 @@ export function clientApiMiddleware(
   void (async () => {
     // Validate the route and body before creating an identity or making upstream requests.
     const route = await parseClientRoute(pathname, request, controller.signal)
+
     const headers = programmeHeaders(request, response, '/client-api')
     const client = createProgrammeApi('https://gw.scgchc.com', fetch, headers)
-    const data = await executeRoute(route, client, controller.signal)
+    const result = await executeRoute(route, client, controller.signal)
 
-    reply(request, response, 200, { data })
+    reply({
+      request,
+      response,
+      status: 200,
+      value: { data: result },
+    })
   })()
     .catch((cause: unknown) => {
       if (response.destroyed) {
@@ -81,6 +99,7 @@ export function clientApiMiddleware(
       }
 
       const failure = describeClientApiError(cause, controller.signal)
+
       if (failure.status >= 500 && !controller.signal.aborted) {
         reportHttpFailure(request.method, pathname, cause)
       }
@@ -89,7 +108,12 @@ export function clientApiMiddleware(
         response.setHeader('Allow', failure.allow)
       }
 
-      reply(request, response, failure.status, { error: failure.error })
+      reply({
+        request,
+        response,
+        status: failure.status,
+        value: { error: failure.error },
+      })
     })
     .finally(() => {
       request.off('aborted', abort)

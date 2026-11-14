@@ -4,6 +4,7 @@ import { streamUpstream } from './stream-upstream.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProxyTarget } from './proxy-policy.ts'
 
+// Validate programme or media proxy requests before forwarding them.
 export function proxyMiddleware(
   request: IncomingMessage,
   response: ServerResponse,

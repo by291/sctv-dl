@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProgrammeApi, UpstreamTimeoutError } from './programme-client.ts'
 import { mediaUrl, imageUrl } from './upstream-urls.ts'
 
-const reply = (data: unknown, rs = 200) =>
-  new Response(JSON.stringify({ rs, data, error: '服务错误' }), {
+const reply = (payload: unknown, rs = 200) =>
+  new Response(JSON.stringify({ rs, data: payload, error: '服务错误' }), {
     headers: { 'content-type': 'application/json' },
   })
 
@@ -157,21 +157,26 @@ describe('programme API', () => {
       .mockResolvedValue(reply({ records: [{ id: Number('2107426129285414913'), name: '测试' }] }))
     await expect(createProgrammeApi('/api', fetcher).programmes()).rejects.toThrow('ID')
   })
-  it('sorts and deduplicates valid dates; accepts an empty list', async () => {
+  it('keeps the last upstream ID per broadcast date and sorts newest first', async () => {
     const fetcher = vi.fn().mockResolvedValue(
       reply([
         { id: '2', date: '2026-10-04' },
         { id: '3', date: '2026-10-06' },
-        { id: '3', date: '2026-10-06' },
+        { id: '4', date: '2026-10-06' },
       ]),
     )
-    expect((await createProgrammeApi('/api', fetcher).dates('1')).map((d) => d.date)).toEqual([
-      '2026-10-06',
-      '2026-10-04',
+    const dates = await createProgrammeApi('/api', fetcher).dates('1')
+
+    expect(dates).toEqual([
+      { id: '4', date: '2026-10-06' },
+      { id: '2', date: '2026-10-04' },
     ])
-    expect(
-      await createProgrammeApi('/api', vi.fn().mockResolvedValue(reply([]))).dates('1'),
-    ).toEqual([])
+  })
+
+  it('accepts an empty broadcast date list', async () => {
+    const api = createProgrammeApi('/api', vi.fn().mockResolvedValue(reply([])))
+
+    expect(await api.dates('1')).toEqual([])
   })
   it('rejects HTTP failures and malformed response shapes', async () => {
     await expect(

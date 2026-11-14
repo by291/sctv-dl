@@ -6,6 +6,7 @@ export interface VideoVariant {
   url: string
 }
 
+// List distinct video sources with their effective qualities.
 export function getVideoVariants(content: ProgrammeContent): VideoVariant[] {
   const variants: VideoVariant[] = []
 
@@ -21,6 +22,7 @@ export function getVideoVariants(content: ProgrammeContent): VideoVariant[] {
   return variants
 }
 
+// Pick the requested video quality or the available fallback.
 export function resolveVideo(content: ProgrammeContent, requested: Quality): VideoVariant | null {
   if (requested === 'smooth' && content.smoothVideo) {
     return { quality: 'smooth', url: content.smoothVideo }

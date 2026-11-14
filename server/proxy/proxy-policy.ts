@@ -3,10 +3,12 @@ export type ProxyTarget =
 
 const mediaHosts = new Set(['fscgc.scgchc.com', 'fscgc.sctv-tf.com'])
 
+// Identify requests owned by the programme and media proxy.
 export function isProxyPath(pathname: string): boolean {
   return pathname === '/media' || pathname === '/api' || pathname.startsWith('/api/')
 }
 
+// Translate a local proxy route into a validated upstream endpoint.
 export function resolveProxyTarget(local: URL): ProxyTarget {
   if (local.pathname === '/media') {
     return {
@@ -35,6 +37,7 @@ export function resolveProxyTarget(local: URL): ProxyTarget {
   return { kind: 'programme-api', url }
 }
 
+// Accept only upstream MP4 targets allowed by the media contract.
 export function validateMediaTarget(raw: string): URL {
   const url = new URL(raw)
   if (
@@ -51,6 +54,7 @@ export function validateMediaTarget(raw: string): URL {
   return url
 }
 
+// Build an attachment header with a sanitized UTF-8 filename.
 export function contentDisposition(filename: string): string {
   // Filenames must not contain control characters or header delimiters.
   const safe =

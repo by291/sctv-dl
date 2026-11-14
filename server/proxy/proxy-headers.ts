@@ -5,6 +5,7 @@ import { programmeHeaders } from './programme-headers.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProxyTarget } from './proxy-policy.ts'
 
+// Build upstream headers for API requests or media range transfers.
 export function proxyRequestHeaders(
   request: IncomingMessage,
   response: ServerResponse,
@@ -30,6 +31,7 @@ export function proxyRequestHeaders(
   return headers
 }
 
+// Copy valid transfer headers and supply attachment metadata when requested.
 export function proxyResponseHeaders(
   upstream: Response,
   target: ProxyTarget,

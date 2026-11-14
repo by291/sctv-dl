@@ -7,6 +7,9 @@ import { proxyRequestHeaders, proxyResponseHeaders } from './proxy-headers.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProxyTarget } from './proxy-policy.ts'
 
+const PROXY_HEADER_TIMEOUT_MS = 20_000
+
+// Forward a validated request and stream its body until completion or disconnect.
 export async function streamUpstream(
   request: IncomingMessage,
   response: ServerResponse,
@@ -19,7 +22,7 @@ export async function streamUpstream(
   response.once('close', abort)
 
   // Only response headers have a deadline; downstream disconnect owns the whole transfer.
-  const headerDeadline = setTimeout(abort, 20_000)
+  const headerDeadline = setTimeout(abort, PROXY_HEADER_TIMEOUT_MS)
 
   try {
     const upstream = await fetch(target.url, {
@@ -28,15 +31,18 @@ export async function streamUpstream(
       redirect: 'manual',
       signal: controller.signal,
     })
+
     clearTimeout(headerDeadline)
 
+    // Following redirects would bypass the target policy applied to this request.
     if (upstream.status >= 300 && upstream.status < 400) {
       await upstream.body?.cancel()
-      throw new Error('视频服务返回不支持的重定向')
+      throw new Error('Upstream returned an unsupported redirect')
     }
 
     if (!upstream.ok) {
       await upstream.body?.cancel()
+
       if (upstream.status >= 500) {
         reportHttpFailure(
           request.method,
@@ -76,6 +82,7 @@ export async function streamUpstream(
 
     reportHttpFailure(request.method, diagnosticPath, cause)
 
+    // Once streaming has begun, only terminating the response can signal failure.
     if (response.headersSent) {
       response.destroy()
     } else {

@@ -5,18 +5,20 @@ import { z } from 'zod'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const deviceCookieName = 'sctv-dl-device-id'
+const DEVICE_COOKIE_MAX_AGE_SECONDS = 31_536_000
 const deviceIdSchema = z.uuidv4()
 
+// Build the upstream guest profile using a browser-scoped installation ID.
 export function programmeHeaders(
   request: IncomingMessage,
   response: ServerResponse,
   cookiePath = '/api',
 ): Record<string, string> {
-  const stored = request.headers.cookie
+  const cookie = request.headers.cookie
     ?.split(';')
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${deviceCookieName}=`))
-    ?.slice(deviceCookieName.length + 1)
+  const stored = cookie?.slice(deviceCookieName.length + 1)
   const parsed = deviceIdSchema.safeParse(stored)
   const deviceId = parsed.success ? parsed.data : randomUUID()
 
@@ -24,7 +26,8 @@ export function programmeHeaders(
     // Keep one simulated installation per browser; this cookie never goes upstream.
     response.setHeader(
       'Set-Cookie',
-      `${deviceCookieName}=${deviceId}; Path=${cookiePath}; Max-Age=31536000; HttpOnly; SameSite=Lax`,
+      `${deviceCookieName}=${deviceId}; Path=${cookiePath}; ` +
+        `Max-Age=${DEVICE_COOKIE_MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax`,
     )
   }
 

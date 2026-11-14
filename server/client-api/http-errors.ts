@@ -13,6 +13,7 @@ interface ClientApiFailure {
   allow?: string
 }
 
+// Map request, business, and upstream failures to the localized client contract.
 export function describeClientApiError(cause: unknown, signal: AbortSignal): ClientApiFailure {
   if (
     signal.aborted ||

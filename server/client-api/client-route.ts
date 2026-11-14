@@ -30,6 +30,7 @@ function requireMethod(request: IncomingMessage, methods: string[]): void {
   }
 }
 
+// Validate the client API method, route IDs, and any preparation payload.
 export async function parseClientRoute(
   pathname: string,
   request: IncomingMessage,
