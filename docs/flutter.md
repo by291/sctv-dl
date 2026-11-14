@@ -33,7 +33,7 @@ Follow [Upstream API](upstream-api.md) for ID validation, date normalization, qu
 
 ### History and backup
 
-History shares exact programme/date/content identity between online and downloaded copies. Retain the newest 500 entries, record advancing progress at five-second intervals and flush pause, completed seek, background and exit. An ended item or 95% of a known positive duration is complete; incomplete playback resumes paused and completed playback starts from zero. Removed entries and cleared history invalidate stale session writes.
+History shares exact programme/date/content identity between online and downloaded copies. Retain the newest 500 entries, record advancing progress at five-second intervals and flush pause, completed seek, background and exit. An ended item or 95% of a known positive duration is complete; incomplete playback resumes paused and completed playback starts from zero. A successful removal invalidates checkpoints from already open sessions for that item, and clearing history invalidates every already open session. New sessions can record progress normally.
 
 User preferences, favourites and viewing history belong to a user database, separate from the reconstructible runtime database. The user database and settings are eligible for backup; runtime metadata, installation identity, native task/resume records and media are excluded. On iOS, exclusion also covers the downloader's own task/resume/defaults storage. An actual OS backup/restore requires separate device verification. Cleanup of metadata/images preserves favourites, history, downloads and completed files.
 
@@ -155,9 +155,9 @@ Restored local playback never silently substitutes an online source.
 
 ### Storage and publication
 
-Android transfers stage in app-owned storage and publish through application-owned MediaStore operations into public `Downloads/sctv-dl`. Same-name lookup alone cannot safely recover pending rows. Publication is separate from transfer completion: retain the private source until the public location is durable, and keep failed publication or cleanup retryable. Removing a terminal task keeps its completed file; deleting a file is a separate explicit action. Published public files can remain after uninstall.
+Android transfers stage in app-owned storage and publish through application-owned MediaStore operations into public `Downloads/sctv-dl`. Same-name lookup alone cannot safely recover pending rows. Publication is separate from transfer completion: retain the private source until the public location is durable, and keep failed publication or cleanup retryable. A provider or permission error while inspecting a published file leaves the existing download record intact so inspection can be retried. Removing a terminal task keeps its completed file; deleting a file is a separate explicit action. Published public files can remain after uninstall.
 
-iOS media lives under the application's `Documents/Downloads`, with Files visibility, local playback, sharing and explicit Save to Files export. References are relative to the current sandbox. Cancelling export keeps the local file. This application-owned folder is not the system-wide Downloads directory; unexported files disappear on app removal. Videos, runtime task state and installation identity are excluded from backup.
+iOS media lives under the application's `Documents/Downloads`, with Files visibility, local playback, sharing and explicit Save to Files export. References are relative to the current sandbox. Cancelling export or closing its scene ends the export and keeps the local file. A presentation failure reports an error and releases the picker for retry. This application-owned folder is not the system-wide Downloads directory; unexported files disappear on app removal. Videos, runtime task state and installation identity are excluded from backup.
 
 ### Scheduling and network policy
 
