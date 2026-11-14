@@ -149,6 +149,27 @@ async fn rejects_redirects_non_json_and_malformed_envelopes() {
 }
 
 #[tokio::test]
+async fn rejects_oversized_metadata_before_the_stream_ends() {
+    let stub = serve(Router::new().fallback(|| async {
+        use futures_util::StreamExt;
+
+        let large_chunk = vec![b' '; 1024 * 1024];
+        let chunks = futures_util::stream::iter([
+            Ok::<_, std::io::Error>(large_chunk.clone()),
+            Ok(large_chunk.clone()),
+            Ok(large_chunk),
+        ]);
+        let body = Body::from_stream(chunks.chain(futures_util::stream::pending()));
+        Response::new(body)
+    }))
+    .await;
+
+    let result = tokio::time::timeout(Duration::from_secs(2), service(&stub).programmes()).await;
+
+    assert_eq!(result.unwrap().unwrap_err().code, ErrorCode::Upstream);
+}
+
+#[tokio::test]
 async fn retains_a_url_redacted_cause_for_failed_metadata_connections() {
     let service =
         ProgrammeService::new("http://127.0.0.1:1", "guest".into(), Deadlines::default()).unwrap();
