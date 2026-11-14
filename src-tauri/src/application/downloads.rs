@@ -21,17 +21,18 @@ pub enum DownloadResult {
 }
 
 /// Coordinates content preparation, directory selection, and task admission.
-pub struct DownloadService<'a, R: Runtime> {
+pub struct DownloadService<'a> {
     state: &'a AppState,
-    settings: &'a DesktopSettings<R>,
+    settings: &'a DesktopSettings,
     downloads: &'a DownloadManager,
     lifecycle: &'a ExitController,
 }
 
-impl<'a, R: Runtime> DownloadService<'a, R> {
+impl<'a> DownloadService<'a> {
+    /// Connects programme preparation with the application download and settings owners.
     pub fn new(
         state: &'a AppState,
-        settings: &'a DesktopSettings<R>,
+        settings: &'a DesktopSettings,
         downloads: &'a DownloadManager,
         lifecycle: &'a ExitController,
     ) -> Self {
@@ -43,7 +44,8 @@ impl<'a, R: Runtime> DownloadService<'a, R> {
         }
     }
 
-    pub async fn start(
+    /// Prepares a batch and admits its files after a destination is available.
+    pub async fn start<R: Runtime>(
         &self,
         app: &AppHandle<R>,
         request: DownloadRequest,

@@ -6,7 +6,6 @@ use std::sync::Arc;
 use sctv_dl_desktop_lib::{commands, lifecycle::ExitController, settings::DesktopSettings};
 use serde_json::json;
 use tauri::{Manager, test::mock_builder};
-use tauri_plugin_store::StoreExt;
 
 use ipc::{invoke, local_origin};
 
@@ -15,7 +14,6 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
     let root = tempfile::tempdir().unwrap();
     let controller = Arc::new(ExitController::default());
     let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(controller.clone())
         .invoke_handler(tauri::generate_handler![
             commands::load_settings,
@@ -24,13 +22,8 @@ async fn preferences_use_domain_commands_and_reject_untrusted_windows_and_exit_t
         .build(tauri::generate_context!(test = true))
         .unwrap();
 
-    let store = app
-        .store_builder(root.path().join("desktop.json"))
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    store.set("installationId", json!("private"));
-    app.manage(DesktopSettings::new(Ok(store)));
+    let (settings, _) = DesktopSettings::open(&root.path().join("desktop.json")).unwrap();
+    app.manage(settings);
 
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()

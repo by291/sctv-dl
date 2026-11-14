@@ -17,12 +17,11 @@ use sctv_dl_desktop_lib::{
     downloads::{DownloadConfig, DownloadManager},
     media::{MediaConfig, PlaybackService},
     programmes::{Deadlines, ProgrammeService},
-    settings::{DesktopSettings, save_download_directory},
+    settings::DesktopSettings,
     state::{AppState, PlaybackState},
 };
 use serde_json::json;
 use tauri::{Manager, test::mock_builder};
-use tauri_plugin_store::StoreExt;
 
 use ipc::{invoke, local_origin};
 
@@ -83,7 +82,6 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
     std::fs::create_dir(&target).unwrap();
 
     let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .manage(std::sync::Arc::new(
             sctv_dl_desktop_lib::lifecycle::ExitController::default(),
@@ -124,13 +122,11 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         .build(tauri::generate_context!(test = true))
         .unwrap();
 
-    let store = app
-        .store_builder(root.path().join("desktop.json"))
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    save_download_directory(&store, &target).unwrap();
-    app.manage(DesktopSettings::new(Ok(store)));
+    let settings_path = root.path().join("desktop.json");
+    let saved = json!({"downloadDirectory": target.to_str().unwrap()});
+    std::fs::write(&settings_path, serde_json::to_vec(&saved).unwrap()).unwrap();
+    let (settings, _) = DesktopSettings::open(&settings_path).unwrap();
+    app.manage(settings);
 
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()

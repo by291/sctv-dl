@@ -1,247 +1,166 @@
-use sctv_dl_desktop_lib::{error::ErrorCode, settings::installation_id};
+use std::{fs, io::Read};
+
+use sctv_dl_desktop_lib::{
+    error::{AppError, ErrorCode},
+    lifecycle::ExitController,
+    settings::DesktopSettings,
+};
 use serde_json::{Value, json};
-use tauri::test::{mock_builder, mock_context, noop_assets};
-use tauri_plugin_store::StoreExt;
 use uuid::Uuid;
 
+const IDENTITY: &str = "12345678-9abc-4def-8abc-123456789abc";
+
 #[test]
-fn propagates_identity_save_failures_without_overwriting_the_existing_store() {
+fn opening_existing_identity_does_not_rewrite_the_document() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("desktop.json");
-    let original = br#"{"unrelated":true}"#;
-    std::fs::write(&path, original).unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
+    let original = format!("{{\n  \"installationId\": \"{IDENTITY}\"\n}}\n");
+    fs::write(&path, &original).unwrap();
+
+    let (_, identity) = DesktopSettings::open(&path).unwrap();
+
+    assert_eq!(identity, IDENTITY);
+    assert_eq!(fs::read_to_string(&path).unwrap(), original);
+}
+
+#[tokio::test]
+async fn saving_preferences_keeps_the_old_document_readable_by_existing_readers() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    let original = json!({
+        "installationId": IDENTITY,
+        "preferences": { "theme": "dark" },
+        "futureField": ["preserve"]
+    });
+    let original_bytes = serde_json::to_vec(&original).unwrap();
+    fs::write(&path, &original_bytes).unwrap();
+    let (settings, _) = DesktopSettings::open(&path).unwrap();
+    let mut existing_reader = fs::File::open(&path).unwrap();
+    let controller = ExitController::default();
+
+    let admission = controller.enter_save().await.unwrap();
+    settings
+        .save(json!({"theme": "light"}), admission)
+        .await
         .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .serialize(|_| Err(std::io::Error::other("injected save failure").into()))
-        .build()
-        .unwrap();
-    assert_eq!(
-        installation_id(&store).unwrap_err().code,
-        ErrorCode::Storage
-    );
-    assert_eq!(std::fs::read(&path).unwrap(), original);
+
+    let mut previous_bytes = Vec::new();
+    existing_reader.read_to_end(&mut previous_bytes).unwrap();
+    assert_eq!(previous_bytes, original_bytes);
+    let disk: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(disk["preferences"]["theme"], "light");
+    assert_eq!(disk["futureField"], json!(["preserve"]));
 }
 
 #[test]
-fn failed_directory_save_rolls_back_memory_and_preserves_persisted_identity() {
-    use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
-
+fn surfaces_identity_creation_errors_without_overwriting_other_files() {
     let root = tempfile::tempdir().unwrap();
-    let path = root.path().join("desktop.json");
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .serialize(|values| {
-            if values.contains_key("downloadDirectory") {
-                Err(std::io::Error::other("injected save failure").into())
-            } else {
-                Ok(serde_json::to_vec(values)?)
-            }
-        })
-        .build()
-        .unwrap();
-    let identity = installation_id(&store).unwrap();
-    let original = std::fs::read(&path).unwrap();
-    assert_eq!(
-        save_download_directory(&store, root.path())
-            .unwrap_err()
-            .code,
-        ErrorCode::Storage
-    );
-    assert!(download_directory(&store).unwrap().is_none());
-    assert_eq!(std::fs::read(&path).unwrap(), original);
-    assert_eq!(store.get("installationId").unwrap(), identity);
+    let occupied = root.path().join("occupied");
+    fs::write(&occupied, b"other").unwrap();
+
+    let result = DesktopSettings::open(&occupied.join("desktop.json"));
+
+    assert_eq!(result.err().unwrap().code, ErrorCode::Storage);
+    assert_eq!(fs::read(&occupied).unwrap(), b"other");
 }
 
-#[test]
-fn stores_download_directories_privately_and_rejects_missing_locations() {
-    use sctv_dl_desktop_lib::settings::{download_directory, save_download_directory};
+#[tokio::test]
+async fn directory_reads_reject_a_saved_location_that_has_disappeared() {
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("downloads");
+    fs::create_dir(&destination).unwrap();
+    let path = root.path().join("desktop.json");
+    let stored = json!({
+        "installationId": IDENTITY,
+        "downloadDirectory": destination.to_str().unwrap()
+    });
+    fs::write(&path, serde_json::to_vec(&stored).unwrap()).unwrap();
+    let (settings, _) = DesktopSettings::open(&path).unwrap();
 
-    let directory = tempfile::tempdir().unwrap();
-    let destination = directory.path().join("downloads");
-    std::fs::create_dir(&destination).unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(directory.path().join("desktop.json"))
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    let identity = installation_id(&store).unwrap();
-    assert!(download_directory(&store).unwrap().is_none());
-    save_download_directory(&store, &destination).unwrap();
     assert_eq!(
-        download_directory(&store).unwrap(),
+        settings.directory().await.unwrap(),
         Some(destination.canonicalize().unwrap())
     );
-    assert_eq!(store.get("installationId").unwrap(), identity);
-    assert!(store.get("preferences").is_none());
-    assert!(save_download_directory(&store, &directory.path().join("missing")).is_err());
-    std::fs::remove_dir(&destination).unwrap();
+
+    fs::remove_dir(&destination).unwrap();
     assert_eq!(
-        download_directory(&store).unwrap_err().code,
+        settings.directory().await.unwrap_err().code,
         ErrorCode::Storage
     );
 }
 
 #[test]
 fn creates_and_reloads_one_persisted_installation_identity() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("desktop.json");
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    let first = installation_id(&store).unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("new-profile").join("desktop.json");
+
+    let (_, first) = DesktopSettings::open(&path).unwrap();
+
     assert_eq!(Uuid::parse_str(&first).unwrap().get_version_num(), 4);
-    let disk: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let disk: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(disk["installationId"], first);
-    let reloaded = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .create_new()
-        .build()
-        .unwrap();
-    assert_eq!(installation_id(&reloaded).unwrap(), first);
+    let (_, reloaded) = DesktopSettings::open(&path).unwrap();
+    assert_eq!(reloaded, first);
 }
 
 #[test]
 fn repairs_invalid_identity_without_removing_other_settings() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("desktop.json");
-    std::fs::write(
-        &path,
-        serde_json::to_vec(&json!({
-            "installationId": "00000000-0000-4000-0000-000000000000",
-            "preferences": { "theme": "dark" }
-        }))
-        .unwrap(),
-    )
-    .unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    let id = installation_id(&store).unwrap();
-    assert_eq!(Uuid::parse_str(&id).unwrap().get_version_num(), 4);
-    assert_eq!(
-        Uuid::parse_str(&id).unwrap().get_variant(),
-        uuid::Variant::RFC4122
-    );
-    let disk: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(disk["preferences"], json!({"theme":"dark"}));
-}
-
-#[test]
-fn surfaces_storage_read_errors_instead_of_using_an_ephemeral_identity() {
-    let directory = tempfile::tempdir().unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let corrupt_path = directory.path().join("corrupt.json");
-    std::fs::write(&corrupt_path, b"not-json").unwrap();
-    let corrupt = app
-        .store_builder(&corrupt_path)
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    assert_eq!(
-        installation_id(&corrupt).unwrap_err().code,
-        ErrorCode::Storage
-    );
-    assert_eq!(std::fs::read(&corrupt_path).unwrap(), b"not-json");
-
-    let blocking_file = directory.path().join("file");
-    std::fs::write(&blocking_file, b"occupied").unwrap();
-    let unwritable = app
-        .store_builder(blocking_file.join("desktop.json"))
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    assert_eq!(
-        installation_id(&unwritable).unwrap_err().code,
-        ErrorCode::Storage
-    );
-}
-
-#[test]
-fn preserves_corrupt_storage_after_the_application_exits() {
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("corrupt.json");
-    std::fs::write(&path, b"not-json").unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    assert_eq!(
-        installation_id(&store).unwrap_err().code,
-        ErrorCode::Storage
-    );
-    let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
-        .build()
-        .unwrap();
-    app.run(move |_, event| {
-        if matches!(event, tauri::RunEvent::Ready) {
-            window.close().unwrap();
-        }
-    });
-    assert_eq!(std::fs::read(&path).unwrap(), b"not-json");
-}
-
-#[test]
-fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
-    use sctv_dl_desktop_lib::settings::{load_preferences, save_preferences};
-
     let root = tempfile::tempdir().unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(root.path().join("desktop.json"))
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    let identity = installation_id(&store).unwrap();
-    store.set("downloadDirectory", json!(root.path().to_str().unwrap()));
-    store.set(
-        "preferences",
-        json!({
+    let path = root.path().join("desktop.json");
+    let original = json!({
+        "installationId": "00000000-0000-4000-0000-000000000000",
+        "preferences": { "theme": "dark" }
+    });
+    fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
+
+    let (_, identity) = DesktopSettings::open(&path).unwrap();
+
+    let parsed = Uuid::parse_str(&identity).unwrap();
+    assert_eq!(parsed.get_version_num(), 4);
+    assert_eq!(parsed.get_variant(), uuid::Variant::RFC4122);
+    let disk: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(disk["installationId"], identity);
+    assert_eq!(disk["preferences"], json!({"theme": "dark"}));
+}
+
+#[test]
+fn rejects_corrupt_settings_without_overwriting_them() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    fs::write(&path, b"not-json").unwrap();
+
+    let result = DesktopSettings::open(&path);
+
+    assert_eq!(result.err().unwrap().code, ErrorCode::Storage);
+    assert_eq!(fs::read(&path).unwrap(), b"not-json");
+}
+
+#[tokio::test]
+async fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    let original = json!({
+        "installationId": IDENTITY,
+        "downloadDirectory": root.path().to_str().unwrap(),
+        "preferences": {
             "theme": "dark",
             "quality": "invalid",
-            "favourites": ["1", 2, "../3", "1", "004"],
+            "favourites": [
+                "1",
+                2,
+                "../3",
+                "1",
+                "004"
+            ],
             "installationId": "leak"
-        }),
-    );
+        }
+    });
+    fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
+    let (settings, identity) = DesktopSettings::open(&path).unwrap();
+    let controller = ExitController::default();
 
-    let snapshot = serde_json::to_value(load_preferences(Ok(&store))).unwrap();
+    let snapshot = serde_json::to_value(settings.load().await).unwrap();
+
     assert_eq!(
         snapshot,
         json!({
@@ -253,39 +172,42 @@ fn preferences_normalize_like_shared_schema_without_exposing_private_values() {
             "persisted": true
         })
     );
-    save_preferences(
-        &store,
-        json!({"theme":"light", "quality":"smooth", "favourites":["8"]}),
-    )
-    .unwrap();
-    let reloaded = app
-        .store_builder(root.path().join("desktop.json"))
-        .disable_auto_save()
-        .create_new()
-        .build()
+
+    let admission = controller.enter_save().await.unwrap();
+    settings
+        .save(
+            json!({
+                "theme": "light",
+                "quality": "smooth",
+                "favourites": ["8"]
+            }),
+            admission,
+        )
+        .await
         .unwrap();
-    assert_eq!(installation_id(&reloaded).unwrap(), identity);
+
+    let (reloaded, reloaded_identity) = DesktopSettings::open(&path).unwrap();
+    assert_eq!(reloaded_identity, identity);
     assert_eq!(
-        serde_json::to_value(load_preferences(Ok(&reloaded))).unwrap()["value"],
-        json!({"theme":"light","quality":"smooth","favourites":["8"]})
+        reloaded.directory().await.unwrap(),
+        Some(root.path().canonicalize().unwrap())
     );
     assert_eq!(
-        reloaded.get("downloadDirectory").unwrap(),
-        root.path().to_str().unwrap()
+        serde_json::to_value(reloaded.load().await).unwrap()["value"],
+        json!({
+            "theme": "light",
+            "quality": "smooth",
+            "favourites": ["8"]
+        })
     );
 }
 
-#[test]
-fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_values() {
-    use sctv_dl_desktop_lib::{
-        error::AppError,
-        settings::{load_preferences, save_preferences},
-    };
+#[tokio::test]
+async fn unavailable_settings_return_flagged_defaults() {
+    let settings = DesktopSettings::unavailable(AppError::new(ErrorCode::Storage, "denied"));
 
-    let snapshot = serde_json::to_value(load_preferences::<tauri::test::MockRuntime>(Err(
-        AppError::new(ErrorCode::Storage, "denied"),
-    )))
-    .unwrap();
+    let snapshot = serde_json::to_value(settings.load().await).unwrap();
+
     assert_eq!(
         snapshot,
         json!({
@@ -297,30 +219,82 @@ fn preference_errors_keep_defaults_usable_and_failed_writes_preserve_saved_value
             "persisted": false
         })
     );
+}
+
+#[tokio::test]
+async fn failed_replacement_leaves_settings_cache_usable_and_allows_a_retry() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("desktop.json");
-    std::fs::write(
-        &path,
-        br#"{"preferences":{"theme":"dark"},"installationId":"keep"}"#,
-    )
-    .unwrap();
-    let original = std::fs::read(&path).unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
-    let store = app
-        .store_builder(&path)
-        .disable_auto_save()
-        .serialize(|_| Err(std::io::Error::other("injected write failure").into()))
-        .build()
-        .unwrap();
+    let backup = root.path().join("original.json");
+    let original = json!({
+        "installationId": IDENTITY,
+        "preferences": {"theme": "dark"}
+    });
+    fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
+    let (settings, _) = DesktopSettings::open(&path).unwrap();
+    let controller = ExitController::default();
+
+    fs::rename(&path, &backup).unwrap();
+    fs::create_dir(&path).unwrap();
+
+    let admission = controller.enter_save().await.unwrap();
+    let failed = settings.save(json!({"theme": "light"}), admission).await;
+
+    assert_eq!(failed.unwrap_err().code, ErrorCode::Storage);
     assert_eq!(
-        save_preferences(&store, json!({"theme":"light"}))
-            .unwrap_err()
-            .code,
-        ErrorCode::Storage
+        serde_json::to_value(settings.load().await).unwrap()["value"]["theme"],
+        "dark"
     );
-    assert_eq!(std::fs::read(&path).unwrap(), original);
-    assert_eq!(store.get("preferences").unwrap(), json!({"theme":"dark"}));
+    let disk: Value = serde_json::from_slice(&fs::read(&backup).unwrap()).unwrap();
+    assert_eq!(disk, original);
+
+    fs::remove_dir(&path).unwrap();
+    fs::rename(&backup, &path).unwrap();
+    let admission = controller.enter_save().await.unwrap();
+    settings
+        .save(json!({"theme": "light"}), admission)
+        .await
+        .unwrap();
+    let (reloaded, _) = DesktopSettings::open(&path).unwrap();
+    assert_eq!(
+        serde_json::to_value(reloaded.load().await).unwrap()["value"]["theme"],
+        "light"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn sync_failure_keeps_the_replaced_preferences_and_a_later_save_confirms_durability() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("desktop.json");
+    let (settings, _) = DesktopSettings::open(&path).unwrap();
+    let controller = ExitController::default();
+    let submitted = json!({"theme": "light"});
+    let admission = controller.enter_save().await.unwrap();
+
+    // Search/write access allows replacement without permitting the final directory sync.
+    let original_permissions = fs::metadata(root.path()).unwrap().permissions();
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o300)).unwrap();
+    if fs::File::open(root.path()).is_ok() {
+        // Privileged runners may bypass these permission bits.
+        fs::set_permissions(root.path(), original_permissions).unwrap();
+        return;
+    }
+
+    let saved = settings.save(submitted.clone(), admission).await;
+    fs::set_permissions(root.path(), original_permissions).unwrap();
+
+    assert_eq!(saved.unwrap_err().code, ErrorCode::Storage);
+    let snapshot = serde_json::to_value(settings.load().await).unwrap();
+    assert_eq!(snapshot["value"]["theme"], "light");
+    assert_eq!(snapshot["persisted"], false);
+    let disk: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(disk["preferences"]["theme"], "light");
+
+    let admission = controller.enter_save().await.unwrap();
+    settings.save(submitted, admission).await.unwrap();
+    let snapshot = serde_json::to_value(settings.load().await).unwrap();
+    assert_eq!(snapshot["persisted"], true);
 }

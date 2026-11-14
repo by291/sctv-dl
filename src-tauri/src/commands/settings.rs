@@ -8,10 +8,10 @@ use crate::{
     settings::{DesktopSettings, SettingsSnapshot},
 };
 
+/// Returns the saved download location if it is still a directory.
 #[tauri::command]
-pub async fn get_download_directory<R: Runtime>(
-    _app: AppHandle<R>,
-    directories: State<'_, DesktopSettings<R>>,
+pub async fn get_download_directory(
+    directories: State<'_, DesktopSettings>,
 ) -> Result<Option<String>> {
     directories
         .directory()
@@ -19,11 +19,12 @@ pub async fn get_download_directory<R: Runtime>(
         .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
 }
 
+/// Prompts for a download directory and saves the chosen location.
 #[tauri::command]
 pub async fn choose_download_directory<R: Runtime>(
     lifecycle: State<'_, Arc<ExitController>>,
     app: AppHandle<R>,
-    directories: State<'_, DesktopSettings<R>>,
+    directories: State<'_, DesktopSettings>,
 ) -> Result<Option<String>> {
     let operation = Arc::new(lifecycle.enter().await?);
 
@@ -33,19 +34,17 @@ pub async fn choose_download_directory<R: Runtime>(
         .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
 }
 
+/// Returns public preferences, including their persistence state.
 #[tauri::command]
-pub async fn load_settings<R: Runtime>(
-    _app: AppHandle<R>,
-    settings: State<'_, DesktopSettings<R>>,
-) -> Result<SettingsSnapshot> {
+pub async fn load_settings(settings: State<'_, DesktopSettings>) -> Result<SettingsSnapshot> {
     Ok(settings.load().await)
 }
 
+/// Saves validated public preferences without exposing private settings.
 #[tauri::command]
-pub async fn save_settings<R: Runtime>(
-    _app: AppHandle<R>,
+pub async fn save_settings(
     lifecycle: State<'_, Arc<ExitController>>,
-    settings: State<'_, DesktopSettings<R>>,
+    settings: State<'_, DesktopSettings>,
     value: serde_json::Value,
 ) -> Result<()> {
     let operation = lifecycle.enter_save().await?;

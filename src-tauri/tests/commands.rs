@@ -15,7 +15,6 @@ use uuid::Uuid;
 
 fn app(state: AppState) -> tauri::App<tauri::test::MockRuntime> {
     mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::list_programmes,

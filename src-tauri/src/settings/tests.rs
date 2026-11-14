@@ -7,16 +7,17 @@ use super::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn waiting_for_a_settings_write_keeps_the_async_runtime_responsive() {
-    let settings = Arc::new(DesktopSettings::<tauri::test::MockRuntime>::new(Err(
-        AppError::new(ErrorCode::Storage, "Unavailable test store"),
+    let settings = Arc::new(DesktopSettings::unavailable(AppError::new(
+        ErrorCode::Storage,
+        "Unavailable test store",
     )));
-    let writes = settings.writes.clone();
+    let store = settings.store.clone();
     let timed_out = Arc::new(AtomicBool::new(false));
     let worker_timed_out = timed_out.clone();
     let (locked, ready) = std::sync::mpsc::channel();
     let (release, wait) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
-        let _write = writes.lock().unwrap();
+        let _locked_store = store.lock().unwrap();
         locked.send(()).unwrap();
         if wait.recv_timeout(Duration::from_secs(1)).is_err() {
             worker_timed_out.store(true, Ordering::SeqCst);
@@ -44,31 +45,19 @@ async fn waiting_for_a_settings_write_keeps_the_async_runtime_responsive() {
 #[tokio::test(flavor = "current_thread")]
 async fn dropping_directory_persistence_keeps_exit_waiting_for_the_owned_worker() {
     use crate::{downloads::DownloadManager, lifecycle::ExitController};
-    use tauri::test::{mock_builder, mock_context, noop_assets};
-    use tauri_plugin_store::StoreExt;
-
     let root = tempfile::tempdir().unwrap();
     let destination = root.path().join("downloads");
     std::fs::create_dir(&destination).unwrap();
-    let app = mock_builder()
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .build(mock_context(noop_assets()))
-        .unwrap();
     let store_path = root.path().join("desktop.json");
-    let store = app
-        .store_builder(&store_path)
-        .disable_auto_save()
-        .build()
-        .unwrap();
-    let settings = DesktopSettings::new(Ok(store));
+    let (settings, _) = DesktopSettings::open(&store_path).unwrap();
     let controller = Arc::new(ExitController::default());
     let downloads = DownloadManager::new(Default::default()).unwrap();
 
-    let writes = settings.writes.clone();
+    let store = settings.store.clone();
     let (locked, ready) = std::sync::mpsc::channel();
     let (release, wait) = std::sync::mpsc::channel();
     let writer = std::thread::spawn(move || {
-        let _write = writes.lock().unwrap();
+        let _locked_store = store.lock().unwrap();
         locked.send(()).unwrap();
         let _ = wait.recv_timeout(Duration::from_secs(5));
     });
@@ -101,7 +90,8 @@ async fn dropping_directory_persistence_keeps_exit_waiting_for_the_owned_worker(
     let disk: serde_json::Value = tokio::time::timeout(Duration::from_secs(1), async {
         loop {
             if let Ok(bytes) = tokio::fs::read(&store_path).await
-                && let Ok(value) = serde_json::from_slice(&bytes)
+                && let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes)
+                && value["downloadDirectory"].is_string()
             {
                 break value;
             }

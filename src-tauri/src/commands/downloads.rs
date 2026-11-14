@@ -16,7 +16,7 @@ use crate::{
 pub async fn start_downloads<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
-    directories: State<'_, DesktopSettings<R>>,
+    directories: State<'_, DesktopSettings>,
     downloads: State<'_, DownloadManager>,
     request: DownloadRequest,
     lifecycle: State<'_, Arc<ExitController>>,

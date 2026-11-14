@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_store::{Store, StoreExt};
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 
 use crate::{
@@ -11,46 +8,27 @@ use crate::{
     media::{MediaConfig, PlaybackService},
     programme_cache::ProgrammeCacheService,
     programmes::ProgrammeService,
-    settings::{self, DesktopSettings},
+    settings::DesktopSettings,
     state::{AppState, PlaybackState},
 };
-
-struct StorageIdentity<R: Runtime> {
-    store: Result<Arc<Store<R>>>,
-    identity: Result<String>,
-}
-
-fn initialize_storage_identity<R: Runtime>(app: &AppHandle<R>) -> StorageIdentity<R> {
-    let store = app
-        .store_builder("desktop.json")
-        .disable_auto_save()
-        .build()
-        .map_err(|cause| {
-            AppError::with_source(ErrorCode::Storage, "无法打开桌面应用数据", cause)
-                .reported("open desktop data")
-        });
-    let identity = store
-        .as_ref()
-        .map_err(Clone::clone)
-        .and_then(|store| settings::installation_id(store));
-
-    // A failed identity disables the shared Store rather than exposing a partial setup.
-    let store = match &identity {
-        Ok(_) => store,
-        Err(error) => Err(error.clone()),
-    };
-
-    StorageIdentity { store, identity }
-}
 
 /// Initializes identity before metadata access and preserves each service's degraded mode.
 /// Download startup failure aborts setup; playback failure remains an IPC-visible result.
 pub(crate) fn initialize_services<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
-    let StorageIdentity { store, identity } = initialize_storage_identity(app);
-    let programmes = identity.and_then(ProgrammeService::production);
+    let settings = app
+        .path()
+        .app_data_dir()
+        .map_err(|cause| {
+            AppError::with_source(ErrorCode::Storage, "无法打开桌面应用数据", cause)
+                .reported("resolve desktop data directory")
+        })
+        .and_then(|directory| DesktopSettings::open(&directory.join("desktop.json")));
+    let (settings, programmes) = match settings {
+        Ok((settings, identity)) => (settings, ProgrammeService::production(identity)),
+        Err(error) => (DesktopSettings::unavailable(error.clone()), Err(error)),
+    };
 
-    app.manage(DesktopSettings::new(store));
-
+    app.manage(settings);
     app.manage(initialize_history(app));
     app.manage(initialize_programme_cache(app));
     app.manage(initialize_downloads(app)?);

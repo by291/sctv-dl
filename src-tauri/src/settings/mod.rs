@@ -2,98 +2,136 @@ mod directory;
 mod preferences;
 mod store;
 
-pub use directory::{download_directory, save_download_directory};
-pub use preferences::{Preferences, SettingsSnapshot, load_preferences, save_preferences};
-pub use store::installation_id;
+pub use preferences::{Preferences, SettingsSnapshot};
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
+use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_store::Store;
 
 use crate::{
     error::{AppError, ErrorCode, Result},
     lifecycle::OperationGuard,
 };
 
-/// Owns the shared Store and serializes complete preference/directory transactions.
-pub struct DesktopSettings<R: Runtime> {
-    store: Result<Arc<Store<R>>>,
-    selection: Arc<tokio::sync::Mutex<()>>,
-    writes: Arc<std::sync::Mutex<()>>,
+use self::{
+    directory::{download_directory, save_download_directory},
+    preferences::{load_preferences, save_preferences},
+    store::SettingsStore,
+};
+
+const READ_PREFERENCES: StoreOperation = StoreOperation {
+    description: "load preferences",
+    worker_failure: "读取设置异常终止",
+};
+const WRITE_PREFERENCES: StoreOperation = StoreOperation {
+    description: "save preferences",
+    worker_failure: "保存设置异常终止",
+};
+const READ_DIRECTORY: StoreOperation = StoreOperation {
+    description: "read download directory",
+    worker_failure: "读取下载目录异常终止",
+};
+const WRITE_DIRECTORY: StoreOperation = StoreOperation {
+    description: "save download directory",
+    worker_failure: "保存下载目录异常终止",
+};
+
+#[derive(Clone, Copy)]
+struct StoreOperation {
+    description: &'static str,
+    worker_failure: &'static str,
 }
 
-impl<R: Runtime> DesktopSettings<R> {
-    pub fn new(store: Result<Arc<Store<R>>>) -> Self {
+enum DirectorySelection {
+    AlwaysPrompt,
+    PreferSaved,
+}
+
+/// Owns the desktop settings document and serializes full read/write transactions.
+pub struct DesktopSettings {
+    store: Arc<Mutex<Result<SettingsStore>>>,
+    selection: Arc<tokio::sync::Mutex<()>>,
+}
+
+impl DesktopSettings {
+    /// Opens the existing settings document and ensures one persisted installation identity.
+    pub fn open(path: &Path) -> Result<(Self, String)> {
+        let (store, identity) = SettingsStore::open(path)
+            .map_err(|error| error.reported("open desktop data and load installation identity"))?;
+
+        Ok((Self::new(Ok(store)), identity))
+    }
+
+    /// Serves defaults without allowing writes when the saved document cannot be opened.
+    pub fn unavailable(error: AppError) -> Self {
+        Self::new(Err(error))
+    }
+
+    fn new(store: Result<SettingsStore>) -> Self {
         Self {
-            store,
+            store: Arc::new(Mutex::new(store)),
             selection: Arc::default(),
-            writes: Arc::default(),
         }
     }
 
+    /// Loads public preferences or returns flagged defaults when storage is unavailable.
     pub async fn load(&self) -> SettingsSnapshot {
-        self.blocking((), "load preferences", "读取设置异常终止", |store| {
-            Ok(load_preferences(store))
+        self.blocking((), READ_PREFERENCES, |store| {
+            Ok(load_preferences(store.ok().map(|store| &*store)))
         })
         .await
-        .unwrap_or_else(|error| load_preferences::<R>(Err(error)))
+        .unwrap_or_else(|_| load_preferences(None))
     }
 
     /// Completes persistence before releasing admission, even if the caller disappears.
-    pub async fn save(&self, value: serde_json::Value, operation: OperationGuard) -> Result<()> {
-        self.blocking(
-            operation,
-            "save preferences",
-            "保存设置异常终止",
-            move |store| save_preferences(store?, value),
-        )
+    pub async fn save(&self, value: Value, operation: OperationGuard) -> Result<()> {
+        self.blocking(operation, WRITE_PREFERENCES, move |store| {
+            save_preferences(store?, value)
+        })
         .await
     }
 
+    /// Returns the validated saved directory, if the user has picked one.
     pub async fn directory(&self) -> Result<Option<PathBuf>> {
-        self.blocking(
-            (),
-            "read download directory",
-            "读取下载目录异常终止",
-            |store| download_directory(store?),
-        )
-        .await
+        self.read_directory(()).await
     }
 
-    pub async fn choose_download_directory(
+    /// Lets the user replace the active download directory.
+    pub async fn choose_download_directory<R: Runtime>(
         &self,
         app: &AppHandle<R>,
         operation: Arc<OperationGuard>,
     ) -> Result<Option<PathBuf>> {
-        self.select_directory(app, false, operation).await
+        self.select_directory(app, DirectorySelection::AlwaysPrompt, operation)
+            .await
     }
 
-    pub async fn ensure_download_directory(
+    /// Reuses the saved directory or prompts for one when none has been chosen.
+    pub async fn ensure_download_directory<R: Runtime>(
         &self,
         app: &AppHandle<R>,
         operation: Arc<OperationGuard>,
     ) -> Result<Option<PathBuf>> {
-        self.select_directory(app, true, operation).await
+        self.select_directory(app, DirectorySelection::PreferSaved, operation)
+            .await
     }
 
-    async fn select_directory(
+    async fn select_directory<R: Runtime>(
         &self,
         app: &AppHandle<R>,
-        only_if_missing: bool,
+        mode: DirectorySelection,
         operation: Arc<OperationGuard>,
     ) -> Result<Option<PathBuf>> {
         let selection = self.selection.clone().lock_owned().await;
-        if only_if_missing {
-            let saved = self
-                .blocking(
-                    operation.clone(),
-                    "read download directory",
-                    "读取下载目录异常终止",
-                    |store| download_directory(store?),
-                )
-                .await?;
+
+        // Serialize the read and picker together so queued requests can reuse the choice.
+        if matches!(mode, DirectorySelection::PreferSaved) {
+            let saved = self.read_directory(operation.clone()).await?;
             if saved.is_some() {
                 return Ok(saved);
             }
@@ -106,6 +144,11 @@ impl<R: Runtime> DesktopSettings<R> {
         self.persist_directory(path, operation, selection).await
     }
 
+    async fn read_directory(&self, guard: impl Send + 'static) -> Result<Option<PathBuf>> {
+        self.blocking(guard, READ_DIRECTORY, |store| download_directory(store?))
+            .await
+    }
+
     async fn persist_directory(
         &self,
         path: PathBuf,
@@ -114,73 +157,61 @@ impl<R: Runtime> DesktopSettings<R> {
     ) -> Result<Option<PathBuf>> {
         // The worker retains both exit admission and picker serialization until
         // persistence settles; dropping its awaiting command cannot release either.
-        self.blocking(
-            (operation, selection),
-            "save download directory",
-            "保存下载目录异常终止",
-            move |store| {
-                let store = store?;
-                save_download_directory(store, &path)?;
-                download_directory(store)
-            },
-        )
+        self.blocking((operation, selection), WRITE_DIRECTORY, move |store| {
+            let store = store?;
+            save_download_directory(store, &path)?;
+
+            download_directory(store)
+        })
         .await
     }
 
-    async fn blocking<T, G>(
+    async fn blocking<T: Send + 'static>(
         &self,
-        guard: G,
-        operation: &'static str,
-        failure_message: &'static str,
-        action: impl FnOnce(Result<&Store<R>>) -> Result<T> + Send + 'static,
-    ) -> Result<T>
-    where
-        T: Send + 'static,
-        G: Send + 'static,
-    {
+        guard: impl Send + 'static,
+        operation: StoreOperation,
+        action: impl FnOnce(Result<&mut SettingsStore>) -> Result<T> + Send + 'static,
+    ) -> Result<T> {
         let store = self.store.clone();
-        let writes = self.writes.clone();
+        let worker = tokio::task::spawn_blocking(move || {
+            let _admission = guard;
+            // Hold the document lock across the entire operation, including its disk commit.
+            let mut locked_store = store.lock().unwrap();
+            let document = locked_store
+                .as_mut()
+                .map_err(|error| error.clone().reported(operation.description));
 
-        tokio::task::spawn_blocking(move || {
-            let _operation = guard;
-            let _write = writes.lock().unwrap();
+            action(document).map_err(|error| error.reported(operation.description))
+        });
 
-            let store = store
-                .as_ref()
-                .map(|store| store.as_ref())
-                .map_err(|error| error.clone().reported(operation));
-
-            action(store).map_err(|error| error.reported(operation))
-        })
-        .await
-        .map_err(|error| {
-            AppError::with_source(ErrorCode::Storage, failure_message, error).reported(operation)
+        worker.await.map_err(|error| {
+            AppError::with_source(ErrorCode::Storage, operation.worker_failure, error)
+                .reported(operation.description)
         })?
     }
 }
 
 async fn pick_directory<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_title("选择视频下载文件夹")
-        .pick_folder(move |path| {
-            let _ = sender.send(path);
-        });
+    let picker = app.dialog().file().set_title("选择视频下载文件夹");
+    picker.pick_folder(move |path| {
+        let _ = sender.send(path);
+    });
 
-    receiver
-        .await
-        .map_err(|error| {
-            AppError::with_source(ErrorCode::Storage, "无法打开文件夹选择器", error)
-                .reported("choose download directory")
-        })?
-        .map(|path| {
-            path.into_path().map_err(|error| {
-                AppError::with_source(ErrorCode::Storage, "请选择本机文件夹", error)
-                    .reported("choose download directory")
-            })
-        })
-        .transpose()
+    let selected = receiver.await.map_err(|error| {
+        AppError::with_source(ErrorCode::Storage, "无法打开文件夹选择器", error)
+            .reported("choose download directory")
+    })?;
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+
+    let location = path.into_path().map_err(|error| {
+        AppError::with_source(ErrorCode::Storage, "请选择本机文件夹", error)
+            .reported("choose download directory")
+    })?;
+
+    Ok(Some(location))
 }
 
 #[cfg(test)]
