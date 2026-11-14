@@ -10,7 +10,7 @@ Product layouts, navigation and resource lifecycles are maintained in [Android C
 
 ## Setup and Build
 
-Open this `android/` directory in an Android Studio release that supports Android Gradle Plugin 9.4.1. Install JDK 21, the stable Android 17 SDK platform (`android-37.0`), and Build Tools 37.0.0. Android Studio manages your untracked `local.properties`; command-line builds may instead use `ANDROID_HOME`. The checked-in Gradle 9.8.1 wrapper verifies its distribution checksum.
+Open this `android/` directory in an Android Studio release that supports Android Gradle Plugin 9.5.1. Install JDK 21, the stable Android 17 SDK platform (`android-37.0`), and Build Tools 37.0.0. Android Studio manages your untracked `local.properties`; command-line builds may instead use `ANDROID_HOME`. The checked-in Gradle 9.8.2 wrapper verifies its distribution checksum.
 
 Run from the repository root on Windows:
 
