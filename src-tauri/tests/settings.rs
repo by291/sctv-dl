@@ -1,4 +1,7 @@
-use std::{fs, io::Read};
+use std::fs;
+
+#[cfg(unix)]
+use std::io::Read;
 
 use sctv_dl_desktop_lib::{
     error::{AppError, ErrorCode},
@@ -24,7 +27,7 @@ fn opening_existing_identity_does_not_rewrite_the_document() {
 }
 
 #[tokio::test]
-async fn saving_preferences_keeps_the_old_document_readable_by_existing_readers() {
+async fn saving_preferences_replaces_the_document_and_preserves_unrelated_values() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("desktop.json");
     let original = json!({
@@ -35,6 +38,8 @@ async fn saving_preferences_keeps_the_old_document_readable_by_existing_readers(
     let original_bytes = serde_json::to_vec(&original).unwrap();
     fs::write(&path, &original_bytes).unwrap();
     let (settings, _) = DesktopSettings::open(&path).unwrap();
+    // Unix keeps the old inode readable. Windows can deny replacement with an open reader.
+    #[cfg(unix)]
     let mut existing_reader = fs::File::open(&path).unwrap();
     let controller = ExitController::default();
 
@@ -44,9 +49,12 @@ async fn saving_preferences_keeps_the_old_document_readable_by_existing_readers(
         .await
         .unwrap();
 
-    let mut previous_bytes = Vec::new();
-    existing_reader.read_to_end(&mut previous_bytes).unwrap();
-    assert_eq!(previous_bytes, original_bytes);
+    #[cfg(unix)]
+    {
+        let mut previous_bytes = Vec::new();
+        existing_reader.read_to_end(&mut previous_bytes).unwrap();
+        assert_eq!(previous_bytes, original_bytes);
+    }
     let disk: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(disk["preferences"]["theme"], "light");
     assert_eq!(disk["futureField"], json!(["preserve"]));
