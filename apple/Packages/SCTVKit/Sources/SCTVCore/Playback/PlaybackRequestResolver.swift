@@ -45,13 +45,15 @@ public struct PlaybackRequestResolver: Sendable {
                 HistoryRules.resumePosition(positionMs: $0.positionMs, completed: $0.completed)
             } ?? 0
         return PlaybackRequest(
-            content: reference, title: content.title, sources: sources, quality: selected.quality,
-            resumeMilliseconds: resume, programmeName: programme.name,
-            broadcastDate: broadcast.date, cover: content.cover)
+            programme: .init(
+                content: reference, title: content.title, programmeName: programme.name,
+                broadcastDate: broadcast.date, cover: content.cover),
+            source: .online(sources, quality: selected.quality),
+            start: .init(positionMilliseconds: resume))
     }
 
     public enum PreparationError: LocalizedError, Equatable {
         case removed
-        public var errorDescription: String? { "该节目已不可用，请刷新后重试。" }
+        public var errorDescription: String? { "The programme is no longer available." }
     }
 }

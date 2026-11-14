@@ -14,15 +14,17 @@ public struct MediaResourceReader {
         source: MediaSource, offset: Int64, length: Int?,
         metadata: (Int64, String) -> Void, receive: (Data) -> Void
     ) async throws {
-        guard offset >= 0, length == nil || length! >= 0 else {
+        guard offset >= 0, (length ?? 0) >= 0 else {
             throw MediaTransportError.invalidRange
         }
+
         let first = try await transport.read(
             source: source, range: ByteRange(offset: offset, length: 1))
         try Task.checkCancellation()
         guard first.data.count == 1, first.contentLength > offset else {
             throw MediaTransportError.invalidResponse
         }
+
         metadata(first.contentLength, first.mediaType)
         if length == 0 { return }
 

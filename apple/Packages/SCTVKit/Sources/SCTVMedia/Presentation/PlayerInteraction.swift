@@ -2,15 +2,35 @@ import Foundation
 import Observation
 
 enum PlayerInteraction {
+    private static let maximumSeekSpanMilliseconds = 120_000.0
+
     static func seek(position: Int64, duration: Int64, delta: Double, width: Double) -> Int64 {
         guard width > 0, delta.isFinite, duration > 0 else { return position }
-        let span = min(Double(duration), 120_000)
+        let span = min(Double(duration), maximumSeekSpanMilliseconds)
         return Int64(min(Double(duration), max(0, Double(position) + delta / width * span)))
     }
 
     static func level(initial: Double, delta: Double, height: Double) -> Double {
         guard height > 0, delta.isFinite else { return initial }
         return min(1, max(0, initial - delta / height))
+    }
+}
+
+/// Formats elapsed or total playback time without depending on the surrounding controls.
+public enum PlaybackTimeText {
+    /// Formats a nonnegative time, with optional padding for compact transport counters.
+    public static func format(_ milliseconds: Int64, padsMinutes: Bool = false) -> String {
+        let secondsPerMinute: Int64 = 60
+        let secondsPerHour = secondsPerMinute * secondsPerMinute
+        let seconds = max(0, milliseconds / 1_000)
+        if seconds >= secondsPerHour {
+            return String(
+                format: "%lld:%02lld:%02lld", seconds / secondsPerHour,
+                seconds / secondsPerMinute % secondsPerMinute, seconds % secondsPerMinute)
+        }
+
+        let format = padsMinutes ? "%02lld:%02lld" : "%lld:%02lld"
+        return String(format: format, seconds / secondsPerMinute, seconds % secondsPerMinute)
     }
 }
 
@@ -64,8 +84,12 @@ public final class PlayerOverlayState {
         activity &+= 1
     }
 
-    func setOptionsPresented(_ presented: Bool, id: String) {
-        if presented { presentedOptions.insert(id) } else { presentedOptions.remove(id) }
+    func setOptionsPresented(isPresented: Bool, id: String) {
+        if isPresented {
+            presentedOptions.insert(id)
+        } else {
+            presentedOptions.remove(id)
+        }
         reveal()
     }
 

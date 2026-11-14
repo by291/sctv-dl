@@ -24,7 +24,8 @@ struct SCTVApp: App {
                     let session = dependencies.player
                     let presentation = session.presentationID
                     PlayerSessionView(
-                        session: session, download: dependencies.downloadCurrentProgramme
+                        session: session, presentationID: presentation,
+                        download: dependencies.downloadCurrentProgramme
                     )
                     .frame(minWidth: 640, minHeight: 480)
                     .onDisappear {

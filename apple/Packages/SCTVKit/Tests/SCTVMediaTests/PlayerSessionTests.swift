@@ -76,7 +76,7 @@ struct PlayerSessionTests {
         let coordinator = try coordinator()
         for _ in 0..<5 {
             _ = try await coordinator.open(request())
-            weak var item = coordinator.player.currentItem
+            weak let item = coordinator.player.currentItem
             #expect(item != nil)
             coordinator.beginDismissal()
             await coordinator.finishDismissal()
@@ -116,13 +116,40 @@ struct PlayerSessionTests {
     @Test(.timeLimit(.minutes(1))) func pipRetainsSessionUntilFinished() async throws {
         let coordinator = try coordinator()
         let id = try await coordinator.open(request())
-        coordinator.setPictureInPictureActive(true)
+        let owner = UUID()
+        coordinator.beginPictureInPicture(owner: owner)
         coordinator.beginDismissal()
         await coordinator.finishDismissal()
         #expect(coordinator.capture()?.sessionID == id)
-        coordinator.setPictureInPictureActive(false)
+        coordinator.endPictureInPicture(owner: owner)
         await coordinator.finishDismissal()
         #expect(coordinator.capture() == nil)
+    }
+
+    @Test func oldPictureInPictureCallbacksCannotStopTheReplacement() async throws {
+        let coordinator = try coordinator()
+        let firstPresentation = UUID()
+        let firstSurface = UUID()
+        coordinator.setPresentation(firstPresentation)
+        let first = try await coordinator.open(request())
+        coordinator.beginPictureInPicture(owner: firstSurface, presentationID: firstPresentation)
+
+        let replacementPresentation = UUID()
+        let replacementSurface = UUID()
+        coordinator.setPresentation(replacementPresentation)
+        let replacement = try await coordinator.open(request())
+        coordinator.beginPictureInPicture(
+            owner: replacementSurface, presentationID: replacementPresentation)
+
+        coordinator.beginPictureInPicture(owner: firstSurface, presentationID: firstPresentation)
+        #expect(!coordinator.endPictureInPicture(owner: firstSurface))
+        coordinator.beginDismissal()
+        await coordinator.finishDismissal(of: first)
+
+        #expect(coordinator.capture()?.sessionID == replacement)
+        #expect(coordinator.endPictureInPicture(owner: replacementSurface))
+        await coordinator.finishDismissal()
+        #expect(coordinator.state == .idle)
     }
 
     @Test(.timeLimit(.minutes(1))) func nativeControlsUpdatePlayIntent() async throws {
@@ -144,10 +171,11 @@ struct PlayerSessionTests {
         let coordinator = try coordinator()
         _ = try await coordinator.open(request())
         coordinator.setPlaybackIntent(.playing)
-        coordinator.setPictureInPictureActive(true)
+        let owner = UUID()
+        coordinator.beginPictureInPicture(owner: owner)
         coordinator.pauseForBackground()
         #expect(coordinator.player.rate > 0)
-        coordinator.setPictureInPictureActive(false)
+        coordinator.endPictureInPicture(owner: owner)
         coordinator.pauseForBackground()
         #expect(coordinator.player.rate == 0)
         coordinator.beginDismissal()

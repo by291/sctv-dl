@@ -7,6 +7,7 @@ private enum WorkspaceSection: String, CaseIterable, Identifiable {
     case catalogue = "栏目"
     case library = "资料库"
     case downloads = "下载"
+
     var id: String { rawValue }
 
     var symbol: String {
@@ -16,6 +17,18 @@ private enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .downloads: "arrow.down.circle"
         }
     }
+}
+
+private enum PlaybackOrigin: Equatable {
+    case catalogue([WorkspaceRoute])
+    case library([WorkspaceRoute])
+    case downloads([PlayerPresentation])
+}
+
+private struct PendingPlayback {
+    let requestID: UUID
+    let origin: PlaybackOrigin
+    let task: Task<Void, Never>
 }
 
 struct WorkspaceView: View {
@@ -41,6 +54,7 @@ struct WorkspaceView: View {
     @State private var downloadsPath: [PlayerPresentation] = []
     @State private var showingSettings = false
     @State private var message: String?
+    @State private var pendingPlayback: PendingPlayback?
 
     @Environment(\.colorScheme) private var systemScheme
     @Environment(\.openWindow) private var openWindow
@@ -128,7 +142,7 @@ struct WorkspaceView: View {
                 TabView(
                     selection: Binding(
                         get: { WorkspaceSection(rawValue: selectedTabName) ?? .catalogue },
-                        set: { selectedTabName = $0.rawValue })
+                        set: selectSection)
                 ) {
                     Tab("栏目", systemImage: "square.grid.2x2", value: WorkspaceSection.catalogue) {
                         catalogueNavigation
@@ -151,18 +165,23 @@ struct WorkspaceView: View {
             }
         }
         .task { await loadWorkspace() }
-        .onChange(of: selection) { _, value in if let value { selectedTabName = value.rawValue } }
+        .onDisappear { cancelPendingPlayback() }
+        .onChange(of: selection) { _, value in
+            if let value { selectedTabName = value.rawValue }
+            cancelPlaybackIfOriginChanged()
+        }
         .onChange(of: catalogue.hasAcceptedSnapshot) { _, accepted in
             if accepted { restoreNavigationIfNeeded() }
         }
         .onChange(of: cataloguePath) { _, value in
-            savedCataloguePath =
-                (try? JSONEncoder().encode(value.compactMap(\.programmeID))) ?? Data()
+            saveArchivePath(value, to: $savedCataloguePath)
+            cancelPlaybackIfOriginChanged()
         }
         .onChange(of: libraryPath) { _, value in
-            savedLibraryPath =
-                (try? JSONEncoder().encode(value.compactMap(\.programmeID))) ?? Data()
+            saveArchivePath(value, to: $savedLibraryPath)
+            cancelPlaybackIfOriginChanged()
         }
+        .onChange(of: downloadsPath) { _, _ in cancelPlaybackIfOriginChanged() }
         .onChange(of: catalogue.alphabetical) { _, value in savedAlphabetical = value }
         .onChange(of: phase) { _, value in
             if value != .active { Task { await dependencies.settings.flush() } }
@@ -188,6 +207,25 @@ struct WorkspaceView: View {
         #endif
     }
 
+    private func selectSection(_ section: WorkspaceSection) {
+        selectedTabName = section.rawValue
+        cancelPlaybackIfOriginChanged()
+    }
+
+    private var activeOrigin: PlaybackOrigin {
+        #if os(macOS)
+            let section = selection ?? .catalogue
+        #else
+            let section = WorkspaceSection(rawValue: selectedTabName) ?? .catalogue
+        #endif
+
+        switch section {
+        case .catalogue: return .catalogue(cataloguePath)
+        case .library: return .library(libraryPath)
+        case .downloads: return .downloads(downloadsPath)
+        }
+    }
+
     private func loadWorkspace() async {
         catalogue.alphabetical = savedAlphabetical
         selection = WorkspaceSection(rawValue: selectedTabName) ?? .catalogue
@@ -211,7 +249,7 @@ struct WorkspaceView: View {
     }
 
     private var catalogueNavigation: some View {
-        NavigationStack(path: $cataloguePath) {
+        NavigationStack(path: observingNavigation($cataloguePath)) {
             CatalogueView(model: catalogue, settings: presentSettings) {
                 cataloguePath.append(.archive($0))
             }
@@ -222,7 +260,7 @@ struct WorkspaceView: View {
     }
 
     private var libraryNavigation: some View {
-        NavigationStack(path: $libraryPath) {
+        NavigationStack(path: observingNavigation($libraryPath)) {
             LibraryView(
                 model: library, catalogue: catalogue,
                 play: { play(.history($0), section: .library) },
@@ -234,7 +272,7 @@ struct WorkspaceView: View {
     }
 
     private var downloadsNavigation: some View {
-        NavigationStack(path: $downloadsPath) {
+        NavigationStack(path: observingNavigation($downloadsPath)) {
             DownloadsView(
                 model: downloads,
                 play: { play(.download($0), section: .downloads) },
@@ -246,18 +284,60 @@ struct WorkspaceView: View {
         }
     }
 
+    private func observingNavigation<Route>(_ path: Binding<[Route]>) -> Binding<[Route]> {
+        Binding(
+            get: { path.wrappedValue },
+            set: {
+                path.wrappedValue = $0
+                cancelPlaybackIfOriginChanged()
+            })
+    }
+
     private func play(_ selection: PlaybackSelection, section: WorkspaceSection) {
-        // Capture the request token at tap time so delayed preparation cannot replace a newer tap.
+        cancelPendingPlayback()
         let requestID = player.reservePlaybackRequest()
-        Task {
+        let origin = activeOrigin
+
+        // The shared token fences competing taps; the origin fences a pop or tab change.
+        let task = Task {
+            defer {
+                if pendingPlayback?.requestID == requestID { pendingPlayback = nil }
+            }
+
             do {
                 let request = try await actions.playbackRequest(for: selection)
+                guard ownsPlaybackPreparation(requestID) else { return }
+
+                // Navigation does not own the request after it hands off the prepared player.
+                pendingPlayback = nil
                 await present(request, requestID: requestID, section: section)
             } catch {
-                if player.isCurrentRequest(requestID) { message = error.localizedDescription }
+                guard ownsPlaybackPreparation(requestID) else { return }
+
+                pendingPlayback = nil
+                message = actions.playbackFailureMessage(error)
                 await actions.recoverAfterPlaybackFailure(for: selection)
             }
         }
+        pendingPlayback = PendingPlayback(requestID: requestID, origin: origin, task: task)
+    }
+
+    private func ownsPlaybackPreparation(_ requestID: UUID) -> Bool {
+        guard let pendingPlayback else { return false }
+
+        return !Task.isCancelled && pendingPlayback.requestID == requestID
+            && pendingPlayback.origin == activeOrigin && player.isCurrentRequest(requestID)
+    }
+
+    private func cancelPlaybackIfOriginChanged() {
+        guard let pendingPlayback, pendingPlayback.origin != activeOrigin else { return }
+
+        cancelPendingPlayback()
+    }
+
+    private func cancelPendingPlayback() {
+        pendingPlayback?.task.cancel()
+        pendingPlayback = nil
     }
 
     private func archive(_ programme: Programme, section: WorkspaceSection) -> some View {
@@ -316,20 +396,31 @@ struct WorkspaceView: View {
     }
 
     private func playerPage(_ presentation: PlayerPresentation) -> some View {
-        PlayerSessionView(session: player, download: dependencies.downloadCurrentProgramme)
-            #if os(iOS)
-                .toolbar(.hidden, for: .tabBar)
-            #endif
-            .onDisappear {
-                // Fullscreen layout changes do not end the playback route.
-                // A committed navigation pop releases only the presentation that left.
-                let remains =
-                    cataloguePath.contains(.player(presentation))
-                    || libraryPath.contains(.player(presentation))
-                    || downloadsPath.contains(presentation)
-                guard !remains else { return }
-                Task { await player.close(presentationID: presentation.id) }
-            }
+        PlayerSessionView(
+            session: player, presentationID: presentation.id,
+            download: dependencies.downloadCurrentProgramme
+        )
+        #if os(iOS)
+            .toolbar(.hidden, for: .tabBar)
+        #endif
+        .onDisappear {
+            // Fullscreen layout changes do not end the playback route.
+            // A committed navigation pop releases only the presentation that left.
+            let remains =
+                cataloguePath.contains(.player(presentation))
+                || libraryPath.contains(.player(presentation))
+                || downloadsPath.contains(presentation)
+            guard !remains else { return }
+            Task { await player.close(presentationID: presentation.id) }
+        }
+    }
+
+    private func saveArchivePath(_ path: [WorkspaceRoute], to storage: Binding<Data>) {
+        // Archive IDs survive launches. A player route owns a live session and must be reopened.
+        let programmeIDs = path.compactMap(\.programmeID)
+        guard let encoded = try? JSONEncoder().encode(programmeIDs) else { return }
+
+        storage.wrappedValue = encoded
     }
 
     private func restore(_ data: Data) -> [WorkspaceRoute] {

@@ -22,16 +22,16 @@
         static func dismantleNSView(_ view: AVRoutePickerView, coordinator: Delegate) {
             view.delegate = nil
             view.player = nil
-            coordinator.overlay.setOptionsPresented(false, id: "airplay")
+            coordinator.overlay.setOptionsPresented(isPresented: false, id: "airplay")
         }
         @MainActor final class Delegate: NSObject, @preconcurrency AVRoutePickerViewDelegate {
             let overlay: PlayerOverlayState
             init(overlay: PlayerOverlayState) { self.overlay = overlay }
             func routePickerViewWillBeginPresentingRoutes(_ routePickerView: AVRoutePickerView) {
-                overlay.setOptionsPresented(true, id: "airplay")
+                overlay.setOptionsPresented(isPresented: true, id: "airplay")
             }
             func routePickerViewDidEndPresentingRoutes(_ routePickerView: AVRoutePickerView) {
-                overlay.setOptionsPresented(false, id: "airplay")
+                overlay.setOptionsPresented(isPresented: false, id: "airplay")
             }
         }
     }

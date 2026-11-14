@@ -9,19 +9,23 @@ public final class PlaybackCoordinator: PlaybackService {
         case idle, preparing, ready
         case failed(String)
     }
+
     public let player = AVPlayer()
     let seekInteraction = PlayerSeekInteraction()
     public private(set) var state = State.idle
 
     private let transport: any MediaRangeTransport
+
     private var request: PlaybackRequest?
     private var sessionID: UUID?
+    private var presentationID: UUID?
     private var sourceGeneration: UInt64 = 0
     private var loader: AssetResourceLoader?
     private var observation: PlaybackObservation?
     #if os(iOS)
         private var audioSession: IOSPlaybackAudioSession?
     #endif
+
     private var quality = VideoQuality.standard
     private var speed = 1.0
     private var temporarySpeedToken: UUID?
@@ -29,7 +33,9 @@ public final class PlaybackCoordinator: PlaybackService {
     private var settled = false
     private var ended = false
     private var dismissing = false
-    private var pictureInPicture = false
+    private var pictureInPictureOwner: UUID?
+    private var pictureInPicture: Bool { pictureInPictureOwner != nil }
+
     private var lastSnapshot: PlaybackSnapshot?
     private var subscribers: [UUID: AsyncStream<PlaybackSnapshot>.Continuation] = [:]
 
@@ -55,16 +61,16 @@ public final class PlaybackCoordinator: PlaybackService {
                 }
             }
         #endif
-        if self.request?.content == request.content, let sessionID, !dismissing { return sessionID }
         disposeItem()
         self.request = request
         let id = UUID()
         sessionID = id
         lastSnapshot = nil
         dismissing = false
-        pictureInPicture = false
+        pictureInPictureOwner = nil
         intent = .paused
         speed = request.speed
+
         try await replaceSource(request.quality, positionMs: request.resumeMilliseconds)
         return id
     }
@@ -138,8 +144,16 @@ public final class PlaybackCoordinator: PlaybackService {
         try await replaceSource(quality, positionMs: position)
     }
 
-    public func retry() async throws {
-        try await replaceSource(quality, positionMs: lastSnapshot?.positionMs ?? 0)
+    @discardableResult
+    public func retry() async throws -> UUID {
+        guard let request, let sessionID else {
+            throw QualityResolver.ResolutionError.unavailable
+        }
+
+        // The initial native open can fail before a settled snapshot exists.
+        let position = lastSnapshot?.positionMs ?? request.resumeMilliseconds
+        try await replaceSource(quality, positionMs: position)
+        return sessionID
     }
 
     public func capture() -> PlaybackSnapshot? {
@@ -169,7 +183,28 @@ public final class PlaybackCoordinator: PlaybackService {
 
     public func cancelDismissal() { dismissing = false }
 
-    public func setPictureInPictureActive(_ active: Bool) { pictureInPicture = active }
+    func setPresentation(_ presentationID: UUID) {
+        self.presentationID = presentationID
+        pictureInPictureOwner = nil
+    }
+
+    func ownsPresentation(_ presentationID: UUID?) -> Bool {
+        self.presentationID == presentationID
+    }
+
+    /// Gives the current native surface that started PiP ownership of its retention.
+    func beginPictureInPicture(owner: UUID, presentationID: UUID? = nil) {
+        guard ownsPresentation(presentationID), sessionID != nil, !dismissing else { return }
+        pictureInPictureOwner = owner
+    }
+
+    /// Releases PiP only when the calling surface still owns it.
+    @discardableResult
+    func endPictureInPicture(owner: UUID) -> Bool {
+        guard pictureInPictureOwner == owner else { return false }
+        pictureInPictureOwner = nil
+        return true
+    }
 
     public func pauseForInterruption() {
         temporarySpeedToken = nil
@@ -200,6 +235,14 @@ public final class PlaybackCoordinator: PlaybackService {
             _ = try? await audioDisposal?.value
         #endif
     }
+
+    func finishDismissal(of session: UUID?) async {
+        // A surface can finish after the original session has already been replaced.
+        guard let session, sessionID == session else { return }
+        await finishDismissal()
+    }
+
+    var currentSessionID: UUID? { sessionID }
 
     public func snapshots() -> AsyncStream<PlaybackSnapshot> {
         let id = UUID()

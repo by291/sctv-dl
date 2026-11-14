@@ -10,7 +10,7 @@ final class FixtureURLProtocol: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let name = request.url!.lastPathComponent
-        Self.started.withLock { $0.insert(name) }
+        _ = Self.started.withLock { $0.insert(name) }
         let range = request.value(forHTTPHeaderField: "Range") ?? "bytes=0-3"
         let offset = Int(range.dropFirst(6).split(separator: "-")[0])!
         let status = name == "ignored.mp4" ? 200 : 206
@@ -28,6 +28,6 @@ final class FixtureURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {
-        Self.stopped.withLock { $0.insert(request.url!.lastPathComponent) }
+        _ = Self.stopped.withLock { $0.insert(request.url!.lastPathComponent) }
     }
 }

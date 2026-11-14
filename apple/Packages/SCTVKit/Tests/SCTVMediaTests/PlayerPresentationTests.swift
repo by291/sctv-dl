@@ -47,6 +47,38 @@ import Testing
         await session.close(presentationID: second)
     }
 
+    @Test func retryAfterInitialFailureResumesAndRecordsProgress() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+            UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let video = folder.appendingPathComponent("pending.mp4")
+        let fixture = try #require(
+            Bundle.module.url(forResource: "probe", withExtension: "mp4", subdirectory: "Fixtures"))
+        let history = PlaybackHistoryTests.Repository()
+        let session = PlayerSession(history: history)
+        let presentation = try #require(
+            session.beginPresentation(forRequest: session.reservePlaybackRequest()))
+        let request = PlaybackRequest(
+            content: try ContentRef(programmeID: "1", dateID: "2", contentID: "3"),
+            title: "Recovered video", sources: [], quality: .standard,
+            resumeMilliseconds: 3000, localFile: try LocalFileLease(url: video))
+        await session.open(request, forPresentation: presentation)
+        guard case .failed = session.playback.state else {
+            Issue.record("Opening without a file should fail")
+            return
+        }
+
+        try FileManager.default.copyItem(at: fixture, to: video)
+        await session.retry(forPresentation: presentation)
+        let position = try #require(session.playback.capture()?.positionMs)
+        #expect(abs(position - 3000) < 100)
+        await session.close(presentationID: presentation)
+
+        let checkpoint = try #require(await history.samples.last)
+        #expect(abs(checkpoint.positionMs - 3000) < 100)
+    }
+
     @Test func slowEarlierRequestCannotReplaceNewerPlayback() async throws {
         let session = PlayerSession(history: PlaybackHistoryTests.Repository())
         let slow = session.reservePlaybackRequest()

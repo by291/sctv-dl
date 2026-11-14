@@ -7,6 +7,8 @@ public struct PlayerControlsView: View {
     let overlay: PlayerOverlayState
     let fullscreen: Bool
     let back: () -> Void
+    let presentationID: UUID
+
     @State private var scrubPosition = 0.0
     @State private var scrubbing = false
     @State private var seekOwner = UUID()
@@ -14,23 +16,32 @@ public struct PlayerControlsView: View {
 
     public init(
         session: PlayerSession, snapshot: PlaybackSnapshot?, overlay: PlayerOverlayState,
-        fullscreen: Bool, back: @escaping () -> Void
+        fullscreen: Bool, presentationID: UUID? = nil, back: @escaping () -> Void
     ) {
         self.session = session
         self.snapshot = snapshot
         self.overlay = overlay
         self.fullscreen = fullscreen
+        self.presentationID = presentationID ?? session.presentationID
         self.back = back
     }
 
     private var playing: Bool { snapshot?.playIntent == .playing }
+
     private var position: Int64 {
         overlay.previewMilliseconds
             ?? (scrubbing
                 ? Int64(scrubPosition)
                 : session.playback.capture()?.positionMs ?? snapshot?.positionMs ?? 0)
     }
+
     private var duration: Int64 { max(1, snapshot?.durationMs ?? 1) }
+
+    private var accessibilityPosition: String {
+        let elapsed = PlaybackTimeText.format(position)
+        let total = PlaybackTimeText.format(duration)
+        return "\(elapsed)，共 \(total)"
+    }
 
     public var body: some View {
         ZStack {
@@ -45,7 +56,11 @@ public struct PlayerControlsView: View {
                         control(
                             fullscreen ? "退出全屏" : "返回", symbol: "chevron.left", id: "player-back"
                         ) {
-                            if fullscreen { overlay.requestFullscreen(false) } else { back() }
+                            if fullscreen {
+                                overlay.requestFullscreen(false)
+                            } else {
+                                back()
+                            }
                         }
                         Spacer(minLength: 0)
                         if !fullscreen { options }
@@ -57,32 +72,20 @@ public struct PlayerControlsView: View {
                     }
                     Spacer(minLength: 0)
                     HStack(spacing: 8) {
-                        Text(timestamp(position)).font(.caption.monospacedDigit())
+                        Text(PlaybackTimeText.format(position)).font(.caption.monospacedDigit())
                         Slider(
                             value: Binding(
                                 get: { scrubbing ? scrubPosition : Double(position) },
                                 set: { scrubPosition = $0 }), in: 0...Double(duration)
-                        ) { editing in
-                            if editing {
-                                scrubPosition = Double(snapshot?.positionMs ?? 0)
-                                scrubbing = true
-                                overlay.setGestureInteraction(active: true)
-                                overlay.reveal()
-                            } else {
-                                let target = Int64(scrubPosition)
-                                scrubbing = false
-                                overlay.setGestureInteraction(active: false)
-                                seek(to: target)
-                            }
-                        }
+                        ) { updateScrubbing(isEditing: $0) }
                         .disabled(
                             snapshot?.durationMs == nil || session.playback.state != .ready
                                 || (!scrubbing && overlay.previewMilliseconds != nil)
                         )
                         .accessibilityLabel("播放进度")
-                        .accessibilityValue("\(timestamp(position))，共 \(timestamp(duration))")
+                        .accessibilityValue(accessibilityPosition)
                         .accessibilityIdentifier("player-progress")
-                        Text(timestamp(duration)).font(.caption.monospacedDigit())
+                        Text(PlaybackTimeText.format(duration)).font(.caption.monospacedDigit())
                         if fullscreen { options }
                         control(
                             fullscreen ? "退出全屏" : "全屏",
@@ -148,8 +151,23 @@ public struct PlayerControlsView: View {
         session.playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
             try await session.playback.seek(to: target)
         } onFailure: { error in
-            session.warning = error.localizedDescription
+            session.reportWarning(error.localizedDescription, forPresentation: presentationID)
         }
+    }
+
+    private func updateScrubbing(isEditing: Bool) {
+        if isEditing {
+            scrubPosition = Double(position)
+            scrubbing = true
+            overlay.setGestureInteraction(active: true)
+            overlay.reveal()
+            return
+        }
+
+        let target = Int64(scrubPosition)
+        scrubbing = false
+        overlay.setGestureInteraction(active: false)
+        seek(to: target)
     }
 
     private var options: some View {
@@ -157,7 +175,9 @@ public struct PlayerControlsView: View {
             PlayerSpeedMenu(
                 playback: session.playback, speed: snapshot?.speed ?? 1, overlay: overlay)
             if let details = session.details, !details.isLocal {
-                PlayerQualityMenu(session: session, quality: snapshot?.quality, overlay: overlay)
+                PlayerQualityMenu(
+                    session: session, quality: snapshot?.quality, overlay: overlay,
+                    presentationID: presentationID)
             }
         }
         .font(.subheadline.weight(.semibold))
@@ -170,15 +190,6 @@ public struct PlayerControlsView: View {
             Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }.accessibilityLabel(title).accessibilityIdentifier(id)
-    }
-
-    private func timestamp(_ milliseconds: Int64) -> String {
-        let seconds = max(0, milliseconds / 1000)
-        if seconds >= 3600 {
-            return String(
-                format: "%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60)
-        }
-        return String(format: "%lld:%02lld", seconds / 60, seconds % 60)
     }
 }
 
@@ -205,12 +216,18 @@ public struct PlayerQualityMenu: View {
     let session: PlayerSession
     let quality: VideoQuality?
     let overlay: PlayerOverlayState?
-    public init(session: PlayerSession, quality: VideoQuality?, overlay: PlayerOverlayState? = nil)
-    {
+    let presentationID: UUID
+
+    public init(
+        session: PlayerSession, quality: VideoQuality?, overlay: PlayerOverlayState? = nil,
+        presentationID: UUID? = nil
+    ) {
         self.session = session
         self.quality = quality
         self.overlay = overlay
+        self.presentationID = presentationID ?? session.presentationID
     }
+
     public var body: some View {
         PlayerOptionsPopover(
             title: "清晰度", value: name(quality ?? .standard), identifier: "player-quality",
@@ -219,9 +236,7 @@ public struct PlayerQualityMenu: View {
         ) { next in
             guard quality != next else { return }
             Task {
-                do { try await session.playback.switchQuality(next) } catch {
-                    session.warning = error.localizedDescription
-                }
+                await session.switchQuality(next, forPresentation: presentationID)
             }
         }
         .accessibilityValue(name(quality ?? .standard))
@@ -274,10 +289,10 @@ private struct PlayerOptionsPopover<Option: Hashable>: View {
             .presentationCompactAdaptation(.popover)
         }
         .onChange(of: presented) { _, value in
-            overlay?.setOptionsPresented(value, id: identifier)
+            overlay?.setOptionsPresented(isPresented: value, id: identifier)
         }
         .onDisappear {
-            overlay?.setOptionsPresented(false, id: identifier)
+            overlay?.setOptionsPresented(isPresented: false, id: identifier)
         }
     }
 }

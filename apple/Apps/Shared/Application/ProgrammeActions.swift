@@ -1,4 +1,6 @@
 import SCTVCore
+import SCTVDownloads
+import SCTVFeatures
 import SCTVMedia
 
 /// Inputs captured by a workspace tap, before asynchronous request preparation begins.
@@ -47,10 +49,29 @@ struct ProgrammeActions {
         let result = await submit(prepared.prepared)
 
         let failed = prepared.failures.count + result.failures.count
-        let fallback = prepared.prepared.filter { $0.source.quality != quality }.count
+        let accepted = Set(result.acceptedContent)
+        let fallback = Set(
+            prepared.prepared.compactMap { item -> ContentRef? in
+                guard item.source.quality != quality, accepted.contains(item.content) else {
+                    return nil
+                }
+                return item.content
+            }
+        ).count
         return "已添加 \(result.accepted.count) 个下载"
             + (fallback > 0 ? "，其中 \(fallback) 项使用可用画质" : "")
             + (failed > 0 ? "；\(failed) 项未添加，请检查任务列表或稍后重试。" : "。")
+    }
+
+    func playbackFailureMessage(_ error: any Error) -> String {
+        if let fileError = error as? DownloadFileError {
+            return DownloadIssueMessage.text(for: fileError.issueCode)
+        }
+        if error as? PlaybackRequestResolver.PreparationError == .removed {
+            return "该节目已不可用，请刷新后重试。"
+        }
+
+        return error.localizedDescription
     }
 
     /// Submits already prepared sources using the current destination and cellular policy.
@@ -74,8 +95,10 @@ struct ProgrammeActions {
             } ?? 0
 
         return PlaybackRequest(
-            content: task.content, title: task.title, sources: [], quality: task.quality,
-            resumeMilliseconds: resume, programmeName: task.programmeName,
-            broadcastDate: task.broadcastDate, cover: task.cover, localFile: lease)
+            programme: .init(
+                content: task.content, title: task.title, programmeName: task.programmeName,
+                broadcastDate: task.broadcastDate, cover: task.cover),
+            source: .local(lease, quality: task.quality),
+            start: .init(positionMilliseconds: resume))
     }
 }

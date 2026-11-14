@@ -85,7 +85,7 @@ struct PlayerSeekInteractionTests {
         interaction.cancel(owner: owner)
         #expect(overlay.previewMilliseconds == nil)
         let next = overlay.beginSeekPreview(at: 5000)
-        overlay.setOptionsPresented(true, id: "speed")
+        overlay.setOptionsPresented(isPresented: true, id: "speed")
         gate.release()
         await task.value
         #expect(overlay.previewMilliseconds == 5000)

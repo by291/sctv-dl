@@ -59,8 +59,9 @@ struct MediaProbeView: View {
                 url: URL(string: "https://fscgc.scgchc.com/probe.mp4")!, quality: .standard)
             _ = try await playback.open(
                 PlaybackRequest(
-                    content: content, title: "合成视频", sources: [source], quality: .standard,
-                    resumeMilliseconds: 3000))
+                    programme: .init(content: content, title: "合成视频"),
+                    source: .online([source], quality: .standard),
+                    start: .init(positionMilliseconds: 3000)))
         } catch { message = error.localizedDescription }
     }
 

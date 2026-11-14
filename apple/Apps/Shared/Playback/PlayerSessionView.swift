@@ -5,7 +5,9 @@ import SwiftUI
 
 struct PlayerSessionView: View {
     let session: PlayerSession
+    let presentationID: UUID
     var download: (() async -> String)? = nil
+
     @State private var snapshot: PlaybackSnapshot?
     @State private var downloadMessage: String?
     @State private var downloading = false
@@ -71,7 +73,9 @@ struct PlayerSessionView: View {
         #if os(macOS)
             .ignoresSafeArea(.container, edges: macPresentation.fullscreen ? .top : [])
             .onChange(of: macPresentation.error) { _, value in
-                if let value { session.warning = value }
+                if let value {
+                    session.reportWarning(value, forPresentation: presentationID)
+                }
             }
         #endif
         .task(id: session.presentationID) {
@@ -97,17 +101,21 @@ struct PlayerSessionView: View {
     private var video: some View {
         ZStack {
             #if os(iOS)
-                IOSPlayerView(playback: session.playback, overlay: overlay)
+                IOSPlayerView(
+                    playback: session.playback, overlay: overlay, presentationID: presentationID)
                 PlayerControlsView(
-                    session: session, snapshot: snapshot, overlay: overlay, fullscreen: videoOnly
+                    session: session, snapshot: snapshot, overlay: overlay, fullscreen: videoOnly,
+                    presentationID: presentationID
                 ) {
                     session.playback.pauseForInterruption()
                     dismiss()
                 }
             #else
                 MacPlayerView(
-                    playback: session.playback, presentation: macPresentation, overlay: overlay
+                    playback: session.playback, presentation: macPresentation, overlay: overlay,
+                    presentationID: presentationID
                 )
+                .id(presentationID)
                 .onTapGesture(count: 2) {
                     overlay.reveal()
                     macPresentation.toggleFullscreen()
@@ -119,7 +127,7 @@ struct PlayerSessionView: View {
                 .overlay(alignment: .bottom) {
                     MacPlayerControlsView(
                         session: session, snapshot: snapshot, overlay: overlay,
-                        presentation: macPresentation)
+                        presentation: macPresentation, presentationID: presentationID)
                 }
             #endif
             if case .preparing = session.playback.state {
@@ -134,9 +142,7 @@ struct PlayerSessionView: View {
                     Text(message).font(.callout).multilineTextAlignment(.center)
                     Button("重试播放") {
                         Task {
-                            do { try await session.playback.retry() } catch {
-                                session.warning = error.localizedDescription
-                            }
+                            await session.retry(forPresentation: presentationID)
                         }
                     }.buttonStyle(.borderedProminent)
                 }
@@ -184,13 +190,11 @@ struct PlayerSessionView: View {
                 Divider()
                 if metadata.resumeMilliseconds > 0 {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("上次看到 \(timestamp(metadata.resumeMilliseconds))")
+                        Text("上次看到 \(PlaybackTimeText.format(metadata.resumeMilliseconds))")
                             .font(.subheadline).foregroundStyle(.secondary)
                         Button("从头播放", systemImage: "arrow.counterclockwise") {
                             Task {
-                                do { try await session.playback.seek(to: 0) } catch {
-                                    session.warning = error.localizedDescription
-                                }
+                                await session.rewind(forPresentation: presentationID)
                             }
                         }.buttonStyle(.bordered)
                     }
@@ -224,15 +228,6 @@ struct PlayerSessionView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
-    }
-
-    private func timestamp(_ milliseconds: Int64) -> String {
-        let seconds = milliseconds / 1000
-        if seconds >= 3600 {
-            return String(
-                format: "%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60)
-        }
-        return String(format: "%lld:%02lld", seconds / 60, seconds % 60)
     }
 
 }

@@ -5,16 +5,20 @@
     public struct IOSPlayerView: UIViewRepresentable {
         private let playback: PlaybackCoordinator
         private let overlay: PlayerOverlayState
+        private let presentationID: UUID?
 
+        /// Shows one playback presentation on a UIKit video surface.
         public init(
-            playback: PlaybackCoordinator, overlay: PlayerOverlayState = PlayerOverlayState()
+            playback: PlaybackCoordinator, overlay: PlayerOverlayState = PlayerOverlayState(),
+            presentationID: UUID? = nil
         ) {
             self.playback = playback
             self.overlay = overlay
+            self.presentationID = presentationID
         }
 
         public func makeUIView(context: Context) -> IOSVideoSurface {
-            IOSVideoSurface(playback: playback, overlay: overlay)
+            IOSVideoSurface(playback: playback, overlay: overlay, presentationID: presentationID)
         }
 
         public func updateUIView(_ view: IOSVideoSurface, context: Context) {
@@ -31,9 +35,14 @@
         @preconcurrency AVPictureInPictureControllerDelegate, UIGestureRecognizerDelegate
     {
         public override class var layerClass: AnyClass { AVPlayerLayer.self }
+
+        // UIKit creates this layer using the class declared above.
         private var videoLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+
         private let playback: PlaybackCoordinator
         private let overlay: PlayerOverlayState
+        private let presentationID: UUID?
+        private let pictureInPictureOwner = UUID()
         private var pip: AVPictureInPictureController?
         private var notifications: [NSObjectProtocol] = []
         private var backgroundPause: Task<Void, Never>?
@@ -51,10 +60,12 @@
         }
         private var drag: Drag?
 
-        init(playback: PlaybackCoordinator, overlay: PlayerOverlayState) {
+        init(playback: PlaybackCoordinator, overlay: PlayerOverlayState, presentationID: UUID?) {
             self.playback = playback
             self.overlay = overlay
+            self.presentationID = presentationID
             super.init(frame: .zero)
+
             backgroundColor = .black
             videoLayer.player = playback.player
             videoLayer.videoGravity = .resizeAspect
@@ -62,11 +73,18 @@
             accessibilityLabel = "视频画面"
             accessibilityHint = "左右滑动调整进度，左侧上下滑动调整亮度，右侧上下滑动调整视频音量，长按临时二倍速"
             accessibilityIdentifier = "player-gesture-surface"
+
             if AVPictureInPictureController.isPictureInPictureSupported() {
                 pip = AVPictureInPictureController(playerLayer: videoLayer)
                 pip?.delegate = self
                 pip?.canStartPictureInPictureAutomaticallyFromInline = true
             }
+
+            installGestures()
+            observeApplicationLifecycle()
+        }
+
+        private func installGestures() {
             let pan = UIPanGestureRecognizer(target: self, action: #selector(panned))
             pan.delegate = self
             pan.maximumNumberOfTouches = 1
@@ -74,11 +92,16 @@
             press.minimumPressDuration = 0.35
             press.allowableMovement = 12
             press.delegate = self
+
+            // A tap or drag must leave a long press free to claim temporary speed.
             pan.require(toFail: press)
             let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
             tap.require(toFail: pan)
             tap.require(toFail: press)
             [pan, press, tap].forEach(addGestureRecognizer)
+        }
+
+        private func observeApplicationLifecycle() {
             observe(UIApplication.didEnterBackgroundNotification) { $0.enteredBackground() }
             observe(UIApplication.willEnterForegroundNotification) { surface in
                 surface.backgroundPause?.cancel()
@@ -124,19 +147,33 @@
         }
 
         func updateOrientation() {
-            guard orientationRequest != overlay.orientationRequest else { return }
-            orientationRequest = overlay.orientationRequest
+            let request = overlay.orientationRequest
+            guard !disposed, playback.ownsPresentation(presentationID),
+                orientationRequest != request
+            else { return }
             guard traitCollection.userInterfaceIdiom == .phone, let scene = window?.windowScene
             else { return }
+
+            orientationRequest = request
             scene.requestGeometryUpdate(
                 .iOS(interfaceOrientations: overlay.fullscreen ? .landscapeRight : .portrait)
             ) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.overlay.hint = "可旋转设备调整横竖屏" }
+                Task { @MainActor [weak self] in
+                    guard let self, !disposed, playback.ownsPresentation(presentationID),
+                        overlay.orientationRequest == request, window?.windowScene != nil
+                    else { return }
+
+                    overlay.hint = "可旋转设备调整横竖屏"
+                }
             }
         }
 
         @objc private func tapped() {
-            if overlay.controlsVisible { overlay.controlsVisible = false } else { overlay.reveal() }
+            if overlay.controlsVisible {
+                overlay.controlsVisible = false
+            } else {
+                overlay.reveal()
+            }
         }
 
         @objc private func pressed(_ recognizer: UILongPressGestureRecognizer) {
@@ -165,43 +202,59 @@
             let delta = recognizer.translation(in: self)
             switch recognizer.state {
             case .began:
-                let velocity = recognizer.velocity(in: self)
-                if abs(velocity.x) >= abs(velocity.y) {
-                    guard let snapshot = playback.capture(), let duration = snapshot.durationMs,
-                        duration > 0
-                    else { return }
-                    drag = .seek(position: snapshot.positionMs, duration: duration)
-                    dragPreview = overlay.beginSeekPreview(at: snapshot.positionMs)
-                } else if recognizer.location(in: self).x < bounds.midX {
-                    guard let screen = window?.windowScene?.screen else { return }
-                    if brightnessBeforeGesture == nil {
-                        brightnessBeforeGesture = screen.brightness
-                        adjustedScreen = screen
-                    }
-                    drag = .brightness(Double(screen.brightness))
-                } else {
-                    drag = .volume(Double(playback.player.volume))
-                }
-                overlay.setGestureInteraction(active: true)
-                overlay.reveal()
+                beginDrag(recognizer)
                 updateDrag(delta)
             case .changed: updateDrag(delta)
-            case .ended:
-                if case .seek = drag, let target = overlay.previewMilliseconds {
-                    finishDrag()
-                    playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
-                        [weak self] in
-                        guard let self, !disposed else { throw CancellationError() }
-                        try await playback.seek(to: target)
-                    } onFailure: { [weak self] _ in
-                        guard let self, !disposed else { return }
-                        overlay.hint = "跳转未完成，请重试"
-                    }
-                    return
-                }
-                finishDrag()
+            case .ended: commitDrag()
             case .cancelled, .failed: finishDrag()
             default: break
+            }
+        }
+
+        private func beginDrag(_ recognizer: UIPanGestureRecognizer) {
+            guard playback.ownsPresentation(presentationID) else { return }
+            let velocity = recognizer.velocity(in: self)
+            if abs(velocity.x) >= abs(velocity.y) {
+                guard let snapshot = playback.capture(), let duration = snapshot.durationMs,
+                    duration > 0
+                else { return }
+                drag = .seek(position: snapshot.positionMs, duration: duration)
+                dragPreview = overlay.beginSeekPreview(at: snapshot.positionMs)
+            } else if recognizer.location(in: self).x < bounds.midX {
+                guard let screen = window?.windowScene?.screen else { return }
+                if brightnessBeforeGesture == nil {
+                    // Restore the original screen value across multiple drags.
+                    brightnessBeforeGesture = screen.brightness
+                    adjustedScreen = screen
+                }
+                drag = .brightness(Double(screen.brightness))
+            } else {
+                drag = .volume(Double(playback.player.volume))
+            }
+
+            overlay.setGestureInteraction(active: true)
+            overlay.reveal()
+        }
+
+        private func commitDrag() {
+            guard case .seek = drag, let target = overlay.previewMilliseconds else {
+                finishDrag()
+                return
+            }
+
+            // Hand off the final position to the shared seek owner before AVPlayer suspends.
+            finishDrag()
+            playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
+                [weak self] in
+                guard let self, !disposed, playback.ownsPresentation(presentationID) else {
+                    throw CancellationError()
+                }
+                try await playback.seek(to: target)
+            } onFailure: { [weak self] _ in
+                guard let self, !disposed, playback.ownsPresentation(presentationID) else {
+                    return
+                }
+                overlay.hint = "跳转未完成，请重试"
             }
         }
 
@@ -250,7 +303,9 @@
             // Automatic PiP gets a brief opportunity to claim playback before fallback pause.
             backgroundPause = Task { [weak self] in
                 do { try await Task.sleep(for: .milliseconds(900)) } catch { return }
-                guard let self, !disposed else { return }
+                guard let self, !disposed, playback.ownsPresentation(presentationID) else {
+                    return
+                }
                 playback.pauseForBackground()
             }
         }
@@ -268,16 +323,16 @@
             pip?.stopPictureInPicture()
             pip?.delegate = nil
             pip = nil
-            playback.setPictureInPictureActive(false)
             videoLayer.player = nil
-            Task { await playback.finishDismissal() }
+            finishPictureInPicture(pauseInBackground: false)
         }
 
         public func pictureInPictureControllerWillStartPictureInPicture(
             _ controller: AVPictureInPictureController
         ) {
-            guard !disposed else { return }
-            playback.setPictureInPictureActive(true)
+            guard !disposed, controller === pip else { return }
+            playback.beginPictureInPicture(
+                owner: pictureInPictureOwner, presentationID: presentationID)
             endBoost()
         }
 
@@ -285,20 +340,24 @@
             _ controller: AVPictureInPictureController,
             failedToStartPictureInPictureWithError error: Error
         ) {
-            playback.setPictureInPictureActive(false)
-            if UIApplication.shared.applicationState == .background {
-                playback.pauseForBackground()
-            }
+            guard !disposed, controller === pip else { return }
+            finishPictureInPicture(pauseInBackground: true)
         }
 
         public func pictureInPictureControllerDidStopPictureInPicture(
             _ controller: AVPictureInPictureController
         ) {
-            playback.setPictureInPictureActive(false)
-            if UIApplication.shared.applicationState == .background {
+            guard !disposed, controller === pip else { return }
+            finishPictureInPicture(pauseInBackground: true)
+        }
+
+        private func finishPictureInPicture(pauseInBackground: Bool) {
+            guard playback.endPictureInPicture(owner: pictureInPictureOwner) else { return }
+            let session = playback.currentSessionID
+            if pauseInBackground, UIApplication.shared.applicationState == .background {
                 playback.pauseForBackground()
             }
-            Task { await playback.finishDismissal() }
+            Task { await playback.finishDismissal(of: session) }
         }
 
         public func pictureInPictureController(
@@ -306,8 +365,11 @@
             restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler:
                 @escaping (Bool) -> Void
         ) {
-            overlay.reveal()
-            completionHandler(!disposed && window != nil)
+            let canRestore = !disposed && window != nil && playback.ownsPresentation(presentationID)
+            if canRestore {
+                overlay.reveal()
+            }
+            completionHandler(canRestore)
         }
     }
 

@@ -7,6 +7,8 @@
         let snapshot: PlaybackSnapshot?
         let overlay: PlayerOverlayState
         let presentation: MacPlayerPresentation
+        let presentationID: UUID
+
         @State private var scrubbing = false
         @State private var scrubPosition = 0.0
         @State private var hovering = false
@@ -18,21 +20,26 @@
 
         public init(
             session: PlayerSession, snapshot: PlaybackSnapshot?, overlay: PlayerOverlayState,
-            presentation: MacPlayerPresentation
+            presentation: MacPlayerPresentation, presentationID: UUID? = nil
         ) {
             self.session = session
             self.snapshot = snapshot
             self.overlay = overlay
             self.presentation = presentation
+            self.presentationID = presentationID ?? session.presentationID
         }
+
         private var playing: Bool { session.playback.capture()?.playIntent == .playing }
+
         private var duration: Int64 { max(1, snapshot?.durationMs ?? 1) }
+
         private var position: Int64 {
             overlay.previewMilliseconds
                 ?? (scrubbing
                     ? Int64(scrubPosition)
                     : session.playback.capture()?.positionMs ?? snapshot?.positionMs ?? 0)
         }
+
         private var visible: Bool { overlay.controlsVisible || !playing || voiceOver }
 
         public var body: some View {
@@ -81,17 +88,7 @@
                 MacPlayerKeyboard(
                     enabled: session.playback.state == .ready && !scrubbing
                         && !overlay.hasPresentedOptions
-                ) {
-                    command in
-                    switch command {
-                    case .togglePlayback: togglePlayback()
-                    case .backward: skip(by: -10_000)
-                    case .forward: skip(by: 10_000)
-                    case .volumeUp: adjustVolume(by: 0.05)
-                    case .volumeDown: adjustVolume(by: -0.05)
-                    case .fullscreen: presentation.toggleFullscreen()
-                    }
-                }
+                ) { performKeyboardCommand($0) }
             }
             .task(id: overlay.activity) {
                 let activity = overlay.activity
@@ -121,19 +118,7 @@
                         get: { scrubbing ? scrubPosition : Double(position) },
                         set: { scrubPosition = $0 }), range: 0...Double(duration),
                     label: "播放进度", identifier: "player-progress"
-                ) { editing in
-                    if editing {
-                        scrubPosition = Double(position)
-                        scrubbing = true
-                        overlay.setGestureInteraction(active: true)
-                        overlay.reveal()
-                    } else {
-                        let target = Int64(scrubPosition)
-                        scrubbing = false
-                        overlay.setGestureInteraction(active: false)
-                        seek(to: target)
-                    }
-                }
+                ) { updateScrubbing(isEditing: $0) }
                 .frame(height: 24)
                 .disabled(
                     snapshot?.durationMs == nil || session.playback.state != .ready
@@ -144,6 +129,32 @@
                 .accessibilityIdentifier("player-progress")
                 Text(timestamp(duration)).frame(minWidth: 40, alignment: .trailing)
             }.font(.system(size: 13).monospacedDigit()).foregroundStyle(.white.opacity(0.75))
+        }
+
+        private func performKeyboardCommand(_ command: MacPlayerKeyboard.Command) {
+            switch command {
+            case .togglePlayback: togglePlayback()
+            case .backward: skip(by: -10_000)
+            case .forward: skip(by: 10_000)
+            case .volumeUp: adjustVolume(by: 0.05)
+            case .volumeDown: adjustVolume(by: -0.05)
+            case .fullscreen: presentation.toggleFullscreen()
+            }
+        }
+
+        private func updateScrubbing(isEditing: Bool) {
+            if isEditing {
+                scrubPosition = Double(position)
+                scrubbing = true
+                overlay.setGestureInteraction(active: true)
+                overlay.reveal()
+                return
+            }
+
+            let target = Int64(scrubPosition)
+            scrubbing = false
+            overlay.setGestureInteraction(active: false)
+            seek(to: target)
         }
 
         private var transport: some View {
@@ -196,7 +207,8 @@
                     playback: session.playback, speed: snapshot?.speed ?? 1, overlay: overlay)
                 if session.details?.isLocal == false {
                     PlayerQualityMenu(
-                        session: session, quality: snapshot?.quality, overlay: overlay)
+                        session: session, quality: snapshot?.quality, overlay: overlay,
+                        presentationID: presentationID)
                 }
                 MacPlayerRoutePicker(playback: session.playback, overlay: overlay)
                     .frame(width: 36, height: 36).help("投屏")
@@ -276,17 +288,12 @@
             session.playback.seekInteraction.seek(to: target, owner: seekOwner, overlay: overlay) {
                 try await session.playback.seek(to: target)
             } onFailure: { error in
-                session.warning = error.localizedDescription
+                session.reportWarning(error.localizedDescription, forPresentation: presentationID)
             }
         }
 
         private func timestamp(_ milliseconds: Int64) -> String {
-            let seconds = max(0, milliseconds / 1000)
-            if seconds >= 3600 {
-                return String(
-                    format: "%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60)
-            }
-            return String(format: "%02lld:%02lld", seconds / 60, seconds % 60)
+            PlaybackTimeText.format(milliseconds, padsMinutes: true)
         }
     }
 #endif

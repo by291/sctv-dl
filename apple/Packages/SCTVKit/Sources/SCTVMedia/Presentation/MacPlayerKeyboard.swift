@@ -11,13 +11,23 @@
         }
 
         func makeNSView(context: Context) -> KeyboardView { KeyboardView() }
+
         func updateNSView(_ view: KeyboardView, context: Context) {
             view.enabled = enabled
             view.action = action
         }
+
         static func dismantleNSView(_ view: KeyboardView, coordinator: ()) { view.stopMonitoring() }
 
         final class KeyboardView: NSView {
+            private enum Key: UInt16 {
+                case space = 49
+                case leftArrow = 123
+                case rightArrow = 124
+                case downArrow = 125
+                case upArrow = 126
+            }
+
             var enabled = false
             var action: (Command) -> Void = { _ in }
             private var monitor: Any?
@@ -44,19 +54,19 @@
                     !(window.firstResponder is NSTextView)
                 else { return false }
                 let command: Command
-                switch event.keyCode {
-                case 49: command = .togglePlayback
-                case 123: command = .backward
-                case 124: command = .forward
-                case 125: command = .volumeDown
-                case 126: command = .volumeUp
-                default:
+                switch Key(rawValue: event.keyCode) {
+                case .space: command = .togglePlayback
+                case .leftArrow: command = .backward
+                case .rightArrow: command = .forward
+                case .downArrow: command = .volumeDown
+                case .upArrow: command = .volumeUp
+                case nil:
                     guard event.charactersIgnoringModifiers?.lowercased() == "f" else {
                         return false
                     }
                     command = .fullscreen
                 }
-                // Holding an arrow repeats its adjustment; holding Space must not oscillate playback.
+                // Repeat arrow adjustments, while Space and F react once per key press.
                 if !event.isARepeat || (command != .togglePlayback && command != .fullscreen) {
                     action(command)
                 }
