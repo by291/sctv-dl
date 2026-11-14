@@ -2,6 +2,8 @@ pub use crate::programmes::ContentRef;
 
 use serde::{Deserialize, Serialize};
 
+use super::MAX_SAFE_INTEGER;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryMetadata {
@@ -52,8 +54,6 @@ pub struct RecordResult {
     pub accepted: bool,
     pub persisted: bool,
 }
-
-const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 impl HistoryMetadata {
     pub fn validate(&self) -> crate::error::Result<()> {

@@ -9,7 +9,19 @@ import {
 import { contentRefSchema } from '@shared/contracts/programmes'
 import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
+import type { ContentRef } from '@shared/contracts/programmes'
 import type { HistoryPort } from '@/shared/platform/ports'
+
+const recordResultSchema = z.object({ accepted: z.boolean(), persisted: z.boolean() })
+
+interface SampleFailure {
+  sequence: number
+  cause: unknown
+}
+
+function historyContentKey(content: ContentRef): string {
+  return [content.programmeId, content.dateId, content.contentId].join(':')
+}
 
 // Expose native history, serialize writes, and track persistence failures.
 export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<void> } {
@@ -17,7 +29,10 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
   let writeRevision = 0
   let queue: Promise<unknown> = Promise.resolve()
   const subscriptions = new Set<() => Promise<void>>()
-  const failedWrites = new Map<string, unknown>()
+  const contentBySession = new Map<string, string>()
+  const failedSamples = new Map<string, SampleFailure & { sessionId: string }>()
+  const failedRemovals = new Map<string, { cause: unknown }>()
+  let failedClear: { cause: unknown } | undefined
 
   async function request<T>(
     command: string,
@@ -39,24 +54,9 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
     })
   }
 
-  function mutate<T>(
-    command: string,
-    args: Record<string, unknown>,
-    schema: z.ZodType<T>,
-  ): Promise<T> {
+  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
     writeRevision += 1
-    const key = `${command}:${JSON.stringify(args.sessionId ?? args.content ?? '')}`
-    const pending = queue.then(async () => {
-      try {
-        const result = await request(command, args, schema)
-        failedWrites.delete(key)
-
-        return result
-      } catch (cause) {
-        failedWrites.set(key, cause)
-        throw cause
-      }
-    })
+    const pending = queue.then(operation)
 
     // Keep processing later writes while the caller receives this operation's failure.
     queue = pending.catch(() => {})
@@ -66,27 +66,69 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
 
   const port: HistoryPort = {
     list: () => request('list_history', {}, historySnapshotSchema),
-    begin: (metadata) =>
-      mutate(
-        'begin_history',
-        { metadata: historyMetadataSchema.parse(metadata) },
-        historySessionSchema,
-      ),
+    begin: (input) => {
+      const metadata = historyMetadataSchema.parse(input)
+
+      return enqueue(async () => {
+        const session = await request('begin_history', { metadata }, historySessionSchema)
+        contentBySession.set(session.id, historyContentKey(metadata.content))
+
+        return session
+      })
+    },
     record: (sessionId, sample) =>
-      mutate(
-        'record_history',
-        { sessionId, sample: historySampleSchema.parse(sample) },
-        z.object({ accepted: z.boolean(), persisted: z.boolean() }),
-      ),
-    end: async (sessionId) => {
-      await mutate('end_history', { sessionId }, z.null())
+      enqueue(async () => {
+        const contentKey = contentBySession.get(sessionId) ?? `session:${sessionId}`
+        const parameters = { sessionId, sample: historySampleSchema.parse(sample) }
+
+        try {
+          const result = await request('record_history', parameters, recordResultSchema)
+          const failure = failedSamples.get(contentKey)
+          // Native can confirm durability on a retry without accepting the sample again.
+          const isRetry = failure?.sessionId === sessionId && sample.sequence >= failure.sequence
+          if (result.persisted && (result.accepted || isRetry)) {
+            failedSamples.delete(contentKey)
+          }
+
+          return result
+        } catch (cause) {
+          failedSamples.set(contentKey, { sessionId, sequence: sample.sequence, cause })
+          throw cause
+        }
+      }),
+    end: (sessionId) =>
+      enqueue(async () => {
+        await request('end_history', { sessionId }, z.null())
+        // Ending a token leaves its last failed sample unresolved until a later commit.
+        contentBySession.delete(sessionId)
+      }),
+    remove: (input) => {
+      const content = contentRefSchema.parse(input)
+      const contentKey = historyContentKey(content)
+
+      return enqueue(async () => {
+        try {
+          await request('remove_history', { content }, z.null())
+          failedSamples.delete(contentKey)
+          failedRemovals.delete(contentKey)
+        } catch (cause) {
+          failedRemovals.set(contentKey, { cause })
+          throw cause
+        }
+      })
     },
-    remove: async (content) => {
-      await mutate('remove_history', { content: contentRefSchema.parse(content) }, z.null())
-    },
-    clear: async () => {
-      await mutate('clear_history', {}, z.null())
-    },
+    clear: () =>
+      enqueue(async () => {
+        try {
+          await request('clear_history', {}, z.null())
+          failedSamples.clear()
+          failedRemovals.clear()
+          failedClear = undefined
+        } catch (cause) {
+          failedClear = { cause }
+          throw cause
+        }
+      }),
     async subscribe(listener) {
       let active = true
       const onEvent = new Channel<unknown>()
@@ -130,9 +172,11 @@ export function createTauriHistory(): { port: HistoryPort; dispose(): Promise<vo
         await pending
       } while (queue !== pending)
 
-      if (failedWrites.size) {
+      const failure =
+        failedClear ?? failedRemovals.values().next().value ?? failedSamples.values().next().value
+      if (failure) {
         throw new Error('观看历史有未保存的更改，请重试', {
-          cause: failedWrites.values().next().value,
+          cause: failure.cause,
         })
       }
 

@@ -73,3 +73,30 @@ it('retains failed queued writes until their explicit retry succeeds', async () 
   await expect(adapter.port.flush()).resolves.toBeUndefined()
   await adapter.dispose()
 })
+
+it('allows exit after a durable clear supersedes a failed sample from a closed session', async () => {
+  mockIPC((command) => {
+    switch (command) {
+      case 'begin_history':
+        return { id: 'old-session', entry: null }
+      case 'record_history':
+        throw { code: 'storage', message: 'Disk unavailable' }
+      case 'list_history':
+        return { entries: [], revision: 2, persisted: true, warning: null }
+      default:
+        return null
+    }
+  })
+
+  const { port, dispose } = createTauriHistory()
+  const session = await port.begin(metadata)
+  const sample = { positionMs: 300000, durationMs: 600000, sequence: 1, ended: false }
+  await expect(port.record(session.id, sample)).rejects.toThrow('Disk unavailable')
+  await port.end(session.id)
+  await expect(port.flush()).rejects.toThrow('观看历史有未保存的更改')
+
+  await port.clear()
+
+  await expect(port.flush()).resolves.toBeUndefined()
+  await dispose()
+})

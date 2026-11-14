@@ -20,6 +20,8 @@ use crate::{
 };
 
 const MAX_DOCUMENT_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_ENTRIES: usize = 500;
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 type Listener = Arc<dyn Fn(HistorySnapshot) -> bool + Send + Sync>;
 
@@ -175,10 +177,12 @@ impl HistoryService {
         }))
     }
 
+    /// Returns the latest visible history and its durable status.
     pub fn list(&self) -> HistorySnapshot {
         snapshot(&self.0.state.lock().unwrap())
     }
 
+    /// Registers for later revisions; callers take their initial snapshot separately.
     pub fn subscribe(
         &self,
         listener: impl Fn(HistorySnapshot) -> bool + Send + Sync + 'static,
@@ -194,10 +198,12 @@ impl HistoryService {
         id
     }
 
+    /// Releases the listener for an existing subscription.
     pub fn unsubscribe(&self, id: &str) {
         self.0.listeners.lock().unwrap().remove(id);
     }
 
+    /// Starts a fresh sample sequence for an item and returns its resume state.
     pub async fn begin(
         &self,
         metadata: HistoryMetadata,
@@ -233,6 +239,7 @@ impl HistoryService {
         .await
     }
 
+    /// Applies a newer sample and reports acceptance separately from disk durability.
     pub async fn record(
         &self,
         id: String,
@@ -277,7 +284,7 @@ impl HistoryService {
                 .entries
                 .retain(|old| old.metadata.content != entry.metadata.content);
             next.document.entries.insert(0, entry);
-            next.document.entries.truncate(500);
+            next.document.entries.truncate(MAX_ENTRIES);
 
             commit(owner, next)?;
 
@@ -289,6 +296,7 @@ impl HistoryService {
         .await
     }
 
+    /// Revokes the session token while keeping the saved resume point.
     pub async fn end(&self, id: String, guard: OperationGuard) -> Result<()> {
         self.blocking(guard, move |owner| {
             owner.state.lock().unwrap().sessions.remove(&id);
@@ -298,6 +306,7 @@ impl HistoryService {
         .await
     }
 
+    /// Removes an item and revokes tokens that could otherwise recreate it.
     pub async fn remove(&self, content: ContentRef, guard: OperationGuard) -> Result<()> {
         self.blocking(guard, move |owner| {
             let mut next = owner.state.lock().unwrap().clone();
@@ -312,6 +321,7 @@ impl HistoryService {
         .await
     }
 
+    /// Clears all history and revokes the tokens for previous samples.
     pub async fn clear(&self, guard: OperationGuard) -> Result<()> {
         self.blocking(guard, move |owner| {
             let mut next = owner.state.lock().unwrap().clone();
@@ -435,8 +445,8 @@ fn apply_commit_result(owner: &Owner, mut next: State, result: std::io::Result<(
 
 fn validate_document(document: &Document) -> std::io::Result<()> {
     let valid = document.version == 1
-        && document.entries.len() <= 500
-        && document.revision < 9_007_199_254_740_991;
+        && document.entries.len() <= MAX_ENTRIES
+        && document.revision < MAX_SAFE_INTEGER;
 
     if !valid {
         return Err(std::io::Error::other("Invalid history document"));
