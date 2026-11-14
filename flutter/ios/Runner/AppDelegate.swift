@@ -3,13 +3,16 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  private let files = FilesChannel()
-
+  /// Registers Flutter plugins and the host channels on the implicit engine.
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    let playerRegistrar = engineBridge.pluginRegistry.registrar(forPlugin: "SctvPlayerEnvironment")!
-    PlayerEnvironment.register(with: playerRegistrar)
-    let filesRegistrar = engineBridge.pluginRegistry.registrar(forPlugin: "SctvFiles")!
-    files.register(with: filesRegistrar)
+    let registry = engineBridge.pluginRegistry
+    GeneratedPluginRegistrant.register(with: registry)
+
+    if let playerRegistrar = registry.registrar(forPlugin: "SctvPlayerEnvironment") {
+      PlayerEnvironment.register(with: playerRegistrar)
+    }
+    if let filesRegistrar = registry.registrar(forPlugin: "SctvFiles") {
+      FilesChannel.register(with: filesRegistrar)
+    }
   }
 }

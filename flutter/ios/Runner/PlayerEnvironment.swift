@@ -10,39 +10,64 @@ private final class SystemVolumeFactory: NSObject, FlutterPlatformViewFactory {
     SystemVolumeView(frame: frame)
   }
 }
+
 private final class SystemVolumeView: NSObject, FlutterPlatformView {
   private let control: MPVolumeView
+
   init(frame: CGRect) {
     control = MPVolumeView(frame: frame)
     control.showsRouteButton = false
     control.accessibilityLabel = "系统音量"
     super.init()
   }
-  func view() -> UIView { control }
+
+  func view() -> UIView {
+    control
+  }
 }
+
+/// Holds the fullscreen brightness override and exposes user-operated system volume.
 final class PlayerEnvironment: NSObject {
+  private static let gestureHintKey = "player_gesture_hint_seen"
+
   private var enteringBrightness: CGFloat?
   private var backgroundObserver: NSObjectProtocol?
+
   private var screen: UIScreen? {
     UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.screen
   }
+
+  /// Installs the player channel and native volume view on this engine.
   static func register(with registrar: FlutterPluginRegistrar) {
     let owner = PlayerEnvironment()
-    registrar.register(SystemVolumeFactory(), withId: "dev.sctvdl.flutter/system_volume")
     let channel = FlutterMethodChannel(
       name: "dev.sctvdl.flutter/player_environment", binaryMessenger: registrar.messenger())
-    channel.setMethodCallHandler { call, result in owner.handle(call, result: result) }
+    registrar.register(SystemVolumeFactory(), withId: "dev.sctvdl.flutter/system_volume")
+    channel.setMethodCallHandler { call, result in
+      owner.handle(call, result: result)
+    }
+
+    // UIKit can suspend Flutter before the Dart route sends its restoration.
     owner.backgroundObserver = NotificationCenter.default.addObserver(
       forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
-    ) { [weak owner] _ in owner?.restore() }
+    ) { [weak owner] _ in
+      owner?.restore()
+    }
   }
+
   deinit {
-    if let observer = backgroundObserver { NotificationCenter.default.removeObserver(observer) }
+    if let observer = backgroundObserver {
+      NotificationCenter.default.removeObserver(observer)
+    }
   }
+
   private func restore() {
-    if let brightness = enteringBrightness { screen?.brightness = brightness }
+    if let brightness = enteringBrightness {
+      screen?.brightness = brightness
+    }
     enteringBrightness = nil
   }
+
   private func handle(_ call: FlutterMethodCall, result: FlutterResult) {
     switch call.method {
     case "brightness", "beginBrightness":
@@ -58,19 +83,23 @@ final class PlayerEnvironment: NSObject {
             code: "invalid_brightness", message: "Expected finite brightness", details: nil))
         return
       }
-      if enteringBrightness == nil { enteringBrightness = screen?.brightness }
+      if enteringBrightness == nil {
+        enteringBrightness = screen?.brightness
+      }
+
       screen?.brightness = CGFloat(min(1, max(0, value)))
       result(nil)
     case "restoreBrightness":
       restore()
       result(nil)
     case "needsGestureHint":
-      let show = !UserDefaults.standard.bool(forKey: "player_gesture_hint_seen")
-      result(show)
+      let shouldShowHint = !UserDefaults.standard.bool(forKey: Self.gestureHintKey)
+      result(shouldShowHint)
     case "acknowledgeGestureHint":
-      UserDefaults.standard.set(true, forKey: "player_gesture_hint_seen")
+      UserDefaults.standard.set(true, forKey: Self.gestureHintKey)
       result(nil)
-    default: result(FlutterMethodNotImplemented)
+    default:
+      result(FlutterMethodNotImplemented)
     }
   }
 }
