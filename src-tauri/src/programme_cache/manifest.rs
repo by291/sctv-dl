@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{MAX_BYTES, models::BrowseState};
+use super::{MAX_BYTES, MAX_SNAPSHOTS, models::BrowseState};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(super) struct Entry {
@@ -37,7 +37,7 @@ impl Manifest {
     pub(super) fn valid(&self) -> bool {
         self.version == 1
             && Uuid::parse_str(&self.epoch).is_ok()
-            && self.entries.len() <= 200
+            && self.entries.len() <= MAX_SNAPSHOTS
             && self
                 .entries
                 .values()
@@ -96,7 +96,7 @@ impl Manifest {
 }
 
 fn trim(manifest: &mut Manifest) {
-    while manifest.entries.len() > 200
+    while manifest.entries.len() > MAX_SNAPSHOTS
         || manifest
             .entries
             .values()

@@ -22,6 +22,7 @@ use manifest::Manifest;
 use persistence::{CacheStorage, CommitOutcome, DiskRead};
 
 const MAX_BYTES: usize = 20 * 1024 * 1024;
+const MAX_SNAPSHOTS: usize = 200;
 const WARNING: &str = "节目缓存无法保存到本地，当前数据仅在本次会话中保留";
 const CORRUPT_INDEX: &str = "节目缓存索引已损坏，已开始新的缓存代际";
 const CORRUPT_SNAPSHOT: &str = "部分节目缓存已损坏，请刷新";
@@ -47,9 +48,14 @@ impl SnapshotLoad {
 
 struct State {
     manifest: Manifest,
-    memory: BTreeMap<String, Snapshot>,
+    memory: BTreeMap<String, MemorySnapshot>,
     manifest_persisted: bool,
     warning: Option<String>,
+}
+
+struct MemorySnapshot {
+    snapshot: Snapshot,
+    bytes: usize,
 }
 
 impl State {
@@ -57,25 +63,19 @@ impl State {
         storage.writable() && self.manifest_persisted && !self.memory.contains_key(key)
     }
 
-    fn remember(&mut self, key: String, snapshot: Snapshot) {
-        self.memory.insert(key.clone(), snapshot);
+    fn remember(&mut self, key: String, snapshot: Snapshot, bytes: usize) {
+        self.memory
+            .insert(key.clone(), MemorySnapshot { snapshot, bytes });
 
-        // Failed writes retain bounded process-local results without changing the
-        // committed index. Prefer keeping the result of the current operation.
-        while self.memory.len() > 200
-            || self
-                .memory
-                .values()
-                .map(|value| serde_json::to_vec(value).map_or(MAX_BYTES, |bytes| bytes.len()))
-                .sum::<usize>()
-                > MAX_BYTES
-        {
-            let oldest = self.memory.keys().find(|name| *name != &key).cloned();
-
-            if let Some(oldest) = oldest {
-                self.memory.remove(&oldest);
-            } else {
+        // Keep the current result; the process-local fallback has no access timestamps.
+        let mut memory_bytes: usize = self.memory.values().map(|entry| entry.bytes).sum();
+        while self.memory.len() > MAX_SNAPSHOTS || memory_bytes > MAX_BYTES {
+            let Some(eviction_key) = self.memory.keys().find(|name| *name != &key).cloned() else {
                 break;
+            };
+
+            if let Some(evicted) = self.memory.remove(&eviction_key) {
+                memory_bytes -= evicted.bytes;
             }
         }
     }
@@ -92,6 +92,7 @@ struct Owner {
 pub struct ProgrammeCacheService(Arc<Owner>);
 
 impl ProgrammeCacheService {
+    /// Opens the cache or reports storage trouble through a process-local fallback.
     pub async fn open(root: PathBuf) -> Self {
         match tokio::task::spawn_blocking(move || Self::open_blocking(root)).await {
             Ok(service) => service,
@@ -101,6 +102,7 @@ impl ProgrammeCacheService {
         }
     }
 
+    /// Starts a process-local cache when the app cannot open its storage.
     pub fn unavailable(error: AppError) -> Self {
         Self(Arc::new(Owner {
             storage: CacheStorage::unavailable(),
@@ -180,6 +182,7 @@ impl ProgrammeCacheService {
         })?
     }
 
+    /// Returns a snapshot with its generation and records access for disk eviction.
     pub async fn read(&self, key: CacheKey, operation: OperationGuard) -> Result<CacheRead> {
         let name = key.name()?;
 
@@ -204,6 +207,7 @@ impl ProgrammeCacheService {
         .await
     }
 
+    /// Writes into the expected generation or returns the current snapshot for a stale caller.
     pub async fn write(
         &self,
         payload: CachePayload,
@@ -265,6 +269,7 @@ impl ProgrammeCacheService {
         .await
     }
 
+    /// Reads the browsing position for a programme and its current generation.
     pub async fn read_browse(
         &self,
         programme_id: String,
@@ -283,6 +288,7 @@ impl ProgrammeCacheService {
         .await
     }
 
+    /// Saves the browsing position if its generation still matches the cache.
     pub async fn write_browse(
         &self,
         value: BrowseState,
@@ -321,6 +327,7 @@ impl ProgrammeCacheService {
         .await
     }
 
+    /// Replaces the generation before cleanup so old requests cannot restore cleared data.
     pub async fn clear(&self, operation: OperationGuard) -> Result<ClearResult> {
         self.run(operation, |owner, state| {
             if !owner.storage.writable() {
@@ -377,7 +384,7 @@ impl ProgrammeCacheService {
 
 fn load(owner: &Owner, state: &mut State, key: &str) -> SnapshotLoad {
     if let Some(snapshot) = state.memory.get(key) {
-        return SnapshotLoad::Found(snapshot.clone());
+        return SnapshotLoad::Found(snapshot.snapshot.clone());
     }
 
     match owner.storage.read_snapshot(&state.manifest, key) {
@@ -411,7 +418,7 @@ fn save_snapshot(
     bytes: usize,
 ) -> bool {
     if !owner.storage.writable() {
-        state.remember(key.into(), snapshot.clone());
+        state.remember(key.into(), snapshot.clone(), bytes);
         state.warning = Some(WARNING.into());
         return false;
     }
@@ -425,7 +432,7 @@ fn save_snapshot(
         state.manifest = next;
         state.memory.remove(key);
     } else {
-        state.remember(key.into(), snapshot.clone());
+        state.remember(key.into(), snapshot.clone(), bytes);
     }
 
     apply_commit_status(state, outcome, "write programme cache")

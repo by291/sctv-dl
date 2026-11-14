@@ -12,9 +12,12 @@ import { invokeValidated } from '@/shared/platform/invoke-validated.tauri'
 
 import type { ProgrammeCachePort } from '@/shared/platform/ports'
 
+const clearResultSchema = z.object({ epoch: z.string().min(1) })
+
 // Expose the native cache and notify owners when its epoch changes.
 export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose(): void } {
   let disposed = false
+  let clearing: Promise<unknown> = Promise.resolve()
   const listeners = new Set<(epoch: string) => void>()
 
   async function request<T>(
@@ -47,6 +50,37 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
     }
   }
 
+  async function readEpoch(): Promise<string | undefined> {
+    try {
+      return (await port.read({ kind: 'catalogue' })).epoch
+    } catch {
+      // Clear can still succeed when its preliminary read fails.
+      return undefined
+    }
+  }
+
+  async function clearGeneration() {
+    const previousEpoch = await readEpoch()
+    let result: z.infer<typeof clearResultSchema>
+
+    try {
+      result = await request('clear_programme_cache', {}, clearResultSchema)
+    } catch (error) {
+      // Post-commit cleanup can fail after the fence changed. An unchanged fence
+      // leaves mounted owners and their in-flight work valid.
+      const currentEpoch = await readEpoch()
+      if (previousEpoch && currentEpoch && previousEpoch !== currentEpoch) {
+        notifyCleared(currentEpoch)
+      }
+
+      throw error
+    }
+
+    notifyCleared(result.epoch)
+
+    return result
+  }
+
   const port: ProgrammeCachePort = {
     read: (key) =>
       request('read_programme_cache', { key: programmeCacheKeySchema.parse(key) }, cacheReadSchema),
@@ -68,28 +102,12 @@ export function createTauriProgrammeCache(): { port: ProgrammeCachePort; dispose
         { value: archiveBrowseStateSchema.parse(value), expectedEpoch },
         z.object({ accepted: z.boolean(), persisted: z.boolean() }),
       ),
-    async clear() {
-      try {
-        const result = await request(
-          'clear_programme_cache',
-          {},
-          z.object({ epoch: z.string().min(1) }),
-        )
-        notifyCleared(result.epoch)
+    clear() {
+      // Serialize clear attempts so each recovery read describes its own fence.
+      const pending = clearing.then(clearGeneration)
+      clearing = pending.catch(() => {})
 
-        return result
-      } catch (error) {
-        // Cleanup can fail after the durable fence was committed. Read the fence
-        // back so mounted owners still invalidate work from the old generation.
-        try {
-          const current = await port.read({ kind: 'catalogue' })
-          notifyCleared(current.epoch)
-        } catch {
-          /* Preserve the actionable clear error if storage is unavailable. */
-        }
-
-        throw error
-      }
+      return pending
     },
     async subscribeCleared(listener) {
       if (disposed) {

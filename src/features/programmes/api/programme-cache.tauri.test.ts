@@ -35,11 +35,11 @@ describe('native programme cache adapter', () => {
     const owner = createTauriProgrammeCache()
     const listener = vi.fn()
     const stop = await owner.port.subscribeCleared(listener)
-    vi.mocked(invoke).mockResolvedValueOnce({ epoch: 'fresh' })
+    vi.mocked(invoke).mockResolvedValueOnce(null).mockResolvedValueOnce({ epoch: 'fresh' })
     expect(await owner.port.clear()).toEqual({ epoch: 'fresh' })
     expect(listener).toHaveBeenCalledWith('fresh')
     stop()
-    vi.mocked(invoke).mockResolvedValueOnce({ epoch: 'next' })
+    vi.mocked(invoke).mockResolvedValueOnce(null).mockResolvedValueOnce({ epoch: 'next' })
     await owner.port.clear()
     expect(listener).toHaveBeenCalledTimes(1)
     vi.mocked(invoke).mockResolvedValueOnce({
@@ -70,3 +70,35 @@ describe('native programme cache adapter', () => {
     owner.dispose()
   })
 })
+
+it.each([
+  { epochAfterFailure: 'original', expectedEvents: [] },
+  { epochAfterFailure: 'new', expectedEvents: ['new'] },
+])(
+  'reports invalidation only when the generation advanced to $epochAfterFailure',
+  async ({ epochAfterFailure, expectedEvents }) => {
+    const { port, dispose } = createTauriProgrammeCache()
+    const events: string[] = []
+    await port.subscribeCleared((epoch) => events.push(epoch))
+    let attemptedClear = false
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === 'clear_programme_cache') {
+        attemptedClear = true
+        throw { code: 'storage', message: 'Clear failed' }
+      }
+
+      return {
+        epoch: attemptedClear ? epochAfterFailure : 'original',
+        snapshot: null,
+        persisted: true,
+        warning: null,
+      }
+    })
+
+    await port.read({ kind: 'catalogue' })
+    await expect(port.clear()).rejects.toThrow('Clear failed')
+
+    expect(events).toEqual(expectedEvents)
+    dispose()
+  },
+)
