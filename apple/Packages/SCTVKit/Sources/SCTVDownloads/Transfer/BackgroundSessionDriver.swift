@@ -7,15 +7,21 @@ public enum BackgroundTransferError: LocalizedError, Sendable {
     case invalidSource
 
     public var errorDescription: String? {
+        issueCode.errorDescription
+    }
+
+    var issueCode: DownloadIssueCode {
         switch self {
-        case .unknownSession: "后台下载会话不可用，请重试。"
-        case .invalidResume: "续传数据失效，请重新下载。"
-        case .invalidSource: "下载地址无效。"
+        case .unknownSession: .unknownSession
+        case .invalidResume: .invalidResume
+        case .invalidSource: .invalidSource
         }
     }
 }
 
 public actor BackgroundSessionDriver: TransferDriver {
+    private typealias BackgroundCompletion = @MainActor @Sendable () -> Void
+
     public static let sessionPrefix = "dev.sctvdl.apple.downloads"
     public static let cellularAllowedIdentifier = "\(sessionPrefix).cellular-allowed"
     public static let cellularDisallowedIdentifier = "\(sessionPrefix).cellular-disallowed"
@@ -27,7 +33,7 @@ public actor BackgroundSessionDriver: TransferDriver {
     private var delegates: [String: BackgroundSessionDelegate] = [:]
     private var continuation: AsyncStream<TransferEvent>.Continuation?
     private var pendingEvents: [TransferEvent] = []
-    private var completions: [String: @MainActor @Sendable () -> Void] = [:]
+    private var completions: [String: [BackgroundCompletion]] = [:]
     private var acknowledgedIdentifiers: Set<String> = []
     private var drainTokens: [String: UUID] = [:]
 
@@ -173,20 +179,30 @@ public actor BackgroundSessionDriver: TransferDriver {
     public func registerBackgroundCompletion(
         identifier: String, completion: @escaping @MainActor @Sendable () -> Void
     ) async {
+        guard
+            identifier == Self.cellularAllowedIdentifier
+                || identifier == Self.cellularDisallowedIdentifier
+        else {
+            // Without an owned session there can be no matching drain callback.
+            await completion()
+            return
+        }
+
         restoreSessions()
-        guard sessions[identifier] != nil else { return }
         if acknowledgedIdentifiers.remove(identifier) != nil {
             await completion()
         } else {
-            completions[identifier] = completion
+            completions[identifier, default: []].append(completion)
         }
     }
 
     public func acknowledgeDrain(identifier: String, token: UUID) async {
         guard drainTokens[identifier] == token else { return }
         drainTokens.removeValue(forKey: identifier)
-        if let completion = completions.removeValue(forKey: identifier) {
-            await completion()
+        if let callbacks = completions.removeValue(forKey: identifier) {
+            for completion in callbacks {
+                await completion()
+            }
         } else {
             acknowledgedIdentifiers.insert(identifier)
         }

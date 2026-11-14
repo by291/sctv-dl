@@ -6,9 +6,13 @@ public enum StagingError: LocalizedError, Sendable {
     case stagedPathOccupied
 
     public var errorDescription: String? {
+        issueCode.errorDescription
+    }
+
+    var issueCode: DownloadIssueCode {
         switch self {
-        case .missingCallbackFile: "临时下载文件已失效，请重试。"
-        case .stagedPathOccupied: "暂存文件路径不可用，请重试。"
+        case .missingCallbackFile: .missingCallbackFile
+        case .stagedPathOccupied: .stagedPathOccupied
         }
     }
 }
@@ -26,6 +30,7 @@ public final class DownloadStagingStore: Sendable {
         try directory.setResourceValues(values)
     }
 
+    /// Moves or copies a callback file before the native temporary location expires.
     public func adoptTemporaryFile(at temporary: URL, taskID: UUID, attemptID: UUID) throws
         -> StagedFile
     {

@@ -378,6 +378,40 @@ struct BackgroundTransferTests {
         #expect(await MainActor.run { probe.calls } == 1)
     }
 
+    @Test func unknownBackgroundSessionCompletesWithoutWaitingForDrain() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let driver = try BackgroundSessionDriver(
+            stagingRoot: root.appending(path: "Staging"),
+            resumeRoot: root.appending(path: "Resume"))
+        let probe = await MainActor.run { CompletionProbe() }
+
+        await driver.registerBackgroundCompletion(identifier: "unrecognized.background.session") {
+            probe.calls += 1
+        }
+
+        #expect(await MainActor.run { probe.calls } == 1)
+    }
+
+    @Test func drainCompletesEveryRegisteredBackgroundHandler() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let driver = try BackgroundSessionDriver(
+            stagingRoot: root.appending(path: "Staging"),
+            resumeRoot: root.appending(path: "Resume"))
+        let probe = await MainActor.run { CompletionProbe() }
+        let identifier = BackgroundSessionDriver.cellularAllowedIdentifier
+        let token = UUID()
+        await driver.registerBackgroundCompletion(identifier: identifier) { probe.calls += 1 }
+        await driver.registerBackgroundCompletion(identifier: identifier) { probe.calls += 1 }
+
+        await driver.emit(.drain(identifier: identifier, token: token))
+        await driver.acknowledgeDrain(identifier: identifier, token: token)
+        await driver.acknowledgeDrain(identifier: identifier, token: token)
+
+        #expect(await MainActor.run { probe.calls } == 2)
+    }
+
     @Test func obsoleteAttemptStagingIsCleanedOnCallbackAndReconcile() async throws {
         let fixture = try Fixture()
         let publisher = CleanupProbePublisher()
@@ -489,6 +523,26 @@ struct BackgroundTransferTests {
         }
     }
 
+    @Test func inaccessiblePublishedFileRetainsCompletedRecord() async throws {
+        let fixture = try Fixture()
+        let publisher = CleanupProbePublisher()
+        let service = DownloadCoordinator(
+            repository: fixture.repository, transfer: fixture.driver, publisher: publisher)
+        let taskID = try #require((await service.start([try fixture.request()])).accepted.first)
+        let task = try #require(await fixture.repository.task(taskID))
+        let staged = StagedFile(
+            taskID: taskID, attemptID: task.attemptID,
+            relativePath: "\(taskID.uuidString)/\(task.attemptID.uuidString).mp4")
+        await service.receive(.staged(staged, nativeID: try #require(task.nativeID)))
+        let beforeProbe = try #require(await fixture.repository.task(taskID))
+        await publisher.denyInspection()
+
+        try await service.reconcile()
+
+        let afterProbe = try #require(await fixture.repository.task(taskID))
+        #expect(afterProbe == beforeProbe)
+    }
+
     @Test func invalidMediaDiscardsStageAndOffersFreshTransferRetry() async throws {
         let fixture = try Fixture()
         let publisher = FailingPublisher(kind: .invalidMedia)
@@ -504,7 +558,7 @@ struct BackgroundTransferTests {
 
         #expect(
             (try await fixture.repository.task(taskID))?.state
-                == .transferFailed(reason: "下载内容不是可播放的视频，请重新下载。", resume: nil))
+                == .transferFailed(reason: DownloadIssueCode.invalidMedia.rawValue, resume: nil))
         #expect(await publisher.cleaned.contains(staged))
         let retry = await service.perform([
             .init(taskID: taskID, expectedAttempt: task.attemptID, action: .retry)
@@ -527,7 +581,8 @@ struct BackgroundTransferTests {
 
         #expect(
             (try await fixture.repository.task(taskID))?.state
-                == .publicationFailed(reason: "无法访问下载目录，请重新授权。", staged: staged))
+                == .publicationFailed(
+                    reason: DownloadIssueCode.accessDenied.rawValue, staged: staged))
         #expect(await publisher.cleaned.isEmpty)
     }
 }
@@ -539,6 +594,7 @@ struct BackgroundTransferTests {
 private actor CleanupProbePublisher: FilePublisher {
     private(set) var cleaned: [StagedFile] = []
     private var fileExists = true
+    private var inspectionDenied = false
 
     func publish(_ staged: StagedFile, for task: DownloadTask) async throws -> PublishedFile {
         PublishedFile(
@@ -549,7 +605,11 @@ private actor CleanupProbePublisher: FilePublisher {
     func cleanup(_ staged: StagedFile) async throws { cleaned.append(staged) }
     func reset() { cleaned.removeAll() }
     func setExists(_ value: Bool) { fileExists = value }
-    func exists(_ file: PublishedFile) async -> Bool { fileExists }
+    func denyInspection() { inspectionDenied = true }
+    func exists(_ file: PublishedFile) async throws -> Bool {
+        if inspectionDenied { throw CocoaError(.fileReadNoPermission) }
+        return fileExists
+    }
     func delete(_ file: PublishedFile) async throws {}
 }
 

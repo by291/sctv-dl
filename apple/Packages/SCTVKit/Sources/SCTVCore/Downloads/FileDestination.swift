@@ -46,8 +46,9 @@ public protocol FilePublisher: Sendable {
     /// Deletes only the matching published file identity. Access and file-operation failures throw.
     func delete(_ file: PublishedFile) async throws
 
-    /// Reports whether the published identity is currently accessible, including external access.
-    func exists(_ file: PublishedFile) async -> Bool
+    /// Reports whether the recorded identity is present.
+    /// An unavailable destination or an unreadable file throws instead of reporting absence.
+    func exists(_ file: PublishedFile) async throws -> Bool
 }
 
 extension FilePublisher {

@@ -1,24 +1,30 @@
 import Foundation
 import SCTVCore
 
-public enum DownloadFileError: LocalizedError {
+public enum DownloadFileError: String, LocalizedError, Sendable {
     case unsafePath, missingFile, accessDenied, identityChanged, emptyFile, invalidMedia
-    public var errorDescription: String? {
+
+    /// Identifies the failure for localized presentation and durable records.
+    public var issueCode: DownloadIssueCode {
         switch self {
-        case .unsafePath: "文件路径无效。"
-        case .missingFile: "文件已移动或删除。"
-        case .accessDenied: "无法访问下载目录，请重新授权。"
-        case .identityChanged: "文件已被替换，操作已取消。"
-        case .emptyFile: "下载文件为空，请重新下载。"
-        case .invalidMedia: "下载内容不是可播放的视频，请重新下载。"
+        case .unsafePath: .unsafePath
+        case .missingFile: .missingFile
+        case .accessDenied: .accessDenied
+        case .identityChanged: .identityChanged
+        case .emptyFile: .emptyFile
+        case .invalidMedia: .invalidMedia
         }
     }
+
+    public var errorDescription: String? { issueCode.errorDescription }
 }
 
 public actor SecurityScopedDirectories {
     private let storage: URL
+
     public init(storage: URL) { self.storage = storage }
 
+    /// Creates or renews the durable bookmark used by existing download tasks.
     public func authorize(_ directory: URL, replacing existingID: UUID? = nil) throws -> UUID {
         #if os(macOS)
             let access = directory.startAccessingSecurityScopedResource()
@@ -34,6 +40,7 @@ public actor SecurityScopedDirectories {
         #endif
     }
 
+    /// Opens the bookmark and holds directory access until the returned lease is released.
     public func open(_ id: UUID) throws -> LocalFileLease {
         #if os(macOS)
             let data = try Data(contentsOf: storage.appending(path: id.uuidString))

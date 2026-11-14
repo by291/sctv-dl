@@ -14,7 +14,21 @@ final class ApplicationModel {
             failure = nil
         } catch {
             failure = error.localizedDescription
+            #if os(iOS)
+                Task { await BackgroundEventsBridge.shared.failStartup() }
+            #endif
         }
+    }
+
+    func retryPreparation() {
+        #if os(iOS)
+            Task {
+                await BackgroundEventsBridge.shared.retryStartup()
+                prepare()
+            }
+        #else
+            prepare()
+        #endif
     }
 }
 
@@ -33,7 +47,7 @@ struct ApplicationBootstrap: View {
                 } description: {
                     Text(model.failure ?? "")
                 } actions: {
-                    Button("重试", action: model.prepare)
+                    Button("重试", action: model.retryPreparation)
                 }
             }
         }

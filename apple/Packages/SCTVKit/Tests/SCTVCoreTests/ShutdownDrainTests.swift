@@ -48,4 +48,50 @@ import Testing
         }
         #expect(!timedOut)
     }
+
+    @Test func timedOutWriterCannotCompleteALaterDrain() async {
+        let drain = ShutdownDrain()
+        let firstReplies = AsyncStream<Bool>.makeStream()
+        let firstWriterCompleted = AsyncStream<Void>.makeStream()
+        let secondReplies = AsyncStream<Bool>.makeStream()
+        var releaseFirst: CheckedContinuation<Void, Never>?
+        var releaseSecond: CheckedContinuation<Void, Never>?
+        var didSecondWriterFinish = false
+
+        await withCheckedContinuation { started in
+            drain.start(timeout: .milliseconds(20)) {
+                await withCheckedContinuation {
+                    releaseFirst = $0
+                    started.resume()
+                }
+                firstWriterCompleted.continuation.finish()
+            } completion: {
+                firstReplies.continuation.yield($0)
+                firstReplies.continuation.finish()
+            }
+        }
+
+        var firstReply = firstReplies.stream.makeAsyncIterator()
+        #expect(await firstReply.next() == true)
+
+        await withCheckedContinuation { started in
+            drain.start(timeout: .seconds(5)) {
+                await withCheckedContinuation {
+                    releaseSecond = $0
+                    started.resume()
+                }
+                didSecondWriterFinish = true
+            } completion: { timedOut in
+                secondReplies.continuation.yield(didSecondWriterFinish && !timedOut)
+                secondReplies.continuation.finish()
+            }
+        }
+
+        releaseFirst?.resume()
+        for await _ in firstWriterCompleted.stream {}
+        releaseSecond?.resume()
+
+        var secondReply = secondReplies.stream.makeAsyncIterator()
+        #expect(await secondReply.next() == true)
+    }
 }

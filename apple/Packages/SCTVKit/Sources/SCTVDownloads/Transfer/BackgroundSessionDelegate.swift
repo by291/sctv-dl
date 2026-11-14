@@ -1,21 +1,30 @@
 import Foundation
 import SCTVCore
 
-/// URLSession callbacks arrive on a serial delegate queue. This queue preserves their order
-/// across the hop into the actor so a drain marker cannot overtake an adopted file.
+/// Serializes actor delivery so a drain marker cannot overtake an adopted file.
+/// The lock protects the queue and pump flag. The weak driver is attached before
+/// the native session is created, and never reassigned while callbacks can run.
 private final class OrderedCallbacks: @unchecked Sendable {
     private let lock = NSLock()
     private var pending: [TransferEvent] = []
     private var pumping = false
-    weak var driver: BackgroundSessionDriver?
+    private weak var driver: BackgroundSessionDriver?
+
+    func attach(_ driver: BackgroundSessionDriver) {
+        self.driver = driver
+    }
 
     func append(_ event: TransferEvent) {
-        lock.lock()
-        pending.append(event)
-        let start = !pumping
-        if start { pumping = true }
-        lock.unlock()
-        if start { Task { await pump() } }
+        let shouldStartPump = lock.withLock {
+            pending.append(event)
+            guard !pumping else { return false }
+            pumping = true
+            return true
+        }
+
+        if shouldStartPump {
+            Task { await pump() }
+        }
     }
 
     private func pump() async {
@@ -33,6 +42,8 @@ private final class OrderedCallbacks: @unchecked Sendable {
     }
 }
 
+/// Delegate callbacks arrive on a serial queue, while driver suppression can race them.
+/// The lock protects both sets; all other stored dependencies are immutable and Sendable.
 final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let identifier: String
     private let staging: DownloadStagingStore
@@ -53,12 +64,12 @@ final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @un
         self.failures = failures
     }
 
-    func attach(_ driver: BackgroundSessionDriver) { callbacks.driver = driver }
+    func attach(_ driver: BackgroundSessionDriver) { callbacks.attach(driver) }
 
     func suppress(_ nativeTask: Int) {
-        lock.lock()
-        suppressedTasks.insert(nativeTask)
-        lock.unlock()
+        lock.withLock {
+            _ = suppressedTasks.insert(nativeTask)
+        }
     }
 
     func urlSession(
@@ -99,9 +110,9 @@ final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @un
         }
         let id = nativeID(downloadTask)
 
-        lock.lock()
-        finishedTasks.insert(downloadTask.taskIdentifier)
-        lock.unlock()
+        lock.withLock {
+            _ = finishedTasks.insert(downloadTask.taskIdentifier)
+        }
 
         let statusCode = (downloadTask.response as? HTTPURLResponse)?.statusCode
         queue(
@@ -130,9 +141,10 @@ final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @un
                 at: location, taskID: taskID, attemptID: attemptID)
             return .staged(staged, nativeID: nativeID)
         } catch {
+            let reason = (error as? StagingError)?.issueCode.rawValue ?? error.localizedDescription
             return .failed(
                 taskID: taskID, attemptID: attemptID, nativeID: nativeID,
-                reason: error.localizedDescription, resume: nil)
+                reason: reason, resume: nil)
         }
     }
 
@@ -140,21 +152,23 @@ final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @un
     {
         guard let correlation = TransferCorrelation.decode(task.taskDescription) else { return }
         let taskNumber = task.taskIdentifier
-        lock.lock()
-        let finished = finishedTasks.remove(taskNumber) != nil
-        let suppressed = suppressedTasks.remove(taskNumber) != nil
-        lock.unlock()
-        guard !finished, !suppressed else { return }
+        let hasTerminalOwner = lock.withLock {
+            let hasFinished = finishedTasks.remove(taskNumber) != nil
+            let isSuppressed = suppressedTasks.remove(taskNumber) != nil
+            return hasFinished || isSuppressed
+        }
+        guard !hasTerminalOwner else { return }
 
         var reference: ResumeReference?
         if let error = error as NSError?,
             let data = error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
         {
+            // A lost resume artifact still allows a fresh transfer with the durable failure receipt.
             reference = try? resumes.save(
                 data, taskID: correlation.taskID, attemptID: correlation.attemptID)
         }
-        let reason: String
-        reason = error?.localizedDescription ?? "Transfer ended without a file"
+
+        let reason = error?.localizedDescription ?? "Transfer ended without a file"
         queue(
             .failed(
                 taskID: correlation.taskID, attemptID: correlation.attemptID,
@@ -166,7 +180,7 @@ final class BackgroundSessionDelegate: NSObject, URLSessionDownloadDelegate, @un
     }
 
     private func queue(_ event: TransferEvent) {
-        // The durable receipt closes the callback-before-native-ID-commit window.
+        // If saving fails, the live callback can still persist it or retain it for drain retry.
         try? failures.save(event)
         callbacks.append(event)
     }

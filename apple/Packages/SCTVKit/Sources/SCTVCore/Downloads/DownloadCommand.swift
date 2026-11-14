@@ -46,10 +46,15 @@ public struct DownloadItemFailure: Equatable, Sendable {
 
 public struct DownloadBatchResult: Sendable {
     public let accepted: [UUID]
+    /// Content identities for accepted reservations, in the same order as their task IDs.
+    public let acceptedContent: [ContentRef]
     public let failures: [DownloadItemFailure]
 
-    public init(accepted: [UUID], failures: [DownloadItemFailure]) {
+    public init(
+        accepted: [UUID], failures: [DownloadItemFailure], acceptedContent: [ContentRef] = []
+    ) {
         self.accepted = accepted
+        self.acceptedContent = acceptedContent
         self.failures = failures
     }
 }

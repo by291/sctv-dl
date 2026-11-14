@@ -5,6 +5,20 @@ import Testing
 @testable import SCTVDownloads
 
 struct FilePublicationTests {
+    @Test func longGraphemeTitlePublishesWithAReusableName() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let title = String(repeating: "👩‍💻", count: 85)
+        let fixture = try fixture(root, filename: "2026-10-22_\(title)_标准.mp4")
+
+        let published = try await fixture.publisher.publish(fixture.staged, for: fixture.task)
+        let sameFile = try await fixture.publisher.publish(fixture.staged, for: fixture.task)
+
+        #expect(published == sameFile)
+        #expect(published.relativeFilename.hasSuffix(".mp4"))
+        #expect(try await fixture.publisher.exists(published))
+    }
+
     @Test func publicationRetainsStagingUntilGuardedCommitAndRecovers() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -13,12 +27,12 @@ struct FilePublicationTests {
         #expect(FileManager.default.fileExists(atPath: fixture.source.path))
         let second = try await fixture.publisher.publish(fixture.staged, for: fixture.task)
         #expect(first == second)
-        #expect(await fixture.publisher.exists(first))
+        #expect(try await fixture.publisher.exists(first))
         try await fixture.publisher.cleanup(fixture.staged)
         #expect(!FileManager.default.fileExists(atPath: fixture.source.path))
-        #expect(await fixture.publisher.exists(first))
+        #expect(try await fixture.publisher.exists(first))
         try await fixture.publisher.delete(first)
-        #expect(!(await fixture.publisher.exists(first)))
+        #expect(try await !fixture.publisher.exists(first))
     }
 
     @Test func revokedBookmarkRetainsStagedBytes() async throws {
@@ -69,7 +83,7 @@ struct FilePublicationTests {
         }
         #expect(FileManager.default.fileExists(atPath: fixture.source.path))
         let retried = try await fixture.publisher.publish(fixture.staged, for: fixture.task)
-        #expect(await fixture.publisher.exists(retried))
+        #expect(try await fixture.publisher.exists(retried))
     }
 
     @Test func diskFullRetainsStagedFileForPublicationRetry() async throws {
@@ -85,7 +99,7 @@ struct FilePublicationTests {
         }
         #expect(FileManager.default.fileExists(atPath: fixture.source.path))
         let retried = try await fixture.publisher.publish(fixture.staged, for: fixture.task)
-        #expect(await fixture.publisher.exists(retried))
+        #expect(try await fixture.publisher.exists(retried))
     }
 
     @Test func rejectsEscapingAndSymlinkPaths() throws {
@@ -98,7 +112,10 @@ struct FilePublicationTests {
         #expect(throws: DownloadFileError.self) { try confinedFile("link/secret", under: root) }
     }
 
-    private func fixture(_ root: URL, destination: FileDestination = .applicationManaged) throws
+    private func fixture(
+        _ root: URL, destination: FileDestination = .applicationManaged,
+        filename: String = "News.mp4"
+    ) throws
         -> (publisher: LocalFilePublisher, task: DownloadTask, staged: StagedFile, source: URL)
     {
         let task = DownloadTask(
@@ -109,7 +126,7 @@ struct FilePublicationTests {
             source: DownloadSource(
                 try MediaSource(
                     url: URL(string: "https://fscgc.scgchc.com/test.mp4")!, quality: .standard)),
-            filename: "News.mp4", allowsCellular: false,
+            filename: filename, allowsCellular: false,
             destination: destination, nativeID: nil, state: .queued, createdAt: Date())
         let staged = StagedFile(
             taskID: task.id, attemptID: task.attemptID,

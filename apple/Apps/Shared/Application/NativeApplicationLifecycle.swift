@@ -6,11 +6,18 @@ import SCTVDownloads
 actor BackgroundEventsBridge {
     static let shared = BackgroundEventsBridge()
 
-    private var driver: BackgroundSessionDriver?
-    private var waiting: [(String, @MainActor @Sendable () -> Void)] = []
+    private typealias Callback = (identifier: String, complete: @MainActor @Sendable () -> Void)
+    private enum State {
+        case preparing
+        case installed(BackgroundSessionDriver)
+        case unavailable
+    }
+
+    private var state = State.preparing
+    private var waiting: [Callback] = []
 
     func install(_ driver: BackgroundSessionDriver) async {
-        self.driver = driver
+        state = .installed(driver)
 
         let callbacks = waiting
         waiting = []
@@ -20,13 +27,35 @@ actor BackgroundEventsBridge {
         }
     }
 
+    func failStartup() async {
+        guard case .preparing = state else { return }
+        state = .unavailable
+
+        // Bootstrap cannot produce a driver to deliver a drain. Return the
+        // OS completion now; durable records remain available for a future launch.
+        let callbacks = waiting
+        waiting = []
+        for callback in callbacks {
+            await callback.complete()
+        }
+    }
+
+    func retryStartup() {
+        if case .unavailable = state {
+            state = .preparing
+        }
+    }
+
     func receive(_ identifier: String, completion: @escaping @MainActor @Sendable () -> Void) async
     {
-        if let driver {
+        switch state {
+        case .installed(let driver):
             await driver.registerBackgroundCompletion(
                 identifier: identifier, completion: completion)
-        } else {
+        case .preparing:
             waiting.append((identifier, completion))
+        case .unavailable:
+            await completion()
         }
     }
 }

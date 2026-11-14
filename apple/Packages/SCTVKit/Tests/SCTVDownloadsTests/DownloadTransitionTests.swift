@@ -23,12 +23,14 @@ struct DownloadTransitionTests {
         let accepted = await fixture.service.start([request])
         let taskID = try #require(accepted.accepted.first)
         let old = try #require(await fixture.repository.task(taskID))
-        await fixture.service.perform([
+        let cancellation = await fixture.service.perform([
             .init(taskID: taskID, expectedAttempt: old.attemptID, action: .cancel)
         ])
-        await fixture.service.perform([
+        let retry = await fixture.service.perform([
             .init(taskID: taskID, expectedAttempt: old.attemptID, action: .retry)
         ])
+        #expect(cancellation.accepted == [taskID])
+        #expect(retry.accepted == [taskID])
         let retried = try #require(await fixture.repository.task(taskID))
         #expect(retried.attemptID != old.attemptID)
         await fixture.service.receive(
@@ -65,6 +67,7 @@ struct DownloadTransitionTests {
         let request = try fixture.request()
         let result = await fixture.service.start([request, request])
         #expect(result.accepted.count == 1)
+        #expect(result.acceptedContent == [request.content])
         #expect(result.failures.map(\.reason) == [.duplicate])
         #expect((try await fixture.repository.all()).count == 1)
     }

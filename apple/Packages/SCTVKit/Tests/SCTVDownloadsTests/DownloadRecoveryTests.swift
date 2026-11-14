@@ -227,6 +227,56 @@ struct DownloadRecoveryTests {
                         fileIdentity: "fixture")))
     }
 
+    @Test func recordRemovalCannotOvertakeFileDeletion() async throws {
+        let fixture = try Fixture()
+        let publisher = DeleteProbePublisher()
+        let service = DownloadCoordinator(
+            repository: fixture.repository, transfer: fixture.driver, publisher: publisher)
+        let task = try await createCompletedDownload(service: service, fixture: fixture)
+        await publisher.beforeDelete {
+            let removal = await service.perform([
+                .init(taskID: task.id, expectedAttempt: task.attemptID, action: .removeRecord)
+            ])
+            #expect(removal.accepted.isEmpty)
+        }
+
+        let deletion = await service.perform([
+            .init(taskID: task.id, expectedAttempt: task.attemptID, action: .deleteFile)
+        ])
+
+        #expect(deletion.accepted == [task.id])
+        if case .missingFile = try await fixture.repository.task(task.id)?.state {
+        } else {
+            Issue.record("The deletion should leave the download record in place")
+        }
+    }
+
+    @Test func overlappingReconcilesShareTheNativeEventSubscription() async throws {
+        let fixture = try Fixture()
+        await fixture.driver.beforeEvents {
+            _ = Task { try await fixture.service.reconcile() }
+            await Task.yield()
+        }
+
+        try await fixture.service.reconcile()
+        try await fixture.service.reconcile()
+
+        #expect(await fixture.driver.eventSubscriptions == 1)
+    }
+
+    @Test func stagedFileReadFailureLeavesBoundNativeTransferRunning() async throws {
+        let fixture = try Fixture()
+        await fixture.driver.setStagedReadFailure()
+
+        let taskID = try #require(
+            (await fixture.service.start([try fixture.request()])).accepted.first)
+
+        let task = try #require(await fixture.repository.task(taskID))
+        let native = try #require(task.nativeID)
+        #expect(try await fixture.driver.snapshot().contains { $0.id == native })
+        #expect(task.state == .transferring(received: 0, total: nil))
+    }
+
     @Test func reconciliationKeepsCurrentNativeIDWhenOldTaskRemains() async throws {
         let fixture = try Fixture()
         let taskID = try #require(
@@ -252,6 +302,34 @@ struct DownloadRecoveryTests {
         #expect((try await fixture.repository.all()).first?.state == .cancelled)
         #expect(try await fixture.driver.snapshot().isEmpty)
     }
+}
+
+private func createCompletedDownload(service: DownloadCoordinator, fixture: Fixture) async throws
+    -> DownloadTask
+{
+    let taskID = try #require((await service.start([try fixture.request()])).accepted.first)
+    let task = try #require(await fixture.repository.task(taskID))
+    let staged = StagedFile(
+        taskID: task.id, attemptID: task.attemptID,
+        relativePath: "\(task.id)/\(task.attemptID).mp4")
+    await service.receive(.staged(staged, nativeID: try #require(task.nativeID)))
+    return try #require(await fixture.repository.task(taskID))
+}
+
+private actor DeleteProbePublisher: FilePublisher {
+    private var deleteHook: (@Sendable () async -> Void)?
+
+    func beforeDelete(_ hook: @escaping @Sendable () async -> Void) { deleteHook = hook }
+
+    func publish(_ staged: StagedFile, for task: DownloadTask) async throws -> PublishedFile {
+        try await FixturePublisher().publish(staged, for: task)
+    }
+
+    func delete(_ file: PublishedFile) async throws {
+        await deleteHook?()
+    }
+
+    func exists(_ file: PublishedFile) async -> Bool { true }
 }
 
 actor RecordingPublisher: FilePublisher {
@@ -334,11 +412,14 @@ actor HookedDownloadRepository: DownloadRepository {
 
 actor FixtureDriver: TransferDriver {
     var enqueues = 0
+    private(set) var eventSubscriptions = 0
     private var ambiguous = false
+    private var stagedReadFails = false
     private var transfers: [NativeTransfer] = []
     private var enqueueHook: (@Sendable (DownloadTask) async -> Void)?
     private var pauseHook: (@Sendable (NativeTransferID) async -> Void)?
     private var snapshotHook: (@Sendable () async -> Void)?
+    private var eventsHook: (@Sendable () async -> Void)?
     private var stagedFiles: [UUID: StagedFile] = [:]
     private var failures: [UUID: TransferEvent] = [:]
 
@@ -351,6 +432,8 @@ actor FixtureDriver: TransferDriver {
         pauseHook = hook
     }
     func beforeSnapshot(_ hook: @escaping @Sendable () async -> Void) { snapshotHook = hook }
+    func beforeEvents(_ hook: @escaping @Sendable () async -> Void) { eventsHook = hook }
+    func setStagedReadFailure() { stagedReadFails = true }
     func storeStaged(_ file: StagedFile) { stagedFiles[file.attemptID] = file }
     func storeFailure(_ event: TransferEvent) {
         if case .failed(_, let attemptID, _, _, _) = event { failures[attemptID] = event }
@@ -363,7 +446,8 @@ actor FixtureDriver: TransferDriver {
         return nil
     }
     func stagedFile(taskID: UUID, attemptID: UUID) async throws -> StagedFile? {
-        stagedFiles[attemptID].flatMap { $0.taskID == taskID ? $0 : nil }
+        if stagedReadFails { throw CocoaError(.fileReadNoPermission) }
+        return stagedFiles[attemptID].flatMap { $0.taskID == taskID ? $0 : nil }
     }
     func stagedFiles() async throws -> [StagedFile] { Array(stagedFiles.values) }
     func enqueue(_ task: DownloadTask) async throws -> NativeTransferID {
@@ -391,7 +475,13 @@ actor FixtureDriver: TransferDriver {
         }
         return current
     }
-    func events() async -> AsyncStream<TransferEvent> { AsyncStream { _ in } }
+    func events() async -> AsyncStream<TransferEvent> {
+        eventSubscriptions += 1
+        let hook = eventsHook
+        eventsHook = nil
+        await hook?()
+        return AsyncStream { _ in }
+    }
 }
 
 struct FixturePublisher: FilePublisher {
