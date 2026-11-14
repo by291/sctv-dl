@@ -35,6 +35,7 @@ pub struct AppError {
 }
 
 impl AppError {
+    /// Creates a domain error with a message suitable for the application UI.
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
         Self {
             code,
@@ -69,10 +70,11 @@ impl AppError {
             return self;
         }
 
+        // Keep the localized IPC message out of operational logs.
         if let Some(source) = self.source() {
-            eprintln!("[desktop] {operation}: {:?}: {self}: {source}", self.code);
+            eprintln!("[desktop] {operation}: {:?}: {source}", self.code);
         } else {
-            eprintln!("[desktop] {operation}: {:?}: {self}", self.code);
+            eprintln!("[desktop] {operation}: {:?}", self.code);
         }
 
         self
