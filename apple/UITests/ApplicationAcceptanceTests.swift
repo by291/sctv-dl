@@ -699,12 +699,18 @@ final class ApplicationAcceptanceTests: XCTestCase {
             verifySelectionTapSequence(on: toggle, startingFrom: .selecting)
 
             let playable = app.buttons["play-download-30"]
-            XCTAssertTrue(firstSelection.waitForNonExistence(timeout: 5))
             XCTAssertTrue(app.buttons["下载操作"].firstMatch.exists)
             requireState("Playback card is available after leaving selection", of: playable) {
                 $0.isHittable
             }
             XCTAssertTrue(catalogue.isHittable)
+            playable.tap()
+            let back = app.buttons["player-back"]
+            XCTAssertTrue(back.waitForExistence(timeout: 10))
+            back.tap()
+            requireState("Downloads return to browsing after playback", of: toggle) {
+                $0.isHittable && $0.label == "选择"
+            }
         }
 
         func testArchiveSelectionRespondsToIndividualAndRapidTaps() {
