@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApplicationDatabase } from '@/shared/storage/application-database.web'
 import { createWebHistory } from '@/features/history/api/history.web'
 
+import type { HistorySnapshot } from '@shared/contracts/history'
+
+const nativeBroadcastChannel = globalThis.BroadcastChannel
 const metadata = {
   content: { programmeId: '1', dateId: '2', contentId: '3' },
   programmeName: 'News',
@@ -14,7 +17,7 @@ const metadata = {
 const sample = { positionMs: 300000, durationMs: 600000, ended: false, sequence: 1 }
 const cleanup: Array<() => void> = []
 
-function repository() {
+function historyOwner() {
   const database = createApplicationDatabase()
   const adapter = createWebHistory(database)
   cleanup.push(() => {
@@ -22,7 +25,11 @@ function repository() {
     database.dispose()
   })
 
-  return adapter.port
+  return adapter
+}
+
+function repository() {
+  return historyOwner().port
 }
 
 beforeEach(() => {
@@ -36,6 +43,33 @@ afterEach(() => {
 })
 
 describe('transactional browser viewing history', () => {
+  it('pushes committed progress and deletions to other connections and stops after disposal', async () => {
+    vi.stubGlobal('BroadcastChannel', nativeBroadcastChannel)
+    const writer = repository()
+    const observing = historyOwner()
+    const detached = historyOwner()
+    const snapshots: HistorySnapshot[] = []
+    const detachedSnapshots: HistorySnapshot[] = []
+    await observing.port.subscribe((snapshot) => snapshots.push(snapshot))
+    await detached.port.subscribe((snapshot) => detachedSnapshots.push(snapshot))
+    const session = await writer.begin(metadata)
+    await writer.record(session.id, sample)
+
+    await vi.waitFor(() => {
+      expect(snapshots.at(-1)?.entries[0]?.positionMs).toBe(300000)
+      expect(detachedSnapshots.at(-1)?.entries[0]?.positionMs).toBe(300000)
+    })
+
+    detached.dispose()
+    const detachedCount = detachedSnapshots.length
+    await writer.remove(metadata.content)
+
+    await vi.waitFor(() => {
+      expect(snapshots.at(-1)?.entries).toEqual([])
+    })
+    expect(detachedSnapshots).toHaveLength(detachedCount)
+  })
+
   it('persists the pending sample after a temporary quota failure without regressing other entries', async () => {
     const port = repository()
     const session = await port.begin(metadata)

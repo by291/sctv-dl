@@ -5,6 +5,7 @@ import { createApplicationDatabase } from '@/shared/storage/application-database
 import { createWebProgrammeCache } from '@/features/programmes/api/programme-cache.web'
 import { MAX_CACHE_BYTES } from '@/features/programmes/model/cache-policy'
 
+const nativeBroadcastChannel = globalThis.BroadcastChannel
 const owners: Array<{ dispose(): void }> = []
 beforeEach(() => {
   vi.stubGlobal('indexedDB', new IDBFactory())
@@ -20,7 +21,7 @@ function setup() {
   const cache = createWebProgrammeCache(database)
   owners.push(database, cache)
 
-  return { database, cache: cache.port }
+  return { database, cache: cache.port, dispose: () => cache.dispose() }
 }
 
 const browse = (id: number) => ({
@@ -33,6 +34,33 @@ const browse = (id: number) => ({
 })
 
 describe('browser programme cache', () => {
+  it('notifies other connections of durable clears and stops notifying disposed owners', async () => {
+    vi.stubGlobal('BroadcastChannel', nativeBroadcastChannel)
+    const writer = setup()
+    const observing = setup()
+    const detached = setup()
+    await observing.cache.read({ kind: 'catalogue' })
+    await detached.cache.read({ kind: 'catalogue' })
+    const epochs: string[] = []
+    const detachedEpochs: string[] = []
+    await observing.cache.subscribeCleared((epoch) => epochs.push(epoch))
+    await detached.cache.subscribeCleared((epoch) => detachedEpochs.push(epoch))
+    const first = await writer.cache.clear()
+
+    await vi.waitFor(() => {
+      expect(epochs).toEqual([first.epoch])
+      expect(detachedEpochs).toEqual([first.epoch])
+    })
+
+    detached.dispose()
+    const second = await writer.cache.clear()
+
+    await vi.waitFor(() => {
+      expect(epochs).toEqual([first.epoch, second.epoch])
+    })
+    expect(detachedEpochs).toEqual([first.epoch])
+  })
+
   it('distinguishes missing, valid empty and corrupt rows and retains revisions on equal refresh', async () => {
     const { database, cache } = setup()
     const initial = await cache.read({ kind: 'catalogue' })
