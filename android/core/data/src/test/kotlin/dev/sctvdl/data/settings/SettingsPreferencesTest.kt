@@ -1,6 +1,5 @@
 package dev.sctvdl.data.settings
 
-import dev.sctvdl.data.settings.decodeSettings
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.settings.AppSettings
 import dev.sctvdl.domain.settings.ThemeMode
@@ -23,9 +22,14 @@ class SettingsPreferencesTest {
         )
     }
 
-    @Test fun validPreferencesRoundTripIndependently() {
+    @Test fun savedPreferenceStringsRetainTheirMeaning() {
         assertEquals(
-            AppSettings(ThemeMode.Dark, true, Quality.Smooth, true),
+            AppSettings(
+                theme = ThemeMode.Dark,
+                dynamicColour = true,
+                initialQuality = Quality.Smooth,
+                wifiOnlyDownloads = true
+            ),
             decodeSettings(
                 mapOf(
                     "theme" to "Dark",

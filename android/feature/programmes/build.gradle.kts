@@ -3,7 +3,18 @@ plugins {
     id("sctv.android.hilt")
 }
 
-android { namespace = "dev.sctvdl.feature.programmes" }
+android {
+    namespace = "dev.sctvdl.feature.programmes"
+
+    buildTypes {
+        // The profileable target owns the scroll fixture and uses release dependencies.
+        create("benchmarkRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+        }
+    }
+}
+
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:design"))

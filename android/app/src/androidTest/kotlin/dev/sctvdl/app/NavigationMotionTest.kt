@@ -1,26 +1,20 @@
 package dev.sctvdl.app
 
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.test.core.app.ActivityScenario
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import dev.sctvdl.app.navigation.AppNavigationShell
 import dev.sctvdl.app.navigation.AppNavigator
 import dev.sctvdl.app.navigation.AppRoute
@@ -29,99 +23,97 @@ import dev.sctvdl.domain.settings.ThemeMode
 import dev.sctvdl.ui.theme.SctvAppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
+private const val CATALOGUE_VIEWPORT = "catalogue-viewport"
+private const val ARCHIVE_INSET = "archive-inset"
+private const val TRANSITION_SAMPLE_FRAMES = 10
+
 class NavigationMotionTest {
-    private val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    private lateinit var navigator: AppNavigator
 
     @Test fun catalogueDoesNotExpandIntoTheNavigationBarDuringArchiveEntry() {
-        val heights = mutableListOf<Int>()
-        lateinit var navigator: AppNavigator
+        showRoutes(ThemeMode.Light, fontScale = 1f)
+        val initialHeight = requireNotNull(heightOf(CATALOGUE_VIEWPORT))
+        assertTrue(initialHeight > 0)
 
-        showRoutes(ThemeMode.Light, 1f) { route, navigation, _ ->
-            navigator = navigation
-            Box(
-                Modifier.fillMaxSize().onSizeChanged {
-                    if (route == AppRoute.Catalogue) {
-                        heights.add(it.height)
-                    }
-                }
-            ) {
-                Text("Page ${route::class.simpleName}")
-            }
-        }.use { scenario ->
-            requireNotNull(device.wait(Until.findObject(By.res("tab-Catalogue")), 5_000))
-            device.waitForIdle()
-            var initialHeight = 0
-            scenario.onActivity {
-                initialHeight = heights.last()
-                assertTrue(initialHeight > 0)
-                heights.clear()
-                navigator.open(AppRoute.Archive("one"))
-            }
+        val frames = sampleTransition { navigator.open(AppRoute.Archive("one")) }
 
-            requireNotNull(device.wait(Until.findObject(By.text("Page Archive")), 5_000))
-            device.waitForIdle()
-            scenario.onActivity {
-                assertTrue(
-                    "The outgoing library must keep its viewport throughout the transition: $heights",
-                    heights.all { it == initialHeight }
-                )
-            }
-            assertTrue(device.wait(Until.gone(By.res("tab-Catalogue")), 3_000))
+        assertTrue("Archive entry must retain the outgoing catalogue", frames.isNotEmpty())
+        for (frame in frames) {
+            assertEquals("Catalogue resized on entry", initialHeight, frame.catalogueHeight)
         }
+        compose.onNodeWithTag(CATALOGUE_VIEWPORT).assertDoesNotExist()
     }
 
     @Test fun archiveKeepsItsGestureInsetWhileReturningToBottomNavigation() {
-        val archivePadding = mutableListOf<Dp>()
-        lateinit var navigator: AppNavigator
+        showRoutes(ThemeMode.Dark, fontScale = 2f)
+        compose.runOnIdle { navigator.open(AppRoute.Archive("one")) }
+        val initialInset = requireNotNull(heightOf(ARCHIVE_INSET))
+        assertTrue("The archive fixture needs a bottom system bar inset", initialInset > 0)
 
-        showRoutes(ThemeMode.Dark, 2f) { route, navigation, bottomPadding ->
-            navigator = navigation
-            if (route is AppRoute.Archive && archivePadding.lastOrNull() != bottomPadding) {
-                archivePadding.add(bottomPadding)
-            }
-            Text("Page ${route::class.simpleName}")
-        }.use { scenario ->
-            requireNotNull(device.wait(Until.findObject(By.res("tab-Catalogue")), 5_000))
-            scenario.onActivity { navigator.open(AppRoute.Archive("one")) }
-            requireNotNull(device.wait(Until.findObject(By.text("Page Archive")), 5_000))
-            device.waitForIdle()
-            var initialPadding = 0.dp
-            scenario.onActivity {
-                initialPadding = archivePadding.last()
-                assertTrue(initialPadding > 0.dp)
-                archivePadding.clear()
-                navigator.back()
-            }
+        val frames = sampleTransition { navigator.back() }
 
-            requireNotNull(device.wait(Until.findObject(By.res("tab-Catalogue")), 5_000))
-            device.waitForIdle()
-            scenario.onActivity {
-                for (padding in archivePadding) {
-                    assertEquals("Returning navigation must not resize the outgoing archive", initialPadding, padding)
-                }
-            }
+        assertTrue("Archive exit must retain the outgoing archive", frames.isNotEmpty())
+        for (frame in frames) {
+            assertEquals("Archive inset changed on exit", initialInset, frame.archiveInset)
         }
+        compose.onNodeWithTag(ARCHIVE_INSET).assertDoesNotExist()
     }
 
-    private fun showRoutes(
-        theme: ThemeMode,
-        fontScale: Float,
-        content: @Composable (AppRoute, AppNavigator, Dp) -> Unit
-    ): ActivityScenario<ComponentActivity> = ActivityScenario.launch(ComponentActivity::class.java).also { scenario ->
-        scenario.onActivity { activity ->
-            activity.enableEdgeToEdge()
-            activity.setContent {
-                val density = LocalDensity.current
-                CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
-                    SctvAppTheme(AppSettings(theme = theme)) {
-                        Box(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
-                            AppNavigationShell(content = content)
+    private fun showRoutes(theme: ThemeMode, fontScale: Float) {
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
+        compose.setContent {
+            val density = Density(LocalDensity.current.density, fontScale)
+            CompositionLocalProvider(LocalDensity provides density) {
+                SctvAppTheme(AppSettings(theme = theme)) {
+                    AppNavigationShell { route, navigation, bottomPadding ->
+                        navigator = navigation
+                        when (route) {
+                            AppRoute.Catalogue -> {
+                                val viewport = Modifier.fillMaxSize().testTag(CATALOGUE_VIEWPORT)
+                                Box(viewport) { Text("Catalogue") }
+                            }
+                            is AppRoute.Archive -> Box(Modifier.fillMaxSize()) {
+                                Spacer(Modifier.height(bottomPadding).testTag(ARCHIVE_INSET))
+                                Text("Archive")
+                            }
+                            else -> Unit
                         }
                     }
                 }
             }
         }
     }
+
+    private fun sampleTransition(start: () -> Unit): List<TransitionFrame> {
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle(start)
+            return buildList {
+                repeat(TRANSITION_SAMPLE_FRAMES) {
+                    compose.mainClock.advanceTimeByFrame()
+                    val catalogueHeight = heightOf(CATALOGUE_VIEWPORT)
+                    val archiveInset = heightOf(ARCHIVE_INSET)
+
+                    // Both destinations must still be mounted during the sampled frame.
+                    if (catalogueHeight != null && archiveInset != null) {
+                        add(TransitionFrame(catalogueHeight, archiveInset))
+                    }
+                }
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    private fun heightOf(tag: String): Int? {
+        val nodes = compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes()
+        return nodes.singleOrNull()?.size?.height
+    }
+
+    private data class TransitionFrame(val catalogueHeight: Int, val archiveInset: Int)
 }

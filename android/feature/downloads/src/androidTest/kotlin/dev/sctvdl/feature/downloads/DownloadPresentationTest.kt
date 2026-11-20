@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +26,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -94,22 +96,6 @@ class DownloadPresentationTest {
         }
     }
 
-    @Test fun removedFilesKeepRetryWithoutTransferBytesOrAnErrorMessage() {
-        val task = task(DownloadState.Missing).copy(reason = "The public file was deleted")
-        compose.setContent {
-            SctvAppTheme(AppSettings()) {
-                DownloadCard(task, {}, {}, {}, {}, false, false, {}, false)
-            }
-        }
-
-        compose.onNodeWithText("文件已移除").assertIsDisplayed()
-        compose.onNodeWithText("重新下载").assertIsDisplayed()
-        compose.onNodeWithText("4.0 KiB / 8.0 KiB").assertDoesNotExist()
-        compose.onNodeWithText(task.reason!!).assertDoesNotExist()
-        compose.onNodeWithText("播放").assertDoesNotExist()
-        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(0)
-    }
-
     @Test fun failedPublicationRetriesSavingWithoutOfferingAnotherTransfer() {
         val task = task(DownloadState.Failed).copy(cacheComplete = true, reason = "空间不足")
         var action: DownloadAction? = null
@@ -170,8 +156,12 @@ class DownloadPresentationTest {
         val completed = compose.onNodeWithText("已完成 · 1").fetchSemanticsNode().boundsInRoot
         assertTrue(active.bottom < completed.top)
         captureScreenshot("sctv-downloads-grouped-light")
-        compose.onNodeWithText("已完成 · 1").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("已移除 · 1").performScrollTo().assertIsDisplayed()
+
+        val downloadList = compose.onNodeWithTag("download-list")
+        downloadList.performScrollToNode(hasText("已完成 · 1"))
+        compose.onNodeWithText("已完成 · 1").assertIsDisplayed()
+        downloadList.performScrollToNode(hasText("已移除 · 1"))
+        compose.onNodeWithText("已移除 · 1").assertIsDisplayed()
     }
 
     @Test fun longPressSelectsThePresentedAttemptWithoutAddingAnOrdinaryCardAction() {

@@ -1,7 +1,6 @@
 package dev.sctvdl.data.programmes.remote
 
-import dev.sctvdl.data.programmes.remote.ProgrammeApi
-import dev.sctvdl.data.programmes.remote.RetrofitProgrammeRemoteDataSource
+import dev.sctvdl.data.di.NetworkModule
 import dev.sctvdl.domain.common.AppException
 import dev.sctvdl.domain.common.ErrorKind
 import java.util.concurrent.TimeUnit
@@ -76,28 +75,31 @@ class ProgrammeApiTest {
     }
 
     @Test fun applicationControlledMetadataRequestsRejectRedirects() = runTest {
-        val server = MockWebServer()
-        server.start()
-        try {
-            server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", "/other"))
-            val api = Retrofit.Builder().baseUrl(
-                server.url("/")
-            ).client(
-                OkHttpClient.Builder().followRedirects(false).build()
-            ).build().create(ProgrammeApi::class.java)
-            var status: Int? = null
-            try {
-                RetrofitProgrammeRemoteDataSource(api).programmes()
-            } catch (
-                error: HttpException
-            ) {
-                status =
-                    error.code()
+        val client = NetworkModule.client()
+        MockWebServer().use { origin ->
+            MockWebServer().use { destination ->
+                val catalogue = "{\"rs\":200,\"data\":{\"records\":[]}}"
+                destination.enqueue(MockResponse().setBody(catalogue))
+                val redirect = MockResponse().setResponseCode(302)
+                origin.enqueue(
+                    redirect.addHeader("Location", destination.url("/programmes"))
+                )
+                val retrofit = Retrofit.Builder().baseUrl(origin.url("/")).client(client).build()
+                val api = retrofit.create(ProgrammeApi::class.java)
+                val source = RetrofitProgrammeRemoteDataSource(api)
+
+                try {
+                    val failure = runCatching { source.programmes() }.exceptionOrNull()
+
+                    assertTrue("Expected HTTP redirect, got $failure", failure is HttpException)
+                    assertEquals(302, (failure as HttpException).code())
+                    assertEquals(1, origin.requestCount)
+                    assertEquals(0, destination.requestCount)
+                } finally {
+                    client.dispatcher.executorService.shutdown()
+                    client.connectionPool.evictAll()
+                }
             }
-            assertEquals(302, status)
-            assertEquals(1, server.requestCount)
-        } finally {
-            server.shutdown()
         }
     }
 }

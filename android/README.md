@@ -66,14 +66,37 @@ Unit tests live in `src/test`; device/UI tests live in `src/androidTest`. Use fa
 | Media           | Live HEAD or small Range probe plus real device playback, seeking and quality switching; no full-video verification download                                                     |
 | Performance     | Release startup and programme scrolling measurements; a baseline profile for the critical browse/play path                                                                       |
 
-Run from the repository root, explicitly selecting the disposable device. Use `gradlew.bat` and set `ANDROID_SERIAL` in the shell on Windows.
+Assemble all app and library instrumentation APKs and the performance targets from the repository
+root. This command only builds APKs and requires no connected device. Use `gradlew.bat` on Windows.
 
 ```sh
-./android/gradlew -p android :app:assembleDebugAndroidTest
+./android/gradlew -p android assembleDebugAndroidTest \
+  :app:assembleBenchmarkRelease :baselineprofile:assemble :benchmark:assemble
+```
+
+Run instrumentation separately and select the disposable device explicitly. Set `ANDROID_SERIAL`
+in the shell before running `gradlew.bat` on Windows.
+
+```sh
 ANDROID_SERIAL=<disposable-device-id> ./android/gradlew -p android connectedDebugAndroidTest --no-parallel
 ```
 
 Use a disposable emulator or device; fixture downloads are removed after the test. On API 37, Espresso 3.7.0 currently calls the removed `InputManager.getInstance` method. Run Compose interaction tests on API 29 and use ADB/UI Automator or non-Espresso instrumentation for API 37 until the upstream test library supports it. This does not affect application playback or navigation at runtime.
+
+Run navigation motion tests with animations enabled and a visible software navigation bar that
+provides a bottom window inset.
+
+Run theme interpolation acceptance on API 31 or later with the system Animator duration scale
+enabled, preferably `1x`. Verify that the test runs and passes because its dynamic-colour
+requirement skips older releases. The device must produce intermediate colours for this check.
+Restore the original animation setting after testing if you changed it.
+
+```sh
+theme_test_class=dev.sctvdl.feature.settings.SettingsThemeTransitionTest
+ANDROID_SERIAL=<disposable-api-31-or-newer-device-id> ./android/gradlew -p android \
+  :feature:settings:connectedDebugAndroidTest --no-parallel \
+  -Pandroid.testInstrumentationRunnerArguments.class="$theme_test_class"
+```
 
 Resource controls are local choices. For a constrained verification run, append `--no-daemon --no-parallel --max-workers=2 -Dorg.gradle.jvmargs="-Xmx1536m -Dfile.encoding=UTF-8" -Pkotlin.compiler.execution.strategy=in-process`. These flags are optional and do not describe a requirement for other developers' computers. Run emulator testing separately from builds when memory is limited.
 
@@ -90,9 +113,11 @@ android/gradlew.bat -p android :app:generateBaselineProfile
 android/gradlew.bat -p android :app:assembleRelease
 ```
 
-The plugin saves generated rules under `app/src/main/generated/baselineProfiles`. Review regenerated rules alongside changes to critical journeys. The optimized `benchmarkRelease` variant is locally debug-signed and profileable; production `release` remains unsigned. Compile the performance harnesses with `:baselineprofile:assemble :benchmark:assemble`.
+The plugin saves generated rules under `app/src/main/generated/baselineProfiles`. Review
+regenerated rules alongside changes to critical journeys. The optimized `benchmarkRelease`
+variant is locally debug-signed and profileable. Production `release` remains unsigned.
 
-Run `android/gradlew.bat -p android :benchmark:connectedBenchmarkReleaseAndroidTest` on a suitable physical device. The suite records cold startup and catalogue frame timing. Keep the device cool, idle, and on the same network/data conditions when comparing results. Emulator timing is not representative of user devices; profile generation on an emulator does not establish performance gains. See the official [Baseline Profile](https://developer.android.com/topic/performance/baselineprofiles/create-baselineprofile) and [Macrobenchmark](https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview) guides.
+Run `android/gradlew.bat -p android :benchmark:connectedBenchmarkReleaseAndroidTest` on a suitable physical device. Cold startup opens the normal launcher activity. The catalogue scroll benchmark renders 100 fixed programme cards in the production catalogue and verifies that both fling directions move the viewport. Keep the device cool and idle. Use the same data and network conditions when comparing startup results. Emulator timing is not representative of user devices; profile generation on an emulator does not establish performance gains. See the official [Baseline Profile](https://developer.android.com/topic/performance/baselineprofiles/create-baselineprofile) and [Macrobenchmark](https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview) guides.
 
 [Android CI](../.github/workflows/android.yml) explicitly configures Android command-line tools and installs the pinned SDK with `android-actions/setup-android`, uses JDK 21 and the verified wrapper, checks formatting/unit tests/lint, assembles app and performance APKs, and preserves reports. It does not rely on the runner image providing `sdkmanager` on `PATH`. Connected device tests and physical performance measurements run separately.
 

@@ -1,5 +1,8 @@
 package dev.sctvdl.feature.downloads
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -9,14 +12,10 @@ import dev.sctvdl.domain.download.DownloadState
 import dev.sctvdl.domain.download.DownloadTask
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.settings.AppSettings
-import dev.sctvdl.feature.downloads.DownloadTab
-import dev.sctvdl.feature.downloads.DownloadsScreen
-import dev.sctvdl.feature.downloads.DownloadsUiState
 import dev.sctvdl.ui.theme.SctvAppTheme
 import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -79,32 +78,44 @@ class DownloadFlowTest {
     }
 
     @Test fun missingFileOffersRetryAndHistoryRemovalInsteadOfPlayback() {
-        var retried = false
-        var removed = false
+        val deletionReason = "The public file was deleted"
+        val missing = task(DownloadState.Missing, total = 8192).copy(reason = deletionReason)
+        var retried: String? = null
+        var removed: String? = null
         compose.setContent {
             SctvAppTheme(AppSettings()) {
                 DownloadsScreen(
-                    DownloadsUiState(
-                        listOf(task(DownloadState.Missing)),
-                        DownloadTab.Removed,
-                        false
+                    state = DownloadsUiState(
+                        tasks = listOf(missing),
+                        tab = DownloadTab.Removed,
+                        loading = false
                     ),
-                    {
-                    }, {}, {
-                        retried = true
-                    }, { removed = true }, {}, {}, {}, {}
+                    onTab = {},
+                    onCancel = {},
+                    onRetry = { retried = it },
+                    onRemove = { removed = it },
+                    onPlay = {},
+                    onShare = {},
+                    onOpenFile = {},
+                    onSystemDownloads = {}
                 )
             }
         }
+
         compose.onNodeWithText("文件已移除").assertIsDisplayed()
         compose.onNodeWithText("播放").assertDoesNotExist()
+        compose.onNodeWithText("4.0 KiB / 8.0 KiB").assertDoesNotExist()
+        compose.onNodeWithText(deletionReason).assertDoesNotExist()
+        val progress = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+        compose.onAllNodes(progress).assertCountEquals(0)
+
         compose.onNodeWithText("重新下载").performClick()
         compose.onNodeWithContentDescription("文件操作").performClick()
         compose.onNodeWithText("移除记录").performClick()
         compose.onNodeWithText("确认移除记录").performClick()
         compose.runOnIdle {
-            assertTrue(retried)
-            assertTrue(removed)
+            assertEquals(missing.id, retried)
+            assertEquals(missing.id, removed)
         }
     }
 }

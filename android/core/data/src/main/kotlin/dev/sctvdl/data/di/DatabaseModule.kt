@@ -7,9 +7,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import dev.sctvdl.data.database.RuntimeMigrations
 import dev.sctvdl.data.database.SctvDatabase
 import dev.sctvdl.data.database.SctvUserDatabase
+import dev.sctvdl.data.database.openRuntimeDatabase
 import javax.inject.Singleton
 
 @Module
@@ -23,9 +23,5 @@ internal object DatabaseModule {
     ).build()
 
     @Provides @Singleton
-    fun database(@ApplicationContext context: Context): SctvDatabase = Room.databaseBuilder(
-        context,
-        SctvDatabase::class.java,
-        "sctv-metadata.db"
-    ).addMigrations(RuntimeMigrations.OneToTwo).build()
+    fun database(@ApplicationContext context: Context): SctvDatabase = openRuntimeDatabase(context)
 }

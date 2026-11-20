@@ -15,6 +15,7 @@ import dev.sctvdl.domain.download.DownloadTask
 import dev.sctvdl.domain.download.target
 import dev.sctvdl.domain.media.Quality
 import dev.sctvdl.domain.repository.DownloadRepository
+import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -22,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,6 +63,30 @@ class ManagedDownloadRepositoryTest {
         assertTrue(store.all().isEmpty())
     }
 
+    @Test fun failedPrivateCleanupPreservesTheRecordForALaterRemoval() = runTest {
+        val download = task(DownloadState.Failed).copy(cacheKey = "private-transfer", revision = 2)
+        val store = FakeDownloadStore().apply { update(download) }
+        val cleanupFailure = IOException("Private transfer cache is unavailable")
+        val control = Control().apply { removalFailure = cleanupFailure }
+        val files = Files()
+        val repository = repository(store, control, files)
+
+        val failure = runCatching {
+            repository.perform(download.target, DownloadAction.RemoveRecord)
+        }.exceptionOrNull()
+
+        assertSame(cleanupFailure, failure)
+        assertEquals(download, store.get(download.id))
+        assertEquals(0, files.deletions)
+
+        control.removalFailure = null
+        val result = repository.perform(download.target, DownloadAction.RemoveRecord)
+
+        assertEquals(DownloadActionResult.Applied, result)
+        assertTrue(store.all().isEmpty())
+        assertEquals(listOf(download.attemptId), control.removed)
+    }
+
     private fun repository(store: FakeDownloadStore, control: Control, files: Files): DownloadRepository =
         ManagedDownloadRepository(
             store,
@@ -88,6 +114,7 @@ class ManagedDownloadRepositoryTest {
 
     private class Control : ManagedDownloadControl {
         val removed = mutableListOf<String>()
+        var removalFailure: IOException? = null
 
         override suspend fun reconcile() = Unit
 
@@ -96,6 +123,7 @@ class ManagedDownloadRepositoryTest {
         override suspend fun stop(task: DownloadTask) = Unit
 
         override suspend fun remove(task: DownloadTask) {
+            removalFailure?.let { throw it }
             removed += task.attemptId
         }
     }
