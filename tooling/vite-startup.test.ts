@@ -70,6 +70,10 @@ describe('Web development scanning', () => {
     await optimizer.init()
     await optimizer.scanProcessing
 
+    // Scanning starts Rolldown output; cancellation does not join that background write.
+    const discovered = Object.values(optimizer.metadata.discovered)
+    await Promise.all(discovered.map((dependency) => dependency.processing))
+
     const dependencies = {
       ...optimizer.metadata.discovered,
       ...optimizer.metadata.optimized,
