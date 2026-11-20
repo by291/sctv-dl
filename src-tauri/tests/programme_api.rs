@@ -2,7 +2,10 @@ mod support;
 
 use std::{
     error::Error,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
 
@@ -127,25 +130,43 @@ async fn rejects_invalid_references_before_network_and_preserves_business_errors
 
 #[tokio::test]
 async fn rejects_redirects_non_json_and_malformed_envelopes() {
+    let destination_calls = Arc::new(AtomicUsize::new(0));
+    let captured_calls = destination_calls.clone();
+    let destination = serve(Router::new().fallback(move || {
+        captured_calls.fetch_add(1, Ordering::SeqCst);
+
+        async { Json(envelope(json!({ "records": [] }))) }
+    }))
+    .await;
+
     for (status, body) in [
-        (302, "redirect"),
+        // A successful envelope ensures only the HTTP status guard can reject this response.
+        (302, "{\"rs\":200,\"data\":{\"records\":[]}}"),
         (200, "<html>no</html>"),
         (200, "{}"),
         (200, "{\"rs\":200,\"data\":{\"records\":[{}]}}"),
     ] {
-        let stub = serve(Router::new().fallback(move || async move {
-            Response::builder()
-                .status(status)
-                .header("Location", "http://127.0.0.1:1/forbidden")
-                .body(Body::from(body))
-                .unwrap()
+        let location = destination.origin.clone();
+        let stub = serve(Router::new().fallback(move || {
+            let location = location.clone();
+
+            async move {
+                let response = Response::builder()
+                    .status(status)
+                    .header("Location", location);
+
+                response.body(Body::from(body)).unwrap()
+            }
         }))
         .await;
-        assert_eq!(
-            service(&stub).programmes().await.unwrap_err().code,
-            ErrorCode::Upstream
-        );
+        let error = service(&stub).programmes().await.unwrap_err();
+        assert_eq!(error.code, ErrorCode::Upstream);
+        if status == 302 {
+            assert!(error.message.contains("HTTP 302"), "{}", error.message);
+        }
     }
+
+    assert_eq!(destination_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

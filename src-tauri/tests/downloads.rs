@@ -14,7 +14,7 @@ use axum::{
 };
 use sctv_dl_desktop_lib::downloads::files::{DownloadDirectory, download_filename};
 use sctv_dl_desktop_lib::downloads::{
-    ContentRef, DownloadConfig, DownloadManager, PreparedDownload, TaskState,
+    ContentRef, DownloadConfig, DownloadManager, DownloadTask, PreparedDownload, TaskState,
 };
 use sctv_dl_desktop_lib::media::Quality;
 
@@ -76,6 +76,27 @@ async fn terminal(manager: &DownloadManager, count: usize) {
     })
     .await
     .expect("downloads did not reach terminal state");
+}
+
+async fn wait_for_written_bytes(manager: &DownloadManager, expected_bytes: u64) -> DownloadTask {
+    const WRITE_TIMEOUT: Duration = Duration::from_secs(3);
+
+    tokio::time::timeout(WRITE_TIMEOUT, async {
+        loop {
+            let task = manager.list().pop().expect("The download task disappeared");
+            if task.received_bytes == expected_bytes {
+                return task;
+            }
+
+            assert!(
+                !task.state.is_terminal(),
+                "The transfer ended before its fixture chunk was written"
+            );
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("The transfer did not acknowledge its fixture chunk")
 }
 
 #[tokio::test]
@@ -328,38 +349,56 @@ async fn limits_concurrency_deduplicates_active_jobs_and_cancels_waiting_jobs() 
 
 #[tokio::test]
 async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
-    let server = stub(Router::new().fallback(|request: Request<Body>| async move {
-        match request.uri().path() {
-            "/3.mp4" => Response::builder()
-                .header("Content-Type", "text/html")
-                .body(Body::from("not a video"))
-                .unwrap(),
-            "/4.mp4" => Response::builder()
-                .status(302)
-                .header("Location", "/5.mp4")
-                .body(Body::empty())
-                .unwrap(),
-            "/5.mp4" => Response::builder()
-                .header("Content-Type", "video/mp4")
-                .header("Content-Length", 100)
-                .body(Body::from_stream(futures_util::stream::iter([
-                    Ok::<_, std::io::Error>(vec![1_u8; 10]),
-                    Err(std::io::Error::other("interrupted")),
-                ])))
-                .unwrap(),
-            "/7.mp4" => Response::builder()
-                .header("Content-Type", "video/mp4")
-                .body(Body::empty())
-                .unwrap(),
-            _ => Response::builder()
-                .header("Content-Type", "video/mp4")
-                .body(Body::from_stream(futures_util::stream::iter([Ok::<
-                    _,
-                    std::io::Error,
-                >(
-                    b"unknown length".to_vec(),
-                )])))
-                .unwrap(),
+    let redirected_calls = Arc::new(AtomicUsize::new(0));
+    let captured_calls = redirected_calls.clone();
+    let server = stub(Router::new().fallback(move |request: Request<Body>| {
+        let redirected_calls = captured_calls.clone();
+
+        async move {
+            match request.uri().path() {
+                "/3.mp4" => Response::builder()
+                    .header("Content-Type", "text/html")
+                    .body(Body::from("not a video"))
+                    .unwrap(),
+                "/4.mp4" => {
+                    let response = Response::builder()
+                        .status(302)
+                        .header("Location", "/redirected.mp4");
+                    let response = response.header("Content-Type", "video/mp4");
+
+                    response
+                        .body(Body::from("video in a redirect response"))
+                        .unwrap()
+                }
+                "/5.mp4" => Response::builder()
+                    .header("Content-Type", "video/mp4")
+                    .header("Content-Length", 100)
+                    .body(Body::from_stream(futures_util::stream::iter([
+                        Ok::<_, std::io::Error>(vec![1_u8; 10]),
+                        Err(std::io::Error::other("interrupted")),
+                    ])))
+                    .unwrap(),
+                "/7.mp4" => Response::builder()
+                    .header("Content-Type", "video/mp4")
+                    .body(Body::empty())
+                    .unwrap(),
+                "/redirected.mp4" => {
+                    redirected_calls.fetch_add(1, Ordering::SeqCst);
+
+                    let response = Response::builder().header("Content-Type", "video/mp4");
+
+                    response.body(Body::from("redirected video")).unwrap()
+                }
+                _ => Response::builder()
+                    .header("Content-Type", "video/mp4")
+                    .body(Body::from_stream(futures_util::stream::iter([Ok::<
+                        _,
+                        std::io::Error,
+                    >(
+                        b"unknown length".to_vec(),
+                    )])))
+                    .unwrap(),
+            }
         }
     }))
     .await;
@@ -382,6 +421,14 @@ async fn isolates_transfer_failures_and_keeps_unknown_totals_unknown() {
 
     let tasks = manager.list();
 
+    assert_eq!(redirected_calls.load(Ordering::SeqCst), 0);
+    let refused_redirect = tasks
+        .iter()
+        .find(|task| task.content.content_id == "4")
+        .unwrap();
+    assert_eq!(refused_redirect.state, TaskState::Failed);
+    let redirect_error = refused_redirect.error.as_deref().unwrap();
+    assert!(redirect_error.contains("HTTP 302"), "{redirect_error}");
     assert_eq!(
         tasks
             .iter()
@@ -464,15 +511,33 @@ async fn bounds_outstanding_work_and_releases_a_cancelled_slot_for_waiting_downl
 
 #[tokio::test]
 async fn throttles_progress_and_keeps_the_latest_written_count_when_cancelled() {
-    let server = stub(Router::new().fallback(|| async {
-        let stream = futures_util::stream::unfold(0, |index| async move {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            Some((Ok::<_, std::io::Error>(vec![1_u8; 1024]), index + 1))
-        });
-        Response::builder()
-            .header("Content-Type", "video/mp4")
-            .body(Body::from_stream(stream))
-            .unwrap()
+    const CHUNK_INTERVAL: Duration = Duration::from_millis(10);
+    const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+    const OBSERVATION_TIMEOUT: Duration = Duration::from_secs(3);
+    const CHUNK_BYTES: usize = 1024;
+    const REQUIRED_PROGRESS_EVENTS: usize = 2;
+
+    let (chunks, receiver) = tokio::sync::mpsc::channel(1);
+    let receiver = Arc::new(Mutex::new(Some(receiver)));
+    let server = stub(Router::new().fallback(move || {
+        let receiver = {
+            let mut owner = receiver.lock().unwrap();
+            owner
+                .take()
+                .expect("The fixture permits exactly one transfer")
+        };
+
+        async move {
+            let stream = futures_util::stream::unfold(receiver, |mut receiver| async move {
+                let bytes: Vec<u8> = receiver.recv().await?;
+
+                Some((Ok::<_, std::io::Error>(bytes), receiver))
+            });
+
+            let response = Response::builder().header("Content-Type", "video/mp4");
+
+            response.body(Body::from_stream(stream)).unwrap()
+        }
     }))
     .await;
     let root = tempfile::tempdir().unwrap();
@@ -488,28 +553,79 @@ async fn throttles_progress_and_keeps_the_latest_written_count_when_cancelled() 
             .lock()
             .unwrap()
             .push((std::time::Instant::now(), task));
+
         true
     });
     let start = manager
         .start(vec![prepared(&server.origin, "3")], root.path())
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(270)).await;
-    manager.cancel(&start.task_ids[0]);
+    let mut written_bytes = 0;
+
+    tokio::time::timeout(OBSERVATION_TIMEOUT, async {
+        loop {
+            chunks.send(vec![1_u8; CHUNK_BYTES]).await.unwrap();
+            written_bytes += CHUNK_BYTES as u64;
+            wait_for_written_bytes(&manager, written_bytes).await;
+            let progress_count = {
+                let events = events.lock().unwrap();
+                events
+                    .iter()
+                    .filter(|(_, task)| task.state == TaskState::Running && task.received_bytes > 0)
+                    .count()
+            };
+
+            if progress_count >= REQUIRED_PROGRESS_EVENTS {
+                break;
+            }
+
+            tokio::time::sleep(CHUNK_INTERVAL).await;
+        }
+    })
+    .await
+    .expect("The transfer did not publish two paced progress events");
+
+    let written_at_cancellation = tokio::time::timeout(OBSERVATION_TIMEOUT, async {
+        loop {
+            chunks.send(vec![1_u8; CHUNK_BYTES]).await.unwrap();
+            written_bytes += CHUNK_BYTES as u64;
+            let current = wait_for_written_bytes(&manager, written_bytes).await;
+            let reported_bytes = {
+                let events = events.lock().unwrap();
+                let latest_progress = events
+                    .iter()
+                    .rfind(|(_, task)| task.state == TaskState::Running)
+                    .expect("The transfer did not publish its running state");
+
+                latest_progress.1.received_bytes
+            };
+
+            if current.received_bytes > reported_bytes {
+                // The next body chunk remains behind the channel gate. No write can race cancel.
+                manager.cancel(&start.task_ids[0]);
+
+                return current.received_bytes;
+            }
+        }
+    })
+    .await
+    .expect("No unreported bytes became available for the final cancellation snapshot");
     terminal(&manager, 1).await;
     let final_task = manager.list().pop().unwrap();
     assert_eq!(final_task.state, TaskState::Cancelled);
+    assert_eq!(final_task.received_bytes, written_at_cancellation);
+
     {
         let events = events.lock().unwrap();
         let progress: Vec<_> = events
             .iter()
             .filter(|(_, task)| task.state == TaskState::Running && task.received_bytes > 0)
             .collect();
-        assert!(progress.len() >= 2);
+        assert!(progress.len() >= REQUIRED_PROGRESS_EVENTS);
         assert!(
             progress
                 .windows(2)
-                .all(|pair| pair[1].0.duration_since(pair[0].0) >= Duration::from_millis(100))
+                .all(|pair| pair[1].0.duration_since(pair[0].0) >= PROGRESS_INTERVAL)
         );
         assert!(final_task.received_bytes > progress.last().unwrap().1.received_bytes);
     }

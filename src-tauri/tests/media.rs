@@ -261,14 +261,32 @@ async fn rejects_unknown_tokens_remote_origins_rebound_hosts_and_unsupported_met
 
 #[tokio::test]
 async fn rejects_redirects_and_non_video_bodies_without_following_them() {
+    let destination_calls = Arc::new(AtomicUsize::new(0));
+    let captured_calls = destination_calls.clone();
+    let destination = serve(Router::new().fallback(move || {
+        captured_calls.fetch_add(1, Ordering::SeqCst);
+
+        async {
+            let response = Response::builder().header("Content-Type", "video/mp4");
+
+            response.body(Body::from("redirected video")).unwrap()
+        }
+    }))
+    .await;
+
     for (status, content_type) in [(302, "video/mp4"), (200, "text/html")] {
-        let stub = serve(Router::new().fallback(move || async move {
-            Response::builder()
-                .status(status)
-                .header("Location", "http://127.0.0.1:1/forbidden")
-                .header("Content-Type", content_type)
-                .body(Body::from("body"))
-                .unwrap()
+        let location = format!("{}/redirected.mp4", destination.origin);
+        let stub = serve(Router::new().fallback(move || {
+            let location = location.clone();
+
+            async move {
+                let response = Response::builder()
+                    .status(status)
+                    .header("Location", location);
+                let response = response.header("Content-Type", content_type);
+
+                response.body(Body::from("body")).unwrap()
+            }
         }))
         .await;
 
@@ -281,7 +299,10 @@ async fn rejects_redirects_and_non_video_bodies_without_following_them() {
                 .status(),
             502
         );
+        server.shutdown().await;
     }
+
+    assert_eq!(destination_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -300,10 +321,9 @@ async fn closing_a_session_cancels_an_active_stream_and_never_reuses_its_token()
                     Some((Ok::<_, std::io::Error>(vec![0_u8; 1024]), index + 1))
                 }
             });
-            Response::builder()
-                .header("Content-Type", "video/mp4")
-                .body(Body::from_stream(stream))
-                .unwrap()
+            let response = Response::builder().header("Content-Type", "video/mp4");
+
+            response.body(Body::from_stream(stream)).unwrap()
         }
     }))
     .await;
@@ -332,15 +352,16 @@ async fn closing_a_session_cancels_an_active_stream_and_never_reuses_its_token()
 
 #[tokio::test]
 async fn dropping_the_downstream_body_stops_consuming_the_upstream_stream() {
-    let sent = Arc::new(AtomicUsize::new(0));
-    let captured = sent.clone();
+    let active = Arc::new(AtomicUsize::new(0));
+    let captured = active.clone();
     let stub = serve(Router::new().fallback(move || {
-        let sent = captured.clone();
+        let active = captured.clone();
         async move {
-            let stream = futures_util::stream::unfold(sent, |sent| async move {
+            active.fetch_add(1, Ordering::SeqCst);
+            let guard = ActiveTransfer(active);
+            let stream = futures_util::stream::unfold(guard, |guard| async move {
                 tokio::time::sleep(Duration::from_millis(5)).await;
-                sent.fetch_add(1, Ordering::SeqCst);
-                Some((Ok::<_, std::io::Error>(vec![0_u8; 64 * 1024]), sent))
+                Some((Ok::<_, std::io::Error>(vec![0_u8; 64 * 1024]), guard))
             });
             Response::builder()
                 .header("Content-Type", "video/mp4")
@@ -354,12 +375,17 @@ async fn dropping_the_downstream_body_stops_consuming_the_upstream_stream() {
     let session = server.open(vec![source(&stub)], Quality::Standard).unwrap();
     let mut response = reqwest::get(&session.sources[0].url).await.unwrap();
     response.chunk().await.unwrap().unwrap();
+    assert_eq!(active.load(Ordering::SeqCst), 1);
     drop(response);
-    tokio::time::sleep(Duration::from_millis(80)).await;
 
-    let stopped = sent.load(Ordering::SeqCst);
-    tokio::time::sleep(Duration::from_millis(80)).await;
-    assert_eq!(sent.load(Ordering::SeqCst), stopped);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while active.load(Ordering::SeqCst) != 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("Dropping the downstream body retained its upstream response");
+    server.shutdown().await;
 }
 
 #[tokio::test]

@@ -1,3 +1,6 @@
+#[path = "support/cache.rs"]
+mod cache_fixture;
+
 use std::sync::Arc;
 
 use sctv_dl_desktop_lib::{
@@ -122,31 +125,11 @@ async fn evicts_lru_and_limits_browse_without_touching_other_data() {
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("history.json"), "preserved").unwrap();
     let lifecycle = Arc::new(ExitController::default());
-    let cache = ProgrammeCacheService::open(root.path().join("cache")).await;
-    let epoch = cache
-        .read(CacheKey::Catalogue, lifecycle.enter_save().await.unwrap())
-        .await
-        .unwrap()
-        .epoch;
+    let path = root.path().join("cache");
+    let epoch = cache_fixture::seed_capacity(&path);
+    let cache = ProgrammeCacheService::open(path.clone()).await;
 
-    for id in 0..200 {
-        let payload = serde_json::from_value(json!({
-            "kind": "dates",
-            "programmeId": id.to_string(),
-            "items": []
-        }))
-        .unwrap();
-        cache
-            .write(
-                payload,
-                epoch.clone(),
-                lifecycle.enter_save().await.unwrap(),
-            )
-            .await
-            .unwrap();
-    }
-
-    cache
+    let retained = cache
         .read(
             CacheKey::Dates {
                 programme_id: "0".into(),
@@ -155,6 +138,8 @@ async fn evicts_lru_and_limits_browse_without_touching_other_data() {
         )
         .await
         .unwrap();
+    assert!(retained.persisted);
+    assert!(retained.snapshot.is_some());
     cache
         .write(
             serde_json::from_value(json!({
@@ -183,21 +168,14 @@ async fn evicts_lru_and_limits_browse_without_touching_other_data() {
             .is_none()
     );
 
-    for id in 0..101 {
-        let value = serde_json::from_value(json!({
-            "programmeId": id.to_string(),
-            "dateId": null,
-            "date": null,
-            "sort": "asc",
-            "scrollY": id,
-            "visitedAt": format!("2026-10-17T00:{:02}:{:02}.000Z", id / 60, id % 60),
-        }))
+    cache
+        .write_browse(
+            cache_fixture::browse_state(100),
+            epoch,
+            lifecycle.enter_save().await.unwrap(),
+        )
+        .await
         .unwrap();
-        cache
-            .write_browse(value, epoch.clone(), lifecycle.enter_save().await.unwrap())
-            .await
-            .unwrap();
-    }
     assert!(
         cache
             .read_browse("0".into(), lifecycle.enter_save().await.unwrap())
@@ -206,6 +184,37 @@ async fn evicts_lru_and_limits_browse_without_touching_other_data() {
             .value
             .is_none()
     );
+
+    // Reopening proves the surviving and newly admitted records reached disk.
+    drop(cache);
+    let cache = ProgrammeCacheService::open(path).await;
+    for programme_id in ["0", "200"] {
+        let retained = cache
+            .read(
+                CacheKey::Dates {
+                    programme_id: programme_id.into(),
+                },
+                lifecycle.enter_save().await.unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert!(retained.persisted);
+        assert!(
+            retained.snapshot.is_some(),
+            "Missing dates for {programme_id}"
+        );
+    }
+
+    for (programme_id, expected_scroll) in [("1", 1.0), ("100", 100.0)] {
+        let retained = cache
+            .read_browse(programme_id.into(), lifecycle.enter_save().await.unwrap())
+            .await
+            .unwrap();
+
+        assert!(retained.persisted);
+        assert_eq!(retained.value.unwrap().scroll_y, expected_scroll);
+    }
 
     cache
         .clear(lifecycle.enter_save().await.unwrap())

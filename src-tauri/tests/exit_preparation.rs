@@ -4,6 +4,16 @@ use sctv_dl_desktop_lib::lifecycle::{ExitEvent, ExitPreparation};
 
 const ACK_TIMEOUT: Duration = Duration::from_secs(1);
 const SHORT_TIMEOUT: Duration = Duration::from_millis(10);
+const EVENT_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn receive_event(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ExitEvent>,
+) -> ExitEvent {
+    tokio::time::timeout(EVENT_TIMEOUT, receiver.recv())
+        .await
+        .expect("The frontend did not receive the expected exit event")
+        .expect("The exit event subscription closed unexpectedly")
+}
 
 #[tokio::test]
 async fn preparation_checks_tokens_and_handles_missing_or_unresponsive_frontends() {
@@ -16,7 +26,7 @@ async fn preparation_checks_tokens_and_handles_missing_or_unresponsive_frontends
         let preparation = preparation.clone();
         tokio::spawn(async move { preparation.attempt().prepare(ACK_TIMEOUT).await })
     };
-    let Some(ExitEvent::Prepare(request)) = receive.recv().await else {
+    let ExitEvent::Prepare(request) = receive_event(&mut receive).await else {
         panic!("Expected the frontend to receive a preparation request");
     };
 
@@ -26,8 +36,8 @@ async fn preparation_checks_tokens_and_handles_missing_or_unresponsive_frontends
     preparation.complete(&request, false);
     assert!(!pending.await.unwrap());
     assert!(matches!(
-        receive.recv().await,
-        Some(ExitEvent::Cancelled { cancelled }) if cancelled == request
+        receive_event(&mut receive).await,
+        ExitEvent::Cancelled { cancelled } if cancelled == request
     ));
     assert!(!preparation.attempt().prepare(SHORT_TIMEOUT).await);
 
@@ -52,7 +62,7 @@ async fn accepted_native_exit_leaves_the_frontend_frozen() {
             attempt.commit();
         })
     };
-    let Some(ExitEvent::Prepare(request)) = receive.recv().await else {
+    let ExitEvent::Prepare(request) = receive_event(&mut receive).await else {
         panic!("Expected an exit preparation request");
     };
     preparation.complete(&request, true);
