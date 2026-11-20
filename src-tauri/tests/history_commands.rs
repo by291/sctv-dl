@@ -3,11 +3,11 @@ mod ipc;
 
 use std::sync::Arc;
 
-use sctv_dl_desktop_lib::{commands, history::HistoryService, lifecycle::ExitController};
+use sctv_dl_desktop_lib::{history::HistoryService, lifecycle::ExitController};
 use serde_json::json;
 use tauri::test::mock_builder;
 
-use ipc::{invoke, local_origin};
+use ipc::{CommandInvocation, assert_permission_denied, invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
@@ -16,16 +16,7 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
     let app = mock_builder()
         .manage(controller.clone())
         .manage(HistoryService::open(root.path().join("history-v1.json")).await)
-        .invoke_handler(tauri::generate_handler![
-            commands::list_history,
-            commands::begin_history,
-            commands::record_history,
-            commands::end_history,
-            commands::remove_history,
-            commands::clear_history,
-            commands::subscribe_history,
-            commands::unsubscribe_history
-        ])
+        .invoke_handler(sctv_dl_desktop_lib::create_command_handler())
         .build(tauri::generate_context!(test = true))
         .unwrap();
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
@@ -47,12 +38,12 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
         "title": "Evening",
         "cover": null
     });
-    let session = invoke(
-        &main,
-        "begin_history",
-        json!({"metadata": metadata}),
+    let session = invoke(CommandInvocation {
+        window: &main,
+        command: "begin_history",
+        body: json!({"metadata": metadata}),
         origin,
-    )
+    })
     .unwrap();
     let record = json!({
         "sessionId": session["id"],
@@ -75,38 +66,54 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
         ("unsubscribe_history", json!({"subscriptionId": "unknown"})),
     ];
     for (command, body) in &requests {
-        assert!(
-            invoke(&secondary, command, body.clone(), origin).is_err(),
-            "{command}"
-        );
-        assert!(
-            invoke(&main, command, body.clone(), "https://external.invalid").is_err(),
-            "{command}"
-        );
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &secondary,
+            command,
+            body: body.clone(),
+            origin,
+        }));
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &main,
+            command,
+            body: body.clone(),
+            origin: "https://external.invalid",
+        }));
     }
 
     let closing = controller.begin().unwrap();
     assert_eq!(
-        invoke(&main, "record_history", record, origin).unwrap(),
+        invoke(CommandInvocation {
+            window: &main,
+            command: "record_history",
+            body: record,
+            origin,
+        })
+        .unwrap(),
         json!({"accepted": true, "persisted": true})
     );
 
-    let snapshot = invoke(&main, "list_history", json!({}), origin).unwrap();
+    let snapshot = invoke(CommandInvocation {
+        window: &main,
+        command: "list_history",
+        body: json!({}),
+        origin,
+    })
+    .unwrap();
     assert_eq!(snapshot["entries"][0]["positionMs"], 300000);
 
-    let subscription = invoke(
-        &main,
-        "subscribe_history",
-        json!({"onEvent": "__CHANNEL__:7"}),
+    let subscription = invoke(CommandInvocation {
+        window: &main,
+        command: "subscribe_history",
+        body: json!({"onEvent": "__CHANNEL__:7"}),
         origin,
-    )
+    })
     .unwrap();
-    invoke(
-        &main,
-        "unsubscribe_history",
-        json!({"subscriptionId": subscription}),
+    invoke(CommandInvocation {
+        window: &main,
+        command: "unsubscribe_history",
+        body: json!({"subscriptionId": subscription}),
         origin,
-    )
+    })
     .unwrap();
 
     let downloads =
@@ -114,7 +121,13 @@ async fn history_commands_are_local_main_only_and_saves_drain_before_exit() {
     assert!(closing.complete(&downloads, || async { false }).await);
     for (command, body) in &requests[1..6] {
         assert_eq!(
-            invoke(&main, command, body.clone(), origin).unwrap_err()["code"],
+            invoke(CommandInvocation {
+                window: &main,
+                command,
+                body: body.clone(),
+                origin,
+            })
+            .unwrap_err()["code"],
             "cancelled",
             "{command}"
         );

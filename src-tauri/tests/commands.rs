@@ -2,9 +2,8 @@
 mod ipc;
 
 use axum::{Json, Router, http::Uri};
-use ipc::{invoke, local_origin};
+use ipc::{CommandInvocation, assert_permission_denied, invoke, local_origin};
 use sctv_dl_desktop_lib::{
-    commands,
     error::{AppError, ErrorCode},
     programmes::{Deadlines, ProgrammeService},
     state::AppState,
@@ -16,12 +15,7 @@ use uuid::Uuid;
 fn app(state: AppState) -> tauri::App<tauri::test::MockRuntime> {
     mock_builder()
         .manage(state)
-        .invoke_handler(tauri::generate_handler![
-            commands::list_programmes,
-            commands::list_programme_dates,
-            commands::list_programme_contents,
-            commands::cancel_request,
-        ])
+        .invoke_handler(sctv_dl_desktop_lib::create_command_handler())
         .build(tauri::generate_context!(test = true))
         .unwrap()
 }
@@ -94,31 +88,47 @@ async fn routes_native_commands_to_services_and_enforces_main_window_local_permi
         args["requestId"] = json!(Uuid::new_v4().to_string());
 
         assert_eq!(
-            invoke(&main, command, args.clone(), local).unwrap(),
+            invoke(CommandInvocation {
+                window: &main,
+                command,
+                body: args.clone(),
+                origin: local,
+            })
+            .unwrap(),
             expected
         );
-        assert!(invoke(&secondary, command, args.clone(), local).is_err());
-        assert!(invoke(&main, command, args, "https://external.invalid").is_err());
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &secondary,
+            command,
+            body: args.clone(),
+            origin: local,
+        }));
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &main,
+            command,
+            body: args,
+            origin: "https://external.invalid",
+        }));
     }
 
-    let denied_store = invoke(
-        &main,
-        "plugin:store|load",
-        json!({"path": "arbitrary.json"}),
-        local,
-    )
+    let denied_store = invoke(CommandInvocation {
+        window: &main,
+        command: "plugin:store|load",
+        body: json!({"path": "arbitrary.json"}),
+        origin: local,
+    })
     .unwrap_err();
     assert!(denied_store.as_str().unwrap().contains("not allowed"));
 
-    let invalid = invoke(
-        &main,
-        "list_programme_dates",
-        json!({
+    let invalid = invoke(CommandInvocation {
+        window: &main,
+        command: "list_programme_dates",
+        body: json!({
             "programmeId": "../1",
             "requestId": Uuid::new_v4().to_string()
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap_err();
     assert_eq!(invalid["code"], "invalid-input");
 
@@ -136,12 +146,12 @@ fn surfaces_identity_storage_failure_without_starting_upstream_work() {
         .unwrap();
     let local = local_origin();
 
-    let error = invoke(
-        &main,
-        "list_programmes",
-        json!({"requestId": Uuid::new_v4().to_string()}),
-        local,
-    )
+    let error = invoke(CommandInvocation {
+        window: &main,
+        command: "list_programmes",
+        body: json!({"requestId": Uuid::new_v4().to_string()}),
+        origin: local,
+    })
     .unwrap_err();
     assert_eq!(
         error,

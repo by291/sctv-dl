@@ -13,7 +13,6 @@ use axum::{
     response::IntoResponse,
 };
 use sctv_dl_desktop_lib::{
-    commands,
     downloads::{DownloadConfig, DownloadManager},
     media::{MediaConfig, PlaybackService},
     programmes::{Deadlines, ProgrammeService},
@@ -23,7 +22,7 @@ use sctv_dl_desktop_lib::{
 use serde_json::json;
 use tauri::{Manager, test::mock_builder};
 
-use ipc::{invoke, local_origin};
+use ipc::{CommandInvocation, assert_permission_denied, invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn downloads_through_domain_commands_and_restricts_native_access() {
@@ -111,21 +110,7 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
             })
             .unwrap(),
         )
-        .invoke_handler(tauri::generate_handler![
-            commands::get_download_snapshot,
-            commands::subscribe_download_events,
-            commands::unsubscribe_download_events,
-            commands::act_on_download,
-            commands::open_local_playback,
-            commands::close_playback,
-            commands::start_downloads,
-            commands::list_downloads,
-            commands::subscribe_downloads,
-            commands::unsubscribe_downloads,
-            commands::cancel_download,
-            commands::get_download_directory,
-            commands::choose_download_directory
-        ])
+        .invoke_handler(sctv_dl_desktop_lib::create_command_handler())
         .build(tauri::generate_context!(test = true))
         .unwrap();
 
@@ -151,7 +136,13 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
             "quality": "smooth"
         }
     });
-    let result = invoke(&main, "start_downloads", request.clone(), local).unwrap();
+    let result = invoke(CommandInvocation {
+        window: &main,
+        command: "start_downloads",
+        body: request.clone(),
+        origin: local,
+    })
+    .unwrap();
 
     assert_eq!(result["kind"], "native");
     assert_eq!(result["usedFallback"], true);
@@ -166,7 +157,13 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
     .await
     .unwrap();
 
-    let tasks = invoke(&main, "list_downloads", json!({}), local).unwrap();
+    let tasks = invoke(CommandInvocation {
+        window: &main,
+        command: "list_downloads",
+        body: json!({}),
+        origin: local,
+    })
+    .unwrap();
     assert_eq!(tasks[0]["state"], "completed");
     assert_eq!(tasks[0]["receivedBytes"], 14);
     assert_eq!(
@@ -174,19 +171,25 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         b"native fixture"
     );
 
-    let snapshot = invoke(&main, "get_download_snapshot", json!({}), local).unwrap();
+    let snapshot = invoke(CommandInvocation {
+        window: &main,
+        command: "get_download_snapshot",
+        body: json!({}),
+        origin: local,
+    })
+    .unwrap();
     assert!(snapshot["epoch"].as_str().is_some());
     assert_eq!(snapshot["tasks"], tasks);
 
-    let session = invoke(
-        &main,
-        "open_local_playback",
-        json!({
+    let session = invoke(CommandInvocation {
+        window: &main,
+        command: "open_local_playback",
+        body: json!({
             "taskId": tasks[0]["id"],
             "requestId": uuid::Uuid::new_v4().to_string(),
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap();
     let url = session["sources"][0]["url"].as_str().unwrap();
     assert_eq!(
@@ -194,59 +197,59 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         "native fixture"
     );
 
-    invoke(
-        &main,
-        "close_playback",
-        json!({ "sessionId": session["id"] }),
-        local,
-    )
+    invoke(CommandInvocation {
+        window: &main,
+        command: "close_playback",
+        body: json!({ "sessionId": session["id"] }),
+        origin: local,
+    })
     .unwrap();
 
-    let stale = invoke(
-        &main,
-        "act_on_download",
-        json!({
+    let stale = invoke(CommandInvocation {
+        window: &main,
+        command: "act_on_download",
+        body: json!({
             "request": {
                 "taskId": tasks[0]["id"],
                 "attemptId": "stale",
                 "action": "remove",
             }
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap();
     assert_eq!(stale["kind"], "skipped");
     assert_eq!(manager.list().len(), 1);
 
     unavailable.store(true, Ordering::SeqCst);
-    let ineligible = invoke(
-        &main,
-        "act_on_download",
-        json!({
+    let ineligible = invoke(CommandInvocation {
+        window: &main,
+        command: "act_on_download",
+        body: json!({
             "request": {
                 "taskId": tasks[0]["id"],
                 "attemptId": tasks[0]["attemptId"],
                 "action": "restart",
             }
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap();
     assert_eq!(ineligible["kind"], "skipped");
     unavailable.store(false, Ordering::SeqCst);
 
-    let deleted = invoke(
-        &main,
-        "act_on_download",
-        json!({
+    let deleted = invoke(CommandInvocation {
+        window: &main,
+        command: "act_on_download",
+        body: json!({
             "request": {
                 "taskId": tasks[0]["id"],
                 "attemptId": tasks[0]["attemptId"],
                 "action": "deleteFile"
             }
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap();
 
     assert_eq!(deleted["kind"], "applied");
@@ -255,18 +258,18 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
 
     // A restarted task must resolve the latest source rather than retain its old URL.
     refreshed.store(true, Ordering::SeqCst);
-    let restarted = invoke(
-        &main,
-        "act_on_download",
-        json!({
+    let restarted = invoke(CommandInvocation {
+        window: &main,
+        command: "act_on_download",
+        body: json!({
             "request": {
                 "taskId": tasks[0]["id"],
                 "attemptId": tasks[0]["attemptId"],
                 "action": "restart"
             }
         }),
-        local,
-    )
+        origin: local,
+    })
     .unwrap();
 
     assert_eq!(restarted["kind"], "applied");
@@ -289,22 +292,56 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         b"refreshed fixture"
     );
 
-    for command in [
-        "get_download_snapshot",
-        "subscribe_download_events",
-        "unsubscribe_download_events",
-        "act_on_download",
-        "open_local_playback",
-        "start_downloads",
-        "list_downloads",
-        "subscribe_downloads",
-        "unsubscribe_downloads",
-        "cancel_download",
-        "get_download_directory",
-        "choose_download_directory",
+    for (command, body) in [
+        ("get_download_snapshot", json!({})),
+        (
+            "subscribe_download_events",
+            json!({ "onEvent": "__CHANNEL__:7" }),
+        ),
+        (
+            "unsubscribe_download_events",
+            json!({ "subscriptionId": "unknown" }),
+        ),
+        (
+            "act_on_download",
+            json!({
+                "request": {
+                    "taskId": current.id,
+                    "attemptId": current.attempt_id,
+                    "action": "remove"
+                }
+            }),
+        ),
+        (
+            "open_local_playback",
+            json!({
+                "taskId": current.id,
+                "requestId": uuid::Uuid::new_v4().to_string()
+            }),
+        ),
+        ("start_downloads", request.clone()),
+        ("list_downloads", json!({})),
+        ("subscribe_downloads", json!({ "onEvent": "__CHANNEL__:7" })),
+        (
+            "unsubscribe_downloads",
+            json!({ "subscriptionId": "unknown" }),
+        ),
+        ("cancel_download", json!({ "taskId": current.id })),
+        ("get_download_directory", json!({})),
+        ("choose_download_directory", json!({})),
     ] {
-        assert!(invoke(&secondary, command, request.clone(), local).is_err());
-        assert!(invoke(&main, command, request.clone(), "https://external.invalid").is_err());
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &secondary,
+            command,
+            body: body.clone(),
+            origin: local,
+        }));
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &main,
+            command,
+            body,
+            origin: "https://external.invalid",
+        }));
     }
 
     for command in [
@@ -313,11 +350,16 @@ async fn downloads_through_domain_commands_and_restricts_native_access() {
         "plugin:store|load",
     ] {
         assert!(
-            invoke(&main, command, json!({}), local)
-                .unwrap_err()
-                .as_str()
-                .unwrap()
-                .contains("not allowed")
+            invoke(CommandInvocation {
+                window: &main,
+                command,
+                body: json!({}),
+                origin: local,
+            })
+            .unwrap_err()
+            .as_str()
+            .unwrap()
+            .contains("not allowed")
         );
     }
 

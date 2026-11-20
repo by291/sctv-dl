@@ -3,13 +3,11 @@ mod ipc;
 
 use std::sync::Arc;
 
-use sctv_dl_desktop_lib::{
-    commands, lifecycle::ExitController, programme_cache::ProgrammeCacheService,
-};
+use sctv_dl_desktop_lib::{lifecycle::ExitController, programme_cache::ProgrammeCacheService};
 use serde_json::json;
 use tauri::test::mock_builder;
 
-use ipc::{invoke, local_origin};
+use ipc::{CommandInvocation, assert_permission_denied, invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
@@ -17,13 +15,7 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
     let app = mock_builder()
         .manage(Arc::new(ExitController::default()))
         .manage(ProgrammeCacheService::open(root.path().join("cache")).await)
-        .invoke_handler(tauri::generate_handler![
-            commands::read_programme_cache,
-            commands::write_programme_cache,
-            commands::read_archive_browse_state,
-            commands::write_archive_browse_state,
-            commands::clear_programme_cache
-        ])
+        .invoke_handler(sctv_dl_desktop_lib::create_command_handler())
         .build(tauri::generate_context!(test = true))
         .unwrap();
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
@@ -34,12 +26,12 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
         .unwrap();
     let origin = local_origin();
 
-    let initial = invoke(
-        &main,
-        "read_programme_cache",
-        json!({"key": {"kind": "catalogue"}}),
+    let initial = invoke(CommandInvocation {
+        window: &main,
+        command: "read_programme_cache",
+        body: json!({"key": {"kind": "catalogue"}}),
         origin,
-    )
+    })
     .unwrap();
     let body = json!({
         "key": { "kind": "catalogue" },
@@ -63,28 +55,44 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
         "write_archive_browse_state",
         "clear_programme_cache",
     ] {
-        assert!(invoke(&secondary, command, body.clone(), origin).is_err());
-        assert!(invoke(&main, command, body.clone(), "https://external.invalid").is_err());
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &secondary,
+            command,
+            body: body.clone(),
+            origin,
+        }));
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &main,
+            command,
+            body: body.clone(),
+            origin: "https://external.invalid",
+        }));
     }
 
     assert_eq!(
-        invoke(
-            &main,
-            "read_programme_cache",
-            json!({
+        invoke(CommandInvocation {
+            window: &main,
+            command: "read_programme_cache",
+            body: json!({
                 "key": {
                     "kind": "dates",
                     "programmeId": "../private"
                 }
             }),
-            origin
-        )
+            origin,
+        })
         .unwrap_err()["code"],
         "invalid-input"
     );
 
     assert_eq!(
-        invoke(&main, "write_programme_cache", body.clone(), origin).unwrap()["persisted"],
+        invoke(CommandInvocation {
+            window: &main,
+            command: "write_programme_cache",
+            body: body.clone(),
+            origin,
+        })
+        .unwrap()["persisted"],
         true
     );
 
@@ -126,12 +134,12 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
             }]),
         ),
     ] {
-        let written = invoke(
-            &main,
-            "write_programme_cache",
-            json!({ "payload": payload, "expectedEpoch": initial["epoch"] }),
+        let written = invoke(CommandInvocation {
+            window: &main,
+            command: "write_programme_cache",
+            body: json!({ "payload": payload, "expectedEpoch": initial["epoch"] }),
             origin,
-        )
+        })
         .unwrap();
 
         assert_eq!(written["persisted"], true);
@@ -142,10 +150,10 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
         json!({ "id": "../3", "title": "Invalid ID" }),
         json!({ "id": "3", "title": "Invalid URL", "video": "file:///private.mp4" }),
     ] {
-        let error = invoke(
-            &main,
-            "write_programme_cache",
-            json!({
+        let error = invoke(CommandInvocation {
+            window: &main,
+            command: "write_programme_cache",
+            body: json!({
                 "expectedEpoch": initial["epoch"],
                 "payload": {
                     "kind": "contents",
@@ -155,7 +163,7 @@ async fn cache_commands_reject_remote_and_secondary_windows_and_bad_keys() {
                 }
             }),
             origin,
-        )
+        })
         .unwrap_err();
 
         assert_eq!(error["code"], "invalid-input");

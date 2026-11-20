@@ -3,11 +3,13 @@ mod ipc;
 
 mod support;
 
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use axum::{Json, Router, http::Uri};
 use sctv_dl_desktop_lib::{
-    commands,
     lifecycle::ExitController,
     media::{MediaConfig, PlaybackService},
     programmes::{Deadlines, ProgrammeService},
@@ -16,17 +18,23 @@ use sctv_dl_desktop_lib::{
 use serde_json::json;
 use tauri::{Manager, test::mock_builder};
 
-use ipc::{invoke, local_origin};
+use ipc::{CommandInvocation, assert_permission_denied, invoke, local_origin};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn playback_commands_enforce_domain_references_acl_and_early_cancellation() {
-    let router = Router::new().fallback(|uri: Uri| async move {
-        let data = if uri.path().contains("contents") {
-            json!([{ "id": 3, "video": "https://fscgc.scgchc.com/a.mp4" }])
-        } else {
-            json!([{ "id": 2, "date": "2026-10-16" }])
-        };
-        Json(json!({ "rs": 200, "data": data }))
+    let upstream_calls = Arc::new(AtomicUsize::new(0));
+    let captured_calls = upstream_calls.clone();
+    let router = Router::new().fallback(move |uri: Uri| {
+        captured_calls.fetch_add(1, Ordering::SeqCst);
+
+        async move {
+            let data = if uri.path().contains("contents") {
+                json!([{ "id": 3, "video": "https://fscgc.scgchc.com/a.mp4" }])
+            } else {
+                json!([{ "id": 2, "date": "2026-10-16" }])
+            };
+            Json(json!({ "rs": 200, "data": data }))
+        }
     });
     let server = support::serve(router).await;
 
@@ -35,7 +43,6 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
         "guest".into(),
         Deadlines::default(),
     ));
-    let registry = state.requests.clone();
     let app = mock_builder()
         .manage(state)
         .manage(PlaybackState(Ok(PlaybackService::new(
@@ -44,11 +51,7 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
         .await
         .unwrap())))
         .manage(Arc::new(ExitController::default()))
-        .invoke_handler(tauri::generate_handler![
-            commands::open_playback,
-            commands::close_playback,
-            commands::cancel_request
-        ])
+        .invoke_handler(sctv_dl_desktop_lib::create_command_handler())
         .build(tauri::generate_context!(test = true))
         .unwrap();
     let main = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
@@ -71,16 +74,22 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
     };
 
     let id = uuid::Uuid::new_v4().to_string();
-    let session = invoke(&main, "open_playback", request(&id), local).unwrap();
+    let session = invoke(CommandInvocation {
+        window: &main,
+        command: "open_playback",
+        body: request(&id),
+        origin: local,
+    })
+    .unwrap();
 
     assert_eq!(session["selectedQuality"], "standard");
 
-    invoke(
-        &main,
-        "close_playback",
-        json!({ "sessionId": session["id"] }),
-        local,
-    )
+    invoke(CommandInvocation {
+        window: &main,
+        command: "close_playback",
+        body: json!({ "sessionId": session["id"] }),
+        origin: local,
+    })
     .unwrap();
     assert_eq!(
         reqwest::get(session["sources"][0]["url"].as_str().unwrap())
@@ -90,16 +99,46 @@ async fn playback_commands_enforce_domain_references_acl_and_early_cancellation(
         404
     );
 
-    for command in ["open_playback", "close_playback"] {
-        assert!(invoke(&secondary, command, request(&id), local).is_err());
-        assert!(invoke(&main, command, request(&id), "https://external.invalid").is_err());
+    for (command, body) in [
+        ("open_playback", request(&uuid::Uuid::new_v4().to_string())),
+        ("close_playback", json!({ "sessionId": session["id"] })),
+    ] {
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &secondary,
+            command,
+            body: body.clone(),
+            origin: local,
+        }));
+        assert_permission_denied(invoke(CommandInvocation {
+            window: &main,
+            command,
+            body,
+            origin: "https://external.invalid",
+        }));
     }
 
     let early = uuid::Uuid::new_v4().to_string();
-    registry.cancel(&early).unwrap();
+    let calls_before_cancellation = upstream_calls.load(Ordering::SeqCst);
+    invoke(CommandInvocation {
+        window: &main,
+        command: "cancel_request",
+        body: json!({ "requestId": early }),
+        origin: local,
+    })
+    .unwrap();
     assert_eq!(
-        invoke(&main, "open_playback", request(&early), local).unwrap_err()["code"],
+        invoke(CommandInvocation {
+            window: &main,
+            command: "open_playback",
+            body: request(&early),
+            origin: local,
+        })
+        .unwrap_err()["code"],
         "cancelled"
+    );
+    assert_eq!(
+        upstream_calls.load(Ordering::SeqCst),
+        calls_before_cancellation
     );
 
     app.state::<PlaybackState>()
