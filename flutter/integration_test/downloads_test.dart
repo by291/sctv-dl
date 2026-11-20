@@ -18,6 +18,7 @@ const _requestTimeout = Duration(seconds: 30);
 const _transferTimeout = Duration(seconds: 60);
 const _sampleSize = 256 * 1024;
 const _resumeSampleSize = 8 * 1024 * 1024;
+const _androidRetryResumeFloor = 1024 * 1024;
 const _resumeChunkSize = 64 * 1024;
 const _resumeChunkInterval = Duration(milliseconds: 40);
 const _bytePatternPeriod = 251;
@@ -41,7 +42,7 @@ void main() {
 
   final resumeDescription = Platform.isIOS
       ? 'native iOS resume restores exact bytes from a partial HTTP response'
-      : 'native Android resume restarts with exact bytes when the server ignores Range';
+      : 'native Android retry restarts with exact bytes when the server ignores Range';
   testWidgets(resumeDescription, (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: Text('Resume fixture'))),
@@ -154,28 +155,44 @@ Future<void> _verifyNativeResume() async {
   var hasStarted = false;
   var isStoppingInitial = false;
 
-  Future<void> sendInitial(HttpResponse response) async {
-    // Pause may close the original connection while its partial body is being written.
-    response.done.ignore();
-    response.contentLength = bytes.length;
+  Future<void> sendPartialBody(IOSink writer) async {
     final cutoff = bytes.length ~/ 2;
-    try {
-      for (var start = 0; start < cutoff; start += _resumeChunkSize) {
-        response.add(
-          Uint8List.sublistView(bytes, start, start + _resumeChunkSize),
-        );
-        await response.flush();
-        await Future<void>.delayed(_resumeChunkInterval);
+    for (var start = 0; start < cutoff; start += _resumeChunkSize) {
+      if (releaseInitial.isCompleted) {
+        break;
       }
-    } on IOException {
-      if (!isStoppingInitial) {
-        rethrow;
+      writer.add(Uint8List.sublistView(bytes, start, start + _resumeChunkSize));
+      await writer.flush();
+      await Future<void>.delayed(_resumeChunkInterval);
+    }
+
+    // Keep the original response incomplete until the test triggers the interruption.
+    await releaseInitial.future;
+  }
+
+  Future<void> sendInitial(HttpResponse response) async {
+    response.contentLength = bytes.length;
+    if (Platform.isAndroid) {
+      // End the first response before its advertised length to trigger the native retry.
+      final socket = await response.detachSocket(writeHeaders: true);
+      socket.done.ignore();
+      try {
+        await sendPartialBody(socket);
+      } finally {
+        socket.destroy();
       }
       return;
     }
 
-    // Keep the original response incomplete until native pause or teardown.
-    await releaseInitial.future;
+    // URLSession can close the original response as soon as pause begins.
+    response.done.ignore();
+    try {
+      await sendPartialBody(response);
+    } on IOException {
+      if (!isStoppingInitial) {
+        rethrow;
+      }
+    }
   }
 
   try {
@@ -204,31 +221,31 @@ Future<void> _verifyNativeResume() async {
       (event) => event.attemptId == task.attemptId,
     );
 
+    // The Android downloader preserves retry data only above this native byte count.
+    final resumeFloor = Platform.isAndroid ? _androidRetryResumeFloor : 0;
     await _actAndObserve(
       events.where(
         (event) =>
             event.state == DownloadState.running &&
-            event.receivedBytes > 0 &&
+            event.receivedBytes > resumeFloor &&
             event.canResume,
       ),
       () => fixture.engine.enqueue(nativeTask),
       description: 'Start a resumable native download',
     );
-    await _actAndObserve(
-      events.where((event) => event.state == DownloadState.paused),
-      () {
-        isStoppingInitial = true;
-        return fixture.gateway.pause(task.attemptId);
-      },
-      description: 'Pause the native download',
-    );
-    releaseInitial.complete();
-
-    final result = await _actAndObserve(
-      events.where(_isTerminal),
-      () => fixture.gateway.resume(task.attemptId),
-      description: 'Resume a paused download to a terminal state',
-    );
+    final result = Platform.isAndroid
+        ? await _retryInterruptedDownload(events, releaseInitial)
+        : await _resumePausedDownload(
+            events,
+            pause: () {
+              isStoppingInitial = true;
+              return fixture.gateway.pause(task.attemptId);
+            },
+            resume: () {
+              releaseInitial.complete();
+              return fixture.gateway.resume(task.attemptId);
+            },
+          );
     expect(result.state, DownloadState.finalizing, reason: result.error);
     await resumedResponse.future.timeout(_requestTimeout);
 
@@ -241,6 +258,47 @@ Future<void> _verifyNativeResume() async {
     }
     await fixture.close([task]);
   }
+}
+
+Future<TransferSnapshot> _retryInterruptedDownload(
+  Stream<TransferSnapshot> events,
+  Completer<void> interrupt,
+) async {
+  final milestones = StreamIterator(
+    events.where(
+      (event) => event.state == DownloadState.retrying || _isTerminal(event),
+    ),
+  );
+  try {
+    // The plugin owns the retry and must keep the interrupted attempt's resume data.
+    final retry = milestones.moveNext();
+    interrupt.complete();
+    expect(await retry.timeout(_requestTimeout), isTrue);
+    expect(milestones.current.state, DownloadState.retrying);
+
+    expect(await milestones.moveNext().timeout(_transferTimeout), isTrue);
+    return milestones.current;
+  } finally {
+    await milestones.cancel();
+  }
+}
+
+Future<TransferSnapshot> _resumePausedDownload(
+  Stream<TransferSnapshot> events, {
+  required Future<bool> Function() pause,
+  required Future<bool> Function() resume,
+}) async {
+  await _actAndObserve(
+    events.where((event) => event.state == DownloadState.paused),
+    pause,
+    description: 'Pause the native download',
+  );
+
+  return _actAndObserve(
+    events.where(_isTerminal),
+    resume,
+    description: 'Resume a paused download to a terminal state',
+  );
 }
 
 Future<void> _sendResumedDownload(HttpRequest request, Uint8List bytes) async {

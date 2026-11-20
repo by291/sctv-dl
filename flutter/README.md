@@ -103,9 +103,15 @@ ANDROID_SERIAL=<disposable-android-id> ./android/gradlew -p android \
   :app:connectedDebugAndroidTest --no-daemon
 ```
 
-The download fixture requires exact file bytes after a native pause and resume.
-On Android the server ignores the resumed Range request with a full HTTP 200
-response. On iOS the fixture returns HTTP 206 with the requested byte range.
+The Android download fixture interrupts a partial transfer and verifies that
+the native retry sends Range and rebuilds the exact file from a full HTTP 200
+response. The iOS fixture explicitly pauses and resumes with a partial HTTP 206
+response. A separate Android API 29 manual-pause run observed a socket-close
+race in the pinned downloader that caused a fresh retry.
+
+On a fresh API 29 emulator, check `adb -s <device-id> logcat -d -s MediaProvider:I`
+for an `End Intent` line containing `android.intent.action.MEDIA_MOUNTED`. Start
+the download fixture after this marker so the initial media scan has finished.
 
 The generic iOS simulator target compiles the host XCTest bundle without booting a device.
 
