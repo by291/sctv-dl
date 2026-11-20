@@ -79,7 +79,12 @@ Release APKs are split into `build/app/outputs/flutter-apk/app-armeabi-v7a-relea
 
 Dart tests use [shared JSON fixtures](../shared/fixtures), disposable SQLite databases and controlled HTTP services. Player/download tests with fake native boundaries verify application decisions; they do not establish native decode, background execution or OS file behavior. Use disposable emulators/simulators and real controlled media/transfer fixtures for runtime acceptance. Record each integration command, device ID, OS version and observed lifecycle mode with its result.
 
-The [Flutter workflow](../.github/workflows/flutter.yml) pins Flutter 3.47.6. Its Ubuntu job checks generation, application Dart formatting, analysis, tests and native host instrumentation compilation, then compiles Android APK/AAB artifacts. Its macOS job compiles and archives an **unsigned** iOS app. Workflow source validation is distinct from an actual hosted CI run; neither release compilation nor a fake-backed test is native runtime evidence.
+The [Flutter workflow](../.github/workflows/flutter.yml) pins Flutter 3.47.6.
+Its Ubuntu job checks generation, Dart formatting, analysis, tests and native host
+instrumentation compilation, then compiles Android APK/AAB artifacts. Its macOS
+job compiles the simulator XCTest target and archives an **unsigned** iOS app.
+Check the hosted workflow result for CI evidence and run the device exercises
+below for runtime evidence.
 
 Android release validation currently uses the debug signing configuration in the native host. The iOS CI app is unsigned and is not an installable distribution package. Production keystores, Apple signing/provisioning, store upload and publication remain separate release work; no production signing material belongs in this repository.
 
@@ -98,6 +103,31 @@ ANDROID_SERIAL=<disposable-android-id> ./android/gradlew -p android \
   :app:connectedDebugAndroidTest --no-daemon
 ```
 
+The download fixture requires exact file bytes after a native pause and resume.
+On Android the server ignores the resumed Range request with a full HTTP 200
+response. On iOS the fixture returns HTTP 206 with the requested byte range.
+
+The generic iOS simulator target compiles the host XCTest bundle without booting a device.
+
+```sh
+flutter build ios --simulator --debug --config-only --no-pub
+xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -only-testing:RunnerTests \
+  -derivedDataPath build/qa/runner-tests CODE_SIGNING_ALLOWED=NO build-for-testing
+```
+
+The runtime command reuses the compiled bundle on a disposable iOS simulator selected by ID.
+
+```sh
+xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Debug \
+  -destination 'platform=iOS Simulator,id=<disposable-ios-device-id>' \
+  -only-testing:RunnerTests -derivedDataPath build/qa/runner-tests \
+  CODE_SIGNING_ALLOWED=NO test-without-building
+```
+
+The XCTest bundle exercises native export presentation rejection and cancellation.
+Run the Dart integration journeys separately to verify native transfers, video and PiP.
+
 The playback fixture defines file supplies `PLAYBACK_FIXTURE_BASE64` with a small generated H264 MP4. Keep fixtures, device IDs, screenshots and run output outside tracked documentation. Native file ownership and background scheduling rules are in [Flutter Client Architecture](../docs/flutter.md#native-transfers-and-files).
 
 For opt-in live UI verification with reviewable screenshots:
@@ -108,7 +138,12 @@ flutter drive --driver=test_driver/integration_test.dart \
   --dart-define=LIVE_APPLICATION_SMOKE=true
 ```
 
-This journey writes screenshots into ignored `build/qa/` and creates no live download. Its final `downloads-fixture-*` and `downloads-completed-*` screenshots use presentation-only task data; they establish card layout rather than native transfer or file availability. Use the controlled fixture commands above for native transfer and file behaviour.
+This journey starts with a light theme, switches to dark through Settings, and
+restores the original preferences during cleanup. It writes screenshots into
+ignored `build/qa/` and creates no live download. The `downloads-fixture-*` and
+`downloads-completed-*` screenshots use presentation-only task data to show
+card layout. Use the controlled fixture commands above for native transfer and
+file behaviour.
 
 For controlled iOS glass contrast checks, scroll white and black content beneath the navigation while keeping the application theme fixed:
 
@@ -127,7 +162,23 @@ flutter drive --driver=test_driver/integration_test.dart \
   --dart-define-from-file=<fixture-defines.json>
 ```
 
-This exercises native paused playback, seeking, speed, replay, fullscreen rotation and exact surface restoration, and captures light/dark screenshots. The optional `VERIFY_PIP=true` define also checks native PiP (`VERIFY_ANDROID_PIP` remains an alias). Android waits for the host to restore the same Activity after the `PLAYER_PARITY_PIP_READY` log marker; iOS requests exit through the public plugin API. The standalone `playback_test.dart` checks native PiP entry/exit on either platform and explicitly skips runtimes that report it unavailable. For a Debug Android run, use `adb -s <disposable-device-id> shell am start -n dev.sctvdl.flutter.debug/dev.sctvdl.flutter.MainActivity` for that restore; Release/Profile uses `dev.sctvdl.flutter` as the package ID. Keep fixture files and outputs outside tracked source.
+This exercises native paused playback, seeking, speed, replay, fullscreen
+rotation and exact surface restoration, and captures light/dark screenshots.
+Pass `--dart-define=VERIFY_PIP=true` (or `VERIFY_ANDROID_PIP=true`) to require
+native PiP entry and exit. The opt-in fails if the video fixture is missing or
+the runtime reports PiP unavailable. On Android, restore the same Activity after
+the `PLAYER_PARITY_PIP_READY` log marker. Use the debug application ID in the restore command.
+
+```sh
+adb -s <disposable-device-id> shell am start \
+  -n dev.sctvdl.flutter.debug/dev.sctvdl.flutter.MainActivity
+```
+
+Release/Profile uses `dev.sctvdl.flutter` as the package ID. The iOS journey
+requests exit through the public plugin API. The standalone `playback_test.dart`
+checks native PiP entry and exit on either platform and explicitly skips
+runtimes that report it unavailable. Keep fixture files and outputs outside
+tracked source.
 
 For resume-frame validation, use `integration_test/resume_frame_test.dart` with
 the same define mechanism and a 30-second H264 fixture: solid red for the first

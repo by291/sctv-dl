@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -11,12 +12,15 @@ import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/app/app.dart';
 import 'package:sctv_dl_mobile/app/bootstrap.dart';
+import 'package:sctv_dl_mobile/app/providers.dart';
+import 'package:sctv_dl_mobile/app/resource_cleanup.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
+import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
 import 'package:sctv_dl_mobile/features/downloads/downloads_page.dart';
 import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
@@ -33,6 +37,25 @@ void main() {
     tester,
   ) async {
     final services = await bootstrapServices();
+    final originalPreferences = services.initialPreferences;
+    var hasRestoredPreferences = false;
+    Future<void> restorePreferences() async {
+      if (hasRestoredPreferences) {
+        return;
+      }
+
+      // The smoke journey exercises the real theme picker and its durable write.
+      await services.user.savePreferences(originalPreferences);
+      hasRestoredPreferences = true;
+    }
+
+    addTearDown(
+      () => closeAppResources([
+        restorePreferences,
+        () => tester.pumpWidget(const SizedBox.shrink()),
+        services.dispose,
+      ]),
+    );
     final captureKey = GlobalKey();
     await tester.pumpWidget(
       RepaintBoundary(
@@ -41,13 +64,15 @@ void main() {
       ),
     );
 
-    Future<void> waitFor(bool Function() ready) async {
+    Future<void> waitFor(FutureOr<bool> Function() ready) async {
       final deadline = DateTime.now().add(const Duration(seconds: 60));
-      while (!ready() && DateTime.now().isBefore(deadline)) {
+      var isReady = await ready();
+      while (!isReady && DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 100));
         await Future<void>.delayed(const Duration(milliseconds: 100));
+        isReady = await ready();
       }
-      expect(ready(), isTrue);
+      expect(isReady, isTrue);
       expect(tester.takeException(), isNull);
     }
 
@@ -91,6 +116,24 @@ void main() {
       image.dispose();
       debugPrint('Application screenshot: ${file.path}');
     }
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+      listen: false,
+    );
+    final preferences = container.read(preferencesProvider.notifier);
+    await preferences.save(
+      originalPreferences.copyWith(
+        theme: AppThemeMode.light,
+        dynamicColour: false,
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(container.read(preferencesProvider).error, isNull);
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.light,
+    );
 
     await waitFor(() => services.library.hasSnapshot);
     expect(services.library.programmes, isNotEmpty);
@@ -353,6 +396,14 @@ void main() {
     await capture('theme-picker');
     await tester.tap(find.text('深色').last);
     await tester.pump(const Duration(milliseconds: 500));
+    await waitFor(() async {
+      final stored = await services.user.loadPreferences();
+      return stored.theme == AppThemeMode.dark;
+    });
+    expect(
+      Theme.of(tester.element(find.byType(Scaffold).first)).brightness,
+      Brightness.dark,
+    );
     await capture('settings-dark');
     await tester.tap(find.text('节目库').hitTestable().last);
     await tester.pump(const Duration(milliseconds: 500));
@@ -404,6 +455,9 @@ void main() {
     await tester.tapAt(const Offset(10, 80));
     await tester.pump(const Duration(milliseconds: 400));
     expect(tester.takeException(), isNull);
+
+    // Restore while the live application's database is still open.
+    await restorePreferences();
 
     // Presentation-only fixtures exercise populated download cards without
     // starting a transfer or claiming native transfer validation.

@@ -12,10 +12,11 @@ import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/playback_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
-import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart'
+    show PlaybackSurface;
 
-import '../test/features/player/playback_controller_test.dart'
-    show MemoryHistory, selection;
+import '../test/support/playback_fixtures.dart' show MemoryHistory, selection;
+import '../test/support/recording_backend.dart';
 
 /// The host supplies an H264 fixture: red for 0–10s, green for 10–30s.
 /// Sampling checks that the upstream seek eventually renders the resumed frame.
@@ -31,7 +32,7 @@ void main() {
       await file.parent.create(recursive: true);
       await file.writeAsBytes(base64Decode(encoded));
       addTearDown(() => file.delete());
-      final backend = _RecordingBackend();
+      final backend = RecordingBackend();
       final boundaryKey = GlobalKey();
       final nav = GlobalKey<NavigatorState>();
       await tester.pumpWidget(
@@ -161,15 +162,4 @@ void main() {
     },
     skip: !Platform.isAndroid || encoded.isEmpty,
   );
-}
-
-class _RecordingBackend implements PlaybackBackend {
-  final delegate = VideoPlayerBackend();
-  PlaybackSession? session;
-  int opens = 0;
-  @override
-  Future<PlaybackSession> open(PlaybackInput input) async {
-    opens++;
-    return session = await delegate.open(input);
-  }
 }

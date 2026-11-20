@@ -12,11 +12,12 @@ import 'package:sctv_dl_mobile/design/theme.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'package:sctv_dl_mobile/platform/playback/playback_picture_in_picture.dart';
-import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart'
+    show PlaybackSurface;
 import 'package:video_player/video_player.dart';
 
-import '../test/features/player/playback_controller_test.dart'
-    show MemoryHistory;
+import '../test/support/playback_fixtures.dart' show MemoryHistory;
+import '../test/support/recording_backend.dart';
 
 /// Uses a generated local MP4. The host restores this disposable Activity from
 /// PiP after the PLAYER_PARITY_PIP_READY marker; no user device is involved.
@@ -30,6 +31,12 @@ void main() {
   testWidgets(
     'native player controls retain the decoder across fullscreen and PiP',
     (tester) async {
+      expect(
+        encoded,
+        isNotEmpty,
+        reason:
+            'VERIFY_PIP requires the PLAYBACK_FIXTURE_BASE64 video fixture.',
+      );
       if (Platform.isIOS) {
         addTearDown(() => SystemChrome.setPreferredOrientations([]));
         await SystemChrome.setPreferredOrientations([
@@ -44,7 +51,7 @@ void main() {
       addTearDown(() async {
         if (await file.exists()) await file.delete();
       });
-      final backend = _RecordingBackend();
+      final backend = RecordingBackend();
       final captureKey = GlobalKey();
       final brightness = ValueNotifier(Brightness.light);
       addTearDown(brightness.dispose);
@@ -181,7 +188,12 @@ void main() {
       await tester.pumpAndSettle();
       await capture('dark');
 
-      if (verifyPip && session.value.supportsPip) {
+      if (verifyPip) {
+        expect(
+          session.value.supportsPip,
+          isTrue,
+          reason: 'VERIFY_PIP requires a runtime with native picture-in-picture support.',
+        );
         await tester.tap(find.byTooltip('播放'));
         await waitFor(() => session.value.playing);
         await tester.tap(find.byTooltip('画中画'));
@@ -240,16 +252,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
-    skip: encoded.isEmpty,
+    skip: encoded.isEmpty && !verifyPip,
   );
-}
-
-class _RecordingBackend implements PlaybackBackend {
-  PlaybackSession? session;
-  int opens = 0;
-  @override
-  Future<PlaybackSession> open(PlaybackInput input) async {
-    opens++;
-    return session = await VideoPlayerBackend().open(input);
-  }
 }

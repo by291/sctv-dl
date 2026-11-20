@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 
-import 'playback_controller_test.dart' as fixtures;
+import '../../support/playback_fixtures.dart' as fixtures;
 
 void main() {
   final captureKey = GlobalKey();

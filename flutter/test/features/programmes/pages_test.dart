@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/design/theme.dart';
@@ -15,6 +14,7 @@ import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 import 'package:sctv_dl_mobile/features/settings/settings_page.dart';
 
 import '../../support/fakes.dart';
+import '../../support/page_host.dart';
 
 class EmptyHistory implements HistoryRepository {
   EmptyHistory({this.entries = const [], this.removeError});
@@ -34,24 +34,6 @@ class EmptyHistory implements HistoryRepository {
   @override
   Future<void> clear() async {}
 }
-
-Widget host(
-  Widget child, {
-  double scale = 1,
-  Brightness brightness = Brightness.light,
-  ThemeData? theme,
-}) => ProviderScope(
-  child: MaterialApp(
-    theme: theme ?? buildAppTheme(brightness),
-    restorationScopeId: 'test-app',
-    builder: (context, widget) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: TextScaler.linear(scale)),
-      child: widget!,
-    ),
-    home: child,
-  ),
-);
 
 void main() {
   const programme = Programme(id: '1', name: '四川新闻');
@@ -83,10 +65,14 @@ void main() {
             onOpenProgramme: (_) {},
             onShowHistory: () {},
           ),
-          scale: layout.$2,
-          theme: theme.copyWith(
-            textTheme: theme.textTheme.copyWith(
-              titleMedium: theme.textTheme.titleMedium!.copyWith(fontSize: 18),
+          appearance: PageHostAppearance(
+            textScale: layout.$2,
+            theme: theme.copyWith(
+              textTheme: theme.textTheme.copyWith(
+                titleMedium: theme.textTheme.titleMedium!.copyWith(
+                  fontSize: 18,
+                ),
+              ),
             ),
           ),
         ),
@@ -269,7 +255,7 @@ void main() {
             onOpenProgramme: (_) {},
             onShowHistory: () {},
           ),
-          scale: 2,
+          appearance: const PageHostAppearance(textScale: 2),
         ),
       );
       await tester.pumpAndSettle();
@@ -384,8 +370,10 @@ void main() {
               onOpenProgramme: (_) => opened++,
               onShowHistory: () {},
             ),
-            scale: layout.$2,
-            brightness: Brightness.dark,
+            appearance: PageHostAppearance(
+              textScale: layout.$2,
+              brightness: Brightness.dark,
+            ),
           ),
         );
         await tester.pumpAndSettle();
@@ -601,7 +589,7 @@ void main() {
             onDownload: (_) async {},
             onOpenProgramme: (_) {},
           ),
-          scale: scale,
+          appearance: PageHostAppearance(textScale: scale),
         ),
       );
       await tester.pumpAndSettle();
@@ -679,8 +667,10 @@ void main() {
             onDownload: (_) async {},
             onOpenProgramme: (_) {},
           ),
-          scale: 2,
-          brightness: Brightness.dark,
+          appearance: const PageHostAppearance(
+            textScale: 2,
+            brightness: Brightness.dark,
+          ),
         ),
       );
       await tester.pumpAndSettle();

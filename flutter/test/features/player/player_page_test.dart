@@ -8,7 +8,7 @@ import 'package:sctv_dl_mobile/design/archive_transition.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 
-import 'playback_controller_test.dart' as fixtures;
+import '../../support/playback_fixtures.dart' as fixtures;
 
 void main() {
   testWidgets('fullscreen exit restores the window after a platform failure', (

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
 import 'package:sctv_dl_mobile/features/settings/settings_page.dart';
 
-import '../programmes/pages_test.dart' show host;
+import '../../support/page_host.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
@@ -27,8 +27,10 @@ void main() {
               onClearHistory: () async => clearCount++,
               version: '0.1.0 (1234)',
             ),
-            scale: 2,
-            brightness: brightness,
+            appearance: PageHostAppearance(
+              textScale: 2,
+              brightness: brightness,
+            ),
           ),
         );
         await tester.tap(find.text('主题'));

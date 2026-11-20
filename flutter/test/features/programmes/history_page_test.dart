@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sctv_dl_mobile/features/programmes/history_page.dart';
 
 import '../../support/history_fixture.dart';
-import 'pages_test.dart' show host;
+import '../../support/page_host.dart';
 
 void main() {
   testWidgets('history groups by local viewing day and filters empty groups', (

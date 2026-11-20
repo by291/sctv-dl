@@ -10,7 +10,7 @@ import 'package:sctv_dl_mobile/features/programmes/library_controller.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
 import '../../support/fakes.dart';
-import 'pages_test.dart' show host;
+import '../../support/page_host.dart';
 
 void main() {
   for (final layout in [
@@ -45,8 +45,10 @@ void main() {
             onOpenProgramme: (_) {},
             onShowHistory: () {},
           ),
-          scale: layout.$2,
-          brightness: layout.$3,
+          appearance: PageHostAppearance(
+            textScale: layout.$2,
+            brightness: layout.$3,
+          ),
         ),
       );
       await tester.pumpAndSettle();

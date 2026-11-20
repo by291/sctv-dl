@@ -3,7 +3,7 @@ import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
 
 import '../support/fakes.dart';
-import 'router_test.dart'
+import '../support/route_harness.dart'
     show RouteDownloads, RouteHistory, CapturingBackend, UnusedCoverCache;
 
 class FailingDownloadDisposal extends RouteDownloads {

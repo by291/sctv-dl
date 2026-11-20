@@ -7,15 +7,15 @@ import 'package:sctv_dl_mobile/features/player/player_controls.dart';
 import 'package:sctv_dl_mobile/features/player/player_gestures.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 
-import 'playback_controller_test.dart' as fixtures;
-import 'player_environment_controller_test.dart' as environment_fixtures;
-import 'player_gesture_controller_test.dart' as gesture_fixtures;
+import '../../support/playback_fixtures.dart' as fixtures;
+import '../../support/player_environment_fixture.dart';
+import '../../support/restore_blocked_session.dart';
 
 void main() {
   testWidgets(
     'visible inactive fullscreen retains a usable brightness gesture base',
     (tester) async {
-      final environment = environment_fixtures.Environment()..read.complete(.4);
+      final environment = Environment()..read.complete(.4);
       final session = fixtures.FakeSession();
       final player = PlaybackController(
         input: fixtures.input,
@@ -59,7 +59,7 @@ void main() {
   testWidgets(
     'real background restores brightness and resuming renews gesture ownership',
     (tester) async {
-      final environment = environment_fixtures.Environment()..read.complete(.4);
+      final environment = Environment()..read.complete(.4);
       final session = fixtures.FakeSession();
       final player = PlaybackController(
         input: fixtures.input,
@@ -114,7 +114,7 @@ void main() {
   testWidgets('pending speed restoration cannot release a newer gesture hold', (
     tester,
   ) async {
-    final session = gesture_fixtures.RestoreBlockedSession();
+    final session = RestoreBlockedSession();
     final player = PlaybackController(
       input: fixtures.input,
       backend: fixtures.FakeBackend(session),
@@ -342,7 +342,7 @@ void main() {
         history: fixtures.MemoryHistory(),
       );
       await player.initialize();
-      final environment = environment_fixtures.Environment()..read.complete(.4);
+      final environment = Environment()..read.complete(.4);
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox.expand(
@@ -552,7 +552,7 @@ void main() {
   );
 }
 
-class QuantizedEnvironment extends environment_fixtures.Environment {
+class QuantizedEnvironment extends Environment {
   double level = .5;
   @override
   Future<double> volume() async => level;

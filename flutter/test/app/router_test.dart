@@ -2,20 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sctv_dl_mobile/app/providers.dart';
-import 'package:sctv_dl_mobile/app/router.dart';
-import 'package:sctv_dl_mobile/app/services.dart';
 import 'package:sctv_dl_mobile/design/cover_image.dart';
 import 'package:sctv_dl_mobile/design/shared_cover.dart';
-import 'package:sctv_dl_mobile/domain/downloads/download_repository.dart';
 import 'package:sctv_dl_mobile/domain/downloads/download_task.dart';
 import 'package:sctv_dl_mobile/domain/playback/history_repository.dart';
-import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/domain/programmes/programme_repository.dart';
 import 'package:sctv_dl_mobile/domain/settings/preferences.dart';
@@ -27,36 +20,9 @@ import 'package:sctv_dl_mobile/features/programmes/download_quality_sheet.dart';
 import 'package:sctv_dl_mobile/features/programmes/library_page.dart';
 
 import '../support/fakes.dart';
+import '../support/route_harness.dart';
 
-const programme = Programme(id: '1', name: 'News');
-const broadcast = BroadcastDate(id: '2', date: '2026-10-16');
-const content = ProgrammeContent(
-  id: '3',
-  title: 'Accepted news',
-  video: 'https://fscgc.scgchc.com/standard.mp4',
-  smoothVideo: 'https://fscgc.scgchc.com/smooth.mp4',
-);
-const selection = ProgrammeSelection(
-  programme: programme,
-  broadcast: broadcast,
-  content: content,
-);
-
-DownloadTask localTask() => DownloadTask(
-  id: 'task-one',
-  attemptId: 'attempt-one',
-  selection: selection,
-  requestedQuality: VideoQuality.standard,
-  quality: VideoQuality.standard,
-  url: content.video!,
-  filename: 'news.mp4',
-  wifiOnly: false,
-  state: DownloadState.completed,
-  createdAt: DateTime.utc(2026, 10, 16),
-  fileLocation: 'documents:Downloads/news.mp4',
-);
-
-void registerDownloadNoticeTests() {
+void _registerDownloadNoticeTests() {
   for (final player in [false, true]) {
     for (final exit in ['back', 'shortcut', 'timeout']) {
       testWidgets('download notice is dismissed after $exit player=$player', (
@@ -130,9 +96,11 @@ void main() {
         await harness.mount(
           tester,
           '/',
-          platform: TargetPlatform.iOS,
-          brightness: brightness,
-          textScale: 2,
+          layout: RouteLayout(
+            platform: TargetPlatform.iOS,
+            brightness: brightness,
+            textScale: 2,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -167,7 +135,11 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPadding);
       final harness = RouteHarness();
-      await harness.mount(tester, '/', platform: TargetPlatform.iOS);
+      await harness.mount(
+        tester,
+        '/',
+        layout: RouteLayout(platform: TargetPlatform.iOS),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byType(ProgrammeCard));
       await tester.pumpAndSettle();
@@ -198,7 +170,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPadding);
       final harness = RouteHarness();
-      await harness.mount(tester, '/', platform: platform);
+      await harness.mount(tester, '/', layout: RouteLayout(platform: platform));
       await tester.pumpAndSettle();
 
       final ios = platform == TargetPlatform.iOS;
@@ -256,10 +228,12 @@ void main() {
             await harness.mount(
               tester,
               '/',
-              platform: TargetPlatform.iOS,
-              brightness: brightness,
-              textScale: 2,
-              reducedMotion: true,
+              layout: RouteLayout(
+                platform: TargetPlatform.iOS,
+                brightness: brightness,
+                textScale: 2,
+                reducedMotion: true,
+              ),
             );
             await tester.pumpAndSettle();
 
@@ -301,7 +275,11 @@ void main() {
           for (var i = 4; i < 14; i++)
             ProgrammeContent(id: '$i', title: 'Clip $i', video: content.video),
         ], 'contents');
-        await harness.mount(tester, '/programme/1', platform: platform);
+        await harness.mount(
+          tester,
+          '/programme/1',
+          layout: RouteLayout(platform: platform),
+        );
         await tester.pumpAndSettle();
         final artwork = find.byWidgetPredicate(
           (widget) => widget is SharedCover && widget.tag == 'playback-1/2/3',
@@ -389,7 +367,7 @@ void main() {
     },
   );
 
-  registerDownloadNoticeTests();
+  _registerDownloadNoticeTests();
 
   testWidgets('back leaves download selection before leaving its tab', (
     tester,
@@ -468,7 +446,7 @@ void main() {
           await harness.mount(
             tester,
             player ? '/play/1/2/3' : '/programme/1',
-            platform: platform,
+            layout: RouteLayout(platform: platform),
           );
           // Native initialization stays pending; download actions are independent
           // of decoder readiness and no platform texture is needed in this test.
@@ -523,7 +501,7 @@ void main() {
           await harness.mount(
             tester,
             local ? '/downloads' : '/programme/1',
-            reducedMotion: reduced,
+            layout: RouteLayout(reducedMotion: reduced),
           );
           await tester.pumpAndSettle();
           final previous = find.byType(
@@ -683,7 +661,11 @@ void main() {
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
           final harness = RouteHarness();
-          await harness.mount(tester, '/', reducedMotion: reduced);
+          await harness.mount(
+            tester,
+            '/',
+            layout: RouteLayout(reducedMotion: reduced),
+          );
           await tester.pumpAndSettle();
           final libraryScroll = tester
               .widget<CustomScrollView>(find.byType(CustomScrollView))
@@ -917,8 +899,10 @@ void main() {
       await harness.mount(
         tester,
         '/',
-        platform: TargetPlatform.iOS,
-        reducedMotion: reduced,
+        layout: RouteLayout(
+          platform: TargetPlatform.iOS,
+          reducedMotion: reduced,
+        ),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byType(ProgrammeCard));
@@ -971,7 +955,7 @@ void main() {
     tester,
   ) async {
     final harness = RouteHarness();
-    await harness.mount(tester, '/', reducedMotion: true);
+    await harness.mount(tester, '/', layout: RouteLayout(reducedMotion: true));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ProgrammeCard));
     await tester.pump();
@@ -1112,7 +1096,11 @@ void main() {
             ),
           );
         }
-        await harness.mount(tester, '/', platform: platform);
+        await harness.mount(
+          tester,
+          '/',
+          layout: RouteLayout(platform: platform),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('观看历史'));
         await tester.pumpAndSettle();
@@ -1408,243 +1396,4 @@ void main() {
       await harness.close(tester);
     },
   );
-}
-
-class RouteHarness {
-  final programmes = RouteProgrammes()
-    ..cachedCatalogue = snapshot([programme], 'catalogue')
-    ..savedDates = snapshot([broadcast], 'dates')
-    ..contents['2'] = snapshot([content], 'contents');
-  final user = FakeUserRepository();
-  final downloads = RouteDownloads();
-  final backend = CapturingBackend();
-  final history = RouteHistory();
-  late final services = AppServices(
-    programmes: programmes,
-    user: user,
-    history: history,
-    downloads: downloads,
-    playback: backend,
-    initialPreferences: const Preferences(),
-    initialFavourites: const {},
-    version: 'test',
-    coverCache: UnusedCoverCache(),
-  );
-  late final GoRouter router = createAppRouter(services);
-  late final container = ProviderContainer(
-    overrides: [servicesProvider.overrideWithValue(services)],
-  );
-  bool _closed = false;
-
-  Future<void> mount(
-    WidgetTester tester,
-    String location, {
-    TargetPlatform platform = TargetPlatform.android,
-    bool reducedMotion = false,
-    Brightness brightness = Brightness.light,
-    double textScale = 1,
-  }) async {
-    addTearDown(() => close(tester));
-    router.go(location);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(
-          restorationScopeId: 'route-tests',
-          theme: ThemeData(platform: platform, brightness: brightness),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              disableAnimations: reducedMotion,
-              textScaler: TextScaler.linear(textScale),
-            ),
-            child: child!,
-          ),
-          routerConfig: router,
-        ),
-      ),
-    );
-    for (var i = 0; i < 5; i++) {
-      await tester.pump();
-    }
-  }
-
-  Future<void> close(WidgetTester tester) async {
-    if (_closed) return;
-    _closed = true;
-    await tester.pumpWidget(const SizedBox());
-    for (final pending in backend.pending) {
-      pending.complete(RoutePlaybackSession());
-    }
-    await tester.pump();
-    router.dispose();
-    container.dispose();
-    await services.dispose();
-    await user.close();
-  }
-}
-
-class RouteProgrammes extends FakeProgrammeRepository {
-  Completer<ProgrammeSnapshot<Programme>>? catalogueReply;
-  Completer<ProgrammeSnapshot<BroadcastDate>>? dateReply;
-  Future<ProgrammeSnapshot<BroadcastDate>?>? delayedDateCache;
-  RequestScope? catalogueScope;
-  RequestScope? dateScope;
-  int catalogueCalls = 0;
-  int dateCalls = 0;
-  int contentReads = 0;
-
-  @override
-  Future<ProgrammeSnapshot<Programme>> refreshProgrammes({
-    RequestScope? scope,
-  }) async {
-    catalogueCalls++;
-    catalogueScope = scope;
-    return await (catalogueReply?.future ??
-        super.refreshProgrammes(scope: scope));
-  }
-
-  @override
-  Future<ProgrammeSnapshot<BroadcastDate>?> cachedDates(
-    String programmeId,
-  ) async => await (delayedDateCache ?? super.cachedDates(programmeId));
-
-  @override
-  Future<ProgrammeSnapshot<BroadcastDate>> refreshDates(
-    String programmeId, {
-    RequestScope? scope,
-  }) async {
-    dateCalls++;
-    dateScope = scope;
-    return await (dateReply?.future ??
-        super.refreshDates(programmeId, scope: scope));
-  }
-
-  @override
-  Future<ProgrammeSnapshot<ProgrammeContent>?> cachedContents(
-    String programmeId,
-    String dateId,
-  ) async {
-    contentReads++;
-    return super.cachedContents(programmeId, dateId);
-  }
-}
-
-class RouteDownloads implements DownloadRepository {
-  List<DownloadTask> tasks = [];
-  final requests =
-      <
-        ({
-          List<ProgrammeSelection> selections,
-          VideoQuality quality,
-          bool wifiOnly,
-        })
-      >[];
-  final changes = StreamController<List<DownloadTask>>.broadcast();
-  int subscriptions = 0;
-  int reconciliations = 0;
-
-  @override
-  Future<List<DownloadTask>> loadTasks() async => tasks;
-
-  @override
-  Future<DownloadBatchResult> start(
-    List<ProgrammeSelection> selections,
-    VideoQuality quality, {
-    required bool wifiOnly,
-  }) async {
-    requests.add((
-      selections: selections,
-      quality: quality,
-      wifiOnly: wifiOnly,
-    ));
-    return const DownloadBatchResult(taskIds: ['new-task']);
-  }
-
-  @override
-  Stream<List<DownloadTask>> watchTasks() => Stream.multi((controller) {
-    subscriptions++;
-    controller.add(tasks);
-    final subscription = changes.stream.listen(controller.add);
-    controller.onCancel = subscription.cancel;
-  });
-
-  @override
-  Future<void> reconcile() async {
-    reconciliations++;
-  }
-
-  @override
-  Future<void> dispose() => changes.close();
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class CapturingBackend implements PlaybackBackend {
-  final inputs = <PlaybackInput>[];
-  final pending = <Completer<PlaybackSession>>[];
-
-  @override
-  Future<PlaybackSession> open(PlaybackInput input) {
-    inputs.add(input);
-    final session = Completer<PlaybackSession>();
-    pending.add(session);
-    return session.future;
-  }
-}
-
-class RouteHistory implements HistoryRepository {
-  final entries = <ViewingEntry>[];
-  Object? loadError;
-
-  @override
-  Future<List<ViewingEntry>> loadHistory() async {
-    if (loadError case final error?) throw error;
-    return entries;
-  }
-
-  @override
-  SaveViewingCheckpoint openSession(ContentRef ref) =>
-      (entry) async => entries.add(entry);
-
-  @override
-  Stream<List<ViewingEntry>> watchHistory() => Stream.value(entries);
-
-  @override
-  Future<void> remove(ContentRef ref) async =>
-      entries.removeWhere((entry) => entry.selection.ref == ref);
-
-  @override
-  Future<void> clear() async => entries.clear();
-}
-
-class RoutePlaybackSession implements PlaybackSession {
-  @override
-  String get id => 'route-playback';
-  @override
-  PlaybackSnapshot get value => const PlaybackSnapshot();
-  @override
-  Stream<PlaybackSnapshot> get changes => const Stream.empty();
-  @override
-  Future<void> dispose() async {}
-  @override
-  Future<void> pause() async {}
-  @override
-  Future<void> play() async {}
-  @override
-  Future<void> seek(Duration position) async {}
-  @override
-  Future<void> setSpeed(double speed) async {}
-  @override
-  Future<void> selectSource(VideoSource source) async {}
-  @override
-  Future<void> enterPictureInPicture() async {}
-}
-
-class UnusedCoverCache implements BaseCacheManager {
-  @override
-  Future<void> dispose() async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

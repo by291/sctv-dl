@@ -7,7 +7,7 @@ import 'package:sctv_dl_mobile/domain/programmes/programme.dart';
 import 'package:sctv_dl_mobile/features/programmes/components/history_card.dart';
 
 import '../../support/history_fixture.dart';
-import 'pages_test.dart' show host;
+import '../../support/page_host.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
@@ -42,8 +42,10 @@ void main() {
                   ),
                 ),
               ),
-              scale: 2,
-              brightness: brightness,
+              appearance: PageHostAppearance(
+                textScale: 2,
+                brightness: brightness,
+              ),
             ),
           );
           final cover = find.byType(CoverImage);
@@ -146,7 +148,7 @@ void main() {
               ),
             ),
           ),
-          scale: layout.$2,
+          appearance: PageHostAppearance(textScale: layout.$2),
         ),
       );
       expect(find.byType(LinearProgressIndicator), findsNothing);

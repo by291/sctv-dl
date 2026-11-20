@@ -8,6 +8,14 @@ import 'package:integration_test/integration_test.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:sctv_dl_mobile/design/ios_primary_navigation.dart';
 
+const _contentHeight = 1200.0;
+
+const _contrastPhases = [
+  (name: 'initial-light', color: Colors.white, hasDarkContent: false),
+  (name: 'scrolled-dark', color: Colors.black, hasDarkContent: true),
+  (name: 'scrolled-light', color: Colors.white, hasDarkContent: false),
+];
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -17,6 +25,7 @@ void main() {
     await LiquidGlassWidgets.initialize(enablePerformanceMonitor: false);
     final capture = GlobalKey();
     final scroll = ScrollController();
+    addTearDown(scroll.dispose);
     var selected = 0;
     await tester.pumpWidget(
       RepaintBoundary(
@@ -35,12 +44,11 @@ void main() {
                   controller: scroll,
                   padding: EdgeInsets.zero,
                   children: [
-                    for (final color in [
-                      Colors.white,
-                      Colors.black,
-                      Colors.white,
-                    ])
-                      SizedBox(height: 1200, child: ColoredBox(color: color)),
+                    for (final phase in _contrastPhases)
+                      SizedBox(
+                        height: _contentHeight,
+                        child: ColoredBox(color: phase.color),
+                      ),
                   ],
                 ),
               ),
@@ -57,9 +65,8 @@ void main() {
 
     // Native readback is necessary: widget tests cannot verify the pixels
     // sampled behind the bar or the shader's resulting material.
-    for (var index = 0; index < 3; index++) {
-      final dark = index == 1;
-      scroll.jumpTo(index * 1200);
+    for (final (index, phase) in _contrastPhases.indexed) {
+      scroll.jumpTo(index * _contentHeight);
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (DateTime.now().isBefore(deadline)) {
         await tester.pump(const Duration(milliseconds: 100));
@@ -67,16 +74,21 @@ void main() {
             .widget<GlassTabBar>(find.byType(GlassTabBar))
             .unselectedIconColor!
             .computeLuminance();
-        if (dark ? luminance > 0.8 : luminance < 0.1) break;
+        final hasExpectedLuminance = phase.hasDarkContent
+            ? luminance > 0.8
+            : luminance < 0.1;
+        if (hasExpectedLuminance) {
+          break;
+        }
       }
       final bar = tester.widget<GlassTabBar>(find.byType(GlassTabBar));
       expect(
         bar.unselectedIconColor!.computeLuminance(),
-        dark ? greaterThan(0.8) : lessThan(0.1),
+        phase.hasDarkContent ? greaterThan(0.8) : lessThan(0.1),
       );
       expect(
         bar.settings!.glassColor.computeLuminance(),
-        dark ? lessThan(0.1) : greaterThan(0.8),
+        phase.hasDarkContent ? lessThan(0.1) : greaterThan(0.8),
       );
 
       final surface =
@@ -89,7 +101,7 @@ void main() {
         () => <Object?>[],
       ) as List<Object?>;
       screenshots.add({
-        'screenshotName': 'ios-glass-contrast-${dark ? 'dark' : 'light'}',
+        'screenshotName': 'ios-glass-contrast-${phase.name}',
         'bytes': bytes!.buffer.asUint8List().toList(),
       });
       image.dispose();
@@ -99,6 +111,5 @@ void main() {
     await tester.tap(find.text('下载').hitTestable().last);
     expect(selected, 1);
     await tester.pumpWidget(const SizedBox.shrink());
-    scroll.dispose();
   }, skip: !Platform.isIOS);
 }

@@ -8,10 +8,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sctv_dl_mobile/domain/playback/playback_backend.dart';
 import 'package:sctv_dl_mobile/features/player/player_page.dart';
 import 'package:sctv_dl_mobile/platform/playback/native_player_environment.dart';
-import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart';
+import 'package:sctv_dl_mobile/platform/playback/video_player_backend.dart'
+    show PlaybackSurface;
 
-import '../test/features/player/playback_controller_test.dart'
-    show MemoryHistory;
+import '../test/support/playback_fixtures.dart' show MemoryHistory;
+import '../test/support/recording_backend.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -197,14 +198,4 @@ void main() {
     },
     skip: encoded.isEmpty,
   );
-}
-
-class RecordingBackend implements PlaybackBackend {
-  PlaybackSession? session;
-  int opens = 0;
-  @override
-  Future<PlaybackSession> open(PlaybackInput input) async {
-    opens++;
-    return session = await VideoPlayerBackend().open(input);
-  }
 }
