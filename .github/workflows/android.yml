@@ -35,7 +35,9 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
       - name: Check and assemble
         run: |
-          ./android/gradlew -p android spotlessCheck check :app:assembleDebug :baselineprofile:assemble :benchmark:assemble --no-daemon
+          ./android/gradlew -p android spotlessCheck check assembleDebugAndroidTest \
+            :app:assembleDebug :app:assembleBenchmarkRelease \
+            :baselineprofile:assemble :benchmark:assemble --no-daemon
       - name: Assemble release APKs per ABI
         run: |
           ./android/gradlew -p android :app:assembleRelease -PsplitPerAbi=true --no-daemon

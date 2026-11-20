@@ -99,7 +99,7 @@ jobs:
           retention-days: 14
 
   ios:
-    name: Unsigned iOS release compilation
+    name: iOS host tests and unsigned release compilation
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -121,6 +121,14 @@ jobs:
           dart run build_runner build
           git diff --exit-code -- lib
           test -z "$(git status --porcelain -- lib)"
+      - name: Configure iOS simulator test compilation
+        run: flutter build ios --simulator --debug --config-only --no-pub
+      - name: Compile native iOS host tests without launching a simulator
+        run: |
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -only-testing:RunnerTests -derivedDataPath build/qa/runner-tests \
+            CODE_SIGNING_ALLOWED=NO build-for-testing
       - name: Compile unsigned iOS release
         run: flutter build ios --release --no-codesign
       - name: Archive unsigned validation app

@@ -20,15 +20,21 @@ Use controlled upstream/media fixtures and disposable devices. HEAD or a small R
 
 Routine CI must not boot simulators/emulators, require a connected device or drive native GUI interactions. Host-side unit/package/widget tests and compilation remain in CI; native UI, instrumentation execution and device acceptance use explicit local commands.
 
-| Workflow                                                  | Automated scope                                                                                                                               |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Web and repository quality](../.github/workflows/ci.yml) | Vitest, Web build, lint, formatting, documentation links and workflow validation                                                              |
-| [Android](../.github/workflows/android.yml)               | Gradle checks/JVM tests/lint, app builds and baseline/benchmark APK compilation                                                               |
-| [Flutter](../.github/workflows/flutter.yml)               | Generated-source checks, Dart formatting/analysis, unit/widget tests, Android instrumentation compilation and Android/iOS release compilation |
-| [Apple](../.github/workflows/apple.yml)                   | Node tooling tests, Swift formatting/package tests and unsigned macOS/iOS Release compilation                                                 |
-| [Desktop](../.github/workflows/desktop.yml)               | Adapter/contract and Rust tests, native checks and platform packaging                                                                         |
+| Workflow                                                  | Automated scope                                                                                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Web and repository quality](../.github/workflows/ci.yml) | Vitest, Web build, lint, formatting, documentation links and workflow validation                                                            |
+| [Android](../.github/workflows/android.yml)               | Gradle checks/JVM tests/lint, all debug test APKs, app builds and baseline/benchmark APK compilation                                        |
+| [Flutter](../.github/workflows/flutter.yml)               | Generated-source checks, Dart formatting/analysis, unit/widget tests, Android/iOS host test compilation and Android/iOS release compilation |
+| [Apple](../.github/workflows/apple.yml)                   | Node tooling tests, Swift formatting/package tests, unsigned macOS/iOS Release apps and Debug UI test bundle compilation                    |
+| [Desktop](../.github/workflows/desktop.yml)               | Adapter/contract and Rust tests, native checks and platform packaging                                                                       |
 
 Compiling an instrumentation or UI target does not execute it. Toolchain versions, runner images and trigger paths are defined in the workflows; platform guides own local commands.
+
+Android uses the unqualified `assembleDebugAndroidTest` task selector to compile app and
+library instrumentation APKs. Apple uses `--compile-tests` with Release validation to
+compile Debug test bundles for the host Mac and a generic iOS Simulator destination.
+Flutter compiles `RunnerTests` for a generic iOS Simulator before preparing the iPhoneOS
+Release app. These commands do not create, boot, or select a connected device.
 
 [GitHub Actions](../.github/workflows/ci.yml) runs on pull requests and pushes to `main`, and can also be started manually. It installs the pnpm version from `package.json` with a frozen lockfile, then runs tests and `pnpm build` on Ubuntu with Node.js 24.15.0 and 26. A separate repository-quality job runs ESLint, Prettier, local Markdown file/heading validation and actionlint once per run. Superseded runs are cancelled, and the shared pnpm store is cached between runs.
 

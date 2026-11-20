@@ -10,6 +10,7 @@ import {
   readLockfiles,
   verifyLockfiles,
   parseOptions,
+  buildApplicationTargets,
 } from './check.mjs'
 
 test('missing requested OS is rejected instead of selecting a newer runtime', () => {
@@ -145,4 +146,37 @@ test('all-platform CI validation permits only unsigned Release builds without de
     () => parseOptions(['--platform', 'all', '--configuration', 'Release', '--device', 'iphone']),
     /device/,
   )
+})
+
+test('compile-only validation builds both native test bundles without a device action', async () => {
+  const builds = []
+  await buildApplicationTargets({
+    platform: 'all',
+    configuration: 'Release',
+    shouldVerifyLockfiles: true,
+    shouldCompileTests: true,
+    output: '/validation',
+    run: async (command, args) => {
+      assert.equal(command, 'xcodebuild')
+      assert.equal(args.includes('test'), false)
+      builds.push({
+        configuration: args[args.indexOf('-configuration') + 1],
+        destination: args[args.indexOf('-destination') + 1],
+        action: args.includes('build-for-testing') ? 'tests' : 'application',
+      })
+    },
+  })
+
+  assert.deepEqual(
+    builds.map(({ configuration, action }) => ({ configuration, action })),
+    [
+      { configuration: 'Release', action: 'application' },
+      { configuration: 'Debug', action: 'tests' },
+      { configuration: 'Release', action: 'application' },
+      { configuration: 'Debug', action: 'tests' },
+    ],
+  )
+  assert.equal(builds[2].destination, 'generic/platform=iOS')
+  assert.equal(builds[3].destination, 'generic/platform=iOS Simulator')
+  assert.throws(() => parseOptions(['--platform', 'ios', '--compile-tests']), /Release/)
 })

@@ -120,6 +120,7 @@ export function parseOptions(args = process.argv.slice(2)) {
       platform: { type: 'string' },
       configuration: { type: 'string', default: 'Debug' },
       'verify-lockfiles': { type: 'boolean', default: false },
+      'compile-tests': { type: 'boolean', default: false },
       device: { type: 'string' },
       os: { type: 'string', default: '26' },
     },
@@ -140,7 +141,102 @@ export function parseOptions(args = process.argv.slice(2)) {
     throw new Error('Release compilation does not accept --device')
   }
 
+  if (values['compile-tests'] && values.configuration !== 'Release') {
+    throw new Error('Compile-only test validation requires --configuration Release')
+  }
+
   return values
+}
+
+function nativeDestination(platform) {
+  if (platform === 'ios') {
+    return 'generic/platform=iOS'
+  }
+
+  const architecture = process.arch === 'arm64' ? 'arm64' : 'x86_64'
+
+  return `platform=macOS,arch=${architecture}`
+}
+
+async function runApplicationBuild({
+  platform,
+  configuration,
+  destination,
+  action,
+  shouldVerifyLockfiles,
+  output,
+  run,
+}) {
+  const label = action === 'build-for-testing' ? `${platform}-tests` : platform
+
+  await run(
+    'xcodebuild',
+    [
+      '-quiet',
+      '-project',
+      'apple/SCTV.xcodeproj',
+      '-scheme',
+      'SCTV',
+      '-destination',
+      destination,
+      '-configuration',
+      configuration,
+      ...(shouldVerifyLockfiles
+        ? ['-onlyUsePackageVersionsFromResolvedFile', '-disableAutomaticPackageResolution']
+        : []),
+      '-derivedDataPath',
+      `apple/build/DerivedData-${label}`,
+      '-resultBundlePath',
+      `${output}/${label}.xcresult`,
+      action,
+      ...(action === 'test' ? [] : ['CODE_SIGNING_ALLOWED=NO', 'ONLY_ACTIVE_ARCH=YES']),
+      'CODE_SIGN_IDENTITY=-',
+      'CODE_SIGNING_REQUIRED=NO',
+    ],
+    { logPath: `${output}/${label}-xcode.log` },
+  )
+}
+
+// Compile application and optional test targets without creating or starting a device.
+export async function buildApplicationTargets({
+  platform,
+  configuration,
+  shouldVerifyLockfiles,
+  shouldCompileTests,
+  output,
+  run = runProcess,
+}) {
+  const platforms = platform === 'all' ? ['macos', 'ios'] : [platform]
+  const action = configuration === 'Release' ? 'build' : 'test'
+
+  for (const target of platforms) {
+    await runApplicationBuild({
+      platform: target,
+      configuration,
+      destination: nativeDestination(target),
+      action,
+      shouldVerifyLockfiles,
+      output,
+      run,
+    })
+
+    if (!shouldCompileTests) {
+      continue
+    }
+
+    // Generic destinations compile Debug diagnostics and XCTest without booting a simulator.
+    const destination =
+      target === 'ios' ? 'generic/platform=iOS Simulator' : nativeDestination(target)
+    await runApplicationBuild({
+      platform: target,
+      configuration: 'Debug',
+      destination,
+      action: 'build-for-testing',
+      shouldVerifyLockfiles,
+      output,
+      run,
+    })
+  }
 }
 
 async function main() {
@@ -205,51 +301,26 @@ async function main() {
     { logPath: `${output}/package.log` },
   )
 
-  const buildOrTest = async (platform, destination) =>
-    runProcess(
-      'xcodebuild',
-      [
-        '-quiet',
-        '-project',
-        'apple/SCTV.xcodeproj',
-        '-scheme',
-        'SCTV',
-        '-destination',
-        destination,
-        '-configuration',
-        values.configuration,
-        ...(locked
-          ? ['-onlyUsePackageVersionsFromResolvedFile', '-disableAutomaticPackageResolution']
-          : []),
-        '-derivedDataPath',
-        `apple/build/DerivedData-${platform}`,
-        '-resultBundlePath',
-        values.platform === 'all' ? `${output}/${platform}.xcresult` : `${output}/Tests.xcresult`,
-        release ? 'build' : 'test',
-        ...(release ? ['CODE_SIGNING_ALLOWED=NO', 'ONLY_ACTIVE_ARCH=YES'] : []),
-        'CODE_SIGN_IDENTITY=-',
-        'CODE_SIGNING_REQUIRED=NO',
-      ],
-      {
-        logPath:
-          values.platform === 'all' ? `${output}/${platform}-xcode.log` : `${output}/xcode.log`,
-      },
-    )
-
   if (selection) {
     await withSimulator(selection, execute, (id) =>
-      buildOrTest('ios', `platform=iOS Simulator,id=${id}`),
+      runApplicationBuild({
+        platform: 'ios',
+        configuration: values.configuration,
+        destination: `platform=iOS Simulator,id=${id}`,
+        action: 'test',
+        shouldVerifyLockfiles: Boolean(locked),
+        output,
+        run: runProcess,
+      }),
     )
   } else {
-    const platforms = values.platform === 'all' ? ['macos', 'ios'] : [values.platform]
-    for (const platform of platforms) {
-      await buildOrTest(
-        platform,
-        platform === 'ios'
-          ? 'generic/platform=iOS'
-          : `platform=macOS,arch=${process.arch === 'arm64' ? 'arm64' : 'x86_64'}`,
-      )
-    }
+    await buildApplicationTargets({
+      platform: values.platform,
+      configuration: values.configuration,
+      shouldVerifyLockfiles: Boolean(locked),
+      shouldCompileTests: values['compile-tests'],
+      output,
+    })
   }
 
   if (locked) {

@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   native:
-    name: Package tests and unsigned builds
+    name: Package tests and unsigned application/test builds
     runs-on: macos-26
     timeout-minutes: 45
     env:
@@ -34,8 +34,10 @@ jobs:
           node --version
       - name: Verify tooling
         run: node --test apple/tool/*.test.mjs
-      - name: Check package and compile macOS and iOS with locked dependencies
-        run: node apple/tool/check.mjs --platform all --configuration Release --verify-lockfiles
+      - name: Check package and compile applications and native test bundles
+        run: |
+          node apple/tool/check.mjs --platform all --configuration Release \
+            --verify-lockfiles --compile-tests
       - name: Preserve validation results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
