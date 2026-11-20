@@ -38,12 +38,19 @@ These are the commands used by Apple CI:
 
 ```sh
 node --test apple/tool/*.test.mjs
-node apple/tool/check.mjs --platform all --configuration Release --verify-lockfiles
+node apple/tool/check.mjs --platform all --configuration Release --verify-lockfiles --compile-tests
 ```
 
-Release mode compiles without signing, using generic iOS or the host Mac architecture. `--platform all` requires Release and runs formatting/package tests once before compiling both platforms. It never starts a simulator or runs native UI tests, and it does not create a distributable signed archive. Individual `--platform macos` and `--platform ios` Release commands remain available.
+Release mode compiles without signing, using generic iOS or the host Mac architecture.
+`--platform all` requires Release and runs formatting and package tests once before compiling
+both platforms. `--compile-tests` also builds the Debug application and `SCTVUITests` bundles
+with `xcodebuild build-for-testing` for the host Mac and generic iOS Simulator destinations.
+Individual `--platform macos` and `--platform ios` Release commands support the same option.
 
-[Apple CI](../.github/workflows/apple.yml) uses the `macos-26` runner and Xcode 26.6 for tooling tests, Swift formatting, package tests and unsigned macOS/iOS Release compilation. It does not start simulators or execute native UI tests; the [Debug commands below](#local-native-ui-checks) remain local acceptance checks. Logs and build result bundles are retained even on failure. A valid workflow does not establish a successful hosted run.
+[Apple CI](../.github/workflows/apple.yml) uses the `macos-26` runner and Xcode 26.6.
+These build actions run without creating or booting a simulator. Native UI execution uses the
+[local Debug commands](#local-native-ui-checks). Logs and build result bundles are retained
+even on failure. Signed archives use the separate release workflow.
 
 ## Local native UI checks
 

@@ -448,20 +448,23 @@ final class ApplicationAcceptanceTests: XCTestCase {
             inline.lifetime = .keepAlways
             add(inline)
             app.buttons["player-quality"].tap()
-            XCTAssertTrue(app.buttons["标准"].waitForExistence(timeout: 5))
-            Thread.sleep(forTimeInterval: 0.5)
+            let standard = app.buttons["标准"]
+            requireState("Quality option is ready", of: standard) { $0.isHittable }
             let qualityMenu = XCTAttachment(screenshot: app.screenshot())
             qualityMenu.name = "custom-player-quality-options"
             qualityMenu.lifetime = .keepAlways
             add(qualityMenu)
-            app.buttons["标准"].tap()
+            standard.tap()
+            XCTAssertTrue(standard.waitForNonExistence(timeout: 5))
             let progress = app.sliders["player-progress"]
             XCTAssertTrue(progress.exists)
             progress.adjust(toNormalizedSliderPosition: 0.5)
-            app.buttons["player-fullscreen"].tap()
+            let fullscreenControl = app.buttons["player-fullscreen"]
+            fullscreenControl.tap()
             let speed = app.buttons["player-speed"]
-            XCTAssertTrue(speed.waitForExistence(timeout: 5))
-            XCTAssertGreaterThan(speed.frame.minX, progress.frame.maxX)
+            requireState("Fullscreen controls have moved beside the timeline", of: speed) {
+                $0.isHittable && $0.frame.minX > progress.frame.maxX
+            }
             XCTAssertTrue(
                 app.windows.allElementsBoundByIndex.contains {
                     $0.frame.width > 0 && $0.frame.contains(app.buttons["player-fullscreen"].frame)
@@ -470,13 +473,28 @@ final class ApplicationAcceptanceTests: XCTestCase {
             fullscreen.name = "custom-player-fullscreen"
             fullscreen.lifetime = .keepAlways
             add(fullscreen)
+            let play = app.buttons["player-toggle-play"]
+            requireState("Play control is ready in fullscreen", of: play) { $0.isHittable }
+            if play.label == "暂停" {
+                play.tap()
+            }
+            requireState("Playback pauses before resetting the timeline", of: play) {
+                $0.label == "播放"
+            }
             progress.adjust(toNormalizedSliderPosition: 0)
-            app.buttons["player-toggle-play"].tap()
+            requireState("Seek to the beginning completes", of: progress) {
+                $0.isEnabled && self.playbackSeconds($0) == 0
+            }
+            play.tap()
+            requireState("Video starts playing", of: play) { $0.label == "暂停" }
             speed.tap()
-            Thread.sleep(forTimeInterval: 5)
-            XCTAssertTrue(app.buttons["1.5 倍速"].exists)
-            app.buttons["1.5 倍速"].tap()
-            XCTAssertEqual(speed.value as? String, "1.5 倍")
+            let faster = app.buttons["1.5 倍速"]
+            requireState("Speed options open", of: faster) { $0.isHittable }
+            expectSpeedOptionStaysOpen(faster)
+            faster.tap()
+            requireState("Playback speed changed", of: speed) {
+                $0.value as? String == "1.5 倍"
+            }
             let surface = app.descendants(matching: .any)["player-gesture-surface"].firstMatch
             surface.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.45)).press(
                 forDuration: 0.6)
@@ -490,6 +508,23 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(title.waitForExistence(timeout: 5))
             app.buttons["player-back"].tap()
             XCTAssertTrue(clip.waitForExistence(timeout: 5))
+        }
+
+        private func expectSpeedOptionStaysOpen(_ option: XCUIElement) {
+            let dismissed = NSPredicate { object, _ in
+                guard let option = object as? XCUIElement else {
+                    return false
+                }
+                return !option.isHittable
+            }
+            let unexpectedDismissal = XCTNSPredicateExpectation(
+                predicate: dismissed, object: option)
+            unexpectedDismissal.isInverted = true
+            // Observe through the overlay's four-second idle interval while playback continues.
+            let observationInterval: TimeInterval = 5
+            XCTAssertEqual(
+                XCTWaiter.wait(for: [unexpectedDismissal], timeout: observationInterval),
+                .completed)
         }
 
         func testCatalogueSortingKeepsViewportAndReturnPosition() {
@@ -620,162 +655,189 @@ final class ApplicationAcceptanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["设置"].waitForExistence(timeout: 5))
         }
 
-        func testDownloadSelectionSurvivesRapidTaps() {
-            let app = XCUIApplication()
-            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
-            continueAfterFailure = false
-            app.launch()
-            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
-            app.buttons["四川新闻"].tap()
-            for id in ["30", "31"] {
-                let content = app.buttons["content-actions-\(id)"]
-                reveal(content, in: app)
-                content.tap()
-                app.buttons["download-content-\(id)"].tap()
-                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
-                app.alerts["提示"].buttons["好"].tap()
-            }
-            app.buttons["下载"].firstMatch.tap()
-            let title = app.buttons["play-download-31"]
-            XCTAssertTrue(title.waitForExistence(timeout: 10))
-            let secondTitle = app.buttons["play-download-30"]
-            XCTAssertTrue(secondTitle.exists)
+        func testDownloadSelectionRespondsToIndividualAndRapidTaps() {
+            let app = openFixtureArchive()
+            completeFixtureDownloads(in: app, contentIDs: ["30", "31"])
+            let toggle = app.buttons["downloads-select"]
             let filters = app.buttons["全部"]
-            let firstRow = downloadCard(in: app, contentID: "31", selecting: false)
-            let secondRow = downloadCard(in: app, contentID: "30", selecting: false)
-            let originalTitleInset = firstRow.frame.minX - filters.frame.minX
-            let originalSecondInset = secondRow.frame.minX - filters.frame.minX
-            let originalWidth = firstRow.frame.width
-            let usesBottomTabs = app.buttons["栏目"].firstMatch.frame.midY > app.frame.midY
-            assertRapidSelectionTaps(
-                app, identifier: "downloads-select", activeLabel: "完成", expectsEveryTap: true
-            ) {
-                let selecting = app.buttons["downloads-select"].label == "完成"
-                let catalogue = app.buttons["栏目"].firstMatch
-                XCTAssertEqual(
-                    catalogue.exists && catalogue.isHittable, !usesBottomTabs || !selecting)
-                XCTAssertEqual(app.buttons["下载操作"].firstMatch.exists, !selecting)
-                let firstCard = downloadCard(in: app, contentID: "31", selecting: selecting)
-                let secondCard = downloadCard(in: app, contentID: "30", selecting: selecting)
-                XCTAssertEqual(firstCard.frame.width, originalWidth, accuracy: 2)
-                XCTAssertEqual(
-                    firstCard.frame.minX - filters.frame.minX - originalTitleInset,
-                    secondCard.frame.minX - filters.frame.minX - originalSecondInset, accuracy: 2)
-                XCTAssertEqual(
-                    firstCard.frame.minX - filters.frame.minX, originalTitleInset, accuracy: 2)
-                if selecting {
-                    XCTAssertTrue(app.staticTexts["请选择要操作的下载任务"].isHittable)
-                    let firstSelection = app.buttons["select-download-30"]
-                    let secondSelection = app.buttons["select-download-31"]
-                    firstSelection.tap()
-                    XCTAssertTrue(app.staticTexts["已选 1 项"].exists)
-                    XCTAssertTrue(firstSelection.isSelected)
-                    XCTAssertFalse(secondSelection.isSelected)
-                    let selectedShot = XCTAttachment(screenshot: app.screenshot())
-                    selectedShot.name = "download-cover-selection-and-outline"
-                    selectedShot.lifetime = .keepAlways
-                    add(selectedShot)
-                    firstSelection.tap()
-                    app.buttons["全选"].tap()
-                    XCTAssertTrue(app.staticTexts["已选 2 项"].waitForExistence(timeout: 5))
-                    app.buttons["取消全选"].tap()
-                    XCTAssertTrue(app.staticTexts["已选 0 项"].exists)
-                }
+            let originalFirstFrame = downloadCard(in: app, contentID: "31", selecting: false).frame
+            let originalSecondFrame = downloadCard(in: app, contentID: "30", selecting: false).frame
+            let originalTitleInset = originalFirstFrame.minX - filters.frame.minX
+            let originalSecondInset = originalSecondFrame.minX - filters.frame.minX
+            let catalogue = app.buttons["栏目"].firstMatch
+            let usesBottomTabs = catalogue.frame.midY > app.frame.midY
+
+            verifySelectionTapSequence(on: toggle, startingFrom: .browsing)
+            let firstSelection = app.buttons["select-download-30"]
+            let secondSelection = app.buttons["select-download-31"]
+            XCTAssertTrue(firstSelection.waitForExistence(timeout: 5))
+            XCTAssertTrue(secondSelection.exists)
+            XCTAssertEqual(catalogue.exists && catalogue.isHittable, !usesBottomTabs)
+            XCTAssertFalse(app.buttons["下载操作"].firstMatch.exists)
+
+            let firstCard = downloadCard(in: app, contentID: "31", selecting: true)
+            let secondCard = downloadCard(in: app, contentID: "30", selecting: true)
+            XCTAssertEqual(firstCard.frame.width, originalFirstFrame.width, accuracy: 2)
+            XCTAssertEqual(
+                firstCard.frame.minX - filters.frame.minX, originalTitleInset, accuracy: 2)
+            XCTAssertEqual(
+                secondCard.frame.minX - filters.frame.minX, originalSecondInset, accuracy: 2)
+            XCTAssertTrue(app.staticTexts["请选择要操作的下载任务"].isHittable)
+            firstSelection.tap()
+            XCTAssertTrue(app.staticTexts["已选 1 项"].waitForExistence(timeout: 5))
+            XCTAssertTrue(firstSelection.isSelected)
+            XCTAssertFalse(secondSelection.isSelected)
+            let selectedShot = XCTAttachment(screenshot: app.screenshot())
+            selectedShot.name = "download-cover-selection-and-outline"
+            selectedShot.lifetime = .keepAlways
+            add(selectedShot)
+
+            app.buttons["全选"].tap()
+            XCTAssertTrue(app.staticTexts["已选 2 项"].waitForExistence(timeout: 5))
+            app.buttons["取消全选"].tap()
+            XCTAssertTrue(app.staticTexts["已选 0 项"].waitForExistence(timeout: 5))
+            verifySelectionTapSequence(on: toggle, startingFrom: .selecting)
+
+            let playable = app.buttons["play-download-30"]
+            XCTAssertTrue(firstSelection.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["下载操作"].firstMatch.exists)
+            requireState("Playback card is available after leaving selection", of: playable) {
+                $0.isHittable
             }
-            app.buttons["play-download-30"].tap()
-            XCTAssertTrue(app.buttons["player-back"].waitForExistence(timeout: 10))
-            app.buttons["player-back"].tap()
-            XCTAssertTrue(app.buttons["downloads-select"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.buttons["栏目"].firstMatch.isHittable)
+            XCTAssertTrue(catalogue.isHittable)
         }
 
-        func testArchiveSelectionSurvivesRapidTaps() {
-            let app = XCUIApplication()
-            app.launchArguments = ["--ui-fixtures", "-ApplePersistenceIgnoreState", "YES"]
-            continueAfterFailure = false
-            app.launch()
-            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
-            app.buttons["四川新闻"].tap()
-            assertRapidSelectionTaps(
-                app, identifier: "archive-select", activeLabel: "完成", expectsEveryTap: true)
+        func testArchiveSelectionRespondsToIndividualAndRapidTaps() {
+            let app = openFixtureArchive()
             let toggle = app.buttons["archive-select"]
-            if toggle.label == "选择" { toggle.tap() }
+            verifySelectionTapSequence(on: toggle, startingFrom: .browsing)
             XCTAssertTrue(app.staticTexts["请选择要下载的节目"].waitForExistence(timeout: 5))
-            let compact = app.windows.firstMatch.frame.width < 600
-            if compact { XCTAssertFalse(app.buttons["资料库"].firstMatch.isHittable) }
+            let library = app.buttons["资料库"].firstMatch
+            let isCompact = app.windows.firstMatch.frame.width < 600
+            if isCompact {
+                XCTAssertFalse(library.isHittable)
+            }
+
             app.buttons["全选"].tap()
             let download = app.buttons["archive-download-selection"]
-            XCTAssertTrue(download.waitForExistence(timeout: 5))
-            XCTAssertTrue(download.isHittable)
-            XCTAssertTrue(download.isEnabled)
+            requireState("Batch download is actionable after rapid selection", of: download) {
+                $0.isHittable && $0.isEnabled
+            }
             XCTAssertFalse(app.buttons["content-actions-30"].exists)
             let selected = XCTAttachment(screenshot: app.screenshot())
             selected.name = "archive-batch-selection"
             selected.lifetime = .keepAlways
             add(selected)
             download.tap()
-            XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 10))
-            app.alerts["提示"].buttons["好"].tap()
-            if compact { XCTAssertFalse(app.buttons["资料库"].firstMatch.isHittable) }
+            acknowledgeFixtureDownload(in: app)
+            if isCompact {
+                XCTAssertFalse(library.isHittable)
+            }
             app.buttons["取消全选"].tap()
-            XCTAssertTrue(app.staticTexts["请选择要下载的节目"].exists)
-            toggle.tap()
-            XCTAssertTrue(app.buttons["资料库"].firstMatch.isHittable)
+            XCTAssertTrue(app.staticTexts["请选择要下载的节目"].waitForExistence(timeout: 5))
+
+            verifySelectionTapSequence(on: toggle, startingFrom: .selecting)
+            requireState("Library tab is available after leaving selection", of: library) {
+                $0.isHittable
+            }
+            XCTAssertTrue(app.buttons["content-actions-30"].waitForExistence(timeout: 5))
             XCTAssertFalse(download.exists)
         }
 
-        private func assertRapidSelectionTaps(
-            _ app: XCUIApplication, identifier: String, activeLabel: String,
-            expectsEveryTap: Bool = false,
-            verify: () -> Void = {}
-        ) {
-            let toggle = app.buttons[identifier]
-            XCTAssertTrue(toggle.waitForExistence(timeout: 10))
-            for _ in 0..<4 {
-                let initialLabel = toggle.label
-                let initialFrame = toggle.frame
-                toggle.tap(withNumberOfTaps: 6, numberOfTouches: 1)
-                XCTAssertTrue(toggle.exists)
-                XCTAssertTrue(toggle.isHittable)
-                XCTAssertTrue(toggle.isEnabled)
-                XCTAssertTrue(["选择", activeLabel].contains(toggle.label))
-                if expectsEveryTap {
-                    XCTAssertEqual(
-                        toggle.label, initialLabel,
-                        "Toggle moved from \(initialFrame) to \(toggle.frame)")
+        private enum SelectionMode: String {
+            case browsing = "选择"
+            case selecting = "完成"
+
+            var toggled: Self {
+                switch self {
+                case .browsing:
+                    .selecting
+                case .selecting:
+                    .browsing
                 }
-                verify()
-                let expectedLabel = toggle.label == "选择" ? activeLabel : "选择"
-                toggle.tap()
-                let changed = XCTNSPredicateExpectation(
-                    predicate: NSPredicate(format: "label == %@", expectedLabel), object: toggle)
-                XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
-                verify()
             }
-            let shot = XCTAttachment(screenshot: app.screenshot())
-            shot.name = "\(identifier)-after-rapid-taps"
-            shot.lifetime = .keepAlways
-            add(shot)
+        }
+
+        private func verifySelectionTapSequence(
+            on toggle: XCUIElement, startingFrom initial: SelectionMode
+        ) {
+            requireState("Selection toggle starts in mode \(initial.rawValue)", of: toggle) {
+                $0.isHittable && $0.isEnabled && $0.label == initial.rawValue
+            }
+
+            let expectedModes = [initial.toggled, initial]
+            for (index, mode) in expectedModes.enumerated() {
+                toggle.tap()
+                // The label changes with selection state before the layout animation settles.
+                requireState("Tap \(index + 1) enters mode \(mode.rawValue)", of: toggle) {
+                    $0.label == mode.rawValue
+                }
+            }
+
+            // Send taps as one gesture so XCTest cannot wait for layout between them.
+            let rapidTapCount = 3
+            toggle.tap(withNumberOfTaps: rapidTapCount, numberOfTouches: 1)
+            let expectedMode = initial.toggled
+            requireState("Rapid taps enter mode \(expectedMode.rawValue)", of: toggle) {
+                $0.label == expectedMode.rawValue
+            }
+        }
+
+        private func openFixtureArchive(arguments: [String] = []) -> XCUIApplication {
+            let app = XCUIApplication()
+            app.launchArguments =
+                [
+                    "--ui-fixtures",
+                    "-ApplePersistenceIgnoreState",
+                    "YES",
+                ] + arguments
+            continueAfterFailure = false
+            app.launch()
+            let programme = app.buttons["四川新闻"]
+            XCTAssertTrue(programme.waitForExistence(timeout: 15))
+            programme.tap()
+            XCTAssertTrue(app.buttons["archive-play-30"].waitForExistence(timeout: 10))
+            return app
+        }
+
+        private func completeFixtureDownloads(in app: XCUIApplication, contentIDs: [String]) {
+            let toggle = app.buttons["archive-select"]
+            toggle.tap()
+            XCTAssertTrue(app.buttons["全选"].waitForExistence(timeout: 5))
+            for contentID in contentIDs {
+                let card = app.buttons["archive-play-\(contentID)"]
+                reveal(card, in: app)
+                card.tap()
+            }
+
+            let download = app.buttons["archive-download-selection"]
+            requireState("Fixture downloads are selected", of: download) {
+                $0.isHittable && $0.isEnabled
+            }
+            download.tap()
+            acknowledgeFixtureDownload(in: app)
+            app.buttons["archive-select"].tap()
+            let downloads = app.buttons["下载"].firstMatch
+            requireState("Downloads tab is ready after leaving selection", of: downloads) {
+                $0.isHittable
+            }
+            downloads.tap()
+            for contentID in contentIDs {
+                let completed = app.buttons["download-\(contentID)-completed"]
+                XCTAssertTrue(completed.waitForExistence(timeout: 20))
+            }
+        }
+
+        private func acknowledgeFixtureDownload(in app: XCUIApplication) {
+            let alert = app.alerts["提示"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 10))
+            alert.buttons["好"].tap()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
         }
 
         func testDownloadsUseExplicitSelectionAndCompactTitles() {
-            let app = XCUIApplication()
-            app.launchArguments = [
-                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
-            ]
-            continueAfterFailure = false
-            app.launch()
-            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
-            app.buttons["四川新闻"].tap()
-            for id in ["31", "32"] {
-                let menu = app.buttons["content-actions-\(id)"]
-                reveal(menu, in: app)
-                menu.tap()
-                app.buttons["download-content-\(id)"].tap()
-                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
-                app.alerts["提示"].buttons["好"].tap()
-            }
-            app.buttons["下载"].firstMatch.tap()
+            let app = openFixtureArchive(arguments: ["--ui-long-content-titles"])
+            completeFixtureDownloads(in: app, contentIDs: ["31", "32"])
             if app.windows.firstMatch.frame.width > 600 {
                 XCUIDevice.shared.orientation = .landscapeLeft
             }
@@ -886,24 +948,14 @@ final class ApplicationAcceptanceTests: XCTestCase {
         }
 
         func testDownloadSelectionBackdropCoversBottomSafeArea() {
-            let app = XCUIApplication()
-            app.launchArguments = [
-                "--ui-fixtures", "--ui-long-content-titles", "-ApplePersistenceIgnoreState", "YES",
-            ]
-            continueAfterFailure = false
-            app.launch()
-            XCTAssertTrue(app.buttons["四川新闻"].waitForExistence(timeout: 15))
-            app.buttons["四川新闻"].tap()
-            for id in ["30", "31", "32"] {
-                let menu = app.buttons["content-actions-\(id)"]
-                reveal(menu, in: app)
-                menu.tap()
-                app.buttons["download-content-\(id)"].tap()
-                XCTAssertTrue(app.alerts["提示"].waitForExistence(timeout: 5))
-                app.alerts["提示"].buttons["好"].tap()
-            }
-            app.buttons["下载"].firstMatch.tap()
-            XCTAssertTrue(app.buttons["download-30-completed"].waitForExistence(timeout: 15))
+            let app = openFixtureArchive(arguments: ["--ui-long-content-titles"])
+            completeFixtureDownloads(
+                in: app,
+                contentIDs: [
+                    "30",
+                    "31",
+                    "32",
+                ])
             app.buttons["选择"].tap()
             app.buttons["全选"].tap()
             XCTAssertTrue(app.staticTexts["已选 3 项"].waitForExistence(timeout: 5))

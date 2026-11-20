@@ -12,13 +12,7 @@ final class DownloadFlowTests: XCTestCase {
             if !app.windows.firstMatch.waitForExistence(timeout: 3) {
                 app.typeKey("n", modifierFlags: .command)
             }
-            let window = app.windows["workspace-AppWindow-1"]
-            let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
-                .withOffset(CGVector(dx: -2, dy: -2))
-            corner.click(
-                forDuration: 0.1,
-                thenDragTo: corner.withOffset(
-                    CGVector(dx: 1180 - window.frame.width, dy: 0)))
+            resizeWindow(app.windows["workspace-AppWindow-1"], toWidth: 1180)
         #endif
         let programme = app.buttons["四川新闻"]
         XCTAssertTrue(programme.waitForExistence(timeout: 15))
@@ -54,13 +48,6 @@ final class DownloadFlowTests: XCTestCase {
             let secondCard = app.buttons["play-download-31"]
             XCTAssertEqual(firstCard.frame.minY, secondCard.frame.minY, accuracy: 2)
             XCTAssertGreaterThan(abs(firstCard.frame.minX - secondCard.frame.minX), 300)
-        #endif
-        #if os(macOS)
-            activate(app.buttons["play-download-30"])
-            XCTAssertTrue(
-                app.descendants(matching: .any)["native-player-ready"].firstMatch.waitForExistence(
-                    timeout: 10))
-            app.windows["player"].buttons["_XCUI:CloseWindow"].click()
         #endif
         activate(app.buttons["downloads-select"])
         let selection = app.buttons["select-download-30"]

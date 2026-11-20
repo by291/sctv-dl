@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import SCTVCore
+import SCTVTestSupport
 import Testing
 
 @testable import SCTVData
@@ -170,23 +171,19 @@ struct DownloadRecoveryTests {
         let repository = HookedDownloadRepository(base: fixture.repository)
         let service = DownloadCoordinator(
             repository: repository, transfer: fixture.driver, publisher: FixturePublisher())
+        let request = try fixture.request()
+        await repository.onNextAll { olderTasks in
+            #expect(olderTasks.isEmpty)
+            let result = await service.start([request])
+            #expect(result.accepted.count == 1)
+        }
+
+        // The older load returns only after the nested start has published its newer snapshot.
+        // The stream buffers the last publication, including a stale one if it was accepted.
         let stream = await service.updates()
-        let recorder = SnapshotRecorder()
-        let observer = Task {
-            for await snapshot in stream { await recorder.record(snapshot.tasks.count) }
-        }
-        defer { observer.cancel() }
-        let second = try fixture.request(contentID: "2")
-        await repository.onNextAll { _ in
-            _ = await service.start([second])
-        }
-        await fixture.driver.beforeReturn { task in
-            if task.content.contentID == "1" { try? await Task.sleep(for: .milliseconds(50)) }
-        }
-        _ = await service.start([try fixture.request(contentID: "1")])
-        let counts = await recorder.counts
-        let firstTwo = try #require(counts.firstIndex(of: 2))
-        #expect(!counts.dropFirst(firstTwo + 1).contains(1))
+        let snapshot = try await requireTestElement(from: stream, "latest download snapshot")
+
+        #expect(snapshot.tasks.map(\.content) == [request.content])
     }
 
     @Test func earlyStagedCallbackRecoversAfterNativeCorrelationCommit() async throws {
@@ -371,11 +368,6 @@ actor ReentrantPublisher: FilePublisher {
     }
     func delete(_ file: PublishedFile) async throws {}
     func exists(_ file: PublishedFile) async -> Bool { true }
-}
-
-actor SnapshotRecorder {
-    var counts: [Int] = []
-    func record(_ count: Int) { counts.append(count) }
 }
 
 actor HookedDownloadRepository: DownloadRepository {

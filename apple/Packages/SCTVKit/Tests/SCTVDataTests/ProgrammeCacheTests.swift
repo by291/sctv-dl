@@ -1,25 +1,43 @@
 import Foundation
 import GRDB
 import SCTVCore
+import SCTVTestSupport
 import Testing
 
 @testable import SCTVData
 
 private actor ControlledProgrammeAPI: ProgrammeAPI {
-    private var requests: [CheckedContinuation<[Programme], any Error>] = []
+    private var requests: [AsyncStream<[Programme]>.Continuation] = []
 
     func catalogue() async throws -> [Programme] {
-        try await withCheckedThrowingContinuation { requests.append($0) }
+        let (stream, response) = AsyncStream<[Programme]>.makeStream()
+        requests.append(response)
+
+        // A real request can finish despite cancellation. Keep this response under test control.
+        let completion = Task {
+            try await requireTestElement(from: stream, "release of a catalogue request")
+        }
+        return try await completion.value
     }
 
     func dates(programmeID: String) async throws -> [BroadcastDate] { [] }
     func contents(programmeID: String, dateID: String) async throws -> [ProgrammeContent] { [] }
 
-    func complete(_ index: Int, with items: [Programme]) {
-        requests[index].resume(returning: items)
+    func completeRequest(_ index: Int, with items: [Programme]) {
+        let response = requests[index]
+        response.yield(items)
+        response.finish()
     }
 
-    func count() -> Int { requests.count }
+    func hasReceived(_ count: Int) -> Bool {
+        requests.count >= count
+    }
+
+    func finishRequests() {
+        for request in requests {
+            request.finish()
+        }
+    }
 }
 
 struct ProgrammeCacheTests {
@@ -32,18 +50,31 @@ struct ProgrammeCacheTests {
     @Test func lateResponseCannotReplaceNewGeneration() async throws {
         let api = ControlledProgrammeAPI()
         let repository = try repository(api: api)
-        let older = Task { try await repository.refresh(.catalogue) }
-        while await api.count() < 1 { await Task.yield() }
-        let newer = Task { try await repository.refresh(.catalogue) }
-        while await api.count() < 2 { await Task.yield() }
-        let newestItems = [Programme(id: "2", name: "New", cover: nil)]
-        await api.complete(1, with: newestItems)
-        try await newer.value
-        await api.complete(0, with: [Programme(id: "1", name: "Old", cover: nil)])
-        try? await older.value
+        async let older: Void = repository.refresh(.catalogue)
+        try await waitForRequest(1, from: api)
+        async let newer: Void = repository.refresh(.catalogue)
+        try await waitForRequest(2, from: api)
 
-        let accepted = await repository.current(.catalogue).accepted
-        #expect(accepted?.items == .catalogue(newestItems))
+        let newestItems = [Programme(id: "2", name: "New", cover: nil)]
+        await api.completeRequest(1, with: newestItems)
+        try await newer
+        await api.completeRequest(0, with: [Programme(id: "1", name: "Old", cover: nil)])
+        try await older
+
+        let update = await repository.current(.catalogue)
+        #expect(update.accepted?.items == .catalogue(newestItems))
+        #expect(update.pending == nil)
+    }
+
+    private func waitForRequest(_ count: Int, from api: ControlledProgrammeAPI) async throws {
+        do {
+            try await waitForTestCondition("catalogue request \(count)") {
+                await api.hasReceived(count)
+            }
+        } catch {
+            await api.finishRequests()
+            throw error
+        }
     }
 
     @Test func emptyIsFetched() async throws {
@@ -106,23 +137,16 @@ struct ProgrammeCacheTests {
         let repository = try repository(api: api)
         let firstOwner = UUID()
         let secondOwner = UUID()
-        let firstStream = await repository.observe(.catalogue)
-        let secondStream = await repository.observe(.catalogue)
-        var first = firstStream.makeAsyncIterator()
-        var second = secondStream.makeAsyncIterator()
-        _ = await first.next()
-        _ = await second.next()
-
-        let older = Task { try await repository.refresh(.catalogue, owner: firstOwner) }
-        while await api.count() < 1 { await Task.yield() }
-        let newer = Task { try await repository.refresh(.catalogue, owner: secondOwner) }
-        while await api.count() < 2 { await Task.yield() }
+        async let older: Void = repository.refresh(.catalogue, owner: firstOwner)
+        try await waitForRequest(1, from: api)
+        async let newer: Void = repository.refresh(.catalogue, owner: secondOwner)
+        try await waitForRequest(2, from: api)
         await repository.cancel(.catalogue, owner: firstOwner)
         let newestItems = [Programme(id: "2", name: "Other window", cover: nil)]
-        await api.complete(1, with: newestItems)
-        try await newer.value
-        await api.complete(0, with: [])
-        try? await older.value
+        await api.completeRequest(1, with: newestItems)
+        try await newer
+        await api.completeRequest(0, with: [])
+        try await older
 
         #expect(await repository.current(.catalogue).accepted?.items == .catalogue(newestItems))
     }

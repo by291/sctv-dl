@@ -28,17 +28,25 @@ let package = Package(
                 "SCTVCore", .product(name: "Nuke", package: "Nuke"),
                 .product(name: "NukeUI", package: "Nuke"),
             ]),
+        .target(name: "SCTVTestSupport", path: "Tests/Support"),
         .testTarget(name: "SCTVFeaturesTests", dependencies: ["SCTVCore", "SCTVFeatures"]),
         .testTarget(
-            name: "SCTVDataTests", dependencies: ["SCTVCore", "SCTVData"],
-            resources: [.copy("Fixtures")]),
+            name: "SCTVDataTests",
+            dependencies: [
+                "SCTVCore",
+                "SCTVData",
+                "SCTVTestSupport",
+            ], resources: [.copy("Fixtures")]),
         .testTarget(
             name: "SCTVMediaTests", dependencies: ["SCTVCore", "SCTVMedia"],
             resources: [.copy("Fixtures")]),
         .testTarget(
             name: "SCTVDownloadsTests",
             dependencies: [
-                "SCTVCore", "SCTVData", "SCTVDownloads",
+                "SCTVCore",
+                "SCTVData",
+                "SCTVDownloads",
+                "SCTVTestSupport",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ], resources: [.copy("Fixtures")]),
         .testTarget(

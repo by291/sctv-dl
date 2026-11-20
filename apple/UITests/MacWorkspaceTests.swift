@@ -91,13 +91,7 @@
             let app = launchFixtures(arguments: ["--ui-long-content-titles"])
             let window = app.windows["workspace-AppWindow-1"]
             // AppKit can retain the frame from a previous narrow-window run.
-            let initialCorner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
-                .withOffset(CGVector(dx: -2, dy: -2))
-            initialCorner.click(
-                forDuration: 0.1,
-                thenDragTo: initialCorner.withOffset(
-                    CGVector(dx: 1180 - window.frame.width, dy: 0)))
-            XCTAssertEqual(window.frame.width, 1180, accuracy: 4)
+            resizeWindow(window, toWidth: 1180)
             app.buttons["exploration-cover"].click()
             for id in ["30", "31", "32"] {
                 let clip = app.buttons["archive-play-\(id)"]
@@ -140,11 +134,11 @@
             wideShot.lifetime = .keepAlways
             add(wideShot)
 
-            let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
-                .withOffset(CGVector(dx: -2, dy: -2))
-            corner.click(forDuration: 0.1, thenDragTo: corner.withOffset(CGVector(dx: -420, dy: 0)))
-            XCTAssertEqual(long.frame.minX, short.frame.minX, accuracy: 2)
-            XCTAssertGreaterThan(abs(long.frame.minY - short.frame.minY), 80)
+            resizeWindow(window, toWidth: 760)
+            requireState("History cards move into one column", of: long) {
+                abs($0.frame.minX - short.frame.minX) <= 2
+                    && abs($0.frame.minY - short.frame.minY) > 80
+            }
             let narrowShot = XCTAttachment(screenshot: window.screenshot())
             narrowShot.name = "mac-history-one-column"
             narrowShot.lifetime = .keepAlways

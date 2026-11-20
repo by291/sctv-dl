@@ -1,6 +1,7 @@
 import Foundation
 import SCTVCore
 import SCTVData
+import SCTVTestSupport
 import Testing
 
 @testable import SCTVDownloads
@@ -111,15 +112,13 @@ struct DownloadTransitionTests {
         let fixture = try Fixture()
         let first = await fixture.service.updates()
         let second = await fixture.service.updates()
-        var firstIterator = first.makeAsyncIterator()
-        var secondIterator = second.makeAsyncIterator()
-        _ = await firstIterator.next()
-        _ = await secondIterator.next()
+        _ = try await requireTestElement(from: first, "initial download snapshot")
+        _ = try await requireTestElement(from: second, "initial download snapshot")
 
         let taskID = try #require(
             (await fixture.service.start([try fixture.request()])).accepted.first)
-        let firstSnapshot = try #require(await firstIterator.next())
-        let secondSnapshot = try #require(await secondIterator.next())
+        let firstSnapshot = try await requireTestElement(from: first, "download snapshot")
+        let secondSnapshot = try await requireTestElement(from: second, "download snapshot")
         #expect(firstSnapshot.tasks.map(\.id) == [taskID])
         #expect(secondSnapshot.tasks.map(\.id) == [taskID])
 
@@ -127,7 +126,7 @@ struct DownloadTransitionTests {
         _ = await fixture.service.perform([
             .init(taskID: taskID, expectedAttempt: task.attemptID, action: .cancel)
         ])
-        let cancelled = try #require(await firstIterator.next())
+        let cancelled = try await requireTestElement(from: first, "cancelled download snapshot")
         #expect(cancelled.revision > firstSnapshot.revision)
         #expect(cancelled.tasks.first?.state == .cancelled)
     }
