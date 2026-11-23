@@ -28,15 +28,15 @@
     "ci:lint": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12"
   },
   "dependencies": {
-    "@lucide/vue": "^1.69.0",
-    "@tauri-apps/api": "2.12.4",
+    "@lucide/vue": "^1.76.0",
+    "@tauri-apps/api": "2.12.5",
     "@vueuse/core": "^15.0.0",
     "artplayer": "^5.4.0",
     "naive-ui": "^2.45.3",
     "pinia": "^4.1.0",
     "sirv": "^3.0.2",
     "vue": "^3.5.45",
-    "vue-router": "^5.4.0",
+    "vue-router": "^5.5.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
